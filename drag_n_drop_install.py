@@ -12,10 +12,20 @@ try:
     import maya.OpenMayaUI as OpenMayaUI
     import maya.cmds as cmds
     import maya.api.OpenMaya as om
-    is_maya = True
+    is_maya_qt5 = True
+except ImportError:
+    is_maya_qt5 = False
 
-except ImportError():
-    is_maya = False
+try:
+    from maya.app.startup import basic
+    from PySide6 import QtWidgets, QtCore, QtGui
+    from shiboken6 import wrapInstance
+    import maya.OpenMayaUI as OpenMayaUI
+    import maya.cmds as cmds
+    import maya.api.OpenMaya as om
+    is_maya_qt6 = True
+except ImportError:
+    is_maya_qt6 = False
 
 # -- constants
 TITLE = "Install mGear"
@@ -701,5 +711,5 @@ def _dropped_install():
     installer_window.show()
 
 
-if is_maya:
+if is_maya_qt5 or is_maya_qt6:
     _dropped_install()
