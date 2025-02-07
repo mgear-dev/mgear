@@ -801,8 +801,9 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     attrs = _get_switch_node_attrs(current_control, "_blend")
     attrs2 = _get_switch_node_attrs(current_control, "ref")
     attrs3 = _get_switch_node_attrs(current_control, "_switch")
-    attrs4 = _get_switch_node_attrs(current_control, "follow")
-    if attrs or attrs2 or attrs3 or attrs4:
+    # attrs4 = _get_switch_node_attrs(current_control, "follow")
+
+    if attrs or attrs2 or attrs3:
         ui_host = current_control
 
     else:
@@ -1036,8 +1037,21 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     cmds.menuItem(parent=parent_menu, divider=True)
 
     # handles constrains attributes (constrain switches)
-    if ui_host:
-        for attr in _get_switch_node_attrs(ui_host, ["ref", "follow"]):
+    space_attrs = _get_switch_node_attrs(ui_host, ["ref", "follow"])
+    ui_hosts = [ui_host for x in space_attrs]
+
+    # in case is not uiHost but also contain space attr like follow or ref
+    if current_control != ui_host:
+        space_attr_out_of_uiHost = _get_switch_node_attrs(
+            current_control, ["ref", "follow"]
+        )
+        out_ui_hosts = [current_control for x in space_attr_out_of_uiHost]
+        if space_attr_out_of_uiHost:
+            space_attrs = space_attrs + space_attr_out_of_uiHost
+            ui_hosts = ui_hosts + out_ui_hosts
+
+    if ui_hosts:
+        for attr, uih in zip(space_attrs, ui_hosts):
 
             part, ctl = (
                 attr.split("_")[0],
@@ -1052,9 +1066,9 @@ def mgear_dagmenu_fill(parent_menu, current_control):
             )
             cmds.radioMenuItemCollection(parent=_p_switch_menu)
             k_values = cmds.addAttr(
-                "{}.{}".format(ui_host, attr), query=True, enumName=True
+                "{}.{}".format(uih, attr), query=True, enumName=True
             ).split(":")
-            current_state = cmds.getAttr("{}.{}".format(ui_host, attr))
+            current_state = cmds.getAttr("{}.{}".format(uih, attr))
 
             combo_box = QtWidgets.QComboBox()
 
@@ -1070,7 +1084,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
                     label=k_val,
                     radioButton=state,
                     command=partial(
-                        __switch_parent_callback, ui_host, attr, idx, k_val
+                        __switch_parent_callback, uih, attr, idx, k_val
                     ),
                 )
 
@@ -1079,7 +1093,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
                 parent=_p_switch_menu,
                 label="++ Space Transfer ++",
                 command=partial(
-                    __space_transfer_callback, ui_host, attr, combo_box
+                    __space_transfer_callback, uih, attr, combo_box
                 ),
             )
 
