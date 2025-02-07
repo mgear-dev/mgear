@@ -1164,7 +1164,11 @@ class Main(object):
             dagNode: match transform node
         """
         # create match
-        match = primitive.addTransform(
+        if self.WIP:
+            add_match = primitive.addLocator
+        else:
+            add_match = primitive.addTransform
+        match = add_match(
             parent, self.getName(name), transform.getTransform(ctl)
         )
 
