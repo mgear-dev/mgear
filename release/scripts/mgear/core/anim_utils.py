@@ -1067,46 +1067,51 @@ def ikFkMatch_with_namespace(
         transform.matchWorldTransform(ik_target, ik_ctrl)
         if ik_rot:
             transform.matchWorldTransform(ik_rot_target, ik_rot_node)
+        # NOTE: Simple match replacing the previous logic.
+        # Added TODO to researh in the future
+        upv_ctrl_target = _get_mth(upv)
+        transform.matchWorldTransform(upv_ctrl_target, upv_ctrl)
 
-        transform.matchWorldTransform(fk_targets[1], upv_ctrl)
-        # calculates new pole vector position
-        start_end = fk_targets[-1].getTranslation(space="world") - fk_targets[
-            0
-        ].getTranslation(space="world")
-        start_mid = fk_targets[1].getTranslation(space="world") - fk_targets[
-            0
-        ].getTranslation(space="world")
+        # TODO: The following logic is failing with some components. Apparently
+        # the control orientation for normal and binormal axis is affecting
+        # transform.matchWorldTransform(fk_targets[1], upv_ctrl)
+        # # calculates new pole vector position
+        # start_end = fk_targets[-1].getTranslation(space="world") - fk_targets[
+        #     0
+        # ].getTranslation(space="world")
+        # start_mid = fk_targets[1].getTranslation(space="world") - fk_targets[
+        #     0
+        # ].getTranslation(space="world")
 
-        dot_p = start_mid * start_end
-        proj = float(dot_p) / float(start_end.length())
-        proj_vector = start_end.normal() * proj
-        arrow_vector = start_mid - proj_vector
-        arrow_vector *= start_end.normal().length()
+        # dot_p = start_mid * start_end
+        # proj = float(dot_p) / float(start_end.length())
+        # proj_vector = start_end.normal() * proj
+        # arrow_vector = start_mid - proj_vector
+        # arrow_vector *= start_end.normal().length()
 
-        thre = 1e-4
-        # handle the case where three points lie on a line.
-        if (
-            abs(arrow_vector.x) < thre
-            and abs(arrow_vector.y) < thre
-            and abs(arrow_vector.z) < thre
-        ):
-            # can make roll and move up ctrl
-            upv_ctrl_target = _get_mth(upv)
-            transform.matchWorldTransform(upv_ctrl_target, upv_ctrl)
-        else:
-            # ensure that the pole vector distance is a minimun of 1 unit
-            # while arrow_vector.length() < 1.0:
-            while arrow_vector.length() < start_mid.length():
-                arrow_vector *= 2.0
+        # thre = 1e-4
+        # # handle the case where three points lie on a line.
+        # if (
+        #     abs(arrow_vector.x) < thre
+        #     and abs(arrow_vector.y) < thre
+        #     and abs(arrow_vector.z) < thre
+        # ):
+        #     # can make roll and move up ctrl
+        #     upv_ctrl_target = _get_mth(upv)
+        #     transform.matchWorldTransform(upv_ctrl_target, upv_ctrl)
+        # else:
+        #     # ensure that the pole vector distance is a minimun of 1 unit
+        #     # while arrow_vector.length() < 1.0:
+        #     while arrow_vector.length() < start_mid.length():
+        #         arrow_vector *= 2.0
 
-            final_vector = arrow_vector + fk_targets[1].getTranslation(
-                space="world"
-            )
-            upv_ctrl.setTranslation(final_vector, space="world")
+        #     final_vector = arrow_vector + fk_targets[1].getTranslation(
+        #         space="world"
+        #     )
+        #     upv_ctrl.setTranslation(final_vector, space="world")
 
         # sets blend attribute new value
         pm.setAttr(o_attr, ik_val)
-        # print(o_attr.get())
 
         # handle the upvector roll
         roll_att_name = ikfk_attr.replace("blend", "roll")
