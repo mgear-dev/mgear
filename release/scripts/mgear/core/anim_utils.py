@@ -344,7 +344,7 @@ def get_ik_fk_controls_by_role(uiHost, attr_ctl_cnx):
                 elif role == "roll":
                     ik_controls["roll"] = c.stripNamespace()
 
-    fk_controls = sorted(fk_controls)
+    # fk_controls = sorted(fk_controls)
     return ik_controls, fk_controls
 
 
