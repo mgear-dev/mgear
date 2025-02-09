@@ -70,7 +70,6 @@ def parentCns(driver, driven, maintain_offset=True, **kwargs):
 
 
 def curvecns_op(crv, inputs=[]):
-
     for i, item in enumerate(inputs):
         node = pm.createNode("decomposeMatrix")
         pm.connectAttr(item + ".worldMatrix[0]", node + ".inputMatrix")
@@ -297,7 +296,6 @@ def aimCns(
             "upVectorZ",
         ]
     ):
-
         pm.setAttr(node + "." + name, a[i])
 
     return node
@@ -392,8 +390,12 @@ def gear_matrix_cns(
             # calculate rotation rest pose
             # we use the  outputDriverOffsetMatrix to have in account the offset
             # rotation when the rest pose is calculated
-            driver_m = om.MMatrix(pm.getAttr(node + ".outputDriverOffsetMatrix"))
-            driven_m = om.MMatrix(pm.getAttr(out_obj + ".parentInverseMatrix[0]"))
+            driver_m = om.MMatrix(
+                pm.getAttr(node + ".outputDriverOffsetMatrix")
+            )
+            driven_m = om.MMatrix(
+                pm.getAttr(out_obj + ".parentInverseMatrix[0]")
+            )
             mult = driver_m * driven_m
             pm.setAttr(node + ".drivenRestMatrix", mult, type="matrix")
 
@@ -409,12 +411,13 @@ def gear_matrix_cns(
     return node
 
 
-def gear_spring_op(in_obj, goal=False):
+def gear_spring_op(in_obj, goal=False, solver="mgear_springNode"):
     """Apply mGear spring node.
 
     Arguments:
         in_obj (dagNode): Constrained object.
         goal (dagNode): By default is False.
+        solver (str, optional): Spring solver
 
     Returns:
         pyNode: Newly created node
@@ -422,7 +425,7 @@ def gear_spring_op(in_obj, goal=False):
     if not goal:
         goal = in_obj
 
-    node = pm.createNode("mgear_springNode")
+    node = pm.createNode(solver)
 
     pm.connectAttr("time1.outTime", node + ".time")
     dm_node = pm.createNode("decomposeMatrix")
@@ -445,6 +448,20 @@ def gear_spring_op(in_obj, goal=False):
     pm.setAttr(node + ".damping", 0.5)
 
     return node
+
+
+def gear_spring_gravity_op(in_obj, goal=False):
+    """Apply mGear spring Gravity  node.
+
+    Arguments:
+        in_obj (dagNode): Constrained object.
+        goal (dagNode): By default is False.
+
+    Returns:
+        pyNode: Newly created node
+    """
+
+    return gear_spring_op(in_obj, goal=goal, solver="mgear_springGravityNode")
 
 
 def gear_mulmatrix_op(mA, mB, target=False, transform="srt"):
@@ -972,11 +989,7 @@ def create_proximity_constraints(shape, in_trans_list):
 
 
 def create_uv_pin_constraint(
-    shape,
-    in_trans,
-    existing_pin=None,
-    out_trans=None,
-    **kwargs
+    shape, in_trans, existing_pin=None, out_trans=None, **kwargs
 ):
     """Create a UV pin constraint between a shape and a transform.
 
