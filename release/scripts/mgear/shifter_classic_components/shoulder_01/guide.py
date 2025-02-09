@@ -12,10 +12,10 @@ from maya.app.general.mayaMixin import MayaQDockWidget
 from . import settingsUI as sui
 
 # guide info
-AUTHOR = "Jeremie Passerin, Miquel Campos"
+AUTHOR = "Jeremie Passerin, Miquel Campos, Joji Nishimura"
 URL = ", www.miquletd.com"
 EMAIL = ", "
-VERSION = [1, 0, 0]
+VERSION = [1, 1, 0]
 TYPE = "shoulder_01"
 NAME = "shoulder"
 DESCRIPTION = "Simple shoulder with space switch for\n the arm, and Orbit " \
@@ -59,6 +59,7 @@ class Guide(guide.ComponentGuide):
 
         self.pRefArray = self.addParam("refArray", "string", "")
         self.pUseIndex = self.addParam("useIndex", "bool", False)
+        self.pMirrorBehaviour = self.addParam("mirrorBehaviour", "bool", False)
 
         self.pParentJointIndex = self.addParam(
             "parentJointIndex", "long", -1, None, None)
@@ -114,6 +115,13 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         # populate tab
         self.tabs.insertTab(1, self.settingsTab, "Component Settings")
 
+        if self.root.attr("mirrorBehaviour").get():
+            self.settingsTab.mirrorBehaviour_checkBox.setCheckState(
+                QtCore.Qt.Checked)
+        else:
+            self.settingsTab.mirrorBehaviour_checkBox.setCheckState(
+                QtCore.Qt.Unchecked)
+
         # populate component settings
         refArrayItems = self.root.attr("refArray").get().split(",")
         for item in refArrayItems:
@@ -128,6 +136,10 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         self.setLayout(self.settings_layout)
 
     def create_componentConnections(self):
+        self.settingsTab.mirrorBehaviour_checkBox.stateChanged.connect(
+            partial(self.updateCheck,
+                    self.settingsTab.mirrorBehaviour_checkBox,
+                    "mirrorBehaviour"))
 
         self.settingsTab.refArrayAdd_pushButton.clicked.connect(
             partial(self.addItem2listWidget,
