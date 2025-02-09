@@ -531,7 +531,7 @@ class Component(component.Main):
         self.tws3_rot.setAttr("sx", 0.001)
 
         self.tws3_drv = primitive.addTransform(
-            self.legBones[2],
+            self.tws3_rot,
             self.getName("tws3_drv"),
             transform.getTransform(self.legBones[3]),
         )
@@ -1284,15 +1284,6 @@ class Component(component.Main):
             pm.connectAttr(self.volDriver_att, o_node + ".driver")
             pm.connectAttr(self.st_att[i], o_node + ".stretch")
             pm.connectAttr(self.sq_att[i], o_node + ".squash")
-
-        # connect roll rotation driver reference
-        pm.orientConstraint(
-            self.legBones[3],
-            self.tws3_drv,
-            skip=["y", "z"],
-            maintainOffset=True,
-            weight=1,
-        )
 
         # Visibilities -------------------------------------
         # fk
