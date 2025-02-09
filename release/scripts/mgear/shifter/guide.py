@@ -1919,6 +1919,11 @@ class GuideSettings(MayaQWidgetDockableMixin, QtWidgets.QDialog, HelperSlots):
                 "synoptic",
             )
         )
+        tap.importSkin_checkBox.stateChanged.connect(
+            partial(
+                self.updateCheck, tap.importSkin_checkBox, "importSkin"
+            )
+        )
         tap.loadSkinPath_pushButton.clicked.connect(self.skinLoad)
         tap.dataCollectorPath_pushButton.clicked.connect(
             self.data_collector_path
