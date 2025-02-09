@@ -111,7 +111,7 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                         reload(module)
                     else:
                         importlib.reload(module)
-                    comp_list.append(module.TYPE)
+                    comp_list.append(module.Guide.compType)
                 except Exception as e:
                     pm.displayWarning(
                         "{} can't be load. Error at import".format(comp_name))
@@ -229,14 +229,15 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 reload(module)
             else:
                 importlib.reload(module)
+            guide = module.Guide
             info_text = (
-                "{}\n".format(module.DESCRIPTION)
+                "{}\n".format(guide.description)
                 + "\n-------------------------------\n\n"
-                + "Author: {}\n".format(module.AUTHOR)
-                + "Url: {}\n".format(module.URL)
-                + "Version: {}\n".format(str(module.VERSION))
-                + "Type: {}\n".format(module.TYPE)
-                + "Name: {}\n".format(module.NAME)
+                + "Author: {}\n".format(guide.author)
+                + "Url: {}\n".format(guide.url)
+                + "Version: {}\n".format(str(guide.version))
+                + "Type: {}\n".format(guide.compType)
+                + "Name: {}\n".format(guide.compName)
             )
         except IndexError:
             info_text = ""
