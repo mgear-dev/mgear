@@ -13,10 +13,10 @@ from . import settingsUI as sui
 
 
 # guide info
-AUTHOR = "Jeremie Passerin, Miquel Campos"
+AUTHOR = "Jeremie Passerin, Miquel Campos, Joji Nishimura"
 URL = ", www.mcsgear.com"
 EMAIL = ", "
-VERSION = [1, 2, 0]
+VERSION = [1, 3, 0]
 TYPE = "leg_2jnt_freeTangents_01"
 NAME = "leg"
 DESCRIPTION = (
@@ -69,6 +69,7 @@ class Guide(guide.ComponentGuide):
         self.pUpvRefArray = self.addParam("pinrefarray", "string", "")
         self.pMaxStretch = self.addParam("maxstretch", "double", 1.5, 1, None)
         self.pMirrorMid = self.addParam("mirrorMid", "bool", False)
+        self.pIKOrient = self.addParam("ikOri", "bool", True)
 
         # Divisions
         self.pDiv0 = self.addParam("div0", "long", 2, 1, None)
@@ -161,6 +162,8 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         )
 
         self.populateCheck(self.settingsTab.mirrorMid_checkBox, "mirrorMid")
+        self.populateCheck(self.settingsTab.ikOri_checkBox, "ikOri")
+
         self.settingsTab.div0_spinBox.setValue(self.root.attr("div0").get())
         self.settingsTab.div1_spinBox.setValue(self.root.attr("div1").get())
         ikRefArrayItems = self.root.attr("ikrefarray").get().split(",")
@@ -210,6 +213,11 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         self.settingsTab.squashStretchProfile_pushButton.clicked.connect(
             self.setProfile
         )
+
+        self.settingsTab.ikOri_checkBox.stateChanged.connect(
+            partial(self.updateCheck,
+                    self.settingsTab.ikOri_checkBox,
+                    "ikOri"))
 
         self.settingsTab.mirrorMid_checkBox.stateChanged.connect(
             partial(
