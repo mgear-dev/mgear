@@ -23,17 +23,17 @@ if sys.version_info[0] == 2:
 else:
     string_types = (str,)
 
-S_CHANNELS = ["scale", "scale.scaleX", "scale.scaleY", "scale.scaleZ", "shear"]
+S_CHANNELS = ["scale", "scaleX", "scaleY", "scaleZ", "shear"]
 
 SRT_CHANNELS = [
     "translate",
-    "translate.translateX",
-    "translate.translateY",
-    "translate.translateZ",
+    "translateX",
+    "translateY",
+    "translateZ",
     "rotate",
-    "rotate.rotateX",
-    "rotate.rotateY",
-    "rotate.rotateZ",
+    "rotateX",
+    "rotateY",
+    "rotateZ",
 ] + S_CHANNELS
 
 DRIVEN_JOINT_ATTR = "drivenJoint"
@@ -303,6 +303,7 @@ def get_connections(source=None, embed_info=False):
     if not source:
         source = pm.selected()
     for jnt in source:
+        jnt = pm.node.Joint(jnt)
         leaf_jnt = None
         if not jnt.name().startswith(("blend_", "leaf_")):
             connections["joints"].append(jnt.name())
