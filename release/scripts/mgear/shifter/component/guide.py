@@ -911,7 +911,7 @@ class ComponentGuide(guide.Main):
         pm.select(children)
         for child in pm.ls(self.fullName + "_*", selection=True):
             objects[
-                child[child.index(self.fullName + "_") + len(self.fullName + "_") :]
+                child.shortName()[child.index(self.fullName + "_") + len(self.fullName + "_") :]
             ] = child
 
         return objects

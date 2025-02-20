@@ -27,7 +27,7 @@ def addNPO(objs=None, *args):
     for obj in objs:
         oParent = obj.getParent()
         oTra = pm.createNode(
-            "transform", n=obj.name() + "_npo", p=oParent, ss=True
+            "transform", n=obj.name() + "_npo", p=oParent.name(), ss=True
         )
         oTra.setTransformation(obj.getMatrix())
         pm.parent(obj, oTra)
