@@ -69,7 +69,6 @@ def createGhostCtl(ctl, parent=None, connect=True):
     for shape in source2.getShapes():
         pm.parent(shape, newCtl, r=True, s=True)
         pm.rename(shape, newCtl.name() + "Shape")
-        pm.parent(shape, newCtl, r=True, s=True)
     pm.delete(source2)
     if parent:
         pm.parent(newCtl, parent)
