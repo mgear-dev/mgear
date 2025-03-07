@@ -213,6 +213,7 @@ def __range_switch_callback(*args):
     # ik_controls, fk_controls = _get_controls(switch_control, blend_attr)
     # search criteria to find all the components sharing the blend
     # criteria = blend_attr.replace(blend_attr_ext, "") + "_id*_ctl_cnx"
+    # TODO: Not working correctly if attr is not _blend. i.e. "_Switch" will fail
     criteria = "*_id*_ctl_cnx"
     component_ctl = (
         cmds.listAttr(switch_control, ud=True, string=criteria) or []
@@ -228,10 +229,15 @@ def __range_switch_callback(*args):
             ik_controls, fk_controls = get_ik_fk_controls_by_role(
                 switch_control, com_list
             )
-            ik_list.append(ik_controls["ik_control"])
+            # we need to ensure there is ik_control. Before was not needed
+            # when used _blend + ciriteria, but now we can get non existing
+            # elements, to avoid error we check if exists
+            if ik_controls["ik_control"]:
+                ik_list.append(ik_controls["ik_control"])
             if ik_controls["ik_rot"]:
                 ikRot_list.append(ik_controls["ik_rot"])
-            upv_list.append(ik_controls["pole_vector"])
+            if ik_controls["pole_vector"]:
+                upv_list.append(ik_controls["pole_vector"])
             fk_list = fk_list + fk_controls
 
         # calls the ui
