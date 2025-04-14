@@ -113,7 +113,7 @@ def get_mesh_components_from_tag_expression(skinCls, tag="*"):
     for t in geo_types:
         obj = skinCls.listConnections(et=True, t=t)
         if obj:
-            geo = obj[0].getShape().name()
+            geo = pm.listRelatives(obj[0], s=True, ni=True)[0].name()
 
     # Get the geo out attribute for the shape
     out_attr = cmds.deformableShape(geo, localShapeOutAttr=True)[0]
