@@ -21,6 +21,7 @@ from mgear.core import attribute
 
 from mgear.uegear import log, tag, bridge, io, ioutils
 from mgear.uegear import utils as ueUtils
+from mgear.uegear import camera as ueCamera
 
 # DEBUGGING
 import importlib
@@ -729,6 +730,12 @@ def import_selected_cameras_from_unreal():
                 tag.apply_tag(
                     transform_node, tag.TAG_ASSET_PATH_ATTR_NAME, asset_path
                 )
+
+        # Check if camera contains filmback attribute, if it does then we convert the curve data and apply it to the
+        # `Sensor Height` `Sensor Width`
+        # transform node is always a camera, as we are only importing a camera.
+        for camera_name in transform_nodes:
+            ueCamera.unreal_to_maya_sensor_conversion(camera_name)
 
     return True
 
