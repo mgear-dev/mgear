@@ -90,7 +90,7 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 pm.progressWindow(
                     e=True, step=1, status="\nLoading: %s" % comp_name
                 )
-                if comp_name == "__init__.py":
+                if comp_name in ["__init__.py", "__pycache__"]:
                     continue
                 elif comp_name in trackLoadComponent:
                     pm.displayWarning(
