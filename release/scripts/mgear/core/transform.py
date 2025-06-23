@@ -1096,6 +1096,14 @@ def apply_pivot_offset_to_translation(obj):
     if not cmds.objExists(obj):
         raise RuntimeError("Object '{}' does not exist.".format(obj))
 
+    # Check if any component of .translate is locked or connected
+    for axis in ["X", "Y", "Z"]:
+        attr = "{}.translate{}".format(obj, axis)
+        if cmds.getAttr(attr, lock=True):
+            return
+        if cmds.connectionInfo(attr, isDestination=True):
+            return
+
     translation = cmds.getAttr(obj + ".translate")[0]
     rotate_pivot = cmds.getAttr(obj + ".rotatePivot")[0]
 
@@ -1148,7 +1156,7 @@ def set_world_transform_data(obj, transform_data):
         )
         v2 = vector.add_3Dvectors_list(transform_data["translation"], v1)
         cmds.xform(obj, ws=True, t=v2)
-        
+
         # apply_pivot_offset_to_translation(obj)
         apply_pivot_offset_to_translation(obj)
     if "rotation" in transform_data:
