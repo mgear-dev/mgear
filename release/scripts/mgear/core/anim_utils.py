@@ -2363,7 +2363,7 @@ def clearSprings(model=None):
         model = getRootNode()
 
     springNodes = getControlers(model, gSuffix=PLOT_GRP_SUFFIX)
-    pairblends = [sn.listConnections(type="pairBlend")[0] for sn in springNodes]
+    pairblends = [pm.PyNode(sn).listConnections(type="pairBlend")[0] for sn in springNodes]
 
     for pb in pairblends:
         animCrvs = pb.listConnections(type="animCurveTA")
@@ -2371,15 +2371,16 @@ def clearSprings(model=None):
             for conn in fcrv.listConnections(
                 connections=True, destination=True, plugs=True
             ):
-
-                pm.disconnectAttr(conn[0], conn[1])
+                # pm.disconnectAttr(conn[0], conn[1])
+                pm.disconnectAttr(conn)
         # reset the value to 0
         attrs = ["inRotateX1", "inRotateY1", "inRotateZ1"]
         for attr in attrs:
             pb.attr(attr).set(0)
 
         # delete fcurves
-        pm.delete(animCrvs)
+        if animCrvs:
+            pm.delete(animCrvs)
 
 
 @utils.one_undo
