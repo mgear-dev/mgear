@@ -1879,12 +1879,16 @@ class AbstractAnimationTransfer(QtWidgets.QDialog):
             startFrame, endFrame, val_src_nodes)
 
         src_keys = pm.keyframe(key_src_nodes, at=["t", "r", "s"], q=True)
-        if src_keys:
+        print(src_keys)
+        if not src_keys:
+            src_keys = []
+        keyframeList = sorted(set(src_keys))
+        # if src_keys:
 
-            keyframeList = sorted(set(src_keys))
-        else:
-            pm.displayWarning("No keys to transfer.")
-            return
+        #     keyframeList = sorted(set(src_keys))
+        # else:
+        #     pm.displayWarning("No keys to transfer.")
+        #     return
 
         # delete animation in the space switch channel and destination ctrls
         pm.cutKey(key_dst_nodes, at=channels, time=(startFrame, endFrame))
@@ -1963,12 +1967,15 @@ class ParentSpaceTransfer(AbstractAnimationTransfer):
         channels = ["tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"]
 
         src_keys = pm.keyframe(key_src_nodes, at=["t", "r", "s"], q=True)
-        if src_keys:
+        if not src_keys:
+            src_keys = []
+        keyframeList = sorted(set(src_keys))
+        # if src_keys:
 
-            keyframeList = sorted(set(src_keys))
-        else:
-            pm.displayWarning("No keys to transfer.")
-            return
+        #     keyframeList = sorted(set(src_keys))
+        # else:
+        #     pm.displayWarning("No keys to transfer.")
+        #     return
 
         # get world transform data for the source nodes
         # and store them in a list for each frame
