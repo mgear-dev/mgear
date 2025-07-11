@@ -973,6 +973,8 @@ def ikFkMatch_with_namespace2(
             transform.matchWorldTransform(
                 ik_targets["reverse_ankle_ik"], ik_ctrl["reverse_ankle_ik"]
             )
+            match_fk_to_ik_arbitrary_lengths(fk_controls, ui_host,
+                                             ikfk_attr, ik_ctrl["pole_vector"])
         except KeyError:
             pass
         pm.setAttr(o_attr, ik_val)
@@ -1245,6 +1247,9 @@ def ikFkMatch_with_namespace(
         if foot_cnx:
             for i, c in enumerate(foot_fk):
                 c.setMatrix(foot_FK_matrix[i], worldSpace=True)
+
+        match_fk_to_ik_arbitrary_lengths(fk_ctrls, ui_host,
+                                         ikfk_attr, upv_ctrl)
 
     # sets keyframes
     if key:
@@ -1879,7 +1884,6 @@ class AbstractAnimationTransfer(QtWidgets.QDialog):
             startFrame, endFrame, val_src_nodes)
 
         src_keys = pm.keyframe(key_src_nodes, at=["t", "r", "s"], q=True)
-        print(src_keys)
         if not src_keys:
             src_keys = []
         keyframeList = sorted(set(src_keys))
@@ -2586,3 +2590,194 @@ class SpineIkFkTransfer(AbstractAnimationTransfer):
         if versions.current() <= 20180200:
             pm.cycleCheck(e=True)
             print("CycleCheck turned back ON")
+
+
+# Functions to support arbitraty limb length for FK to IK
+
+def match_fk_to_ik_scale_slide(arm_ctl, forearm_ctl, hand_ctl,
+                               ui_host, scale_attr='scale',
+                               slide_attr='slide'):
+    """Match FK limb to IK using scale and slide on a uiHost node.
+
+    Args:
+        arm_ctl (str): Arm or upper leg FK control.
+        forearm_ctl (str): Forearm or lower leg FK control.
+        hand_ctl (str): Hand or foot FK control.
+        ui_host (str): Node where scale/slide attrs live.
+        scale_attr (str): Name of scale attribute.
+        slide_attr (str): Name of slide attribute.
+
+    Raises:
+        RuntimeError: On missing nodes or zero‐length setup.
+    """
+    # verify controls & parents
+    def parent_of(obj):
+        p = cmds.listRelatives(obj, parent=True, f=True)
+        if not p:
+            raise RuntimeError("No parent for {}".format(obj))
+        return p[0]
+
+    for ctl in (arm_ctl, forearm_ctl, hand_ctl):
+        if not cmds.objExists(ctl):
+            raise RuntimeError("Control not found: {}".format(ctl))
+
+    # arm_p = parent_of(arm_ctl)
+    # arm_p_p = parent_of(arm_p)
+    fore_p = parent_of(forearm_ctl)
+    fore_p_p = parent_of(fore_p)
+    hand_p = parent_of(hand_ctl)
+    hand_p_p = parent_of(hand_p)
+
+    # rest lengths
+    rest_upper = vector.getDistance2(fore_p_p, fore_p)
+    rest_lower = vector.getDistance2(hand_p_p, hand_p)
+    # rest_lower = 2.0
+    rest_total = rest_upper + rest_lower
+    # print("Rest lengths: upper={:.3f}, lower={:.3f}, total={:.3f}"
+    #       .format(rest_upper, rest_lower, rest_total))
+
+    if rest_total == 0:
+        raise RuntimeError("Rest pose total length is zero.")
+
+    # current lengths
+    cur_upper = vector.getDistance2(arm_ctl, forearm_ctl)
+    cur_lower = vector.getDistance2(forearm_ctl, hand_ctl)
+    cur_total = cur_upper + cur_lower
+    # print("Cur lengths:  upper={:.3f}, lower={:.3f}, total={:.3f}"
+    #       .format(cur_upper, cur_lower, cur_total))
+
+    # scale
+    scale_val = cur_total / rest_total
+    # print("Scale value: {:.3f}".format(scale_val))
+
+    # slide: piecewise around rest ratio
+    rest_ratio = rest_upper / rest_total
+    cur_ratio = cur_upper / cur_total
+    # print("Ratios: rest_ratio={:.3f}, cur_ratio={:.3f}"
+    #       .format(rest_ratio, cur_ratio))
+
+    if cur_ratio <= rest_ratio:
+        slide_val = (cur_ratio / rest_ratio) * 0.5
+    else:
+        slide_val = 0.5 + ((cur_ratio - rest_ratio) / (1 - rest_ratio)) \
+            * 0.5
+
+    slide_val = max(0.0, min(1.0, slide_val))
+    # print("Slide value: {:.3f}".format(slide_val))
+
+    # set attrs
+    s_path = "{}.{}".format(ui_host, scale_attr)
+    sl_path = "{}.{}".format(ui_host, slide_attr)
+    for p in (s_path, sl_path):
+        if not cmds.objExists(p):
+            raise RuntimeError("Missing attribute: {}".format(p))
+
+    cmds.setAttr(s_path, scale_val)
+    cmds.setAttr(sl_path, slide_val)
+
+
+def place_upv_from_fk(arm_ctl, forearm_ctl, hand_ctl,
+                      upv_ctl, distance_multiplier=2.0):
+    """Place up vector control based on the FK plane.
+
+    Calculates the pole vector (up vector) position defined by the FK
+    controls and places the upv_ctl at that position.
+
+    Args:
+        arm_ctl (str): Arm or upper leg FK control.
+        forearm_ctl (str): Forearm or lower leg FK control.
+        hand_ctl (str): Hand or foot FK control.
+        upv_ctl (str): Up vector control to be moved.
+        distance_multiplier (float): Distance scale factor.
+
+    Raises:
+        RuntimeError: If any control does not exist.
+    """
+    for ctl in [arm_ctl, forearm_ctl, hand_ctl, upv_ctl]:
+        if not cmds.objExists(ctl):
+            raise RuntimeError("Control not found: {}".format(ctl))
+
+    v1 = vector.get_mvector(arm_ctl)
+    v2 = vector.get_mvector(forearm_ctl)
+    v3 = vector.get_mvector(hand_ctl)
+
+    a = v2 - v1  # vector from arm to elbow
+    b = v3 - v1  # vector from arm to wrist
+
+    b_normalized = b.normal()
+    proj = a * b_normalized
+    projected = b_normalized * proj
+    pole_dir = a - projected
+    pole_dir = pole_dir.normal()
+
+    elbow_len = a.length()
+    pole_vec = v2 + (pole_dir * elbow_len * distance_multiplier)
+
+    cmds.xform(upv_ctl, ws=True,
+               t=[pole_vec.x, pole_vec.y, pole_vec.z])
+
+
+def match_fk_to_ik_arbitrary_lengths(fk_controls, ui_host,
+                                     blend_attr, upv_ctl):
+    """Match FK to IK for arbitrary limb lengths.
+
+    Args:
+        fk_controls (list[str or PyNode]): [arm_ctl, forearm_ctl, hand_ctl].
+        ui_host (str or PyNode): Node with blend attr.
+        blend_attr (str): Name of blend or switch attr.
+        upv_ctl (str or PyNode): Up-vector control.
+
+    Returns:
+        bool: True if match ran, False if attrs missing.
+    """
+    arm_str, fore_str, hand_str = [], [], []
+    names = []
+    for c in fk_controls:
+        if not isinstance(c, str):
+            names.append(c.name())
+        else:
+            names.append(c)
+    arm_str, fore_str, hand_str = names
+
+    if not isinstance(ui_host, str):
+        ui_node = ui_host
+        ui_str = ui_host.name()
+    else:
+        ui_node = pm.PyNode(ui_host)
+        ui_str = ui_host
+
+    if not isinstance(upv_ctl, str):
+        upv_str = upv_ctl.name()
+    else:
+        upv_str = upv_ctl
+
+    # Derive scale/slide attr names
+    if blend_attr.endswith('_blend'):
+        base = blend_attr[:-6]
+    elif blend_attr.endswith('_Switch'):
+        base = blend_attr[:-7]
+    else:
+        base = blend_attr
+    scale_attr = base + '_ikscale'
+    slide_attr = base + '_slide'
+
+    # Check required attrs on PyNode
+    if not ui_node.hasAttr(scale_attr) or not ui_node.hasAttr(
+            slide_attr):
+        return False
+
+    # Run FK to IK match
+    match_fk_to_ik_scale_slide(
+        arm_ctl=arm_str, forearm_ctl=fore_str,
+        hand_ctl=hand_str, ui_host=ui_str,
+        scale_attr=scale_attr, slide_attr=slide_attr
+    )
+
+    # Place up-vector
+    place_upv_from_fk(
+        arm_ctl=arm_str, forearm_ctl=fore_str,
+        hand_ctl=hand_str, upv_ctl=upv_str,
+        distance_multiplier=1.0
+    )
+
+    return True

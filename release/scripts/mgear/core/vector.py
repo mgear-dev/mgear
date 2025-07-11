@@ -5,6 +5,7 @@ import maya.cmds as cmds
 import maya.OpenMaya as OpenMaya
 
 from mgear.pymaya import datatypes
+from mgear.core import utils
 
 
 #############################################
@@ -26,6 +27,7 @@ def getDistance(v0, v1):
     return v.length()
 
 
+@utils.ensure_pynode
 def getDistance2(obj0, obj1):
     """Get the distance between 2 objects.
 
@@ -43,6 +45,19 @@ def getDistance2(obj0, obj1):
     v = v1 - v0
 
     return v.length()
+
+
+def get_mvector(obj):
+    """Get MVector position of an object in world space.
+
+    Args:
+        obj (str): Object name.
+
+    Returns:
+        OpenMaya.MVector: Position in world space.
+    """
+    pos = cmds.xform(obj, q=True, ws=True, t=True)
+    return OpenMaya.MVector(pos[0], pos[1], pos[2])
 
 
 def linearlyInterpolate(v0, v1, blend=.5):
