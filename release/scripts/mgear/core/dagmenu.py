@@ -540,7 +540,7 @@ def __space_transfer_callback(*args):
     """
 
     # creates a map for non logical components controls
-    control_map = {"elbow": "mid", "rot": "orbit", "knee": "mid"}
+    control_map = {"elbow": ["mid"], "rot": ["orbit", "fk0"], "knee": ["mid"]}
 
     # switch_control = args[0].split("|")[-1].split(":")[-1]
     switch_control = args[0].split("|")[-1]
@@ -548,7 +548,7 @@ def __space_transfer_callback(*args):
     switch_attr = args[1]
     combo_box = args[2]
     search_token = switch_attr.split("_")[-1].split("ref")[0].split("Ref")[0]
-    # print(search_token)
+    print(search_token)
     target_control = None
 
     # control_01 attr don't standard name ane need to be check
@@ -575,7 +575,7 @@ def __space_transfer_callback(*args):
                 break
             elif (
                 search_token in control_map.keys()
-                and ctl.ctl_role.get() == control_map[search_token]
+                and ctl.ctl_role.get() in control_map[search_token]
             ):
                 target_control = ctl.stripNamespace()
                 break
