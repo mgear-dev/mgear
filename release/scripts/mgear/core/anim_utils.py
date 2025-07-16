@@ -988,7 +988,7 @@ def ikFkMatch_with_namespace2(
             )
             for elem in _all_controls
         ]
-    cmds.dgdirty(a=True)
+    # cmds.dgdirty(a=True)
 
     return
 
@@ -1260,7 +1260,7 @@ def ikFkMatch_with_namespace(
         if gimbal_exist:
             for x in fks_gimbal + [ik_gimbal]:
                 pm.setKeyframe(x, time=(cmds.currentTime(query=True)))
-    cmds.dgdirty(a=True)
+    # cmds.dgdirty(a=True)
 
 
 def ikFkMatch(model, ikfk_attr, ui_host, fks, ik, upv, ik_rot=None, key=None):
