@@ -1913,6 +1913,9 @@ class AbstractAnimationTransfer(QtWidgets.QDialog):
                 if worldMatrixList[i][j]:
                     n.setMatrix(worldMatrixList[i][j], worldSpace=True)
 
+            match_fk_to_ik_arbitrary_lengths(key_src_nodes, switch_attr_name.split(".")[0],
+                                             switch_attr_name.split(".")[1], key_dst_nodes[1])
+
             pm.setKeyframe(key_dst_nodes, at=channels)
             pm.setKeyframe(switch_attr_name)
 
@@ -2766,6 +2769,14 @@ def match_fk_to_ik_arbitrary_lengths(fk_controls, ui_host,
             slide_attr):
         return False
 
+    keyframe = pm.keyframe(f"{ui_str}.{blend_attr}",
+                           query=True,
+                           keyframeCount=True)
+
+    if keyframe:
+        cmds.setKeyframe(f"{ui_str}.{scale_attr}", time=(cmds.currentTime(query=True) - 1.0))
+        cmds.setKeyframe(f"{ui_str}.{slide_attr}", time=(cmds.currentTime(query=True) - 1.0))
+
     # Run FK to IK match
     match_fk_to_ik_scale_slide(
         arm_ctl=arm_str, forearm_ctl=fore_str,
@@ -2779,5 +2790,9 @@ def match_fk_to_ik_arbitrary_lengths(fk_controls, ui_host,
         hand_ctl=hand_str, upv_ctl=upv_str,
         distance_multiplier=1.0
     )
+
+    if keyframe:
+        cmds.setKeyframe(f"{ui_str}.{scale_attr}", time=(cmds.currentTime(query=True)))
+        cmds.setKeyframe(f"{ui_str}.{slide_attr}", time=(cmds.currentTime(query=True)))
 
     return True
