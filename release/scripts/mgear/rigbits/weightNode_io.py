@@ -37,7 +37,7 @@ from .six import PY2
 import maya.cmds as mc
 import mgear.pymaya as pm
 
-from mgear.core import plugin_utils
+# from mgear.core import plugin_utils
 
 # rbfSetup
 if PY2:
@@ -124,56 +124,56 @@ RBF_TYPE = "weightDriver"
 
 
 # Check for plugin
-def loadWeightPlugin(dependentFunc):
-    """ensure that plugin is always loaded prior to importing from json
+# def loadWeightPlugin(dependentFunc):
+#     """ensure that plugin is always loaded prior to importing from json
 
-    Note: No assumption has been made about plugin location, we loop over
-        available plugin, and check for the highest version.
+#     Note: No assumption has been made about plugin location, we loop over
+#         available plugin, and check for the highest version.
 
-    Args:
-        dependentFunc (func): any function that needs to have plugin loaded
+#     Args:
+#         dependentFunc (func): any function that needs to have plugin loaded
 
-    Returns:
-        func: pass through of function
-    """
-    maya_version = int(mc.about(version=True))
+#     Returns:
+#         func: pass through of function
+#     """
+#     maya_version = int(mc.about(version=True))
 
-    # maya2024+ cannot have a version lower then
-    maya_2024_lower_limit = plugin_utils.pluginVersion("3.6.2")
-    # maya2023- cannot have a version higher then
-    maya_2023_upper_limit = plugin_utils.pluginVersion("3.6.1")
+#     # maya2024+ cannot have a version lower then
+#     maya_2024_lower_limit = plugin_utils.pluginVersion("3.6.2")
+#     # maya2023- cannot have a version higher then
+#     maya_2023_upper_limit = plugin_utils.pluginVersion("3.6.1")
 
-    try:
-        plugin_list = plugin_utils.get_available_plugins("weightDriver")
+#     try:
+#         plugin_list = plugin_utils.get_available_plugins("weightDriver")
 
-        # only one weightDriver plugin
-        if len(plugin_list) == 1:
-            return dependentFunc
+#         # only one weightDriver plugin
+#         if len(plugin_list) == 1:
+#             return dependentFunc
 
-        # Loop over weight plugins, enable and test version
-        for plugin_data in plugin_list:
-            plugin_utils.load_plugin(*plugin_data)
-            wd_version = plugin_utils.get_plugin_version("weightDriver")
-            usingShapes = False
+#         # Loop over weight plugins, enable and test version
+#         for plugin_data in plugin_list:
+#             plugin_utils.load_plugin(*plugin_data)
+#             wd_version = plugin_utils.get_plugin_version("weightDriver")
+#             usingShapes = False
 
-            if maya_version >= 2024:
-                if wd_version >= maya_2024_lower_limit:
-                    usingShapes = True
-            else:
-                if wd_version <= maya_2023_upper_limit:
-                    usingShapes = True
-            if usingShapes:
-                msg = "RBF Manager is using weightDriver version {} installed \
-with SHAPES plugin"
-                pm.displayInfo(msg.format(wd_version))
-                break
-    except RuntimeError:
-        pm.displayWarning("RBF Manager couldn't found any valid RBF solver.")
+#             if maya_version >= 2024:
+#                 if wd_version >= maya_2024_lower_limit:
+#                     usingShapes = True
+#             else:
+#                 if wd_version <= maya_2023_upper_limit:
+#                     usingShapes = True
+#             if usingShapes:
+#                 msg = "RBF Manager is using weightDriver version {} installed \
+# with SHAPES plugin"
+#                 pm.displayInfo(msg.format(wd_version))
+#                 break
+#     except RuntimeError:
+#         pm.displayWarning("RBF Manager couldn't found any valid RBF solver.")
 
-    return dependentFunc
+#     return dependentFunc
 
 
-@loadWeightPlugin
+# @loadWeightPlugin
 def createRBF(name, transformName=None):
     """Creates a rbf node of type weightDriver
 
@@ -760,7 +760,7 @@ def recreateConnections(connectionsInfo):
         pprint.pprint(failedConnections)
 
 
-@loadWeightPlugin
+# @loadWeightPlugin
 def createRBFFromInfo(weightNodeInfo_dict):
     """create an rbf node from the dictionary provided information
 

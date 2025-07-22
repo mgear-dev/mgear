@@ -124,7 +124,7 @@ RBF_TYPE = "mGearWeightDriver"
 
 
 # Check for plugin
-def loadWeightPlugin(dependentFunc):
+def loadMGWeightPlugin(dependentFunc):
     """ensure that plugin is always loaded prior to importing from json"""
     try:
         pm.loadPlugin("mGearWeightDriver", qt=True)
@@ -137,7 +137,7 @@ def loadWeightPlugin(dependentFunc):
     return dependentFunc
 
 
-@loadWeightPlugin
+@loadMGWeightPlugin
 def createRBF(name, transformName=None):
     """Creates a rbf node of type mGearWeightDriver
 
@@ -724,7 +724,7 @@ def recreateConnections(connectionsInfo):
         pprint.pprint(failedConnections)
 
 
-@loadWeightPlugin
+@loadMGWeightPlugin
 def createRBFFromInfo(weightNodeInfo_dict):
     """create an rbf node from the dictionary provided information
 

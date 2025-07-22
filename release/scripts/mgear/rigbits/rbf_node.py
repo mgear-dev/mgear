@@ -55,7 +55,12 @@ ROTATE_ATTRS = ["rotateX", "rotateY", "rotateZ"]
 
 SCALE_ATTRS = ["scaleX", "scaleY", "scaleZ"]
 
-SUPPORTED_RBF_NODES = ("mGearWeightDriver", "weightDriver")
+# available_SHAPES_WD = mc.pluginInfo("weightDriver", q=True, loaded=True)
+# if available_SHAPES_WD:
+
+#     SUPPORTED_RBF_NODES = ("mGearWeightDriver", "weightDriver")
+# else:
+SUPPORTED_RBF_NODES = ("mGearWeightDriver",)
 
 GENERIC_SUFFIX = "_RBF"
 
@@ -563,10 +568,23 @@ def getSceneSetupNodes():
     Returns:
         list: of rbf nodes with setup information
     """
-    nodes = set(mc.ls(type=SUPPORTED_RBF_NODES))
+    global SUPPORTED_RBF_NODES
+
+    # Dynamically add "weightDriver" if the plugin is loaded
+    if mc.pluginInfo("weightDriver", q=True, loaded=True):
+        SUPPORTED_RBF_NODES = (
+            "mGearWeightDriver",
+            "weightDriver"
+        )
+
+    nodes = set()
+
+    for node_type in SUPPORTED_RBF_NODES:
+        if node_type in mc.ls(nodeTypes=True):
+            nodes.update(mc.ls(type=node_type))
+
     return [
-        rbf
-        for rbf in nodes
+        rbf for rbf in nodes
         if mc.attributeQuery(RBF_SETUP_ATTR, n=rbf, ex=True)
     ]
 
