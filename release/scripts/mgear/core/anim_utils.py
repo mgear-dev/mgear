@@ -973,7 +973,7 @@ def ikFkMatch_with_namespace2(
             transform.matchWorldTransform(
                 ik_targets["reverse_ankle_ik"], ik_ctrl["reverse_ankle_ik"]
             )
-            match_fk_to_ik_arbitrary_lengths(fk_controls, ui_host,
+            match_fk_to_ik_arbitrary_lengths(fk_controls, ui_node,
                                              ikfk_attr, ik_ctrl["pole_vector"])
         except KeyError:
             pass
@@ -1248,7 +1248,7 @@ def ikFkMatch_with_namespace(
             for i, c in enumerate(foot_fk):
                 c.setMatrix(foot_FK_matrix[i], worldSpace=True)
 
-        match_fk_to_ik_arbitrary_lengths(fk_ctrls, ui_host,
+        match_fk_to_ik_arbitrary_lengths(fk_ctrls, ui_node,
                                          ikfk_attr, upv_ctrl)
 
     # sets keyframes
@@ -1912,9 +1912,9 @@ class AbstractAnimationTransfer(QtWidgets.QDialog):
             for j, n in enumerate(key_dst_nodes):
                 if worldMatrixList[i][j]:
                     n.setMatrix(worldMatrixList[i][j], worldSpace=True)
-
-            match_fk_to_ik_arbitrary_lengths(key_src_nodes, switch_attr_name.split(".")[0],
-                                             switch_attr_name.split(".")[1], key_dst_nodes[1])
+            if definition == "IK":
+                match_fk_to_ik_arbitrary_lengths(key_src_nodes, switch_attr_name.split(".")[0],
+                                                 switch_attr_name.split(".")[1], key_dst_nodes[1])
 
             pm.setKeyframe(key_dst_nodes, at=channels)
             pm.setKeyframe(switch_attr_name)
@@ -2773,9 +2773,9 @@ def match_fk_to_ik_arbitrary_lengths(fk_controls, ui_host,
                            query=True,
                            keyframeCount=True)
 
-    if keyframe:
-        cmds.setKeyframe(f"{ui_str}.{scale_attr}", time=(cmds.currentTime(query=True) - 1.0))
-        cmds.setKeyframe(f"{ui_str}.{slide_attr}", time=(cmds.currentTime(query=True) - 1.0))
+    # if keyframe:
+    #     cmds.setKeyframe(f"{ui_str}.{scale_attr}", time=(cmds.currentTime(query=True) - 1.0))
+    #     cmds.setKeyframe(f"{ui_str}.{slide_attr}", time=(cmds.currentTime(query=True) - 1.0))
 
     # Run FK to IK match
     match_fk_to_ik_scale_slide(
