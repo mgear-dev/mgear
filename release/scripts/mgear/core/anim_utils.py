@@ -1990,6 +1990,7 @@ class ParentSpaceTransfer(AbstractAnimationTransfer):
         for i, x in enumerate(range(startFrame, endFrame + 1)):
             world_transform_data_frame = []
             if onlyKeyframes and x not in keyframeList:
+                world_transform_data.append([])
                 continue
 
             pm.currentTime(x)
@@ -1997,7 +1998,6 @@ class ParentSpaceTransfer(AbstractAnimationTransfer):
                 world_transform_data_frame.append(transform.get_world_transform_data(n))
 
             world_transform_data.append(world_transform_data_frame)
-
         # delete animation in the space switch channel and destination ctrls
         pm.cutKey(key_dst_nodes, at=channels, time=(startFrame, endFrame))
         pm.cutKey(switch_attr_name, time=(startFrame, endFrame))
