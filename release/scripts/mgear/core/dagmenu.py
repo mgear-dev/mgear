@@ -587,8 +587,9 @@ def __space_transfer_callback(*args):
             # found controls for the match.
             # This is needed for regular ik match in Control_01
             for ctl in uiHost.attr(comp_ctl_list).listConnections():
+                if ctl.ctl_role.get() == "ctl":
 
-                target_control_list.append(ctl.stripNamespace())
+                    target_control_list.append(ctl.stripNamespace())
 
     # gets root node for the given control
     namespace_value = args[0].split("|")[-1].split(":")
