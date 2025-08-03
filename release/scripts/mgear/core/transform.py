@@ -1084,6 +1084,44 @@ def rotate_180(axis="Y", rotation_order="XYZ", objects=None):
 
 # Wolrd Transform Functions: Transform data IO with pivot offset
 
+def apply_world_scale(obj, world_scale):
+    """Apply world scale to an object.
+    Previously when using cmds.xform(obj, ws=True, s=transform_data["scale"])
+    the scale was interpred as local value and didn't work with negative values
+
+    Args:
+        obj (str): Name of the object.
+        world_scale (list of float): Desired world scale [sx, sy, sz].
+    """
+    # Get parent
+    parent = cmds.listRelatives(obj, parent=True, fullPath=True)
+
+    if parent:
+        # Get parent world scale
+        parent_world_scale = cmds.xform(parent[0], q=True, ws=True, s=True)
+
+        # Compute local scale: desired world scale / parent world scale
+        local_scale = [
+            world_scale[i] / parent_world_scale[i]
+            if abs(parent_world_scale[i]) > 1e-10 else 0.0
+            for i in range(3)
+        ]
+    else:
+        # No parent, local scale = world scale
+        local_scale = world_scale
+
+    # Set local scale
+    # Check each scale axis before setting
+    for i, axis in enumerate(["X", "Y", "Z"]):
+        attr = "{}.scale{}".format(obj, axis)
+        # Skip if locked or connected
+        if cmds.getAttr(attr, lock=True):
+            continue
+        if cmds.connectionInfo(attr, isDestination=True):
+            continue
+        cmds.setAttr(attr, local_scale[i])
+
+
 def apply_pivot_offset_to_translation(obj):
     """Add the local rotate pivot to the object's current translation.
 
@@ -1158,6 +1196,7 @@ def set_world_transform_data(obj, transform_data):
     if "rotation" in transform_data:
         cmds.xform(obj, ws=True, rotation=transform_data["rotation"])
     if "scale" in transform_data:
-        cmds.xform(obj, ws=True, s=transform_data["scale"])
+        # cmds.xform(obj, ws=True, s=transform_data["scale"])
+        apply_world_scale(obj, transform_data["scale"])
 
 
