@@ -619,17 +619,18 @@ def __space_transfer_callback(*args):
         pm.displayInfo("Not root or target control list for space transfer")
         return
 
-    autokey = cmds.listConnections(
-        "{}.{}".format(switch_control, switch_attr), type="animCurve"
-    )
+    # autokey = cmds.listConnections(
+    #     "{}.{}".format(switch_control, switch_attr), type="animCurve"
+    # )
 
-    if autokey:
-        for target_control in target_control_list:
-            cmds.setKeyframe(
-                "{}:{}".format(namespace_value, target_control),
-                "{}.{}".format(switch_control, switch_attr),
-                time=(cmds.currentTime(query=True) - 1.0),
-            )
+    # if autokey:
+    #     print("Autokey run")
+    #     for target_control in target_control_list:
+    #         cmds.setKeyframe(
+    #             "{}:{}".format(namespace_value, target_control),
+    #             "{}.{}".format(switch_control, switch_attr),
+    #             time=(cmds.currentTime(query=True) - 1.0),
+    #         )
 
     # triggers switch
     ParentSpaceTransfer.showUI(
@@ -640,13 +641,13 @@ def __space_transfer_callback(*args):
         target_control_list[0],
     )
 
-    if autokey:
-        for target_control in target_control_list:
-            cmds.setKeyframe(
-                "{}:{}".format(namespace_value, target_control),
-                "{}.{}".format(switch_control, switch_attr),
-                time=(cmds.currentTime(query=True)),
-            )
+    # if autokey:
+    #     for target_control in target_control_list:
+    #         cmds.setKeyframe(
+    #             "{}:{}".format(namespace_value, target_control),
+    #             "{}.{}".format(switch_control, switch_attr),
+    #             time=(cmds.currentTime(query=True)),
+    #         )
 
 
 def __switch_xray_ctl_callback(*args):
