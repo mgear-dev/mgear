@@ -1084,119 +1084,47 @@ def rotate_180(axis="Y", rotation_order="XYZ", objects=None):
 
 # Wolrd Transform Functions: Transform data IO with pivot offset
 
-def apply_world_scale(obj, world_scale):
-    """Apply world scale to an object.
-    Previously when using cmds.xform(obj, ws=True, s=transform_data["scale"])
-    the scale was interpred as local value and didn't work with negative values
-
-    Args:
-        obj (str): Name of the object.
-        world_scale (list of float): Desired world scale [sx, sy, sz].
-    """
-    # Get parent
-    parent = cmds.listRelatives(obj, parent=True, fullPath=True)
-
-    if parent:
-        # Get parent world scale
-        parent_world_scale = cmds.xform(parent[0], q=True, ws=True, s=True)
-
-        # Compute local scale: desired world scale / parent world scale
-        local_scale = [
-            world_scale[i] / parent_world_scale[i]
-            if abs(parent_world_scale[i]) > 1e-10 else 0.0
-            for i in range(3)
-        ]
-    else:
-        # No parent, local scale = world scale
-        local_scale = world_scale
-
-    # Set local scale
-    # Check each scale axis before setting
-    for i, axis in enumerate(["X", "Y", "Z"]):
-        attr = "{}.scale{}".format(obj, axis)
-        # Skip if locked or connected
-        if cmds.getAttr(attr, lock=True):
-            continue
-        if cmds.connectionInfo(attr, isDestination=True):
-            continue
-        cmds.setAttr(attr, local_scale[i])
-
-
-def apply_pivot_offset_to_translation(obj):
-    """Add the local rotate pivot to the object's current translation.
-
-    Args:
-        obj (str): Name of the object.
-
-    Raises:
-        RuntimeError: If the object does not exist.
-    """
-    if not cmds.objExists(obj):
-        raise RuntimeError("Object '{}' does not exist.".format(obj))
-
-    # Check if any component of .translate is locked or connected
-    for axis in ["X", "Y", "Z"]:
-        attr = "{}.translate{}".format(obj, axis)
-        if cmds.getAttr(attr, lock=True):
-            return
-
-    translation = cmds.getAttr(obj + ".translate")[0]
-    rotate_pivot = cmds.getAttr(obj + ".rotatePivot")[0]
-
-    new_translation = [t - rp for t, rp in zip(translation, rotate_pivot)]
-    cmds.setAttr(obj + ".translate", *new_translation, type="double3")
-
-
 def get_world_transform_data(obj):
-    """Get world transform data (translation, rotation, scale) of a given object.
+    """Get world transform matrix and pivot of a given object.
 
     Args:
         obj (str): Name of the source object.
 
     Returns:
-        dict: Dictionary with keys 'translation', 'rotation', and 'scale'.
+        dict: {
+            'matrix': list of 16 floats for the world matrix,
+            'rotatePivot': list of 3 floats for the world-space pivot
+        }
     """
     if not cmds.objExists(obj):
         raise RuntimeError("Object '{}' does not exist.".format(obj))
 
-    transform_data = {
-        "translation": cmds.xform(obj, q=True, ws=True, t=True),
-        "rotation": cmds.xform(obj, q=True, ws=True, rotation=True),
-        "scale": cmds.xform(obj, q=True, ws=True, s=True),
-        "rotatePivot": cmds.xform(obj, q=True, ws=True, rotatePivot=True),
-    }
-    return transform_data
+    matrix = cmds.xform(obj, q=True, ws=True, m=True)
+    pivot = cmds.xform(obj, q=True, ws=True, rotatePivot=True)
+    return {'matrix': matrix, 'rotatePivot': pivot}
 
 
 def set_world_transform_data(obj, transform_data):
-    """Set world transform data to a given object.
+    """Apply stored world matrix and pivot to a given object.
 
     Args:
         obj (str): Name of the target object.
-        transform_data (dict): Dictionary with keys 'translation',
-            'rotation', and 'scale'.
+        transform_data (dict): {
+            'matrix': list of 16 floats,
+            'rotatePivot': list of 3 floats
+        }
     """
     if not cmds.objExists(obj):
         raise RuntimeError("Object '{}' does not exist.".format(obj))
 
-    if "translation" in transform_data:
-        cmds.xform(
-            obj,
-            ws=True,
-            t=vector.subtract_3Dvectors_list(
-                transform_data["translation"], transform_data["rotatePivot"]
-            ),
-        )
-        v1 = vector.subtract_3Dvectors_list(
-            transform_data["rotatePivot"], transform_data["translation"]
-        )
-        v2 = vector.add_3Dvectors_list(transform_data["translation"], v1)
-        cmds.xform(obj, ws=True, t=v2)
-        apply_pivot_offset_to_translation(obj)
-    if "rotation" in transform_data:
-        cmds.xform(obj, ws=True, rotation=transform_data["rotation"])
-    if "scale" in transform_data:
-        # cmds.xform(obj, ws=True, s=transform_data["scale"])
-        apply_world_scale(obj, transform_data["scale"])
+    matrix = transform_data.get('matrix')
+    pivot = transform_data.get('rotatePivot')
+
+    if matrix:
+        cmds.xform(obj, ws=True, m=matrix)
+    if pivot:
+        # restore both rotate- and scale-pivot in world space
+        cmds.xform(obj, ws=True, rotatePivot=pivot)
+        cmds.xform(obj, ws=True, scalePivot=pivot)
 
 
