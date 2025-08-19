@@ -1146,11 +1146,14 @@ def ikFkMatch_with_namespace(
         _all_controls.extend(foot_fk)
 
     # if already keyframe we always set keyframes
-    if not key:
-        for c in _all_controls:
-            if pm.keyframe(c, query=True, keyframeCount=True):
-                key = True
-                break
+    # Comment out:
+    # The behavior wasn't clear for user. So now is removed and the user must
+    # keyframe or use + key option
+    # if not key:
+    #     for c in _all_controls:
+    #         if pm.keyframe(c, query=True, keyframeCount=True):
+    #             key = True
+    #             break
 
     if key:
         [
