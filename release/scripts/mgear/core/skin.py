@@ -199,6 +199,9 @@ def collectInfluenceWeights(skinCls, dagPath, components, dataDic):
     numInfluences = get_skin_cluster_fn(skinCls.name()).influenceObjects(
         influencePaths
     )
+    # cast to float to avoid rounding errors when dividing integers?
+    dataDic["vertexCount"] = int(weights.length() / float(numInfluences))
+
     numComponentsPerInfluence = int(weights.length() / numInfluences)
     for ii in range(influencePaths.length()):
         influenceName = influencePaths[ii].partialPathName()
@@ -209,8 +212,7 @@ def collectInfluenceWeights(skinCls, dagPath, components, dataDic):
             for jj in range(numComponentsPerInfluence)
             if weights[jj * numInfluences + ii] != 0.0
         }
-        # cast to float to avoid rounding errors when dividing integers?
-        dataDic["vertexCount"] = int(weights.length() / float(numInfluences))
+
         # cast influenceWithoutNamespace as string otherwise it can end up
         # as DependNodeName(u'jointName') in the data.
         dataDic["weights"][str(influenceWithoutNamespace)] = inf_w
@@ -290,9 +292,9 @@ def exportSkin(filePath=None, objs=None, *args):
             # start by pruning by a tiny amount. Enough to not make  noticeable
             # change to the skin, but it will remove infinitely small weights.
             # Otherwise, compressing will do almost nothing!
-            if isinstance(obj.getShape(), pm.nodetypes.Mesh):
+            # if isinstance(obj.getShape(), pm.nodetypes.Mesh):
                 # TODO: Implement pruning on nurbs. Less straight-forward
-                pm.skinPercent(skinCls, obj, pruneWeights=0.001)
+                # pm.skinPercent(skinCls, obj, pruneWeights=0.0001)
 
             dataDic = {
                 "weights": {},
