@@ -549,7 +549,6 @@ def __space_transfer_callback(*args):
     switch_attr = args[1]
     combo_box = args[2]
     search_token = switch_attr.split("_")[-1].split("ref")[0].split("Ref")[0]
-    print(search_token)
     target_control = None
 
     # control_01 attr don't standard name ane need to be check
