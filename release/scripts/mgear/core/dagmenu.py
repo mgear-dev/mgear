@@ -419,7 +419,7 @@ def __switch_parent_callback(*args):
     """
 
     # creates a map for non logical components controls
-    control_map = {"elbow": ["mid"], "rot":[ "orbit"], "knee": ["mid"], "ik": ["headIK"]}
+    control_map = {"elbow": ["mid"], "rot":[ "orbit"], "knee": ["mid"], "ik": ["headIK"],"head": ["headFree"]}
 
     # switch_control = args[0].split("|")[-1].split(":")[-1]
     switch_control = args[0].split("|")[-1]
@@ -540,7 +540,8 @@ def __space_transfer_callback(*args):
     """
 
     # creates a map for non logical components controls
-    control_map = {"elbow": ["mid"], "rot": ["orbit", "fk0"], "knee": ["mid"]}
+    control_map = {"elbow": ["mid"], "rot": ["orbit", "fk0"], "knee": ["mid"],
+                   "ik": ["headIK"], "head": ["headFree"]}
 
     # switch_control = args[0].split("|")[-1].split(":")[-1]
     switch_control = args[0].split("|")[-1]
