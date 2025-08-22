@@ -43,7 +43,9 @@ class Component(component.Main):
             fk_ctl = None
 
             self.ik_cns = primitive.addTransform(
-                self.root, self.getName("ik_cns"), self.guide.tra["root"]
+                self.root,
+                self.getName("ik_cns"),
+                transform.getTransformFromPos(self.guide.pos["root"])
             )
 
             chain_pos = transform.getChainTransform(
@@ -56,7 +58,10 @@ class Component(component.Main):
                     dist = dist * -1
 
                 if self.settings["neutralpose"] or not previous_transform:
-                    tnpo = t
+                    if self.settings["mirrorBehaviour"] and self.negate:
+                        tnpo = transform.setMatrixScale(t, [-1, -1, -1])
+                    else:
+                        tnpo = t
                 else:
                     tnpo = transform.setMatrixPosition(
                         previous_transform, transform.getPositionFromMatrix(t)
@@ -71,23 +76,23 @@ class Component(component.Main):
                     )
                     self.fk_ref.append(fk_ref)
                 else:
-                    if self.settings["mirrorBehaviour"] and self.negate:
-                        tref = transform.setMatrixScale(t, [-1, -1, -1])
-                    else:
-                        tref = t
+                    tref = t
+                if self.settings["mirrorBehaviour"] and self.negate:
+                    t_ctl = transform.setMatrixScale(t, [-1, -1, -1])
+                else:
+                    t_ctl = t
 
                 fk_off = primitive.addTransform(
                     self.ik_cns, self.getName("fk%s_off" % i), tref
                 )
 
                 fk_npo = primitive.addTransform(
-                    fk_off, self.getName("fk%s_npo" % i), tref
+                    fk_off, self.getName("fk%s_npo" % i), tnpo
                 )
-
                 fk_ctl = self.addCtl(
                     fk_npo,
                     "fk%s_ctl" % i,
-                    tref,
+                    t_ctl,
                     self.color_fk,
                     "cube",
                     w=dist,
@@ -100,7 +105,7 @@ class Component(component.Main):
                 self.fk_off.append(fk_off)
                 self.fk_npo.append(fk_npo)
                 self.fk_ctl.append(fk_ctl)
-                previous_transform = tref
+                previous_transform = t_ctl
                 self.previusTag = fk_ctl
 
         # IK controllers ------------------------------------

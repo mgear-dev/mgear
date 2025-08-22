@@ -405,30 +405,31 @@ class HumanIKMapper:
             for bone in cls.char_config
             if cls.char_config[bone]["sub_ik"]
         ]
-        sub_ik_constraints = [
-            cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
-        ]
-        sub_ik_constraints_string = " ".join(sub_ik_constraints)
+        if sub_ik_ctls:
+            sub_ik_constraints = [
+                cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
+            ]
+            sub_ik_constraints_string = " ".join(sub_ik_constraints)
 
-        mel_cmd = """
-            string $currCharacter = hikGetCurrentCharacter();
+            mel_cmd = """
+                string $currCharacter = hikGetCurrentCharacter();
 
-            if( $currCharacter != "" )
-            {{
-                string $preBakeCmd =  "hikBakeCharacterPre( \\"{0}\\" ); ";
-                $preBakeCmd += "select -add {1};";
-                string $postBakeCmd = "hikBakeCharacterPost( \\"{0}\\" ); ";
-                $postBakeCmd += "delete {2};";
+                if( $currCharacter != "" )
+                {{
+                    string $preBakeCmd =  "hikBakeCharacterPre( \\"{0}\\" ); ";
+                    $preBakeCmd += "select -add {1};";
+                    string $postBakeCmd = "hikBakeCharacterPost( \\"{0}\\" ); ";
+                    $postBakeCmd += "delete {2};";
 
-                performBakeSimulationArgList 2 {{ "1", "animationList", $preBakeCmd, $postBakeCmd }};
-            }}
+                    performBakeSimulationArgList 2 {{ "1", "animationList", $preBakeCmd, $postBakeCmd }};
+                }}
 
-        """.format(
-            current_ik_char, attrs_string, sub_ik_constraints_string
-        )
+            """.format(
+                current_ik_char, attrs_string, sub_ik_constraints_string
+            )
 
-        mel.eval(mel_cmd)
-        # cls.sub_iks_binding(False)
+            mel.eval(mel_cmd)
+            # cls.sub_iks_binding(False)
 
     @classmethod
     def get_sub_ik_bake_attrs(cls):

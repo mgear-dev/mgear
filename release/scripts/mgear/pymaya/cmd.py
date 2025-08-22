@@ -603,6 +603,7 @@ def listRelatives(*args, **kwargs):
         "s": "shapes",
         "ni": "noIntermediate",
         "t": "type",
+        "typ": "type",
     }
     # Convert short names in kwargs to long names.
     for key in list(kwargs):

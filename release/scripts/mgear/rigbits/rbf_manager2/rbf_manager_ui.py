@@ -316,6 +316,45 @@ class RBFMenuFunction:
             return
         rbf_io.exportRBFs(nodesToExport, filePath)
 
+    def update_rbf_solver_reference(self):
+        """Open file dialog and update solver name in selected .rbf or .ma file.
+
+        Replaces all occurrences of 'weightDriver' with 'mGearWeightDriver' and
+        saves the modified file in the same folder with a '_RBF_solver_updated'
+        suffix. Displays how many replacements were made.
+
+        Returns:
+            str: Path to the updated file or None if cancelled.
+        """
+        file_path = mc.fileDialog2(
+            fileFilter="RBF/Maya ASCII (*.rbf *.ma)",
+            dialogStyle=2,
+            fileMode=1
+        )
+
+        if not file_path:
+            return None
+
+        source_path = file_path[0]
+        base, ext = os.path.splitext(source_path)
+        new_name = os.path.basename(base) + "_RBF_solver_updated" + ext
+
+        new_path, count = mString.replace_string_in_file(
+            "weightDriver",
+            "mGearWeightDriver",
+            new_name,
+            source_path
+        )
+
+        mc.confirmDialog(
+            title="RBF Solver Update",
+            message="Updated file saved:\n{}\n\nReplacements made: {}".format(
+                new_path, count),
+            button=["OK"]
+        )
+
+        return new_path
+
 
 class RBFManagerUI(widget.RBFWidget):
     """A manager for creating, mirroring, importing/exporting poses created
@@ -1925,6 +1964,10 @@ class RBFManagerUI(widget.RBFWidget):
             "Delete All Setup",
             partial(self.menuFunc.deleteSetup, allSetup=True),
         )
+        file.addSeparator()
+        file.addAction(
+            "Update file to mGear Weight Driver Variant",
+            self.menuFunc.update_rbf_solver_reference)
         # mirror --------------------------------------------------------------
         mirrorMenu = mainMenuBar.addMenu("Mirror")
         mirrorMenu1 = mirrorMenu.addAction("Mirror Setup", self.mirrorSetup)

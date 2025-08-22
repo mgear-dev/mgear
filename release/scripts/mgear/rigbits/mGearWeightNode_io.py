@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """
-import weightNode_io
+import mGearWeightNode_io
 
 # Find all the weight Nodes
-weightDrivers = pm.ls(type="weightDriver")
+weightDrivers = pm.ls(type="mGearWeightDriver")
 
 # any filePath
 testPath = r"C:\\Users\rafael\Documents\core\scripts\testWeightNodes.json"
 
 # Export listed weightDrivers
-weightNode_io.exportNodes(testPath, weightDrivers)
+mGearWeightNode_io.exportNodes(testPath, weightDrivers)
 
 # import all weight drivers from filePath
-weightNode_io.importNodes(testPath)
+mGearWeightNode_io.importNodes(testPath)
 
 Attributes:
     CTL_SUFFIX (str): ctl suffix shared from rbf_io
@@ -37,7 +37,7 @@ from .six import PY2
 import maya.cmds as mc
 import mgear.pymaya as pm
 
-# from mgear.core import plugin_utils
+from mgear.core import plugin_utils
 
 # rbfSetup
 if PY2:
@@ -116,7 +116,7 @@ WNODE_SHAPE_ATTRS = [
 ENVELOPE_ATTR = "scale"
 
 WD_SUFFIX = "_WD"
-RBF_TYPE = "weightDriver"
+RBF_TYPE = "mGearWeightDriver"
 
 # ==============================================================================
 # General utils
@@ -124,65 +124,29 @@ RBF_TYPE = "weightDriver"
 
 
 # Check for plugin
-# def loadWeightPlugin(dependentFunc):
-#     """ensure that plugin is always loaded prior to importing from json
+def loadMGWeightPlugin(dependentFunc):
+    """ensure that plugin is always loaded prior to importing from json"""
+    try:
+        pm.loadPlugin("mGearWeightDriver", qt=True)
 
-#     Note: No assumption has been made about plugin location, we loop over
-#         available plugin, and check for the highest version.
+    except RuntimeError:
+        pm.displayWarning(
+            "RBF Manager couldn't found any valid mGearWeightDriver RBF solver."
+        )
 
-#     Args:
-#         dependentFunc (func): any function that needs to have plugin loaded
-
-#     Returns:
-#         func: pass through of function
-#     """
-#     maya_version = int(mc.about(version=True))
-
-#     # maya2024+ cannot have a version lower then
-#     maya_2024_lower_limit = plugin_utils.pluginVersion("3.6.2")
-#     # maya2023- cannot have a version higher then
-#     maya_2023_upper_limit = plugin_utils.pluginVersion("3.6.1")
-
-#     try:
-#         plugin_list = plugin_utils.get_available_plugins("weightDriver")
-
-#         # only one weightDriver plugin
-#         if len(plugin_list) == 1:
-#             return dependentFunc
-
-#         # Loop over weight plugins, enable and test version
-#         for plugin_data in plugin_list:
-#             plugin_utils.load_plugin(*plugin_data)
-#             wd_version = plugin_utils.get_plugin_version("weightDriver")
-#             usingShapes = False
-
-#             if maya_version >= 2024:
-#                 if wd_version >= maya_2024_lower_limit:
-#                     usingShapes = True
-#             else:
-#                 if wd_version <= maya_2023_upper_limit:
-#                     usingShapes = True
-#             if usingShapes:
-#                 msg = "RBF Manager is using weightDriver version {} installed \
-# with SHAPES plugin"
-#                 pm.displayInfo(msg.format(wd_version))
-#                 break
-#     except RuntimeError:
-#         pm.displayWarning("RBF Manager couldn't found any valid RBF solver.")
-
-#     return dependentFunc
+    return dependentFunc
 
 
-# @loadWeightPlugin
+@loadMGWeightPlugin
 def createRBF(name, transformName=None):
-    """Creates a rbf node of type weightDriver
+    """Creates a rbf node of type mGearWeightDriver
 
     Args:
         name (str): name of node
         transformName (str, optional): specify name of transform
 
     Returns:
-        list: pymel: trasnform, weightDriverShape
+        list: pymel: trasnform, mGearWeightDriverShape
     """
     if transformName is None:
         transformName = "{}{}".format(name, TRANSFORM_SUFFIX)
@@ -194,20 +158,20 @@ def createRBF(name, transformName=None):
 
 
 def forceEvaluation(node):
-    """force evaluation of the weightDriver node
+    """force evaluation of the mGearWeightDriver node
     thank you Ingo
 
     Args:
-        node (str): weightDriver to be recached
+        node (str): mGearWeightDriver to be recached
     """
     pm.setAttr("{}.evaluate".format(node), 1)
 
 
 def getNodeConnections(node):
-    """get all connections on weightDriver node
+    """get all connections on mGearWeightDriver node
 
     Args:
-        node (str): weightDriver node
+        node (str): mGearWeightDriver node
 
     Returns:
         list: of connections and attrs to recreate,
@@ -237,7 +201,7 @@ def getRBFTransformInfo(node):
     """get a dict of all the information to be serialized to/from json
 
     Args:
-        node (str): name of weightDriverShape node
+        node (str): name of mGearWeightDriverShape node
 
     Returns:
         dict: information to be recreated on import
@@ -284,7 +248,7 @@ def lengthenCompoundAttrs(node):
     already querying info that will be needed later on.
 
     Args:
-        node (str): weightDriver to perform insanity check
+        node (str): mGearWeightDriver to perform insanity check
 
     Returns:
         n/a: n/a
@@ -310,10 +274,10 @@ def lengthenCompoundAttrs(node):
 
 
 def getPoseInfo(node):
-    """Get dict of the pose info from the provided weightDriver node
+    """Get dict of the pose info from the provided mGearWeightDriver node
 
     Args:
-        node (str): name of weightDriver
+        node (str): name of mGearWeightDriver
 
     Returns:
         dict: of poseInput:list of values, poseValue:values
@@ -335,11 +299,11 @@ def getPoseInfo(node):
 
 
 def getDriverListInfo(node):
-    """used for when live connections are supported on the weightDriver
+    """used for when live connections are supported on the mGearWeightDriver
     # TODO - Complete support
 
     Args:
-        node (str): name of weightDriverNode
+        node (str): name of mGearWeightDriverNode
 
     Returns:
         dict: driver:poseValue
@@ -368,7 +332,7 @@ def setDriverNode(node, driverNode, driverAttrs):
     """set the node that will be driving the evaluation on our poses
 
     Args:
-        node (str): name of weightDriver node
+        node (str): name of mGearWeightDriver node
         driverNode (str): name of driver node
         driverAttrs (list): of attributes used to perform evaluations
     """
@@ -379,10 +343,10 @@ def setDriverNode(node, driverNode, driverAttrs):
 
 
 def getDriverNode(node):
-    """get nodes that are driving weightDriver node
+    """get nodes that are driving mGearWeightDriver node
 
     Args:
-        node (str): weightDriver node
+        node (str): mGearWeightDriver node
 
     Returns:
         list: of driver nodes
@@ -395,12 +359,12 @@ def getDriverNode(node):
 
 
 def setDrivenNode(node, drivenNode, drivenAttrs):
-    """set the node to be driven by the weightDriver
+    """set the node to be driven by the mGearWeightDriver
 
     Args:
-        node (str): weightDriver node
+        node (str): mGearWeightDriver node
         drivenNode (str): name of node to be driven
-        drivenAttrs (list): of attributes to be driven by weightDriver
+        drivenAttrs (list): of attributes to be driven by mGearWeightDriver
     """
     attrs_dict = []
     for index, dAttr in enumerate(drivenAttrs):
@@ -414,10 +378,10 @@ def setDrivenNode(node, drivenNode, drivenAttrs):
 
 
 def getDrivenNode(node):
-    """get driven nodes connected to weightDriver
+    """get driven nodes connected to mGearWeightDriver
 
     Args:
-        node (str): weightDriver node
+        node (str): mGearWeightDriver node
 
     Returns:
         list: of driven nodes
@@ -434,7 +398,7 @@ def getAttrInOrder(node, attrWithIndex):
     of index - Sanity check
 
     Args:
-        node (str): weightDriver node
+        node (str): mGearWeightDriver node
         attrWithIndex (str): name of compound attr with indicies to query
 
     Returns:
@@ -457,7 +421,7 @@ def getDriverNodeAttributes(node):
     of index - Sanity check
 
     Args:
-        node (str): weightDriver node
+        node (str): mGearWeightDriver node
 
     Returns:
         list: of connected attrs in order
@@ -477,7 +441,7 @@ def getDrivenNodeAttributes(node):
     of index - Sanity check
 
     Args:
-        node (str): weightDriver node
+        node (str): mGearWeightDriver node
 
     Returns:
         list: of connected attrs in order
@@ -564,10 +528,10 @@ def syncPoseIndices(srcNode, destNode):
 
 def getNodeInfo(node):
     """get a dictionary of all the serialized information from the desired
-    weightDriver node for export/import/duplication
+    mGearWeightDriver node for export/import/duplication
 
     Args:
-        node (str): name of weightDriver node
+        node (str): name of mGearWeightDriver node
 
     Returns:
         dict: collected node info
@@ -624,7 +588,7 @@ def deletePose(node, indexToPop):
     """gather information on node, remove desired index and reapply
 
     Args:
-        node (str): weightDriver
+        node (str): mGearWeightDriver
         indexToPop (int): pose index to remove
     """
     node = pm.PyNode(node)
@@ -640,7 +604,7 @@ def deletePose(node, indexToPop):
 
 
 def addPose(node, poseInput, poseValue, posesIndex=None):
-    """add pose to the weightDriver node provided. Also used for editing an
+    """add pose to the mGearWeightDriver node provided. Also used for editing an
     existing pose, since you can specify the index. If non provided assume new
 
     Args:
@@ -665,7 +629,7 @@ def setPosesFromInfo(node, posesInfo):
     """set a large number of poses from the dictionary provided
 
     Args:
-        node (str): weightDriver
+        node (str): mGearWeightDriver
         posesInfo (dict): of poseInput/PoseValue:values
     """
     for attr, value in posesInfo.items():
@@ -705,11 +669,11 @@ def setDriverListFromInfo(node, driverListInfo):
 
 
 def setWeightNodeAttributes(node, weightNodeAttrInfo):
-    """set the attribute information on the weightDriver node provided from
+    """set the attribute information on the mGearWeightDriver node provided from
     the info dict
 
     Args:
-        node (pynode): name of weightDrivers
+        node (pynode): name of mGearWeightDrivers
         weightNodeAttrInfo (dict): of attr:value
     """
     failedAttrSets = []
@@ -760,15 +724,15 @@ def recreateConnections(connectionsInfo):
         pprint.pprint(failedConnections)
 
 
-# @loadWeightPlugin
+@loadMGWeightPlugin
 def createRBFFromInfo(weightNodeInfo_dict):
     """create an rbf node from the dictionary provided information
 
     Args:
-        weightNodeInfo_dict (dict): of weightDriver information
+        weightNodeInfo_dict (dict): of mGearWeightDriver information
 
     Returns:
-        list: of all created weightDriver nodes
+        list: of all created mGearWeightDriver nodes
     """
     createdNodes = []
     skipped_nodes = []
@@ -844,7 +808,7 @@ def getNodesInfo(weightDriverNodes):
     """convenience function to get a dict of all the provided nodes
 
     Args:
-        weightDriverNodes (list): names of all weightDriver nodes
+        weightDriverNodes (list): names of all mGearWeightDriver nodes
 
     Returns:
         dict: collected serialized informtiaon
@@ -861,7 +825,7 @@ def exportNodes(filePath, weightDriverNodes):
 
     Args:
         filePath (str): path/to/file.ext
-        weightDriverNodes (list): of weightDriver nodes
+        weightDriverNodes (list): of mGearWeightDriver nodes
     """
     weightNodeInfo_dict = getNodesInfo(weightDriverNodes)
     rbf_io._exportData(weightNodeInfo_dict, filePath)

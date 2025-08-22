@@ -273,41 +273,43 @@ def add2DChain(
 
     # moving rotation value to joint orient
     for i, jnt in enumerate(chain):
-        if i == 0:
-            jnt.setAttr("jointOrient", jnt.getAttr("rotate"))
-            jnt.setAttr("rotate", 0, 0, 0)
-        elif i == len(chain) - 1:
-            jnt.setAttr("jointOrient", 0, 0, 0)
-            jnt.setAttr("rotate", 0, 0, 0)
-        else:
-            # This will fail if chain is not always oriented the same
-            # way (like X chain)
-            v0 = positions[i] - positions[i - 1]
-            v1 = positions[i + 1] - positions[i]
-            angle = datatypes.degrees(v0.angle(v1))
-            jnt.setAttr("rotate", 0, 0, 0)
-            jnt.setAttr("jointOrient", 0, 0, angle)
+        pm.makeIdentity(jnt, apply=True, t=0, r=1, s=0, n=0, pn=1)
+
+        # if i == 0:
+        #     jnt.setAttr("jointOrient", jnt.getAttr("rotate"))
+        #     jnt.setAttr("rotate", 0, 0, 0)
+        # elif i == len(chain) - 1:
+        #     jnt.setAttr("jointOrient", 0, 0, 0)
+        #     jnt.setAttr("rotate", 0, 0, 0)
+        # else:
+        #     # This will fail if chain is not always oriented the same
+        #     # way (like X chain)
+        #     v0 = positions[i] - positions[i - 1]
+        #     v1 = positions[i + 1] - positions[i]
+        #     angle = datatypes.degrees(v0.angle(v1))
+        #     jnt.setAttr("rotate", 0, 0, 0)
+        #     jnt.setAttr("jointOrient", 0, 0, angle)
 
         # check if we have to negate Z angle by comparing the guide
         # position and the resulting position.
-        if i >= 1:
-            # round the position values to 6 decimals precission
-            # TODO: test with less precision and new check after apply
-            # Ik solver
-            if [round(elem, 4) for elem in transform.getTranslation(jnt)] != [
-                round(elem, 4) for elem in positions[i]
-            ]:
+        # if i >= 1:
+        #     # round the position values to 6 decimals precission
+        #     # TODO: test with less precision and new check after apply
+        #     # Ik solver
+        #     if [round(elem, 4) for elem in transform.getTranslation(jnt)] != [
+        #         round(elem, 4) for elem in positions[i]
+        #     ]:
 
-                jp = jnt.getParent()
+        #         jp = jnt.getParent()
 
-                # Aviod intermediate e.g. `transform3` groups that can appear
-                # between joints due to basic moving around.
-                while jp.type() == "transform":
-                    jp = jp.getParent()
+        #         # Aviod intermediate e.g. `transform3` groups that can appear
+        #         # between joints due to basic moving around.
+        #         while jp.type() == "transform":
+        #             jp = jp.getParent()
 
-                jp.setAttr(
-                    "jointOrient", 0, 0, jp.attr("jointOrient").get()[2] * -1
-                )
+        #         jp.setAttr(
+        #             "jointOrient", 0, 0, jp.attr("jointOrient").get()[2] * -1
+        #         )
 
         jnt.setAttr("radius", 1.5)
 

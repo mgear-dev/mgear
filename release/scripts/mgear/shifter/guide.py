@@ -1753,12 +1753,13 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
             widget.setFixedSize(pyqt.dpi_scale(30), pyqt.dpi_scale(20))
 
         self.populateCheck(tap.useRGB_checkBox, "Use_RGB_Color")
+
         self.toggleRgbIndexWidgets(
             tap.useRGB_checkBox,
             (w for i in index_widgets for w in i[:2]),
             (w for i in rgb_widgets for w in i[:2]),
             "Use_RGB_Color",
-            tap.useRGB_checkBox.checkState(),
+            tap.useRGB_checkBox.isChecked(),
         )
 
         # pupulate custom steps sttings

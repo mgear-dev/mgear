@@ -174,6 +174,8 @@ def _get_switch_node_attrs(node, end_string):
 
     """
     attrs = []
+    if not node:
+        return []
     if not isinstance(end_string, list):
         end_string = [end_string]
     for end_str in end_string:
@@ -417,7 +419,7 @@ def __switch_parent_callback(*args):
     """
 
     # creates a map for non logical components controls
-    control_map = {"elbow": ["mid"], "rot":[ "orbit"], "knee": ["mid"], "ik": ["headIK"]}
+    control_map = {"elbow": ["mid"], "rot":[ "orbit"], "knee": ["mid"], "ik": ["headIK"],"head": ["headFree"]}
 
     # switch_control = args[0].split("|")[-1].split(":")[-1]
     switch_control = args[0].split("|")[-1]
@@ -538,7 +540,8 @@ def __space_transfer_callback(*args):
     """
 
     # creates a map for non logical components controls
-    control_map = {"elbow": "mid", "rot": "orbit", "knee": "mid"}
+    control_map = {"elbow": ["mid"], "rot": ["orbit", "fk0"], "knee": ["mid"],
+                   "ik": ["headIK"], "head": ["headFree"]}
 
     # switch_control = args[0].split("|")[-1].split(":")[-1]
     switch_control = args[0].split("|")[-1]
@@ -546,7 +549,6 @@ def __space_transfer_callback(*args):
     switch_attr = args[1]
     combo_box = args[2]
     search_token = switch_attr.split("_")[-1].split("ref")[0].split("Ref")[0]
-    # print(search_token)
     target_control = None
 
     # control_01 attr don't standard name ane need to be check
@@ -573,7 +575,7 @@ def __space_transfer_callback(*args):
                 break
             elif (
                 search_token in control_map.keys()
-                and ctl.ctl_role.get() == control_map[search_token]
+                and ctl.ctl_role.get() in control_map[search_token]
             ):
                 target_control = ctl.stripNamespace()
                 break
@@ -585,8 +587,9 @@ def __space_transfer_callback(*args):
             # found controls for the match.
             # This is needed for regular ik match in Control_01
             for ctl in uiHost.attr(comp_ctl_list).listConnections():
+                if ctl.ctl_role.get() == "ctl":
 
-                target_control_list.append(ctl.stripNamespace())
+                    target_control_list.append(ctl.stripNamespace())
 
     # gets root node for the given control
     namespace_value = args[0].split("|")[-1].split(":")
@@ -617,17 +620,18 @@ def __space_transfer_callback(*args):
         pm.displayInfo("Not root or target control list for space transfer")
         return
 
-    autokey = cmds.listConnections(
-        "{}.{}".format(switch_control, switch_attr), type="animCurve"
-    )
+    # autokey = cmds.listConnections(
+    #     "{}.{}".format(switch_control, switch_attr), type="animCurve"
+    # )
 
-    if autokey:
-        for target_control in target_control_list:
-            cmds.setKeyframe(
-                "{}:{}".format(namespace_value, target_control),
-                "{}.{}".format(switch_control, switch_attr),
-                time=(cmds.currentTime(query=True) - 1.0),
-            )
+    # if autokey:
+    #     print("Autokey run")
+    #     for target_control in target_control_list:
+    #         cmds.setKeyframe(
+    #             "{}:{}".format(namespace_value, target_control),
+    #             "{}.{}".format(switch_control, switch_attr),
+    #             time=(cmds.currentTime(query=True) - 1.0),
+    #         )
 
     # triggers switch
     ParentSpaceTransfer.showUI(
@@ -638,13 +642,13 @@ def __space_transfer_callback(*args):
         target_control_list[0],
     )
 
-    if autokey:
-        for target_control in target_control_list:
-            cmds.setKeyframe(
-                "{}:{}".format(namespace_value, target_control),
-                "{}.{}".format(switch_control, switch_attr),
-                time=(cmds.currentTime(query=True)),
-            )
+    # if autokey:
+    #     for target_control in target_control_list:
+    #         cmds.setKeyframe(
+    #             "{}:{}".format(namespace_value, target_control),
+    #             "{}.{}".format(switch_control, switch_attr),
+    #             time=(cmds.currentTime(query=True)),
+    #         )
 
 
 def __switch_xray_ctl_callback(*args):

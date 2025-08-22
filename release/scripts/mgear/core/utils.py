@@ -44,6 +44,30 @@ def as_pynode(obj):
     return obj
 
 
+def ensure_pynode(func):
+    """Decorator to convert string args to PyNodes for Maya dag nodes.
+
+    Args:
+        func (callable): Function that accepts Maya node args.
+
+    Returns:
+        callable: Wrapped function where string args become PyNodes.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        new_args = []
+        for arg in args:
+            if isinstance(arg, str):
+                new_args.append(pm.PyNode(arg))
+            else:
+                new_args.append(arg)
+        for key, val in kwargs.items():
+            if isinstance(val, str):
+                kwargs[key] = pm.PyNode(val)
+        return func(*new_args, **kwargs)
+    return wrapper
+
+
 def is_odd(num):
     """Check if the number is odd.
 

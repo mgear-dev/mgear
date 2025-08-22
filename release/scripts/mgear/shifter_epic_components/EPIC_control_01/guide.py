@@ -67,6 +67,7 @@ class Guide(guide.ComponentGuide):
         self.pIcon = self.addParam("icon", "string", "cube")
 
         self.pIkRefArray = self.addParam("ikrefarray", "string", "")
+        self.pBackwardsRefJnt  = self.addParam("backwards_ref_jnt", "string", "")
 
         self.pJoint = self.addParam("joint", "bool", False)
         self.pUniScale = self.addParam("uniScale", "bool", False)
@@ -209,6 +210,9 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         comboIndex = self.connector_items.index(currentConnector)
         self.mainSettingsTab.connector_comboBox.setCurrentIndex(comboIndex)
 
+        self.settingsTab.backwards_ref_jnt_lineEdit.setText(
+            self.root.attr("backwards_ref_jnt").get())
+
     def create_componentLayout(self):
 
         self.settings_layout = QtWidgets.QVBoxLayout()
@@ -292,6 +296,43 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
                 "descriptionName",
             )
         )
+
+        self.settingsTab.backwards_ref_jnt_pushButton.clicked.connect(
+            partial(self.updateFallbackJoint,
+                    self.settingsTab.backwards_ref_jnt_lineEdit,
+                    "backwards_ref_jnt"))
+
+    def updateFallbackJoint(self, lEdit, targetAttr):
+        """Update line edit with selected joint name if valid.
+
+        This method checks if the selected object is a joint and sets the
+        line edit text and corresponding attribute on the root.
+
+        Args:
+            lEdit (QLineEdit): Line edit widget to populate.
+            targetAttr (str): Attribute name on root to update.
+
+        Returns:
+            None
+        """
+        oSel = pm.selected()
+        if oSel:
+            node = oSel[0]
+            if node == self.root:
+                pm.displayWarning("Root joint cannot be used as fallback.")
+                return
+
+            if pm.nodeType(node) == "joint":
+                lEdit.setText(node.name())
+                self.root.attr(targetAttr).set(lEdit.text())
+            else:
+                pm.displayWarning("Selected element is not a joint.")
+        else:
+            pm.displayWarning("Nothing selected.")
+            if lEdit.text():
+                lEdit.clear()
+                self.root.attr(targetAttr).set("")
+                pm.displayWarning("Fallback joint reference has been cleared.")
 
     def eventFilter(self, sender, event):
         if event.type() == QtCore.QEvent.ChildRemoved:

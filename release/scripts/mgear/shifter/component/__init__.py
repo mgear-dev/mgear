@@ -479,11 +479,15 @@ class Main(object):
                     if not all(component == 0 for component in jnt.rotate.get()):
                         pm.displayInfo(f"Joint {jnt.name()} has non-zero rotations, We will use Constraints to connect: {jnt.rotate.get()}")
                         use_cns_connection = True
-                    driver = primitive.addTransform(
-                        obj, name=obj.name() + "_cnx_off"
-                    )
-                    transform.matchWorldTransform(jnt, driver)
-                    rot_off = [0, 0, 0]
+                    if isinstance(obj, datatypes.Matrix):
+                        driver = None
+                        jnt.setMatrix(obj, worldSpace=True)
+                    else:
+                        driver = primitive.addTransform(
+                            obj, name=obj.name() + "_cnx_off"
+                        )
+                        transform.matchWorldTransform(jnt, driver)
+                        rot_off = [0, 0, 0]
 
                 else:
                     if isinstance(obj, datatypes.Matrix):

@@ -290,7 +290,7 @@ def transformWalkDown(node, add=False, multi=False):
     if not isinstance(node, list):
         node = [node]
     for n in node:
-        relatives = n.listRelatives(typ='transform')
+        relatives = n.listRelatives(c=True)
         if relatives:
             if multi:
                 oChild = oChild + relatives
@@ -326,7 +326,7 @@ def _getTransformWalkSiblings(node, direction="right", multi=False):
     for n in node:
         p = n.getParent()
         sib = p.getChildren()
-        tSib = [t for t in sib if t.type() == "transform"]
+        tSib = [t for t in sib]
         if multi:
             siblings = siblings + tSib
         else:

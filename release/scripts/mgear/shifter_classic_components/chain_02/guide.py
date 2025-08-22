@@ -63,8 +63,8 @@ class Guide(guide.ComponentGuide):
         self.pType = self.addParam("mode", "long", 0, 0)
         self.pBlend = self.addParam("blend", "double", 1, 0, 1)
         self.pNeutralPose = self.addParam("neutralpose", "bool", True)
-        self.pChainAiming = self.addParam("chainAiming", "bool", False)
-        self.pMirrorBehaviour = self.addParam("mirrorBehaviour", "bool", False)
+        self.pChainAiming = self.addParam("chainAiming", "bool", True)
+        self.pMirrorBehaviour = self.addParam("mirrorBehaviour", "bool", True)
         self.pIkRefArray = self.addParam("ikrefarray", "string", "")
         self.pUseIndex = self.addParam("useIndex", "bool", False)
         self.pParentJointIndex = self.addParam(

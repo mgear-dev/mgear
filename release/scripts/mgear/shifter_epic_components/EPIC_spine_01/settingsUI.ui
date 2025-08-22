@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>279</width>
-    <height>410</height>
+    <width>534</width>
+    <height>468</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -346,8 +346,8 @@
      <y>30</y>
     </hint>
     <hint type="destinationlabel">
-     <x>235</x>
-     <y>28</y>
+     <x>505</x>
+     <y>52</y>
     </hint>
    </hints>
   </connection>
@@ -358,12 +358,12 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>235</x>
-     <y>20</y>
+     <x>505</x>
+     <y>48</y>
     </hint>
     <hint type="destinationlabel">
-     <x>187</x>
-     <y>20</y>
+     <x>355</x>
+     <y>49</y>
     </hint>
    </hints>
   </connection>
@@ -374,12 +374,12 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>156</x>
-     <y>50</y>
+     <x>324</x>
+     <y>86</y>
     </hint>
     <hint type="destinationlabel">
-     <x>208</x>
-     <y>50</y>
+     <x>505</x>
+     <y>88</y>
     </hint>
    </hints>
   </connection>
@@ -390,12 +390,12 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>218</x>
-     <y>56</y>
+     <x>505</x>
+     <y>88</y>
     </hint>
     <hint type="destinationlabel">
-     <x>176</x>
-     <y>54</y>
+     <x>344</x>
+     <y>86</y>
     </hint>
    </hints>
   </connection>
@@ -406,12 +406,12 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>207</x>
-     <y>79</y>
+     <x>505</x>
+     <y>124</y>
     </hint>
     <hint type="destinationlabel">
-     <x>165</x>
-     <y>82</y>
+     <x>333</x>
+     <y>122</y>
     </hint>
    </hints>
   </connection>
@@ -422,12 +422,12 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>111</x>
-     <y>76</y>
+     <x>279</x>
+     <y>122</y>
     </hint>
     <hint type="destinationlabel">
-     <x>198</x>
-     <y>70</y>
+     <x>505</x>
+     <y>124</y>
     </hint>
    </hints>
   </connection>
@@ -438,12 +438,44 @@
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>97</x>
-     <y>23</y>
+     <x>265</x>
+     <y>50</y>
     </hint>
     <hint type="destinationlabel">
-     <x>207</x>
-     <y>23</y>
+     <x>505</x>
+     <y>51</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>lockOri_chest_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>lockOri_chest_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>442</x>
+     <y>145</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>505</x>
+     <y>151</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>lockOri_chest_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>lockOri_chest_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>505</x>
+     <y>140</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>442</x>
+     <y>140</y>
     </hint>
    </hints>
   </connection>

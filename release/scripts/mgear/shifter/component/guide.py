@@ -1345,7 +1345,7 @@ class componentMainSettings(QtWidgets.QDialog, guide.helperSlots):
             (w for i in index_widgets for w in i[:2]),
             (w for i in rgb_widgets for w in i[:2]),
             "Use_RGB_Color",
-            tab.useRGB_checkBox.checkState(),
+            tab.useRGB_checkBox.isChecked(),
         )
 
         self.refresh_controls()

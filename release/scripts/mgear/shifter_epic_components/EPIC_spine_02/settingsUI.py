@@ -179,6 +179,8 @@ class Ui_Form(object):
         QtCore.QObject.connect(self.position_spinBox, QtCore.SIGNAL("valueChanged(int)"), self.position_slider.setValue)
         QtCore.QObject.connect(self.lockOri_pelvis_spinBox, QtCore.SIGNAL("valueChanged(int)"), self.lockOri_pelvis_slider.setValue)
         QtCore.QObject.connect(self.lockOri_pelvis_slider, QtCore.SIGNAL("valueChanged(int)"), self.lockOri_pelvis_spinBox.setValue)
+        QtCore.QObject.connect(self.lockOri_chest_spinBox, QtCore.SIGNAL("valueChanged(int)"), self.lockOri_chest_slider.setValue)
+        QtCore.QObject.connect(self.lockOri_chest_slider, QtCore.SIGNAL("valueChanged(int)"), self.lockOri_chest_spinBox.setValue)
         QtCore.QObject.connect(self.softness_slider, QtCore.SIGNAL("valueChanged(int)"), self.softness_spinBox.setValue)
         QtCore.QMetaObject.connectSlotsByName(Form)
 

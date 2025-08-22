@@ -4,6 +4,7 @@
 # GLOBAL
 ##########################################################
 import re
+import os
 
 ##########################################################
 # FUNCTIONS
@@ -196,3 +197,36 @@ def convertRLName_old(name):
         name = re.sub(rePattern, rep, name)
 
     return name
+
+
+# String renamer in files
+def replace_string_in_file(search_string, replace_string, new_filename,
+                           source_path):
+    """Replace all occurrences of a string in an ASCII file and save a copy.
+
+    Args:
+        search_string (str): string to search in the file.
+        replace_string (str): string to replace the search_string with.
+        new_filename (str): Name for the modified file.
+        source_path (str): Path to the original ASCII file.
+
+    Returns:
+        tuple: (str) Path to the modified file,
+               (int) Number of replacements made.
+    """
+    if not os.path.isfile(source_path):
+        raise IOError("Source file does not exist: {}".format(source_path))
+
+    with open(source_path, 'r') as src_file:
+        content = src_file.read()
+
+    count = content.count(search_string)
+    content = content.replace(search_string, replace_string)
+
+    folder = os.path.dirname(source_path)
+    new_path = os.path.join(folder, new_filename)
+
+    with open(new_path, 'w') as new_file:
+        new_file.write(content)
+
+    return new_path, count

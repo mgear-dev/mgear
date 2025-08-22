@@ -433,34 +433,14 @@ class _Node(base.Node):
         try:
             p = fn_dg.findPlug(attrname, False)
         except Exception:
-            # Handle alias attributes if the plug is not found
-            try:
-                alias_plug = fn_dg.findAlias(attrname)
-            except Exception:
-                alias_plug = None
-
-            if alias_plug:
+            if checkShape:
                 try:
-                    # Convert the alias plug to a valid MPlug
-                    p = OpenMaya.MPlug(alias_plug)
+                    # Check the shape node if the attribute is not found
+                    get_shape = super(_Node, self).__getattribute__("getShape")
+                    shape = get_shape()
+                    p = shape.dgFn().findPlug(attrname, False)
                 except Exception:
-                    # Fallback to cmds to confirm the attribute's existence
-                    full_attr_name = f"{self.name()}.{attrname}"
-                    if cmds.objExists(full_attr_name):
-                        return attr.Attribute(full_attr_name)
-                    else:
-                        raise exception.MayaAttributeError(
-                            f"Alias '{attrname}' could not be resolved to a valid plug."
-                        )
-            elif checkShape:
-                # Check the shape node if the attribute is not found
-                get_shape = super(_Node, self).__getattribute__("getShape")
-                shape = get_shape()
-                if shape:
-                    try:
-                        p = shape.dgFn().findPlug(attrname, False)
-                    except Exception:
-                        pass
+                    pass
 
         # If the plug is still not resolved, confirm existence with cmds
         if p is None or p.isNull:

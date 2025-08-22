@@ -51,7 +51,7 @@ def install():
             "mgear_crosshair.svg",
         ),
         ("-----", None),
-        ("Auto Fit Guide (BETA)", str_auto_fit_guide),
+        ("Auto Fit Guide", str_auto_fit_guide),
         ("-----", None),
         ("Plebes...", str_plebes),
         (None, mocap_submenu),
@@ -157,7 +157,7 @@ def game_submenu(parent_menu_id):
         parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
     commands = (
-        ("FBX Export (Beta)", str_game_fbx_export),
+        ("FBX Export", str_game_fbx_export),
         ("-----", None),
         ("Disconnect Joints", str_game_disconnet),
         ("Connect Joints", str_game_connect),
