@@ -32,6 +32,17 @@ importlib.reload(ueUtils)
 
 logger = log.uegear_logger
 
+def get_unreal_version():
+    """Gets the Unreal version for the active session"""
+    print("[mGear] Retrieving Unreal Engine Version.")
+
+    uegear_bridge = bridge.UeGearBridge()
+
+    result = uegear_bridge.execute(
+        "get_unreal_version"
+    ).get("ReturnValue", "")
+
+    return result
 
 def content_project_directory():
     """

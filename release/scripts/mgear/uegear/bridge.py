@@ -48,6 +48,25 @@ class UeGearBridge(object):
             "Accept": "text/plain",
         }
 
+        self.pre_run()
+
+    def pre_run(self):
+        """
+        A pre run check that will try to retrieve the Engine version, if it fails it will change the object path.
+
+        This is due to UE 5.5 handling python packages differently.
+        """
+        result = self.execute("get_unreal_version").get("ReturnValue", "")
+        if result:
+            print(f"[UEGear Remote Session] {result}")
+        else:
+            print(f"[UEGear Remote Session] Pre run failed, changing Object Path to 5.5+ structure")
+            self._commands_object_path = "/ueGear/Python/ueGear/commands_PY.Default__PyUeGearCommands"
+
+            result = self.execute("get_unreal_version").get("ReturnValue", "")
+            if result:
+                print(f"[UEGear Remote Session] {result}")
+
     # =================================================================================================================
     # PROPERTIES
     # =================================================================================================================
