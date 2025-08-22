@@ -12,6 +12,7 @@ import tempfile
 import traceback
 
 import maya.cmds as cmds
+import maya.mel as mel
 import maya.api.OpenMaya as OpenMaya
 
 from mgear.vendor.Qt import QtWidgets
@@ -784,12 +785,17 @@ def update_sequencer_camera_from_maya():
     # Export FBX file into disk
     for i in range(len(cameras)):
         camera_name = ue_camera_names[i]
-        fbx_file_path = os.path.join(temp_folder, camera_name + ".fbx")
+        if " " in camera_name:
+            modified_camera_name = camera_name.replace(" ", "_")
+        fbx_file_path = os.path.join(temp_folder, modified_camera_name + ".fbx")
+
+        maya_cam_name = nodes_to_export[i]
 
         try:
-            cmds.file(
-                fbx_file_path, force=True, typ="FBX", pr=True, es=True
-            )
+            mel.eval("FBXExportCameras - v 1")
+            cmds.select(maya_cam_name, replace=True)
+            cmds.file(fbx_file_path, force=True, typ="FBX export", pr=True, es=True, mbl=True)
+
             msg = "Camera '{}' exported as FBX to '{}'"
             print(msg.format(camera_name, fbx_file_path))
         except Exception as e:
