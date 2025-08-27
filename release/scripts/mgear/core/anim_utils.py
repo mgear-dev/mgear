@@ -1666,6 +1666,7 @@ class AbstractAnimationTransfer(QtWidgets.QDialog):
         self.model = None  # type = pm.nodetypes.Transform
         self.uihost = None  # type = str
         self.switchedAttrShortName = None  # type = str
+        self.combo_idx = 0
 
     def createUI(self, parent=None):
         # type = (QtWidgets.QObject) -> None
@@ -1709,6 +1710,8 @@ class AbstractAnimationTransfer(QtWidgets.QDialog):
             # this add suport QlistWidget
             if isinstance(self.comboObj, QtWidgets.QListWidget):
                 idx = self.comboObj.currentRow()
+            elif isinstance(self.comboObj, (list, tuple)):
+                idx = self.combo_idx
             else:
                 idx = self.comboObj.currentIndex()
             self.comboBoxSpaces.setCurrentIndex(idx)
@@ -1767,6 +1770,11 @@ class AbstractAnimationTransfer(QtWidgets.QDialog):
         # type = (widegts.toggleCombo or QtWidgets.QListWidget) -> None
 
         del self.comboItems[:]
+        if isinstance(combo, (list, tuple)):
+            for itm in combo:
+                self.comboItems.append(str(itm))
+            return
+
         for i in range(combo.count() - 1):
             # this add suport QlistWidget
             if isinstance(combo, QtWidgets.QListWidget):
@@ -2062,6 +2070,12 @@ class ParentSpaceTransfer(AbstractAnimationTransfer):
         ui.setSwitchedAttrShortName(switchedAttrShortName)
         ui.setCtrls(ctrl_name)
         ui.setComboBoxItemsFormComboObj(ui.comboObj)
+
+        if isinstance(combo, (list, tuple)):
+            idx = getComboIndex_with_namespace(
+                                    getNamespace(model), uihost, switchedAttrShortName
+                                    )
+            ui.combo_idx = idx
 
         # Delete the UI if errors occur to avoid causing winEvent
         # and event errors (in Maya 2014)
