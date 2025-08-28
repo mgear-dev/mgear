@@ -9,7 +9,7 @@ from mgear.vendor.Qt import QtWidgets, QtCore, QtCompat, QtGui
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear.rigbits.six import PY2
 
-__version__ = "2.0.1"
+__version__ = "2.1.0"
 TOOL_NAME = "RBF Manager"
 TOOL_TITLE = "{} v{} | mGear {}".format(
     TOOL_NAME, __version__, mgear.getVersion()
