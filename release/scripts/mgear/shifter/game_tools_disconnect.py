@@ -95,9 +95,12 @@ def delete_rig_keep_joints(confirmPop=True):
         if button_pressed == QtWidgets.QMessageBox.Yes:
             confirm = True
 
+        else:
+            pm.displayInfo("Cancelled")
+            return
     else:
-        pm.displayInfo("Cancelled")
-        return
+        confirm = True
+
     if confirm:
         disconnect_joints()
         for rig_root in get_rig_root_from_set():

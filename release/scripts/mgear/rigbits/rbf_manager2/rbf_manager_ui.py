@@ -584,7 +584,6 @@ class RBFManagerUI(widget.RBFWidget):
             drivenNode_name = drivenNode
 
         # Check if there is an existing rbf node attached
-        print(drivenNode_name)
         if not drivenNode_name:
             pm.displayWarning("Not Driven Channels Selected")
             return
