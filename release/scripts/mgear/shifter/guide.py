@@ -815,7 +815,7 @@ class Rig(Main):
                 mgear.sev_error,
             )
             return
-        if parent is None:
+        if not parent:
             self.initialHierarchy()
             parent = self.model
         else:
