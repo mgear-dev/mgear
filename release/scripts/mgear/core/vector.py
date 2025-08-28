@@ -96,8 +96,12 @@ def getPlaneNormal(v0, v1, v2):
     vector0.normalize()
     vector1.normalize()
 
-    normal = vector1 ^ vector0
-    normal.normalize()
+    if vector0.isParallel(vector1):
+        # if vectors are parallel, we use an arbitrary up vector to resolve the plane. 
+        # TODO: add an optional parameter to this function so joints will be aligned from the given guide axis instead of arbitrary vector.
+        normal = vector0 ^ datatypes.Vector(0, 0, -1)
+    else:
+        normal = vector1 ^ vector0    normal.normalize()
 
     return normal
 
