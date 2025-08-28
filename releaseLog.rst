@@ -2,6 +2,36 @@ Release Log
 ===========
 
 
+5.1.0
+------
+**Enhancements**
+	* Core: Anim_utils: allow ParentSpaceTransfer to be executed outside anim_picker #552
+	* Rigbits: RBF Manager v2.0: new solver and misc updates #429 #514
+	* Shifter: EPIC_control_01: add backwards_ref_jnt setting #523
+	* Shifter: Improve IK/FK matching in arms and leg to support arbitrary length for FK sections and match with IK configuration #501
+
+
+**Bug Fix**
+	* Core: Right click dag menu fails to populate in all controls types #526
+	* Core: SKIN IO: Rounding issue with 10+ influences #538
+	* Rigbits: RBF Manager not working correctly with new weightDriver kernel. #514
+	* Shifter: Behavior on EPIC_spine_02 : controls are rotating in wrong axis when moving IK #510
+	* Shifter: Color settings aren’t working #511
+	* Shifter: Core: CustomPickwalk faling if not controls #524
+	* Shifter: EPIC_spine_02 : (UI bug) slider "Lock Orient Chest" and spin box aren't synced #516
+	* Shifter: Orientation control and joints issue with chain_02 #509
+	* Shifter: Rig not deleted when using confirmPop=False in delete_rig_keep_joints() #527
+	* Shifter: The "Draw Component" in the right-click menu of the Shifter Guide Manager was incorrect when no component was selected. #528
+
+
+**Deprecated**
+	* IMPORTANT: Dropping support for Maya 2020 and older Maya versions.
+	* IMPORTANT: Remove original weightDriver from SHAPES, been replaced by the mgearWeightDriver fork version. We can still use it on the weight driver but we need to install it separately
+
+**ueGear 1.0.3**
+	* Fixed remote control issue for UE 5.4+
+	* Improved Control Rig build times
+
 5.0.7
 ------
 **Enhancements**
