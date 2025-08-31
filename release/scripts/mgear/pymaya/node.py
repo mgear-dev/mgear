@@ -739,7 +739,7 @@ class ObjectSet(_Node):
         Returns:
             list: A list of members in the set, or an empty list if no members exist.
         """
-        return cmds.sets(self, q=True) or []
+        return cmd.sets(self, q=True) or []
 
     def union(self, *other_sets):
         """
@@ -811,6 +811,10 @@ class ObjectSet(_Node):
         if objects_to_add:
             # Add objects to the set using cmds.sets
             cmds.sets(objects_to_add, addElement=self.name())
+
+    def addMembers(self, *items):
+
+        self.add(*items)
 
 
 nt.registerClass("objectSet", cls=ObjectSet)
