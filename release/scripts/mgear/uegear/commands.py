@@ -785,8 +785,11 @@ def update_sequencer_camera_from_maya():
     # Export FBX file into disk
     for i in range(len(cameras)):
         camera_name = ue_camera_names[i]
+
         if " " in camera_name:
             modified_camera_name = camera_name.replace(" ", "_")
+        else:
+            modified_camera_name = camera_name
         fbx_file_path = os.path.join(temp_folder, modified_camera_name + ".fbx")
 
         maya_cam_name = nodes_to_export[i]
