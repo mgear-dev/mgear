@@ -1852,7 +1852,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
         # Setting Tab
         tap = self.guideSettingsTab
         tap.rigName_lineEdit.editingFinished.connect(
-            partial(self.updateLineEdit, tap.rigName_lineEdit, "rig_name")
+            partial(self.updateLineEdit2, tap.rigName_lineEdit, "rig_name")
         )
         tap.mode_comboBox.currentIndexChanged.connect(
             partial(self.updateComboBox, tap.mode_comboBox, "mode")
