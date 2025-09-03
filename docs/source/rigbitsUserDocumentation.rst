@@ -113,29 +113,10 @@ RBF Manager
 
 A tool to manage a number of RBF type nodes under a user defined setup(name)
 
-.. only:: html
+.. image:: https://i.vimeocdn.com/video/1115410441_640.jpg
+   :alt: Vimeo video
+   :target: https://vimeo.com/1115410441/cbaa109360?fl=pl&fe=sh
 
-   .. raw:: html
-
-      <div style="max-width: 800px; margin: 2em auto;">
-        <div style="position: relative; padding-bottom: 56.25%;
-                    height: 0; overflow: hidden;">
-          <iframe
-              title="vimeo-player"
-              src="https://player.vimeo.com/video/1115410441?h=cbaa109360"
-              frameborder="0"
-              allow="autoplay; fullscreen; picture-in-picture; clipboard-write;
-                      encrypted-media; web-share"
-              allowfullscreen
-              style="position: absolute; top: 0; left: 0; width: 100%;
-                     height: 100%;">
-          </iframe>
-        </div>
-      </div>
-
-.. only:: not html
-
-   `Watch the video on Vimeo <https://vimeo.com/1115410441>`_
 
 Steps -
     set Driver
