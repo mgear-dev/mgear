@@ -28,7 +28,7 @@ Release Log
 	* IMPORTANT: Dropping support for Maya 2020 and older Maya versions.
 	* IMPORTANT: Remove original weightDriver from SHAPES, been replaced by the mgearWeightDriver fork version. We can still use it on the weight driver but we need to install it separately
 
-**ueGear 1.0.3**
+**ueGear 1.0.4**
 	* Fixed remote control issue for UE 5.4+
 	* Improved Control Rig build times
 
