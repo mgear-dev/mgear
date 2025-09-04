@@ -13,7 +13,11 @@ from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
 from mgear import shifter
 from mgear.shifter import guide_manager
 from mgear.shifter import guide_manager_component_ui as gmcUI
+from mgear.compatible import guide_manager_compatible_comp as gmcc
+
 import importlib
+
+importlib.reload(gmcc)
 
 PY2 = sys.version_info[0] == 2
 
@@ -157,10 +161,15 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             return
         self.comp_menu = QtWidgets.QMenu()
         parentPosition = comp_widget.mapToGlobal(QtCore.QPoint(0, 0))
+        menu_item_00 = self.comp_menu.addAction(
+            "Syn The Selected Component Type To The Type Selected In The Manager"
+        )
+        self.comp_menu.addSeparator()
         menu_item_01 = self.comp_menu.addAction("Draw Component")
         self.comp_menu.addSeparator()
         menu_item_02 = self.comp_menu.addAction("Refresh List")
 
+        menu_item_00.triggered.connect(self.set_component)
         menu_item_01.triggered.connect(self.draw_component)
         menu_item_02.triggered.connect(self._refreshList)
 
@@ -226,6 +235,9 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.gmcUIInst.search_lineEdit.customContextMenuRequested.connect(
             self._search_menu
         )
+        self.gmcUIInst.update_guide_checkBox.stateChanged.connect(
+            self.on_update_changed
+        )
 
     #############
     # SLOTS
@@ -270,6 +282,14 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         showUI = self.gmcUIInst.showUI_checkBox.checkState()
         for x in self.gmcUIInst.component_listView.selectedIndexes():
             guide_manager.draw_comp(x.data(), parent, showUI)
+
+    def on_update_changed(self, state):
+        self.update_flag = self.gmcUIInst.update_guide_checkBox.isChecked()
+
+    def set_component(self):
+        self.update_flag = self.gmcUIInst.update_guide_checkBox.isChecked()
+        for x in self.gmcUIInst.component_listView.selectedIndexes():
+            gmcc.update_component_type_and_update_guide(x.data(), self.update_flag)
 
     def filter_changed(self, filter_str):
         """Filter out the elements in the list view"""

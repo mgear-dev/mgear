@@ -42,6 +42,7 @@ from mgear.shifter import guide_template
 from .six import string_types
 
 from mgear.vendor.Qt import QtWidgets
+from mgear.compatible import compatible_comp_dagmenu
 
 
 def __change_rotate_order_callback(*args):
@@ -819,6 +820,12 @@ def mgear_dagmenu_guide_fill(parent_menu, current_guide_locator):
         parent=parent_menu,
         label="Update Guide",
         command=guide_template.updateGuide,
+        image="mgear_loader.svg",
+    )
+    cmds.menuItem(
+        parent=parent_menu,
+        label="Update Setected Components Type",
+        command=compatible_comp_dagmenu.update_component_type_and_update_guide_with_dagmenu,
         image="mgear_loader.svg",
     )
     cmds.menuItem(
