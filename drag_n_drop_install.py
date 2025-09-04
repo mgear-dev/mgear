@@ -23,10 +23,10 @@ except ImportError():
 
 # -- constants
 TITLE = "Install mGear"
-VERSION = 1.3
+VERSION = 1.4
 MGEAR_MOD_PATH = "MGEAR_MODULE_PATH"
 MAYA_MOD_PATH = "MAYA_MODULE_PATH"
-PLUGINS = ["mgear_solvers.mll", "weightDriver.mll"]
+PLUGINS = ["mgear_solvers.mll", "mGearWeightDriver.mll"]
 DEFAULT_ITEMS = ["platforms", "mGear.mod", "scripts", "icons"]
 CURRENT_FOLDER = os.path.dirname(__file__)
 
