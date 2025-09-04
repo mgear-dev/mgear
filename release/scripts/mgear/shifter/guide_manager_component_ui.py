@@ -82,6 +82,10 @@ class Ui_Form(object):
         self.showUI_checkBox.setChecked(True)
         self.showUI_checkBox.setObjectName("showUI_checkBox")
         self.verticalLayout.addWidget(self.showUI_checkBox)
+        self.update_guide_checkBox = QtWidgets.QCheckBox(self.list_groupBox)
+        self.update_guide_checkBox.setChecked(True)
+        self.update_guide_checkBox.setObjectName("update_guide_checkBox")
+        self.verticalLayout.addWidget(self.update_guide_checkBox)
         self.verticalLayout_3.addWidget(self.list_groupBox)
 
         self.retranslateUi(Form)
@@ -105,5 +109,14 @@ class Ui_Form(object):
         self.draw_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Draw selected component.</p></body></html>", None, -1))
         self.draw_pushButton.setText(gqt.fakeTranslate("Form", "Draw Component", None, -1))
         self.showUI_checkBox.setText(gqt.fakeTranslate("Form", "Show Setting After Create New Component.", None, -1))
+        self.update_guide_checkBox.setText(
+            gqt.fakeTranslate(
+                "Form",
+                "Update Guide After Setting The Specified Component Type.",
+                None,
+                -1,
+            )
+        )
+
 
 from mgear.core.widgets import DragQListView
