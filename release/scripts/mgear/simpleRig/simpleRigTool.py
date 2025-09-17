@@ -743,9 +743,8 @@ def _build_rig_from_model(
         w_shape=w_shape,
     )
     if local_ctl:
-        descendents = reversed(
-            dagNode.listRelatives(allDescendents=True, type="transform")
-        )
+        descendents = dagNode.listRelatives(allDescendents=True, type="transform")
+
         suff_list = suffix.split(",")
         for d in descendents:
             if list(filter(d.name().endswith, suff_list)) != []:
