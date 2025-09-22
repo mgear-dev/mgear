@@ -1004,6 +1004,9 @@ class Main(object):
             letter_case=self.options["ctl_description_letter_case"],
         )
 
+        if fullName.endswith("_"):
+            fullName = fullName[:-1]
+
         bufferName = fullName + "_controlBuffer"
         if bufferName in self.rig.guide.controllers.keys():
             ctl_ref = self.rig.guide.controllers[bufferName]
