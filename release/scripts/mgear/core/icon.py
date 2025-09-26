@@ -635,7 +635,7 @@ def diamond(
     pN = datatypes.Vector(dlen, 0, dlen * -1)
     Np = datatypes.Vector(dlen * -1, 0, dlen)
     NN = datatypes.Vector(dlen * -1, 0, dlen * -1)
-    bottom = (0, -dlen, 0)
+    bottom = datatypes.Vector(0, -dlen, 0)
 
     v_array = [
         pp,
