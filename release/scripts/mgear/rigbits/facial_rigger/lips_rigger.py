@@ -784,7 +784,7 @@ def rig(edge_loop="",
 
         skinCluster = skin.getSkinCluster(objName)
         if not skinCluster:
-            skinCluster = pm.skinCluster(head_joint,
+            [skinCluster] = pm.skinCluster(head_joint,
                                          geo,
                                          tsb=True,
                                          nw=2,
