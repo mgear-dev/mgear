@@ -162,7 +162,7 @@ class Component(component.Main):
         v = self.guide.apos[2] - self.guide.apos[0]
         v = self.normal ^ v
         v.normalize()
-        v *= self.size * .8
+        v *= self.size * .5
         v += self.guide.apos[1]
 
         self.upv_cns = primitive.addTransformFromPos(self.root,
