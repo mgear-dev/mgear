@@ -510,8 +510,8 @@ class _Node(base.Node):
     def hasAttr(self, name, checkShape=True):
         return cmds.objExists("{}.{}".format(self.name(), name))
 
-    def listAttr(self, **kwargs):
-        return cmd.listAttr(**kwargs)
+    def listAttr(self, *args, **kwargs):
+        return cmd.listAttr(self.name(), *args, **kwargs)
 
     def disconnectAttr(self, attr_name):
         # Construct the full attribute name
