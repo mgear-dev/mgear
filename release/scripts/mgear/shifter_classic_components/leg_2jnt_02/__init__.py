@@ -413,7 +413,7 @@ class Component(component.Main):
         self.readerB = primitive.addTransform(
             self.readerA, self.getName("readerB_loc"), t
         )
-        self.readerB.rotateOrder.set(2)
+        self.readerB.rotateOrder.set(3)
 
         # Divisions ----------------------------------------
         # We have at least one division at the start, the end and one for
