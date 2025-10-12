@@ -1,5 +1,6 @@
 import mgear.pymaya as pm
 from mgear.core import attribute
+from maya import cmds
 
 
 class customShifterMainStep(object):
@@ -92,5 +93,5 @@ class customShifterMainStep(object):
             pm.rename(dup, "_".join([source.name(), self.name, "setup"]))
 
         if self.setup_root:
-            pm.parent(dup, self.setup_root)
+            cmds.parent(dup.longName(), self.setup_root.longName())
         return dup
