@@ -346,7 +346,7 @@ def setup_upv_position_calculation(
             upv_pos_sum[i].output >> getattr(upv, f"translate{axis}")
 
 
-def setup_visibility_and_matrix(root, upv, upvcrv):
+def setup_visibility_and_matrix(root, root_decompose, upv, upvcrv):
     """
     Set up visibility and matrix connections.
 
@@ -354,10 +354,11 @@ def setup_visibility_and_matrix(root, upv, upvcrv):
 
     Args:
         root (PyNode): Root guide node
+        root_decompose (PyNode): Decompose matris node from root
         upv (PyNode): Pole vector guide node
         upvcrv (PyNode): Pole vector display curve
     """
-    root.scale >> upv.scale
+    root_decompose.outputScale >> upv.scale
     root.worldInverseMatrix[0] >> upv.offsetParentMatrix
     root.worldInverseMatrix[0] >> upvcrv.offsetParentMatrix
 
@@ -394,4 +395,4 @@ def create_upv_system(root, elbow, wrist, eff, upvcrv, upv, float_value=0.5):
             elbow, upv, normalize_node, half_multiply_node, decompose_nodes
         )
 
-        setup_visibility_and_matrix(root, upv, upvcrv)
+        setup_visibility_and_matrix(root, decompose_nodes[0], upv, upvcrv)
