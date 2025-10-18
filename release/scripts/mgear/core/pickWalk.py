@@ -268,7 +268,7 @@ def transformWalkUp(node, add=False):
     if not isinstance(node, list):
         node = [node]
     for n in node:
-        p = n.listRelatives(p=True)
+        p = n.listRelatives(p=True, typ='transform')
         if p:
             oParent.append(p)
 
@@ -290,7 +290,7 @@ def transformWalkDown(node, add=False, multi=False):
     if not isinstance(node, list):
         node = [node]
     for n in node:
-        relatives = n.listRelatives(c=True)
+        relatives = n.listRelatives(c=True, typ='transform')
         if relatives:
             if multi:
                 oChild = oChild + relatives
