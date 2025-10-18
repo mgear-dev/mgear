@@ -60,3 +60,10 @@ def get_root_joint(rigTopNode):
     jnt_org = rigTopNode.jnt_vis.listConnections()[0]
     root_jnt = jnt_org.child(0)
     return root_jnt
+
+
+def get_guide():
+    """
+    Get the guide top node in the scene.
+    """
+    return pm.ls("*.ismodel") or []

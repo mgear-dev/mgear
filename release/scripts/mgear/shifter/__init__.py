@@ -12,7 +12,6 @@ from mgear.pymaya import versions
 
 # mgear
 import mgear
-import mgear.core.utils
 from . import guide, component
 
 from mgear.core import primitive, attribute, skin, dag, icon, node
@@ -20,7 +19,7 @@ from mgear import shifter_classic_components
 from mgear import shifter_epic_components
 from mgear.shifter import naming
 import importlib
-from mgear.core import utils
+from mgear.core import utils as core_utils
 
 PY2 = sys.version_info[0] == 2
 
@@ -97,7 +96,7 @@ def log_window():
 def getComponentDirectories():
     """Get the components directory"""
     # TODO: ready to support multiple default directories
-    return mgear.core.utils.gatherCustomModuleDirectories(
+    return core_utils.gatherCustomModuleDirectories(
         SHIFTER_COMPONENT_ENV_KEY,
         [
             os.path.join(os.path.dirname(shifter_classic_components.__file__)),
@@ -115,7 +114,7 @@ def importComponentGuide(comp_type):
     defFmt = "mgear.shifter.component.{}.guide"
     customFmt = "{}.guide"
 
-    module = mgear.core.utils.importFromStandardOrCustomDirectories(
+    module = core_utils.importFromStandardOrCustomDirectories(
         dirs, defFmt, customFmt, comp_type
     )
     return module
@@ -127,7 +126,7 @@ def importComponent(comp_type):
     defFmt = "mgear.shifter.component.{}"
     customFmt = "{}"
 
-    module = mgear.core.utils.importFromStandardOrCustomDirectories(
+    module = core_utils.importFromStandardOrCustomDirectories(
         dirs, defFmt, customFmt, comp_type
     )
     return module
@@ -184,7 +183,7 @@ class Rig(object):
 
         self.build_data = {}
 
-    @utils.one_undo
+    @core_utils.one_undo
     def buildFromDict(self, conf_dict):
         log_window()
         startTime = datetime.datetime.now()
@@ -231,7 +230,7 @@ class Rig(object):
 
         return build_data
 
-    @utils.one_undo
+    @core_utils.one_undo
     def buildFromSelection(self):
         """Build the rig from selected guides."""
 
@@ -364,7 +363,7 @@ class Rig(object):
                 customSteps = [cs.replace("\\", "/") for cs in customSteps]
             self.customStep(customSteps)
 
-    # @utils.timeFunc
+    # @core_utils.timeFunc
     def get_guide_data(self):
         """Get the guide data
 
