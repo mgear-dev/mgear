@@ -117,7 +117,6 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                     pm.displayWarning(
                         "{} can't be load. Error at import".format(comp_name)
                     )
-                    pm.displayError(e)
                     pm.displayError(traceback.format_exc())
 
         pm.progressWindow(e=True, endProgress=True)
