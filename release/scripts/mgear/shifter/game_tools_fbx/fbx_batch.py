@@ -92,7 +92,8 @@ def perform_fbx_condition(
             jnt_org = rig_root.jnt_vis.listConnections(type="transform")[0]
             joints = jnt_org.getChildren()
             if joints:
-                pm.parent(joints, world=True)
+                if cmds.listRelatives(joints, parent=True):
+                    pm.parent(joints, world=True)
 
             # Updates all the geometry root paths, as they may have changed when geo
             # root was moved to world, depending on the structure of the rig.
@@ -103,8 +104,11 @@ def perform_fbx_condition(
                     print("Too many {} found".format(geo_root))
                     return False
                 geo_long_name = geo_long_names[0]
-                output = pm.parent(geo_root, world=True)
-                root_geos[geo_index] = output[0].name()
+                if cmds.listRelatives(geo_root, parent=True):
+                    output = pm.parent(geo_root, world=True)
+                else:
+                    output = cmds.ls(geo_root, long=False)
+                root_geos[geo_index] = output[0]
 
                 # The geo roots are moved to be under the 'World', in doing so we need to
                 # update each geometry object stored in a partition.
