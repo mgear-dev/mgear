@@ -946,7 +946,7 @@ def create_proximity_constraint(shape,
                      out_trans + ".offsetParentMatrix",
                      f=True)
 
-    return out_trans, pin
+    return pm.PyNode(out_trans), pm.PyNode(pin)
 
 
 def create_proximity_constraints(shape, in_trans_list):
