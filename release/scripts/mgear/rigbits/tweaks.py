@@ -758,7 +758,7 @@ def create_proximity_tweak(
     )
 
     # in_trans
-    in_trans = pm.spaceLocator(name="inTrans_tempName")
+    in_trans = pm.spaceLocator(name="inTrans_tempName")[0]
     pm.xform(
         in_trans,
         translation=(center_position.x, center_position.y, center_position.z),
