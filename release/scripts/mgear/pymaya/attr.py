@@ -302,6 +302,9 @@ class Attribute(base.Attr):
         else:
             return None
 
+    def getRange(self):
+        return [self.getMin(), self.getMax()]
+
     def longName(self):
         return self.plug().partialName(False, False, False, False, False, True)
 
