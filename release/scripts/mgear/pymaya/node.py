@@ -732,14 +732,45 @@ class ObjectSet(_Node):
     def __init__(self, nodename_or_mobject):
         super(ObjectSet, self).__init__(nodename_or_mobject)
 
-    def members(self):
-        """
-        Return the members of the set.
+    def members(self, *args, **kwargs):
+        """Return the members of the set.
+
+        Supports a PyMEL-like `flatten=True` in query mode by flattening
+        nested sets in Python (non-destructive).
+
+        Args:
+            *args: Positional args passed to cmds.sets().
+            **kwargs: Keyword args passed to cmds.sets(). Recognized here:
+                flatten (bool): If True, expand nested sets recursively.
 
         Returns:
-            list: A list of members in the set, or an empty list if no members exist.
+            list: Members of the set. Empty list if none.
         """
-        return cmd.sets(self, q=True) or []
+        flatten = bool(kwargs.pop('flatten', False))
+        nodes_only = bool(kwargs.get('nodesOnly', False))
+
+        # Always query members; do not send 'flatten' to cmds.sets.
+        members = cmd.sets(self, q=True, *args, **kwargs) or []
+        if not flatten:
+            return members
+
+        def _is_object_set(node):
+            try:
+                return (cmd.objExists(node) and
+                        cmd.nodeType(node) in ('objectSet', 'partition'))
+            except Exception:
+                return False
+
+        out = []
+        stack = list(members)
+        while stack:
+            n = stack.pop()
+            if _is_object_set(n):
+                sub = cmd.sets(n, q=True, nodesOnly=nodes_only) or []
+                stack.extend(sub)
+            else:
+                out.append(n)
+        return out
 
     def union(self, *other_sets):
         """
