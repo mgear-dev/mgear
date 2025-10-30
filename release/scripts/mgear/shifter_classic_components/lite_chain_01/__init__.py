@@ -22,8 +22,13 @@ class Component(component.Main):
 
         self.normal = self.guide.blades["blade"].z * -1
         self.binormal = self.guide.blades["blade"].x
-
         self.WIP = self.options["mode"]
+
+        rot_offset = [
+                self.settings["joint_rot_offset_x"],
+                self.settings["joint_rot_offset_y"],
+                self.settings["joint_rot_offset_z"],
+            ]
 
         if self.negate and self.settings["overrideNegate"]:
             self.negate = False
@@ -41,30 +46,34 @@ class Component(component.Main):
         # FK controllers ------------------------------------
         self.fk_npo = []
         self.fk_ctl = []
-        t = self.guide.tra["root"]
 
         parent = self.root
-        tOld = False
-        fk_ctl = None
+        previous_transform = None
         self.previusTag = self.parentCtlTag
-        for i, t in enumerate(transform.getChainTransform(self.guide.apos,
-                                                          self.normal,
-                                                          self.negate)):
-            dist = vector.getDistance(self.guide.apos[i],
-                                      self.guide.apos[i + 1])
-            if self.settings["neutralpose"] or not tOld:
+
+        chain_pos = transform.getChainTransform(
+            self.guide.apos, self.normal, self.negate)
+
+        for i, t in enumerate(chain_pos):
+            if self.settings["neutralpose"] or not previous_transform:
                 tnpo = t
             else:
                 tnpo = transform.setMatrixPosition(
-                    tOld,
+                    previous_transform,
                     transform.getPositionFromMatrix(t))
+
+            dist = vector.getDistance(self.guide.apos[i], self.guide.apos[i + 1])
+            if self.settings["mirrorBehaviour"] and self.negate:
+                dist = dist * -1
+                rot_offset = [180, 180, 0]
+                tnpo = transform.setMatrixScale(t, [-1, -1, -1])
 
             fk_npo = primitive.addTransform(
                 parent, self.getName("fk%s_npo" % i), tnpo)
             fk_ctl = self.addCtl(
                 fk_npo,
                 "fk%s_ctl" % i,
-                t,
+                tnpo,
                 self.color_fk,
                 "cube",
                 w=dist,
@@ -76,11 +85,19 @@ class Component(component.Main):
 
             self.fk_npo.append(fk_npo)
             self.fk_ctl.append(fk_ctl)
-            tOld = t
             self.previusTag = fk_ctl
+            previous_transform = t
             parent = fk_ctl
             if self.settings["addJoints"]:
-                self.jnt_pos.append([fk_ctl, i, None, False])
+                self.jnt_pos.append(
+                    {
+                        "obj": fk_ctl,
+                        "name": i,
+                        "newActiveJnt": None,
+                        "UniScale": False,
+                        "rot_off": rot_offset
+                    }
+                )
 
     # =====================================================
     # ATTRIBUTES
