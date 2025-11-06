@@ -716,3 +716,108 @@ def connect_scale_from_world_matrix(driver, driven):
         pm.connectAttr(
             dec_matrix.attr("outputScale" + axis), driven.attr("scale" + axis)
         )
+
+# Hide and lock functions
+
+
+def lock_hide_ctl(ctlList, ctl_ext="_ctl", lock_ext="_lock"):
+    """Hide shapes, lock attrs, rename, and remove from object sets.
+
+    Args:
+        ctl_list (list): Iterable of controls (MObjects or names).
+        ctl_ext (str, optional): Suffix to replace. Defaults to "_ctl".
+        lock_ext (str, optional): Replacement suffix. Defaults to "_lock".
+    """
+
+    for ctl in ctlList:
+        try:
+            if isinstance(ctl, str):
+                ctl = pm.PyNode(ctl)
+            # Hide shapes
+            for shape in ctl.getShapes():
+                shape.visibility.set(False)
+            # lock ctl attr
+            attribute.lockAttribute(ctl)
+            pm.rename(ctl, ctl.name().replace(ctl_ext, lock_ext))
+
+            # remove from grp
+            grps = ctl.listConnections(t="objectSet")
+            for grp in grps:
+                grp.remove(ctl)
+        except:
+            print("{}: not found".format(ctl))
+
+
+def show_hide_toggle(ctl, at_name, groupA, groupB, keyable=False):
+    """Create boolean attr on ctl to toggle visibility of two groups.
+
+    Args:
+        ctl (pm.DagNode|str): Control node or its name.
+        attr_name (str): Name of the toggle attribute to create.
+        group_a (list): Nodes visible when attr is True.
+        group_b (list): Nodes visible when attr is False.
+    """
+
+    # create attr
+    ctl = pm.PyNode(ctl)
+    at = attribute.addAttribute(ctl, at_name, "bool", value=True, keyable=keyable)
+
+    # connect visibility group A
+    for x in groupA:
+        pm.connectAttr(at, x + ".visibility")
+
+    # reverse note
+    rever = node.createReverseNode(at)
+
+    # connect visibility group B
+    for x in groupB:
+        pm.connectAttr(rever.outputX, x + ".visibility")
+
+
+def hide_shape(obj_list, attr_name, attr_host, val=True, keyable=False):
+    """Hide shapes of given nodes using a host boolean attribute.
+
+    Args:
+        obj_list (list): Nodes (or names) whose shapes will be hidden.
+        attr_name (str): Attribute name to create/use on the host.
+        attr_host (pm.DependNode|str): Node holding the attribute.
+        val (bool, optional): Initial value. Defaults to True.
+    """
+
+    if not attr_host.hasAttr(attr_name):
+        attrHide = attribute.addAttribute(
+            attr_host, attr_name, "bool", val, keyable=keyable
+        )
+    else:
+        attrHide = attr_host.attr(attr_name)
+
+    for ctl in obj_list:
+        if isinstance(ctl, str):
+            ctl = pm.PyNode(ctl)
+        for shape in ctl.getShapes():
+            if not shape.visibility.isConnected():
+                pm.connectAttr(attrHide, shape.visibility)
+
+
+def hide_transform(transform_list, attr_name, attr_host, val=True, keyable=False):
+    """Hide transform nodes using a host boolean attribute.
+
+    Args:
+        transform_list (list): Transform nodes (or names) to hide.
+        attr_name (str): Attribute name to create/use on the host.
+        attr_host (pm.DependNode|str): Node holding the attribute.
+        val (bool, optional): Initial value. Defaults to True.
+    """
+
+    if not attr_host.hasAttr(attr_name):
+        attrHide = attribute.addAttribute(
+            attr_host, attr_name, "bool", val, keyable=keyable
+        )
+    else:
+        attrHide = attr_host.attr(attr_name)
+
+    for part in transform_list:
+        if isinstance(part, str):
+            part = pm.PyNode(part)
+        if not part.visibility.isConnected():
+            pm.connectAttr(attrHide, part.visibility)

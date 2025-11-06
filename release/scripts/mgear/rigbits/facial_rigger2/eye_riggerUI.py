@@ -31,7 +31,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
     def create(self):
 
-        self.setWindowTitle("Eye Rigger 2.0")
+        self.setWindowTitle("Eye Rigger 2.1")
         self.setWindowFlags(QtCore.Qt.Window)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, 1)
 
@@ -60,18 +60,18 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.extCorner = QtWidgets.QLineEdit()
         self.extCorner_button = QtWidgets.QPushButton("<<")
 
-        # Blink heigh slider
-        self.blinkHeight_group = QtWidgets.QGroupBox("Blink Height")
-        self.blinkH = QtWidgets.QSpinBox()
-        self.blinkH.setRange(0, 100)
-        self.blinkH.setSingleStep(10)
-        self.blinkH.setValue(20)
-        self.blinkHeight_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.blinkHeight_slider.setRange(0, 100)
-        self.blinkHeight_slider.setSingleStep(
-            self.blinkHeight_slider.maximum() / 10.0
-        )
-        self.blinkHeight_slider.setValue(20)
+        # # Blink heigh slider
+        # self.blinkHeight_group = QtWidgets.QGroupBox("Blink Height")
+        # self.blinkH = QtWidgets.QSpinBox()
+        # self.blinkH.setRange(0, 100)
+        # self.blinkH.setSingleStep(10)
+        # self.blinkH.setValue(20)
+        # self.blinkHeight_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        # self.blinkHeight_slider.setRange(0, 100)
+        # self.blinkHeight_slider.setSingleStep(
+        #     self.blinkHeight_slider.maximum() / 10.0
+        # )
+        # self.blinkHeight_slider.setValue(20)
 
         # vTrack and hTrack
         self.tracking_group = QtWidgets.QGroupBox("Tracking")
@@ -150,10 +150,20 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.offset.setRange(0, 10)
         self.offset.setSingleStep(0.05)
         self.offset.setValue(0.05)
+        self.ctl_size_label = QtWidgets.QLabel("Controls Size:")
+        self.ctl_size = QtWidgets.QDoubleSpinBox()
+        self.ctl_size.setRange(0.1, 10)
+        self.ctl_size.setSingleStep(0.05)
+        self.ctl_size.setValue(1.0)
         self.sideRange = QtWidgets.QCheckBox(
             "Use Z axis for wide calculation (i.e: Horse and fish side eyes)"
         )
         self.sideRange.setChecked(False)
+
+        self.simplified = QtWidgets.QCheckBox(
+            "Simplified controls. If Checked reduce the eyelid controls number"
+        )
+        self.simplified.setChecked(False)
 
         self.ctlSet_label = QtWidgets.QLabel("Controls Set:")
         self.ctlSet = QtWidgets.QLineEdit()
@@ -195,12 +205,12 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         geometryInput_layout.addLayout(edgeloop_layout)
         self.geometryInput_group.setLayout(geometryInput_layout)
 
-        # Blink Height Layout
-        blinkHeight_layout = QtWidgets.QHBoxLayout()
-        blinkHeight_layout.setContentsMargins(1, 1, 1, 1)
-        blinkHeight_layout.addWidget(self.blinkH)
-        blinkHeight_layout.addWidget(self.blinkHeight_slider)
-        self.blinkHeight_group.setLayout(blinkHeight_layout)
+        # # Blink Height Layout
+        # blinkHeight_layout = QtWidgets.QHBoxLayout()
+        # blinkHeight_layout.setContentsMargins(1, 1, 1, 1)
+        # blinkHeight_layout.addWidget(self.blinkH)
+        # blinkHeight_layout.addWidget(self.blinkHeight_slider)
+        # self.blinkHeight_group.setLayout(blinkHeight_layout)
 
         # Tracking Layout
         tracking_layout = QtWidgets.QVBoxLayout()
@@ -284,6 +294,9 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         offset_layout = QtWidgets.QHBoxLayout()
         offset_layout.addWidget(self.ctlShapeOffset_label)
         offset_layout.addWidget(self.offset)
+        ctl_size_layout = QtWidgets.QHBoxLayout()
+        ctl_size_layout.addWidget(self.ctl_size_label)
+        ctl_size_layout.addWidget(self.ctl_size)
         ctlSet_layout = QtWidgets.QHBoxLayout()
         ctlSet_layout.addWidget(self.ctlSet_label)
         ctlSet_layout.addWidget(self.ctlSet)
@@ -300,9 +313,11 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         options_layout.setContentsMargins(6, 1, 6, 2)
         options_layout.addLayout(parent_layout)
         options_layout.addLayout(offset_layout)
-        options_layout.addWidget(self.blinkHeight_group)
+        options_layout.addLayout(ctl_size_layout)
+        # options_layout.addWidget(self.blinkHeight_group)
         options_layout.addWidget(self.tracking_group)
         options_layout.addWidget(self.sideRange)
+        options_layout.addWidget(self.simplified)
         options_layout.addLayout(ctlSet_layout)
         options_layout.addLayout(deformersGrp_layout)
         self.options_group.setLayout(options_layout)
@@ -336,8 +351,8 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.setLayout(main_layout)
 
     def create_connections(self):
-        self.blinkH.valueChanged[int].connect(self.blinkHeight_slider.setValue)
-        self.blinkHeight_slider.valueChanged[int].connect(self.blinkH.setValue)
+        # self.blinkH.valueChanged[int].connect(self.blinkHeight_slider.setValue)
+        # self.blinkHeight_slider.valueChanged[int].connect(self.blinkH.setValue)
 
         self.eyeball_button.clicked.connect(
             partial(self.populate_object, self.eyeMesh)

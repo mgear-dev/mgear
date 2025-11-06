@@ -35,7 +35,7 @@ from mgear import rigbits
 def rig(
     eyeMesh=None,
     edgeLoop="",
-    blinkH=20,
+    # blinkH=20,
     namePrefix="eye",
     offset=0.05,
     rigidLoops=2,
@@ -60,6 +60,8 @@ def rig(
     fixedJoints=False,
     fixedJointsNumber=3,
     orderFromCenter=False,
+    simplified=False,
+    ctl_size=1.0
 ):
     """Create eyelid and eye rig
 
@@ -121,8 +123,8 @@ def rig(
             )
             return
 
-    # Convert data
-    blinkH = blinkH / 100.0
+    # # Convert data
+    # blinkH = blinkH / 100.0
 
     # Initial Data
     bboxCenter = meshNavigation.bboxCenter(eyeMesh)
@@ -373,7 +375,7 @@ def rig(
             setName("aim_%s" % ctlName),
             t_arrow,
             icon="arrow",
-            w=1,
+            w=1 * ctl_size,
             po=datatypes.Vector(0, 0, radius),
             color=4,
         )
@@ -412,18 +414,32 @@ def rig(
 
     # Blink driver controls
     if z_up:
-        trigger_axis = "tz"
+        trigger_axis = ["tz"]
+        extra_trigger_axis = ["tx", "ry"]
         ro_up = [0, 1.57079633 * 2, 1.57079633]
         ro_low = [0, 0, 1.57079633]
         po = [0, offset * -1, 0]
         low_pos = 2  # Z
     else:
-        trigger_axis = "ty"
-        ro_up = (1.57079633, 1.57079633, 0)
+        trigger_axis = ["ty"]
+        extra_trigger_axis = ["tx", "rz"]
+        ro_up = [1.57079633, 1.57079633, 0]
         ro_low = [1.57079633, 1.57079633, 1.57079633 * 2]
         po = [0, 0, offset]
         low_pos = 1  # Y
 
+    # TODO: Add other trigger_axis if self.simplified
+    if simplified:
+        ctl_shape = "square"
+        trigger_axis = trigger_axis + extra_trigger_axis
+        ro_up = [1.57079633, 0, 0]
+        ro_low = [1.57079633, 0, 0]
+        up_size = .6
+        low_size = .6
+    else:
+        ctl_shape = "arrow"
+        up_size = 2.5
+        low_size = 1.5
     # upper ctl
     # rest index in R side is 14
     if side == "R":
@@ -438,14 +454,14 @@ def rig(
         npo,
         setName("upBlink_ctl"),
         ut,
-        icon="arrow",
-        w=2.5,
-        d=2.5,
+        icon=ctl_shape,
+        w=up_size * ctl_size,
+        d=up_size * ctl_size,
         ro=datatypes.Vector(ro_up[0], ro_up[1], ro_up[2]),
         po=datatypes.Vector(po[0], po[1], po[2]),
         color=4,
     )
-    attribute.setKeyableAttributes(up_ctl, [trigger_axis])
+    attribute.setKeyableAttributes(up_ctl, trigger_axis)
     attribute.addAttribute(up_ctl, "isCtl", "bool", keyable=False)
     attribute.add_mirror_config_channels(up_ctl)
     pm.sets(ctlSet, add=up_ctl)
@@ -463,20 +479,21 @@ def rig(
         npo,
         setName("lowBlink_ctl"),
         lt,
-        icon="arrow",
-        w=1.5,
-        d=1.5,
+        icon=ctl_shape,
+        w=low_size * ctl_size,
+        d=low_size * ctl_size,
         ro=datatypes.Vector(ro_low[0], ro_low[1], ro_low[2]),
         po=datatypes.Vector(po[0], po[1], po[2]),
         color=4,
     )
-    attribute.setKeyableAttributes(low_ctl, [trigger_axis])
+    attribute.setKeyableAttributes(low_ctl, trigger_axis)
     pm.sets(ctlSet, add=low_ctl)
     attribute.addAttribute(low_ctl, "isCtl", "bool", keyable=False)
     attribute.add_mirror_config_channels(low_ctl)
 
     # Controls lists
     upControls = []
+    upMidControls = []
     trackLvl = []
     track_corner_lvl = []
     corner_ctl = []
@@ -492,12 +509,12 @@ def rig(
     for i, cv in enumerate(cvs):
         if utils.is_odd(i):
             color = 14
-            wd = 0.3
+            wd = 0.3 * ctl_size
             icon_shape = "circle"
             params = ["tx", "ty", "tz"]
         else:
             color = 4
-            wd = 0.6
+            wd = 0.6 * ctl_size
             icon_shape = "circle"
             params = [
                 "tx",
@@ -558,6 +575,7 @@ def rig(
             ghost_ctl.append(ctl_g)
             # connect local SRT
             rigbits.connectLocalTransform([ctl_g, ctl])
+            upMidControls.append(ctl_g)
         else:
             ctl = icon.create(
                 npo,
@@ -607,6 +625,7 @@ def rig(
     cns_node.interpType.set(0)
     # lower eyelid controls
     lowControls = [upControls[0]]
+    lowMidControls = []
     lowerCtlNames = [
         "inCorner",
         "lowInMid",
@@ -624,12 +643,12 @@ def rig(
             continue
         if utils.is_odd(i):
             color = 14
-            wd = 0.3
+            wd = 0.3 * ctl_size
             icon_shape = "circle"
             params = ["tx", "ty", "tz"]
         else:
             color = 4
-            wd = 0.6
+            wd = 0.6 * ctl_size
             icon_shape = "circle"
             params = [
                 "tx",
@@ -686,6 +705,7 @@ def rig(
             ghost_ctl.append(ctl_g)
             # connect local SRT
             rigbits.connectLocalTransform([ctl_g, ctl])
+            lowMidControls.append(ctl_g)
         else:
             ctl = icon.create(
                 npo,
@@ -1065,17 +1085,17 @@ def rig(
 
     # Adding channels for eye tracking
     upVTracking_att = attribute.addAttribute(
-        up_ctl, "vTracking", "float", upperVTrack, minValue=0
+        up_ctl, "vTracking", "float", upperVTrack, minValue=0, keyable=False
     )
     upHTracking_att = attribute.addAttribute(
-        up_ctl, "hTracking", "float", upperHTrack, minValue=0
+        up_ctl, "hTracking", "float", upperHTrack, minValue=0, keyable=False
     )
 
     lowVTracking_att = attribute.addAttribute(
-        low_ctl, "vTracking", "float", lowerVTrack, minValue=0
+        low_ctl, "vTracking", "float", lowerVTrack, minValue=0, keyable=False
     )
     lowHTracking_att = attribute.addAttribute(
-        low_ctl, "hTracking", "float", lowerHTrack, minValue=0
+        low_ctl, "hTracking", "float", lowerHTrack, minValue=0, keyable=False
     )
 
     # vertical tracking connect
@@ -1131,7 +1151,7 @@ def rig(
     # track_corner_lvl
     for i, ctl in enumerate(corner_ctl):
         VTracking_att = attribute.addAttribute(
-            ctl, "vTracking", "float", 0.1, minValue=0
+            ctl, "vTracking", "float", 0.1, minValue=0, keyable=False
         )
         if z_up:
             mult_node = node.createMulNode(VTracking_att, up_ctl.tz)
@@ -1164,6 +1184,33 @@ def rig(
                 "The eye rig can not be parent to: %s. Maybe "
                 "this object doesn't exist." % parent_node
             )
+
+    ###########################################
+    # Simplified
+    ###########################################
+    if simplified:
+
+        # connect blink to mid ctl
+        rigbits.connectLocalTransform([up_ctl, upMidControls[1]], s=False, r=True, t=False)
+        rigbits.connectLocalTransform([low_ctl, lowMidControls[1]], s=False, r=True, t=False)
+        up_ctl.tx >> upMidControls[1].tx
+        low_ctl.tx >> lowMidControls[1].tx
+
+        # add vis toggle for mid sides
+        rigbits.hide_shape([upMidControls[0], upMidControls[2]],
+                           "hide_mid_ctl",
+                           up_ctl,
+                           False
+                           )
+        rigbits.hide_shape([lowMidControls[0], lowMidControls[2]],
+                           "hide_mid_ctl",
+                           low_ctl,
+                           False
+                           )
+
+        # lock and hide mid centers
+        rigbits.lock_hide_ctl([upMidControls[1], lowMidControls[1]])
+
 
     ###########################################
     # Auto Skinning
@@ -1206,7 +1253,7 @@ def rig(
         if not skinCluster:
             skinCluster = pm.skinCluster(
                 headJnt, geo, tsb=True, nw=2, n="skinClsEyelid"
-            )
+            )[0]
 
         eyelidJoints = upperEyelid_jnt + lowerEyelid_jnt
         pm.progressWindow(
@@ -1317,3 +1364,4 @@ def get_eye_mesh(eyeMesh):
 # Build from json file.
 def rig_from_file(path):
     rig(**json.load(open(path)))
+

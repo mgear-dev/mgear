@@ -7,11 +7,114 @@ import mgear.pymaya as pm
 import mgear.pymaya.datatypes as datatypes
 from maya import OpenMaya as om
 from . import utils
+from maya import cmds
 
 
 #############################################
 # Vertex
 #############################################
+
+#NOTE: WIP function for further improvement in the eyerigger 2.1
+def get_extreme_vertex_from_vtx_loop(vtx_list=None,
+                                     side_range=False,
+                                     z_up=False):
+    """Get extreme vertices (up, low, in, out) from a vertex loop.
+
+    Inspects a list of mesh vertex components (or mixed components that
+    can be converted to vertices) and returns the extreme vertices along
+    the lateral axis and the vertical axis.
+
+    Args:
+        vtx_list (list or None): List of mesh vertex components. If None,
+            uses the current selection (flattened). Any edges/faces will
+            be converted to vertices.
+        side_range (bool): If True, use Z as the lateral axis. When
+            `z_up` is False, this falls back to Y to match your logic.
+        z_up (bool): If True, the up axis is Z; otherwise it is Y.
+
+    Returns:
+        tuple: (upPos, lowPos, inPos/outPos depending on side_range,
+            input_list, vertex_list)
+
+    """
+    if not vtx_list:
+        vtx_list = cmds.ls(sl=True, fl=True) or []
+
+    verts = _as_vertices_unique(vtx_list)
+
+    max_lat = None
+    min_lat = None
+    max_up = None
+    min_up = None
+
+    up_pos = None
+    low_pos = None
+    in_pos = None
+    out_pos = None
+
+    # Lateral axis: X(0) by default; Z(2) if side_range.
+    axis_index = 2 if side_range else 0
+    # Up axis: Z(2) if z_up else Y(1).
+    up_axis = 2 if z_up else 1
+    # Preserve your special case: if Y-up and side_range=True => lateral Y.
+    if not z_up and axis_index == 2:
+        axis_index = 1
+
+    for v in verts:
+        pos = cmds.pointPosition(v, w=True)
+        lat = pos[axis_index]
+        upv = pos[up_axis]
+
+        if max_lat is None or lat > max_lat:
+            max_lat = lat
+            out_pos = v
+        if min_lat is None or lat < min_lat:
+            min_lat = lat
+            in_pos = v
+        if max_up is None or upv > max_up:
+            max_up = upv
+            up_pos = v
+        if min_up is None or upv < min_up:
+            min_up = upv
+            low_pos = v
+
+    if side_range:
+        return (up_pos, low_pos, out_pos, in_pos, vtx_list, verts)
+    else:
+        return (up_pos, low_pos, in_pos, out_pos, vtx_list, verts)
+
+
+def _as_vertices_unique(items):
+    """Convert mixed components to a unique, ordered vertex list.
+
+    Args:
+        items (list): Mixed mesh components (verts/edges/faces) or strs.
+
+    Returns:
+        list: Unique, ordered list of vertex component strings.
+
+    """
+    flat = cmds.ls(items, fl=True) or []
+    if not flat:
+        return []
+
+    verts_all = []
+    for comp in flat:
+        conv = cmds.polyListComponentConversion(comp, tv=True)
+        if not conv:
+            continue
+        exp = cmds.ls(conv, fl=True) or []
+        if exp:
+            verts_all.extend(exp)
+
+    seen = set()
+    verts = []
+    for v in verts_all:
+        if v in seen:
+            continue
+        seen.add(v)
+        verts.append(v)
+    return verts
 
 
 def getExtremeVertexFromLoop(edgeList=None, sideRange=False, z_up=False):

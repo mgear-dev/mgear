@@ -40,7 +40,7 @@ def install():
         ("-----", None),
         ("Channel Wrangler", str_openChannelWrangler),
         ("-----", None),
-        ("Eyelid Rigger 2.0", str_eye_rigger),
+        ("Eyelid Rigger 2.1", str_eye_rigger),
         ("Facial Rigger 1.0 (Legacy)", str_facial_rigger),
         ("-----", None),
         ("Proxy Geo", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
