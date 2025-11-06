@@ -760,7 +760,7 @@ def show_hide_toggle(ctl, at_name, groupA, groupB, keyable=False):
 
     # create attr
     ctl = pm.PyNode(ctl)
-    at = attribute.addAttribute(ctl, at_name, "bool", value=True, keyable=keyable)
+    at = attribute.addAttribute(ctl, at_name, "bool", value=True, keyable=keyable, channelBox=True)
 
     # connect visibility group A
     for x in groupA:
@@ -786,7 +786,7 @@ def hide_shape(obj_list, attr_name, attr_host, val=True, keyable=False):
 
     if not attr_host.hasAttr(attr_name):
         attrHide = attribute.addAttribute(
-            attr_host, attr_name, "bool", val, keyable=keyable
+            attr_host, attr_name, "bool", val, keyable=keyable, channelBox=True
         )
     else:
         attrHide = attr_host.attr(attr_name)
@@ -811,7 +811,7 @@ def hide_transform(transform_list, attr_name, attr_host, val=True, keyable=False
 
     if not attr_host.hasAttr(attr_name):
         attrHide = attribute.addAttribute(
-            attr_host, attr_name, "bool", val, keyable=keyable
+            attr_host, attr_name, "bool", val, keyable=keyable, channelBox=True
         )
     else:
         attrHide = attr_host.attr(attr_name)

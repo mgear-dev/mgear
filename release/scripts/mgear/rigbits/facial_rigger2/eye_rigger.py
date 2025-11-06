@@ -1085,17 +1085,17 @@ def rig(
 
     # Adding channels for eye tracking
     upVTracking_att = attribute.addAttribute(
-        up_ctl, "vTracking", "float", upperVTrack, minValue=0, keyable=False
+        up_ctl, "vTracking", "float", upperVTrack, minValue=0, keyable=False, channelBox=True
     )
     upHTracking_att = attribute.addAttribute(
-        up_ctl, "hTracking", "float", upperHTrack, minValue=0, keyable=False
+        up_ctl, "hTracking", "float", upperHTrack, minValue=0, keyable=False, channelBox=True
     )
 
     lowVTracking_att = attribute.addAttribute(
-        low_ctl, "vTracking", "float", lowerVTrack, minValue=0, keyable=False
+        low_ctl, "vTracking", "float", lowerVTrack, minValue=0, keyable=False, channelBox=True
     )
     lowHTracking_att = attribute.addAttribute(
-        low_ctl, "hTracking", "float", lowerHTrack, minValue=0, keyable=False
+        low_ctl, "hTracking", "float", lowerHTrack, minValue=0, keyable=False, channelBox=True
     )
 
     # vertical tracking connect
@@ -1151,7 +1151,7 @@ def rig(
     # track_corner_lvl
     for i, ctl in enumerate(corner_ctl):
         VTracking_att = attribute.addAttribute(
-            ctl, "vTracking", "float", 0.1, minValue=0, keyable=False
+            ctl, "vTracking", "float", 0.1, minValue=0, keyable=False, channelBox=True
         )
         if z_up:
             mult_node = node.createMulNode(VTracking_att, up_ctl.tz)
