@@ -804,6 +804,9 @@ class Rig(Main):
             parent (dagNode): Parent of this new component guide.
             compType (str): Type of component to add.
 
+        Returns:
+            True if the component guide instance was created, False or None if not.
+
         """
         comp_guide = self.getComponentGuide(comp_type)
 
@@ -841,7 +844,7 @@ class Rig(Main):
 
                 parent_root = parent_root.getParent()
 
-        comp_guide.drawFromUI(parent, showUI)
+        return comp_guide.drawFromUI(parent, showUI)
 
     def drawUpdate(self, oldRoot, parent=None):
 
