@@ -213,15 +213,12 @@ MStatus mgear_rollSplineKine::compute(const MPlug& plug, MDataBlock& data)
     // Get roll, pos, tan, rot, scl
     MVectorArray pos(count);
     MVectorArray tan(count);
-	MQuaternion *rot;
-	rot = new MQuaternion[count];
     MVectorArray scl(count);
 	double threeDoubles[3];
 	for (int i = 0 ; i < count ; i++){
 		MTransformationMatrix tp(inputsP[i]);
 		MTransformationMatrix t(inputs[i]);
 		pos[i] = t.getTranslation(MSpace::kWorld);
-		rot[i] = tp.rotation();
 
 		t.getScale(threeDoubles, MSpace::kWorld);
 		scl[i] = MVector(threeDoubles[0], threeDoubles[1], threeDoubles[2]);
@@ -325,7 +322,9 @@ MStatus mgear_rollSplineKine::compute(const MPlug& plug, MDataBlock& data)
 	MVector scl1 = linearInterpolate(scl[index1temp], scl[index2temp],vtemp);
 
 	// compute the rotation!
-	MQuaternion q = slerp(rot[index1temp], rot[index2temp], vtemp);
+	MQuaternion rot1 = MTransformationMatrix(inputsP[index1temp]).rotation();
+	MQuaternion rot2 = MTransformationMatrix(inputsP[index2temp]).rotation();
+	MQuaternion q = slerp(rot1, rot2, vtemp);
 	yAxis = MVector(0,1,0);
 	yAxis = yAxis.rotateBy(q);
 	
