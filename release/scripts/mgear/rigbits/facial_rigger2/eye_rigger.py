@@ -61,7 +61,9 @@ def rig(
     fixedJointsNumber=3,
     orderFromCenter=False,
     simplified=False,
-    ctl_size=1.0
+    ctl_size=1.0,
+    *args,
+    **kwargs
 ):
     """Create eyelid and eye rig
 
