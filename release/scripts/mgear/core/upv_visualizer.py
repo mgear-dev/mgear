@@ -192,44 +192,54 @@ def calculate_vector_lengths(vector_nodes):
 
     return length_nodes
 
-
 def setup_math_operations(root, length_nodes, float_value=0.5):
     """
     Set up mathematical operation nodes.
 
-    Creates a chain of mathematical operation nodes for pole vector calculation.
+    Creates a chain of mathematical operation nodes for pole vector
+    calculation.
 
     Args:
         root (PyNode): Root guide node
         length_nodes (dict): Dictionary containing length nodes
-        float_value (float, optional): Multiplication coefficient, defaults to 0.5
+        float_value (float, optional): Multiplication coefficient,
+            defaults to 0.5
 
     Returns:
         tuple: A tuple containing two elements:
             - half_one_float_node: Final multiplication node
-            - math_nodes: Mathematical node dictionary, containing 'max' and 'half_multiply' nodes
+            - math_nodes: Mathematical node dictionary,
+              containing 'max' and 'half_multiply' nodes
     """
-    max_float_node = pm.createNode("floatMath", name=f"{root}_max_floatMath")
-    max_float_node.floatA.set(0.010)
-    max_float_node.operation.set(2)  # multiply
+    # Equivalent of floatMath (multiply)
+    max_float_node = pm.createNode(
+        "multiplyDivide", name=f"{root}_max_md"
+    )
+    max_float_node.input1X.set(0.010)
+    max_float_node.operation.set(1)  # 1 = multiply
 
     max_node = pm.createNode("max", name=f"{root.name()}_max")
-    max_float_node.outFloat >> max_node.input[0]
+    max_float_node.outputX >> max_node.input[0]
 
     length_nodes["eff"].output >> max_node.input[1]
     length_nodes["elbow"].output >> max_node.input[2]
     length_nodes["wrist"].output >> max_node.input[3]
 
-    half_one_float_node = pm.createNode("floatMath", name=f"{root}_half_one_floatMath")
-    half_one_float_node.floatB.set(float_value)
-    half_one_float_node.operation.set(2)  # multiply
-    max_node.output >> half_one_float_node.floatA
+    # Equivalent of floatMath (multiply)
+    half_one_float_node = pm.createNode(
+        "multiplyDivide", name=f"{root}_half_one_md"
+    )
+    half_one_float_node.input2X.set(float_value)
+    half_one_float_node.operation.set(1)  # 1 = multiply
+    max_node.output >> half_one_float_node.input1X
 
-    math_nodes = {}
-    math_nodes["max"] = max_node
-    math_nodes["half_multiply"] = half_one_float_node
+    math_nodes = {
+        "max": max_node,
+        "half_multiply": half_one_float_node
+    }
 
     return half_one_float_node, math_nodes
+
 
 
 def setup_cross_product_chain(root, elbow, wrist, vector_nodes, float_value):
@@ -335,7 +345,7 @@ def setup_upv_position_calculation(
     if upv_pos_mul and upv_pos_sum:
         for i, axis in enumerate(["X", "Y", "Z"]):
             getattr(normalize_node, f"output{axis}") >> upv_pos_mul[i].input[0]
-            half_multiply_node.outFloat >> upv_pos_mul[i].input[1]
+            half_multiply_node.outputX >> upv_pos_mul[i].input[1]
 
             upv_pos_mul[i].output >> upv_pos_sum[i].input[0]
             (
