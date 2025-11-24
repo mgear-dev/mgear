@@ -73,7 +73,7 @@ def addCurve(
         op (bool, optional): If True will add a curve that pass over the points
                             This is equivalent of using"editPoint " flag
 
-    No Longer Returned:
+    Returns:
         dagNode: The newly created curve.
     """
     # Check and convert only if the item is an MPoint
