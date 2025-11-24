@@ -247,7 +247,7 @@ def alignToPointsLoop(points=None, loc=None, name=None, *args):
     if not loc:
         if not name:
             name = "axisCenterRef"
-        loc = pm.spaceLocator(n=name)
+        loc = pm.spaceLocator(n=name)[0]
 
     oLen = len(points)
     wPos = [0, 0, 0]
