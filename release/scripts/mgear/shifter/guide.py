@@ -1043,6 +1043,8 @@ class Rig(Main):
             if symmetrize:
                 if not comp_guide.symmetrize():
                     return
+                else:
+                    comp_guide.duplicate_symmetry_status = True
 
         # Draw
         if pm.attributeQuery("ismodel", node=root, ex=True):
@@ -1092,7 +1094,6 @@ class Rig(Main):
                 comp_guide.setIndex(self.model)
 
                 comp_guide.draw(parent)
-
         pm.select(self.components[self.componentsIndex[0]].root)
 
     def updateProperties(self, root, newName, newSide, newIndex):

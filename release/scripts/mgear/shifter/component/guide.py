@@ -142,6 +142,14 @@ class ComponentGuide(guide.Main):
         # store guide locators names
         self.guide_locators = []
 
+        # Duplicate symmetry status
+        # When duplicate symmetry guides this status flag will help to detemine
+        # if we need to execute a logic when or not
+        # for example in postDraw method, we may want to execute a code when
+        # duplicate symmetry testin if is R side, but not when the guide is re-imported
+        # and postDraw is executed again
+        self.duplicate_symmetry_status = False
+
         # Init the guide
         self.postInit()
         self.initialHierarchy()
