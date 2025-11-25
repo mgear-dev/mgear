@@ -709,6 +709,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                         connectedAttrs.append(attr)
                 driverAttrs = connectedAttrs
 
+            driverAttrs = [x.attrName(longName=True) for x in driverAttrs]
             self.ui.DriverAttribute_comboBox.insertItems(0, driverAttrs)
 
     def update_list_widget(self):
@@ -1257,6 +1258,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                         driver_ctl_attrs = pm.listAttr(
                             driver_ctl_node, keyable=True
                         )
+                        driver_ctl_attrs = [x.attrName(longName=True) for x in driver_ctl_attrs]
                         # If its the current driver, remove the current driver
                         # attr to avoid false positives
                         if driver_ctl_node.name() == self.driver.name():
