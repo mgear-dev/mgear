@@ -33,6 +33,7 @@ import json
 import pprint
 
 import mgear.pymaya as pm
+from mgear.pymaya import attr as pm_attr
 from mgear.core import attribute
 
 import mgear.core.utils as mUtils
@@ -379,13 +380,13 @@ def copySDKsToNode(
     # if no attrs provided, assume all
     if not sourceAttributes:
         sourceAttributes = pm.listAttr(sourceDriven, connectable=True)
-
+        sourceAttributesNames = [a.longName() for a in sourceAttributes if isinstance(a, pm_attr.Attribute)]
     # sourceDriverFilter = None
     sourceSDKInfo = getConnectedSDKs(sourceDriven, sourceDriverFilter=None)
     sourceSDKInfo.extend(getMultiDriverSDKs(sourceDriven, sourceDriverFilter))
 
     for source, dest in sourceSDKInfo:
-        if dest.plugAttr(longName=True) not in sourceAttributes:
+        if dest.plugAttr(longName=True) not in sourceAttributesNames:
             continue
 
         sourceDriverAttr = pm.listConnections(
@@ -411,7 +412,7 @@ def copySDKsToNode(
 
         # drivenNode, drivenAttr = getSDKDestination(duplicateCurve.output)
         drivenAttrPlug = "{0}.{1}".format(
-            targetDriven, dest.name(includeNode=False)
+            targetDriven, dest.longName()
         )
         if pm.listConnections(drivenAttrPlug):
             targetAttrPlug = getBlendNodes(drivenAttrPlug)
