@@ -499,7 +499,13 @@ class _Node(base.Node):
         kwargs.pop("ln", None)
         kwargs.pop("longName", None)
         kwargs["longName"] = name
-        return cmd.addAttr(self.name(), **kwargs)
+        cmd.addAttr(self.name(), **kwargs)
+        try:
+            return self.attr(name)
+        except exception.MayaAttributeError:
+            # For things like vector3 builders, just let creation succeed
+            # and don't force a wrapped plug.
+            return None
 
     def getAttr(self, name, **kwargs):
         return cmd.getAttr("{}.{}".format(self.name(), name), **kwargs)
