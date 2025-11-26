@@ -323,7 +323,13 @@ def set_driven_key(
     DriverConB = pm.listConnections(driverAttr)
     for conB in DriverConB:
         if conB not in driver_con_A:
-            animUU = conB
+            if isinstance(conB, pm.nt.UnitConversion) or \
+                    conB.type() == "unitConversion":
+                out_nodes = pm.listConnections(conB.output, d=True) or []
+                if out_nodes:
+                    animUU = out_nodes[0]
+            else:
+                animUU = conB
 
     # Setting Attrs
     if animUU:
