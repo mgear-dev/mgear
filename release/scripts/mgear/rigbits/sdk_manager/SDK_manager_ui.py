@@ -704,7 +704,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 connectedAttrs = []
                 for attr in driverAttrs:
                     if sdk_m.get_driven_from_attr(
-                        self.driver.attr(attr), is_SDK=False
+                        self.driver.attr(attr.shortName()), is_SDK=False
                     ):
                         connectedAttrs.append(attr)
                 driverAttrs = connectedAttrs
