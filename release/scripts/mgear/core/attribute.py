@@ -824,6 +824,39 @@ def move_output_connections(source, target, type_filter=None):
         pm.connectAttr(target.attr(at_name), i[1])
 
 
+def get_attr_info(node, attr):
+    """
+    Returns default, min, and max values of an attribute.
+
+    Args:
+        node (str): Node name, e.g. "control_C1_ctl"
+        attr (str): Attribute name, e.g. "arm_slide"
+
+    Returns:
+        dict: { "default": value or None,
+                "min": value or None,
+                "max": value or None }
+    """
+    info = {"default": None, "min": None, "max": None}
+
+    # Default
+    default = cmds.attributeQuery(attr, node=node, listDefault=True)
+    if default:
+        info["default"] = default[0]
+
+    # Min
+    minimum = cmds.attributeQuery(attr, node=node, minimum=True)
+    if minimum:
+        info["min"] = minimum[0]
+
+    # Max
+    maximum = cmds.attributeQuery(attr, node=node, maximum=True)
+    if maximum:
+        info["max"] = maximum[0]
+
+    return info
+
+
 ##########################################################
 # PARAMETER DEFINITION
 ##########################################################
