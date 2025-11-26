@@ -18,6 +18,7 @@ from mgear.vendor.Qt import QtCore, QtWidgets
 # mGear core ---------
 import mgear.core.utils as utils
 import mgear.core.attribute as attribute
+from mgear.core import callbackManager
 
 # import mgear.core.pickWalk as pickWalk
 
@@ -52,7 +53,6 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.driver = None
         self.driver_range = None
         self.driver_att = None
-        self.script_jobs = []
 
         # --------------------------
         self.init_ui(ui_path)
@@ -60,6 +60,8 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.create_layout()
         self.create_contextMenu_01()
         self.create_connections()
+
+        self.cb_manager = callbackManager.CallbackManager()
 
     def __list_widget_selection(self):
         """
@@ -593,7 +595,8 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         - delete any remaining script jobs created by the ui.
         - find workspace root and delete the ui.
         """
-        self.delete_script_jobs()
+        self.cb_manager.removeAllManagedCB()
+        # self.delete_script_jobs()
 
     def hideEvent(self, *args):
         """
@@ -664,29 +667,15 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.driver = None
         self.ui.DriverAttribute_comboBox.clear()
         self.ui.Driven_listWidget.clear()
-        self.delete_script_jobs()
+        self.cb_manager.removeAllManagedCB()
 
-    def create_script_jobs(self):
-        """
-        creates a script job and connects it to
-        self.driver.attr(self.driver_att)
-        """
+    def add_callback(self):
         if self.driver:
             if self.driver_att:
-                watched_attr = "{0}.{1}".format(self.driver, self.driver_att)
-                new_script = pm.scriptJob(
-                    attributeChange=(watched_attr, partial(self.update_slider))
-                )
-                self.script_jobs.append(new_script)
-
-    def delete_script_jobs(self):
-        """
-        deletes all the script jobs inside self.script_jobs
-        """
-        for job_number in self.script_jobs:
-            pm.scriptJob(kill=job_number)
-        self.script_jobs = []
-
+                self.cb_manager.attributeChangedCB("attrChanged",
+                                                   self.update_slider,
+                                                   self.driver.longName(),
+                                                   [self.driver_att])
     def driver_attr_drop_down(self):
         """
         Adds all the keyable channels to the DriverAttribute_comboBox.
@@ -737,8 +726,8 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             self.update_spin_box_range()
 
             # Creating a script job to connect
-            self.delete_script_jobs()
-            self.create_script_jobs()
+            self.cb_manager.removeAllManagedCB()
+            self.add_callback()
 
     def update_driver_val(self, val):
         """
