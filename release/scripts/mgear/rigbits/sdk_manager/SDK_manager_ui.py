@@ -28,7 +28,7 @@ import mgear.rigbits.sdk_manager.core as sdk_m
 
 __author__ = "Justin Pedersen"
 __email__ = "Justin@tcgcape.co.za"
-__version__ = [0, 0, 1]
+__version__ = [1, 0, 0]
 
 
 class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
@@ -40,7 +40,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
     """
 
     def __init__(self, ui_path=None, parent=None):
-        self.toolName = "SDK_manager [Beta]"
+        self.toolName = "SDK_manager"
         super(SDKManagerDialog, self).__init__(parent)
         self.setWindowTitle(self.toolName)
         self.setWindowFlags(
@@ -438,7 +438,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         )
         self.ui.SetDrivenKey_pushButton.clicked.connect(self.set_driven_key)
         self.ui.driverReset_pushButton.clicked.connect(
-            self.update_slider_range
+            partial(self.update_slider_range, reset=True)
         )
         self.ui.driverReset_pushButton.clicked.connect(
             self.update_spin_box_range
@@ -596,7 +596,6 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         - find workspace root and delete the ui.
         """
         self.cb_manager.removeAllManagedCB()
-        # self.delete_script_jobs()
 
     def hideEvent(self, *args):
         """
@@ -670,12 +669,12 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.cb_manager.removeAllManagedCB()
 
     def add_callback(self):
-        if self.driver:
-            if self.driver_att:
-                self.cb_manager.attributeChangedCB("attrChanged",
-                                                   self.update_slider,
-                                                   self.driver.longName(),
-                                                   [self.driver_att])
+        if self.driver and self.driver_att:
+
+            self.cb_manager.attributeChangedCB("attrChanged",
+                                               self.update_slider,
+                                               self.driver.name(),
+                                               [self.driver.attr(self.driver_att).shortName()])
     def driver_attr_drop_down(self):
         """
         Adds all the keyable channels to the DriverAttribute_comboBox.
@@ -734,7 +733,11 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         updates the driver value when the spider is moved.
         """
         if self.driver:
-            self.driver.attr(self.driver_att).set(float(val) / 100)
+            try:
+                self.driver.attr(self.driver_att).set(float(val) / 100)
+            except:
+                print("update_driver_val cant be set")
+                pass
 
     def update_slider(self, val=None):
         """
