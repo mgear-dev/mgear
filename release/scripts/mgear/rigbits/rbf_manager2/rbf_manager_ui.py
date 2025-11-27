@@ -76,6 +76,7 @@ import mgear.core.string as mString
 from mgear.core import anim_utils
 from mgear.core import attribute
 from mgear.vendor.Qt import QtWidgets, QtCore, QtCompat
+from mgear.core import pyqt
 
 # from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 # from mgear.rigbits.six import PY2
@@ -430,6 +431,7 @@ class RBFManagerUI(widget.RBFWidget):
 
         self.absWorld = True
         self.zeroedDefaults = True
+        self.customNameDefaults = False
         self.currentRBFSetupNodes = []
         self.allSetupsInfo = None
         self.drivenWidget = []
@@ -601,6 +603,8 @@ class RBFManagerUI(widget.RBFWidget):
             drivenNode = rbf_node.addDrivenGroup(drivenNode)
 
         # Create RBFNode instance, apply settings
+        if self.customNameDefaults:
+            setupName = ask_for_name()
         if not setupName:
             setupName = "{}_WD".format(driverNode)
         rbfNode = sortRBF(drivenNode, rbfType=rbfType)
@@ -1877,6 +1881,11 @@ class RBFManagerUI(widget.RBFWidget):
         """
         self.zeroedDefaults = toggleState
 
+    def _on_custom_names_toggled(self, checked):
+
+        self.customNameDefaults = checked
+
+
     # signal management -------------------------------------------------------
     def connectSignals(self):
         """connect all the signals in the UI
@@ -2049,6 +2058,14 @@ class RBFManagerUI(widget.RBFWidget):
 
         worldSpaceMenuItem.setToolTip(toolTip)
 
+        menuLabel = "Promp Custom Names"
+        self.customNamesItem = settingsMenu.addAction(menuLabel)
+
+        self.customNamesItem.setCheckable(True)
+        self.customNamesItem.setChecked(False)
+
+        self.customNamesItem.toggled.connect(self._on_custom_names_toggled)
+
         # show override -------------------------------------------------------
         additionalFuncDict = getEnvironModules()
         if additionalFuncDict:
@@ -2074,3 +2091,51 @@ class RBFManagerUI(widget.RBFWidget):
             if event.buttons() == QtCore.Qt.NoButton:
                 pos = event.pos()
                 self.mousePosition.emit(pos.x(), pos.y())
+
+
+class NameInputDialog(QtWidgets.QDialog):
+
+    def __init__(self, parent=pyqt.maya_main_window()):
+        super(NameInputDialog, self).__init__(parent)
+
+        self.setWindowTitle("Enter Name")
+        self.setModal(True)
+
+        # Remove the "?" help button
+        self.setWindowFlags(
+            self.windowFlags()
+            & ~QtCore.Qt.WindowContextHelpButtonHint
+        )
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Line edit
+        self.line_edit = QtWidgets.QLineEdit()
+        self.line_edit.setPlaceholderText(
+            "<name>_<side><int>   //  skirt_L0"
+        )
+        layout.addWidget(self.line_edit)
+
+        # Buttons
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok
+            | QtWidgets.QDialogButtonBox.Cancel
+        )
+        layout.addWidget(btn_box)
+
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+
+    def get_text(self):
+        """Return the string the user typed."""
+        return mString.normalize2(self.line_edit.text())
+
+
+def ask_for_name():
+    dlg = NameInputDialog()
+    result = dlg.exec()
+
+    if result == QtWidgets.QDialog.Accepted:
+        return dlg.get_text()
+
+    return None
