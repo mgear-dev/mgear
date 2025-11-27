@@ -929,10 +929,10 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         # setting Infinity
         for SDK in SDKs_to_set:
             if pre:
-                value = 4 if SDK.preInfinity.get() == 0 else 0
+                value = 1 if SDK.preInfinity.get() == 0 else 0
                 SDK.preInfinity.set(value)
             if post:
-                value = 4 if SDK.postInfinity.get() == 0 else 0
+                value = 1 if SDK.postInfinity.get() == 0 else 0
                 SDK.postInfinity.set(value)
 
         om.MGlobal.displayInfo("infinity set")
@@ -960,14 +960,14 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             numberOfKeys = (
                 len(pm.listAttr("{0}.ktv".format(animNode), multi=True)) / 3
             )
-            for index in range(0, numberOfKeys):
+            for index in range(0, int(numberOfKeys)):
                 if tangent == "in":
                     pm.keyTangent(
-                        animNode, index=[index, index], inTangentType=tanType
+                        animNode, index=(index, index), inTangentType=tanType
                     )
                 if tangent == "out":
                     pm.keyTangent(
-                        animNode, index=[index, index], outTangentType=tanType
+                        animNode, index=(index, index), outTangentType=tanType
                     )
 
         om.MGlobal.displayInfo(

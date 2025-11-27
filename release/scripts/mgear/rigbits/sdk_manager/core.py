@@ -269,6 +269,17 @@ def ctl_from_list(in_list, SDK=False, animTweak=False):
 # ================================================= #
 # SDK
 # ================================================= #
+def _filter_out_unitConversion_nodes(nodes_list):
+    filtered_nodes = []
+    for nod in nodes_list:
+        if isinstance(nod, pm.nt.UnitConversion) or \
+                nod.type() == "unitConversion":
+            out_nodes = pm.listConnections(nod.output, d=True) or []
+            if out_nodes:
+                nod = out_nodes[0]
+        filtered_nodes.append(nod)
+
+    return filtered_nodes
 
 
 def set_driven_key(
@@ -321,15 +332,11 @@ def set_driven_key(
 
     # Compairing the connections to DriverAtt to find new Anim UU node.
     DriverConB = pm.listConnections(driverAttr)
+    DriverConB = _filter_out_unitConversion_nodes(DriverConB)
+
     for conB in DriverConB:
         if conB not in driver_con_A:
-            if isinstance(conB, pm.nt.UnitConversion) or \
-                    conB.type() == "unitConversion":
-                out_nodes = pm.listConnections(conB.output, d=True) or []
-                if out_nodes:
-                    animUU = out_nodes[0]
-            else:
-                animUU = conB
+            animUU = conB
 
     # Setting Attrs
     if animUU:
@@ -359,8 +366,9 @@ def get_driven_from_attr(driverAttr, is_SDK=False):
         list [List of unicode names]
     """
     driven_ctls = []
+    connected_nodes = _filter_out_unitConversion_nodes(pm.listConnections(driverAttr))
 
-    for connected_node in pm.listConnections(driverAttr):
+    for connected_node in connected_nodes:
         if pm.nodeType(connected_node) in SDK_ANIMCURVES_TYPE:
             drvn_ctl = sdk_io.getSDKDestination(connected_node)[0]
             if is_SDK:
