@@ -2127,7 +2127,7 @@ class NameInputDialog(QtWidgets.QDialog):
         btn_box.rejected.connect(self.reject)
 
     def get_text(self):
-        """Return the string the user typed."""
+        """Return the string normalized as a valid Maya name."""
         return mString.normalize2(self.line_edit.text())
 
 
