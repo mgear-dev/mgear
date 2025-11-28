@@ -615,7 +615,6 @@ class Rig(object):
         pm.select(ctl_master_grp, replace=True)
         dag_node = pm.dagPose(save=True, selection=True)
         pm.connectAttr(dag_node.message, self.model.rigPoses[0])
-        print(dag_node)
 
         # hide all DG nodes inputs in channel box -----------------------
         # only hides if components_finalize or All steps are done
@@ -898,7 +897,7 @@ class Rig(object):
         if names:
             return names[1]
 
-    def findRelative(self, guideName, relatives_map={}):
+    def findRelative(self, guideName, relatives_map=None):
         """Return the objects in the rig matching the guide object.
 
         Args:
@@ -914,6 +913,7 @@ class Rig(object):
         if guideName is None:
             return self.global_ctl
 
+        relatives_map = relatives_map or {}
         if guideName in relatives_map.keys():
             return relatives_map[guideName]
 

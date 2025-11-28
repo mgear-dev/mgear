@@ -23,7 +23,7 @@ def create(
     parent=None,
     name="icon",
     m=datatypes.Matrix(),
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     icon="cube",
     **kwargs
 ):
@@ -36,7 +36,7 @@ def create(
         parent (dagNode): The parent for the new icon
         name (str): Name of the Icon.
         m (matrix): Transformation matrix of the icon
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         icon (str): Icon type. Options: "cube", "pyramid", "square",
             "flower", "circle", "cylinder", "compas", "diamond",
                     "cubewithpeak", "sphere", "arrow", "crossarrow",
@@ -190,7 +190,7 @@ def cube(
     width=1,
     height=1,
     depth=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -203,7 +203,7 @@ def cube(
         width (float): Width of the shape.
         height (float): Height of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve
             from its center.
@@ -212,6 +212,7 @@ def cube(
 
     Returns:
         dagNode: The newly created icon.
+
     """
     lenX = width * 0.5
     lenY = height * 0.5
@@ -261,7 +262,7 @@ def pyramid(
     width=1,
     height=1,
     depth=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -274,7 +275,7 @@ def pyramid(
         width (float): Width of the shape.
         height (float): Height of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve
             from its center.
@@ -312,7 +313,7 @@ def square(
     name="square",
     width=1,
     depth=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -324,7 +325,7 @@ def square(
         name (str): Name of the curve.
         width (float): Width of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -356,7 +357,7 @@ def flower(
     parent=None,
     name="flower",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -368,7 +369,7 @@ def flower(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -405,7 +406,7 @@ def circle(
     parent=None,
     name="circle",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -417,7 +418,7 @@ def circle(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -455,7 +456,7 @@ def cylinder(
     name="cylinder",
     width=1,
     heigth=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -468,7 +469,7 @@ def cylinder(
         name (str): Name of the curve.
         width (float): Width of the shape.
         height (float): Height of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -554,7 +555,7 @@ def compas(
     parent=None,
     name="compas",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -566,7 +567,7 @@ def compas(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -604,7 +605,7 @@ def diamond(
     parent=None,
     name="diamond",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -617,7 +618,7 @@ def diamond(
         width (float): Width of the shape.
         height (float): Height of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -669,7 +670,7 @@ def cubewithpeak(
     parent=None,
     name="cubewithpeak",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -680,7 +681,7 @@ def cubewithpeak(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -742,7 +743,7 @@ def sphere(
     parent=None,
     name="sphere",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -754,7 +755,7 @@ def sphere(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -817,7 +818,7 @@ def arrow(
     parent=None,
     name="arrow",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -828,7 +829,7 @@ def arrow(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -864,7 +865,7 @@ def crossarrow(
     parent=None,
     name="crossArrow",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -875,7 +876,7 @@ def crossarrow(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -952,7 +953,7 @@ def cross(
     parent=None,
     name="cross",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -963,7 +964,7 @@ def cross(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1011,7 +1012,7 @@ def null(
     parent=None,
     name="null",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -1022,7 +1023,7 @@ def null(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1065,7 +1066,7 @@ def axis(
     parent=None,
     name="axis",
     width=1,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -1076,7 +1077,7 @@ def axis(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1153,6 +1154,7 @@ def direction_arrow(
 
     Returns:
         str: The name of the created arrow curve.
+
     """
     # Validate axis input
     valid_axes = ["x", "y", "z", "-x", "-y", "-z"]
@@ -1214,7 +1216,7 @@ def guideRootIcon(
     parent=None,
     name="root",
     width=0.5,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -1228,7 +1230,7 @@ def guideRootIcon(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1270,7 +1272,7 @@ def guideRootIcon2D(
     parent=None,
     name="root",
     width=0.5,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -1284,7 +1286,7 @@ def guideRootIcon2D(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1331,7 +1333,7 @@ def guideLocatorIcon(
     parent=None,
     name="locator",
     width=0.5,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -1345,7 +1347,7 @@ def guideLocatorIcon(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1354,6 +1356,7 @@ def guideLocatorIcon(
 
     Returns:
         dagNode: The newly created icon.
+
     """
     rootIco = null(parent, name, width, color, m, pos_offset, rot_offset)
     spheWidth = width / 2.0
@@ -1379,7 +1382,7 @@ def guideBladeIcon(
     parent=None,
     name="blade",
     lenX=1.0,
-    color=[0, 0, 0],
+    color=(0, 0, 0),
     m=datatypes.Matrix(),
     pos_offset=None,
     rot_offset=None,
@@ -1393,7 +1396,7 @@ def guideBladeIcon(
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         lenX (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1492,8 +1495,7 @@ def setcolor(node, color):
 
     Arguments:
         node(dagNode): The object
-        color (int or list of float): The color in index base or RGB.
-
+        color (int | list of float | tuple of float): The color in index base or RGB.
 
     """
     # TODO: configure this funcion to work with RGB or Index color base
