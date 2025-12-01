@@ -398,7 +398,9 @@ class HumanIKMapper:
     @classmethod
     @viewport_off
     def bake(cls):
+        print("Baking character".center(30, '#'))
         current_ik_char = mel.eval("hikGetCurrentCharacter;")
+        print(f"{current_ik_char}".center(30, '#'))
         attrs_string = " ".join(cls.get_sub_ik_bake_attrs())
         sub_ik_ctls = [
             cls.char_config[bone]["sub_ik"]
@@ -429,6 +431,23 @@ class HumanIKMapper:
             )
 
             mel.eval(mel_cmd)
+
+        else:
+            mel_cmd = """
+                string $currCharacter = hikGetCurrentCharacter();
+
+                if( $currCharacter != "" )
+                {{
+                    string $preBakeCmd =  "hikBakeCharacterPre( \\"{0}\\" ); ";
+                    string $postBakeCmd = "hikBakeCharacterPost( \\"{0}\\" ); ";
+
+                    performBakeSimulationArgList 2 {{ "1", "animationList", $preBakeCmd, $postBakeCmd }};
+                }}
+
+            """.format(current_ik_char)
+
+            mel.eval(mel_cmd)
+
             # cls.sub_iks_binding(False)
 
     @classmethod
@@ -452,9 +471,11 @@ class HumanIKMapper:
 
     @classmethod
     @one_undo
-    def batch_bake(cls, file_list):
+    @viewport_off
+    def batch_bake(cls, file_list, timeline=False):
         # curr_character = mel.eval("hikGetCurrentCharacter;") # Not used ?
         # cmds.hikSetCurrentCharacter(hikChar)
+        cmds.timeEditor(mute=True)
         existing_ik_humans = set(pm.ls(type="HIKCharacterNode"))
 
         HumanIKMapper.refresh_char_configuration()
@@ -468,6 +489,9 @@ class HumanIKMapper:
         sub_ik_constraints = [
             cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
         ]
+
+        current_start_frame = 0
+        clip_id = 1
 
         for file in file_list:
             # TODO test with references
@@ -483,13 +507,25 @@ class HumanIKMapper:
                 cmds.playbackOptions(q=True, min=True),
                 cmds.playbackOptions(q=True, max=True)
             )
-            # pm.evalDeferred(deferred_cmd)
-            cmds.evalDeferred(
-                "from mgear.animbits.humanIkMapper import HumanIKMapper \n"
-                'HumanIKMapper.deferred_bake("{0}", "{1}")'.format(
-                    file_ik_human, frame_range
+            if not timeline:
+                cmds.evalDeferred(
+                    "from mgear.animbits.humanIkMapper import HumanIKMapper \n"
+                    'HumanIKMapper.deferred_bake("{0}", "{1}")'.format(
+                        file_ik_human, frame_range, current_start_frame, clip_id
+                    )
                 )
-            )
+            else:
+                cmds.evalDeferred(
+                    "from mgear.animbits.humanIkMapper import HumanIKMapper \n"
+                    'HumanIKMapper.deferred_bake_timeline("{0}", "{1}", "{2}", {3})'.format(
+                        file_ik_human, frame_range, current_start_frame, clip_id
+                    )
+                )
+            current_start_frame += frame_range[1]
+            clip_id += 1
+
+        cmds.timeEditor(mute=False)
+        cmds.playbackOptions(min=0, max=current_start_frame)
 
     @classmethod
     def deferred_bake(cls, ikhuman, frame_range):
@@ -531,6 +567,64 @@ class HumanIKMapper:
         if sub_ik_constraints:
             cmds.delete(sub_ik_constraints)
         cmds.rename("BakeResults", ikhuman)
+    
+    @classmethod
+    @viewport_off
+    def deferred_bake_timeline(cls, ikhuman, frame_range, start_frame, clip_id):
+        
+        # updates src
+        HumanIKMapper.sub_iks_binding(True)
+        cmds.optionMenuGrp(
+            "hikSourceList", edit=True, value=" {0}".format(ikhuman)
+        )
+        mel.eval("hikUpdateCurrentSourceFromUI;")
+
+        sub_ik_ctls = [
+            cls.char_config[bone]["sub_ik"]
+            for bone in HumanIKMapper.char_config
+            if HumanIKMapper.char_config[bone]["sub_ik"]
+        ]
+        sub_ik_constraints = [
+            cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
+        ]
+        # print("sub ik ctls = {1}, \n subik constraints = {1}".format(sub_ik_ctls, sub_ik_constraints))
+
+        mel.eval(
+            'hikBakeCharacterPre("{}");'.format(
+                mel.eval("hikGetCurrentCharacter;")
+            )
+        )
+        cmds.select(HumanIKMapper.get_sub_ik_bake_attrs(), add=1)
+        cmds.bakeResults(
+            cmds.ls(sl=1),
+            simulation=True,
+            t=ast.literal_eval(frame_range),
+            sampleBy=1,
+        )
+        mel.eval(
+            'hikBakeCharacterPost("{}");'.format(
+                mel.eval("hikGetCurrentCharacter;")
+            )
+        )
+        if sub_ik_constraints:
+            cmds.delete(sub_ik_constraints)
+        # cmds.rename("BakeResults", ikhuman)
+        ctls = cls.get_all_controls()
+        cmds.select(ctls)
+        animSource = cmds.timeEditorAnimSource(ikhuman, aso=1)
+        animClip = cmds.timeEditorClip(f"{ikhuman}_Clip", startTime=start_frame, rootClipId=clip_id, animSource=animSource, track="Composition1:0")
+
+
+    @classmethod
+    def get_all_controls(cls):
+        ctls = []
+        for bone in cls.char_config.values():
+            if bone['target']:
+                ctls.append(bone['target'])
+            if bone['sub_ik']:
+                ctls.extend(bone['sub_ik'])
+
+        return ctls
 
 
 class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
@@ -566,6 +660,7 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.import_action = QtWidgets.QAction("Import")
         self.export_action = QtWidgets.QAction("Export")
         self.bake_action = QtWidgets.QAction("Bake")
+        self.bake_timeline_action = QtWidgets.QAction("Bake to timeline")
         self.export_batch_bake_action = QtWidgets.QAction(
             "Export Batch Bake Config"
         )
@@ -669,7 +764,8 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
         )
         self.remove_bake_path_btn.setFont(add_remove_font)
-        self.batch_bake_btn = QtWidgets.QPushButton("Batch Bake")
+        self.batch_bake_layers_btn = QtWidgets.QPushButton("Batch Bake Layers")
+        self.batch_bake_timeline_btn = QtWidgets.QPushButton("Batch Bake Timeline")
 
     def create_layout(self):
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -778,7 +874,8 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         paths_hlayout.addLayout(path_buttons_vlayout)
 
         batch_bake_vlayout.addLayout(paths_hlayout)
-        batch_bake_vlayout.addWidget(self.batch_bake_btn)
+        batch_bake_vlayout.addWidget(self.batch_bake_layers_btn)
+        batch_bake_vlayout.addWidget(self.batch_bake_timeline_btn)
 
         self.tabs.addTab(self.batch_bake_tab, "Batch Bake")
 
@@ -886,7 +983,8 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.add_bake_path_btn.clicked.connect(self.add_batch_bake_paths)
         self.remove_bake_path_btn.clicked.connect(self.remove_batch_bake_paths)
-        self.batch_bake_btn.clicked.connect(self.batch_bake)
+        self.batch_bake_layers_btn.clicked.connect(self.batch_bake_layers)
+        self.batch_bake_timeline_btn.clicked.connect(self.batch_bake_timeline)
 
     def deferred_resize(self):
         # print("calling deferred resize")
@@ -943,12 +1041,19 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         for item in selected_items:
             self.bake_paths_lw.takeItem(self.bake_paths_lw.row(item))
 
-    def batch_bake(self):
+    def batch_bake_layers(self):
         files = []
         for i in range(self.bake_paths_lw.count()):
             files.append(self.bake_paths_lw.item(i).text())
         print(files)
         HumanIKMapper.batch_bake(files)
+
+    def batch_bake_timeline(self):
+        files = []
+        for i in range(self.bake_paths_lw.count()):
+            files.append(self.bake_paths_lw.item(i).text())
+        print(files)
+        HumanIKMapper.batch_bake(files, timeline=True)
 
     def export_batch_bake_config(self):
         files = []
