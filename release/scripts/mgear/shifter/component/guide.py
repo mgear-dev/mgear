@@ -598,7 +598,7 @@ class ComponentGuide(guide.Main):
         # objList = dag.findComponentChildren(self.parent,
         #                                     oldName, oldSideIndex)
         # NOTE: Experimenta  using findComponentChildren3
-        objList = dag.findComponentChildren3(self.parent, oldName, oldSideIndex)
+        objList = dag.findComponentChildren4(self.parent, oldName, oldSideIndex)
         newSideIndex = newSide + str(self.values["comp_index"])
         objList.append(self.parent)
         for obj in objList:
