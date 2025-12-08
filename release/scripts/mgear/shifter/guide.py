@@ -998,20 +998,20 @@ class Rig(Main):
         if pm.attributeQuery("ismodel", node=sel, ex=True):
             self.model = sel
         else:
-            pm.displayWarning("select the top guide node")
+            pm.displayWarning("Select the top guide node.")
             return
 
         name = self.model.name()
         self.setFromHierarchy(self.model, True)
         if self.valid and not force:
-            pm.displayInfo("The Guide is updated")
+            pm.displayInfo("The guide is up to date.")
             return
 
         pm.rename(self.model, name + "_old")
         deleteLater = self.model
         self.drawUpdate(deleteLater)
         pm.rename(self.model, name)
-        pm.displayInfo("The guide %s have been updated" % name)
+        pm.displayInfo(f"Guide successfully updated: {name}")
         pm.delete(deleteLater)
 
     def duplicate(self, root, symmetrize=False):
