@@ -797,6 +797,7 @@ class Rig(Main):
         )
         self.controllers_org.attr("visibility").set(0)
 
+    @utils.one_undo
     def drawNewComponent(self, parent, comp_type, showUI=True):
         """Add a new component to the guide.
 

@@ -17,7 +17,7 @@ from mgear.core import string
 from mgear.core import node
 from mgear.pymaya import versions
 
-from mgear.core import dag, vector, transform, applyop, attribute, icon, pyqt
+from mgear.core import dag, vector, transform, applyop, attribute, icon, pyqt, utils
 
 from mgear.shifter import guide, guide_manager
 from . import chain_guide_initializer
@@ -565,6 +565,7 @@ class ComponentGuide(guide.Main):
 
         return True
 
+    @utils.one_undo
     def rename(self, root, newName, newSide, newIndex):
         """Rename the component.
 
