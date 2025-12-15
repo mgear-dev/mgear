@@ -53,7 +53,7 @@ def addAttribute(
             when the attribute is not keyable. (optional)
 
     Returns:
-        str: The long name of the new attribute
+        pm.Attribute: A pymaya `Attribute` wrapper of the new attribute.
     """
     if isinstance(node, str):
         try:

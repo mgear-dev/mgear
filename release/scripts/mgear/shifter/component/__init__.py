@@ -1343,7 +1343,7 @@ class Main(object):
                             from the component name or instance name.(optional)
 
         Returns:
-            str: The long name of the new attribute
+            pm.Attribute: A pymaya `Attribute` wrapper of the new attribute.
 
         """
         if not uihost:
