@@ -603,11 +603,17 @@ class RBFManagerUI(widget.RBFWidget):
             drivenNode = rbf_node.addDrivenGroup(drivenNode)
 
         # Create RBFNode instance, apply settings
+        allSetups = sorted(self.allSetupsInfo.keys())
         if self.customNameDefaults:
             setupName = ask_for_name()
+            if not setupName:
+                pm.displayInfo("Custom name cancelled. Using Automatic Name")
+            while setupName and setupName in allSetups:
+                pm.displayWarning(f"{setupName} already exists, please select another name.")
+                setupName = ask_for_name()
+
         if not setupName:
             index = 0
-            allSetups = sorted(self.allSetupsInfo.keys())
             while "{}_{:03d}_WD".format(driverNode, index) in allSetups:
                 index += 1
             setupName = "{}_{:03d}_WD".format(driverNode, index)
