@@ -1,4 +1,6 @@
-from typing import List, Sequence, Union
+import os
+from typing import List, Optional, Sequence, Union
+from pathlib import Path
 import mgear.pymaya as pm
 
 
@@ -45,3 +47,44 @@ class TempSelection:
                 pm.select(clear=True)
         except Exception:
             pass
+
+
+def get_mgear_icon_search_paths() -> List[Path]:
+    """
+    Return all mGear-related icon search paths from XBMLANGPATH.
+
+    These paths represent the effective icon directories Maya is using
+    after module resolution.
+
+    :return: List of icon search paths containing "mgear".
+    """
+    paths: List[Path] = []
+
+    xbm_lang_path = os.environ.get("XBMLANGPATH", "")
+    if not xbm_lang_path:
+        return paths
+
+    for entry in xbm_lang_path.split(os.pathsep):
+        if "mgear" not in entry.lower():
+            continue
+
+        p = Path(entry)
+        if p.is_dir() and p not in paths:
+            paths.append(p)
+
+    return paths
+
+
+def get_mgear_icon_path(filename: str) -> Optional[Path]:
+    """
+    Resolve a full path to an mGear icon file using Maya's resolved icon paths.
+
+    :param filename: Icon file name (e.g. "visibility_on.svg").
+    :return: Absolute Path to the icon if found, otherwise None.
+    """
+    for base_path in get_mgear_icon_search_paths():
+        candidate = base_path / filename
+        if candidate.is_file():
+            return candidate
+
+    return None
