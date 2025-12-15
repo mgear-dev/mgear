@@ -279,6 +279,9 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
     def draw_component(self, parent=None):
         showUI = self.gmcUIInst.showUI_checkBox.checkState()
+        if isinstance(showUI, QtCore.Qt.CheckState):
+            showUI = showUI.value
+        showUI = bool(showUI)
         for x in self.gmcUIInst.component_listView.selectedIndexes():
             guide_manager.draw_comp(x.data(), parent, showUI)
 
