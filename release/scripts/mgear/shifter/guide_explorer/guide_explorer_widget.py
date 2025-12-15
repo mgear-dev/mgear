@@ -16,9 +16,6 @@ import mgear.pymaya as pm
 
 logger = logging.getLogger("Guide Explorer")
 
-import importlib
-importlib.reload(shifter_utils)
-
 
 class GuideExplorerWidget(QtWidgets.QWidget):
     """
@@ -135,41 +132,12 @@ class GuideExplorerWidget(QtWidgets.QWidget):
 
     def on_selection_changed_clicked(self) -> None:
         """
-        Update the settings panel based on the current tree selection.
+        Slot invoked when the tree selection changes.
 
-        Displays either the guide settings, component settings or
-        a placeholder if nothing is selected.
-
-        :return: None
+        Delegates to "_update_right_panel_from_selection" to refresh
+        the right-hand settings panel based on the newly selected item.
         """
-        items = self.guide_tree_widget.selectedItems()
-        if not items:
-            self.show_placeholder()
-            return
-
-        # -- Stored information when loading in the guide and components
-        data = items[-1].data(0, guide_tree_widget.DATA_ROLE)
-
-        # -- Shifter Component Instance
-        if isinstance(data, ShifterComponent) and data.root_name:
-            self.open_component_widget(data)
-
-            # -- Safe select via the node uuid
-            if self.sync_checkbox.isChecked():
-                shifter_utils.select_by_uuid(uuid=data.uuid)
-
-            return
-
-        # -- Guide object
-        if self._is_pymaya_node(data) or isinstance(data, str):
-            self.open_guide_widget(data)
-
-            if self.sync_checkbox.isChecked():
-                shifter_utils.select_items(items=[data])
-            return
-
-        # -- Default to showing the placeholder if nothing is selected
-        self.show_placeholder()
+        self._update_right_panel_from_selection()
 
     def on_item_double_clicked(self) -> None:
         """
@@ -515,6 +483,40 @@ class GuideExplorerWidget(QtWidgets.QWidget):
         if self.current_key and not self.component_exists(self.current_key):
             self.show_placeholder()
 
+    def _update_right_panel_from_selection(self) -> None:
+        """
+        Update the settings panel based on the current tree selection.
+
+        Displays either the guide settings, component settings or
+        a placeholder if nothing is selected.
+        """
+        items = self.guide_tree_widget.selectedItems()
+        if not items:
+            self.show_placeholder()
+            return
+
+        data = items[-1].data(0, guide_tree_widget.DATA_ROLE)
+
+        # -- Shifter Component Instance
+        if isinstance(data, ShifterComponent) and data.root_name:
+            self.open_component_widget(data)
+
+            if self.sync_checkbox.isChecked():
+                shifter_utils.select_by_uuid(uuid=data.uuid)
+
+            return
+
+        # -- Guide
+        if self._is_pymaya_node(data) or isinstance(data, str):
+            self.open_guide_widget(data)
+
+            if self.sync_checkbox.isChecked():
+                shifter_utils.select_items(items=[data])
+            return
+
+        # -- Default to showing the placeholder if nothing is selected
+        self.show_placeholder()
+
     def _is_pymaya_node(self, obj) -> bool:
         """
         Check if the given object behaves like a PyMaya or PyNode instance.
@@ -568,8 +570,21 @@ class GuideExplorerWidget(QtWidgets.QWidget):
         :return: None
         """
         super(GuideExplorerWidget, self).showEvent(event)
+        # -- Rebuild the tree widget
         self.refresh()
+        # -- Load in any saved settings from previous session
         self._load_settings()
+
+        # -- We need to ensure that we have a valid selection for when we open the
+        # -- widget.
+        if not self.guide_tree_widget.selectedItems():
+            root_item = self.guide_tree_widget.topLevelItem(0)
+            if root_item is not None:
+                root_item.setSelected(True)
+                self.guide_tree_widget.setCurrentItem(root_item)
+
+        # -- Force an update based on our selection here
+        self._update_right_panel_from_selection()
 
     def hideEvent(self, event) -> None:
         """

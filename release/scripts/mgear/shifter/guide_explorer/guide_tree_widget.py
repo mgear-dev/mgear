@@ -1,6 +1,5 @@
 from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
 
-import importlib
 import logging
 from dataclasses import dataclass
 from functools import partial
@@ -14,19 +13,21 @@ from mgear.core import callbackManager as cb
 from mgear.shifter import guide_manager
 from mgear.shifter import utils as shifter_utils
 from mgear.shifter.guide_explorer import guide_tree_widget_items
+from mgear.shifter.guide_explorer import guide_visibility_delegate
 from mgear.shifter.guide_explorer.models import ShifterComponent
+from mgear.shifter.guide_explorer import utils as guide_explorer_utils
 
 from mgear.compatible import compatible_comp_dagmenu
-
-importlib.reload(shifter_utils)
-importlib.reload(guide_tree_widget_items)
 
 logger = logging.getLogger("Guide Explorer - Tree Widget")
 
 DATA_ROLE = QtCore.Qt.UserRole + 1
 
-ATTRS_GUIDE = ["rig_name"]
-ATTRS_COMP  = ["comp_name", "comp_side", "comp_index"]
+# -- We use shorthand name for the attribute callback as
+# -- the callback manager takes in short names and not long names
+# -- "comp_name" and others have the same long and short names.
+ATTRS_GUIDE = ["rig_name", "v"]
+ATTRS_COMP  = ["comp_name", "comp_side", "comp_index", "v"]
 
 
 class GuideTreeWidget(QtWidgets.QTreeWidget):
@@ -108,6 +109,10 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         self.guide_visibility_action.setShortcut(QtGui.QKeySequence("H"))
         self.guide_visibility_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
+        self.unhide_all_guide_action = QtWidgets.QAction("Unhide All", self)
+        self.unhide_all_guide_action.setShortcut(QtGui.QKeySequence("Ctrl+H"))
+        self.unhide_all_guide_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
+
         self.ctrl_visibility_action = QtWidgets.QAction("Control Visibility", self)
         self.ctrl_visibility_action.setShortcut(QtGui.QKeySequence("C"))
         self.ctrl_visibility_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
@@ -132,6 +137,7 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         self.addAction(self.unbuild_action)
         self.addAction(self.delete_action)
         self.addAction(self.guide_visibility_action)
+        self.addAction(self.unhide_all_guide_action)
         self.addAction(self.ctrl_visibility_action)
         self.addAction(self.joint_visibility_action)
         self.addAction(self.select_component_action)
@@ -146,7 +152,7 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
 
         :return: None
         """
-        self.setColumnCount(2)
+        self.setColumnCount(3)
         self.setIndentation(10)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
@@ -154,16 +160,25 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         header.setStretchLastSection(False)
         header.setMinimumSectionSize(60)
 
-        # -- Make columns follow the widget width:
-        # -- Component name stretches
+        # -- Column 0: visibility icon
         header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
-        # -- Type hugs content
+        # -- Column 1: name (stretches)
         header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        # -- Column 2: type (hugs content)
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.Fixed)
 
         # -- Hide the header after setting modes
         self.setHeaderHidden(True)
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.viewport().setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+
+        # -- We assume here that icons sizes are always square and equal
+        icon_size = QtCore.QSize(17, 17)
+        self.visibility_delegate = guide_visibility_delegate.VisibilityDelegate(icon_size=icon_size, parent=self)
+        self.setItemDelegateForColumn(2, self.visibility_delegate)
+
+        # -- Setting the column widget of the visibility icons
+        self.setColumnWidth(2, 10)
 
     def create_connections(self) -> None:
         """
@@ -183,6 +198,7 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         self.delete_action.triggered.connect(self.on_delete_action_clicked)
 
         self.guide_visibility_action.triggered.connect(self.on_guide_visibility_action_clicked)
+        self.unhide_all_guide_action.triggered.connect(self.on_unhide_all_action_clicked)
         self.ctrl_visibility_action.triggered.connect(self.on_control_visibility_action_clicked)
         self.joint_visibility_action.triggered.connect(self.on_joint_visibility_action_clicked)
 
@@ -348,6 +364,58 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
             visibility = node.visibility.get()
             node.visibility.set(not visibility)
 
+    def on_unhide_all_action_clicked(self) -> None:
+        """
+        Unhide the entire guide hierarchy.
+
+        Iterates over all tree items representing the guide root and its
+        components, forcing their ``visibility`` attribute to True where
+        available and updating the corresponding visibility buttons.
+
+        :return: None
+        """
+        # -- If there is no guide loaded, nothing to do
+        if not self._guide:
+            return
+
+        root = self.invisibleRootItem()
+        if not root:
+            return
+
+        # -- Traverse all top-level items and their children
+        stack: List[QtWidgets.QTreeWidgetItem] = [
+            root.child(i) for i in range(root.childCount())
+        ]
+
+        while stack:
+            item = stack.pop()
+
+            # -- Push children to the stack to process the entire subtree
+            for i in range(item.childCount()):
+                stack.append(item.child(i))
+
+            data = item.data(0, DATA_ROLE)
+            if isinstance(data, ShifterComponent):
+                node = shifter_utils.node_from_uuid(uuid=data.uuid)
+            else:
+                node = shifter_utils.node_from_name(name=data)
+
+            if not node:
+                continue
+
+            # -- Only touch nodes that actually have a visibility attribute
+            try:
+                vis_attr = node.visibility
+            except Exception:
+                continue
+
+            # -- Force visible
+            if not vis_attr.get():
+                vis_attr.set(True)
+
+            # -- Keep the UI button in sync
+            self.update_visibility_widget(item)
+
     def on_control_visibility_action_clicked(self) -> None:
         """
         Toggle the rig control visibility.
@@ -436,12 +504,13 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         root_item = guide_tree_widget_items.GuideTreeWidgetItem(parent=self,
                                                                 rig_name=rig_name)
 
-        root_item.setText(0, f"guide ({rig_name})")
         root_item.setData(0, QtCore.Qt.UserRole, "guide")
         root_item.setData(0, DATA_ROLE, guide_name)
         self._node_to_item[str(guide_name)] = root_item
 
         self._create_attr_callbacks(str(guide_name), ATTRS_GUIDE)
+
+        self.create_visibility_widget(root_item)
 
         for comp in components:
 
@@ -470,8 +539,12 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
             # -- watch naming attrs on this component root
             self._create_attr_callbacks(root_node, ATTRS_COMP)
 
+            self.create_visibility_widget(comp_item)
+
         # -- Select root so settings show on first open
-        self.setCurrentItem(root_item)
+        if root_item is not None:
+            root_item.setSelected(True)
+            self.setCurrentItem(root_item)
 
     def _create_attr_callbacks(self, node_name: str, short_attrs: list[str]) -> None:
         """
@@ -519,6 +592,11 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         if not item:
             return
 
+        # -- If only visibility changed, just update the eye icon
+        if attr == "v":
+            self.update_visibility_widget(item)
+            return
+
         data = item.data(0, DATA_ROLE)
 
         if isinstance(data, ShifterComponent):
@@ -549,10 +627,6 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
 
             self.blockSignals(False)
 
-            self.labelsUpdated.emit()
-            if self.currentItem() is item:
-                self.selectionPayloadRenamed.emit()
-
         # -- Either guide or component
         else:
 
@@ -564,9 +638,12 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
             item.setText(0, f"guide ({rig_name})")
             self.blockSignals(False)
 
-            self.labelsUpdated.emit()
-            if self.currentItem() is item:
-                self.selectionPayloadRenamed.emit()
+        # -- Keep visibility button in sync with the node state
+        self.update_visibility_widget(item)
+
+        self.labelsUpdated.emit()
+        if self.currentItem() is item:
+            self.selectionPayloadRenamed.emit()
 
     def _on_scene_selection_changed(self, *args: Any) -> None:
         """
@@ -738,6 +815,74 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         finally:
             self._block_scene_selection_sync = False
 
+    def on_visibility_icon_clicked(self, item: QtWidgets.QTreeWidgetItem) -> None:
+        """
+        Toggle visibility for the node represented by the given item.
+
+        :param item: Tree item whose visibility button was clicked.
+        :return: None
+        """
+        data = item.data(0, DATA_ROLE)
+
+        if isinstance(data, ShifterComponent):
+            node = shifter_utils.node_from_uuid(uuid=data.uuid)
+        else:
+            node = shifter_utils.node_from_name(name=data)
+
+        if not node:
+            return
+
+        try:
+            vis_attr = node.visibility
+        except Exception:
+            return
+
+        vis_attr.set(not vis_attr.get())
+        self.update_visibility_widget(item)
+
+    def create_visibility_widget(self, item: QtWidgets.QTreeWidgetItem) -> None:
+        """
+        Initialize the visibility icon for the given item.
+
+        We no longer use a QPushButton or QToolButton. The icon is set
+        directly on the tree item in column 2 and made clickable through
+        mousePressEvent.
+        """
+        self.update_visibility_widget(item)
+
+    def update_visibility_widget(self, item: QtWidgets.QTreeWidgetItem) -> None:
+        """
+        Update the visibility icon for the given item.
+
+        :param item: Tree item to refresh.
+        """
+        data = item.data(0, DATA_ROLE)
+
+        if isinstance(data, ShifterComponent):
+            node = shifter_utils.node_from_uuid(uuid=data.uuid)
+        else:
+            node = shifter_utils.node_from_name(name=data)
+
+        if not node:
+            item.setDisabled(True)
+            return
+
+        try:
+            vis_attr = node.visibility
+        except Exception:
+            item.setDisabled(True)
+            return
+
+        is_visible = bool(vis_attr.get())
+        item.setDisabled(False)
+
+        visible_icon_path = str(guide_explorer_utils.get_mgear_icon_path("mgear_eye.svg"))
+        hidden_icon_path = str(guide_explorer_utils.get_mgear_icon_path("mgear_eye-off.svg"))
+
+        icon = QtGui.QIcon(visible_icon_path) if is_visible else QtGui.QIcon(hidden_icon_path)
+        item.setIcon(2, icon)
+        item.setToolTip(2, "Visible" if is_visible else "Hidden")
+
     def _enable_scene_callbacks(self) -> None:
         """
         Ensure scene callbacks are registered.
@@ -818,6 +963,7 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
 
         if has_guide:
             visibility_actions.append(self.guide_visibility_action)
+            visibility_actions.append(self.unhide_all_guide_action)
 
         if has_rig:
             visibility_actions.append(self.ctrl_visibility_action)
@@ -858,6 +1004,20 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         self._node_to_item.clear()
         self._uuid_to_item.clear()
         self._guide = None
+
+    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        """
+        Handle mouse presses so that clicking the visibility column
+        toggles the icon instead of using a button widget.
+        """
+        index = self.indexAt(event.pos())
+        if index.isValid() and index.column() == 2:
+            item = self.itemFromIndex(index)
+            if item:
+                self.on_visibility_icon_clicked(item)
+
+        # -- Keep normal selection behavior
+        super(GuideTreeWidget, self).mousePressEvent(event)
 
     def teardown(self) -> None:
         """
