@@ -606,7 +606,11 @@ class RBFManagerUI(widget.RBFWidget):
         if self.customNameDefaults:
             setupName = ask_for_name()
         if not setupName:
-            setupName = "{}_WD".format(driverNode)
+            index = 0
+            allSetups = sorted(self.allSetupsInfo.keys())
+            while "{}_{:03d}_WD".format(driverNode, index) in allSetups:
+                index += 1
+            setupName = "{}_{:03d}_WD".format(driverNode, index)
         rbfNode = sortRBF(drivenNode, rbfType=rbfType)
         rbfNode.setSetupName(setupName)
         rbfNode.setDriverControlAttr(driverControl)
