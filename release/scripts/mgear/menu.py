@@ -149,6 +149,10 @@ def install_main_menu():
     import mgear.cfxbits.menu
     mgear.cfxbits.menu.install()
 
+    # Install Utilsbits Menu
+    import mgear.utilbits.menu
+    mgear.utilbits.menu.install()
+
     # Install Crank Menu
     import mgear.crank.menu
     mgear.crank.menu.install()
