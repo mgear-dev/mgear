@@ -378,26 +378,64 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         layout.addWidget(menubar)
 
-        # Toolbar
-        toolbar = QtWidgets.QHBoxLayout()
-        toolbar_widget = QtWidgets.QWidget()
-        toolbar_widget.setLayout(toolbar)
-        toolbar.setContentsMargins(5, 5, 5, 5)
-
-        # Refresh button
-        self.refresh_btn = QtWidgets.QPushButton("⟳")
-        self.refresh_btn.setFixedSize(30, 25)
-        self.refresh_btn.setToolTip("Refresh")
-        self.refresh_btn.clicked.connect(self.refresh)
-        toolbar.addWidget(self.refresh_btn)
+        # Search bar
+        search_layout = QtWidgets.QHBoxLayout()
+        search_widget = QtWidgets.QWidget()
+        search_widget.setLayout(search_layout)
+        search_layout.setContentsMargins(5, 5, 5, 2)
 
         # Search field
         self.search_field = QtWidgets.QLineEdit()
         self.search_field.setPlaceholderText("Search...")
         self.search_field.textChanged.connect(self.filter_tree)
-        toolbar.addWidget(self.search_field)
+        search_layout.addWidget(self.search_field)
 
-        layout.addWidget(toolbar_widget)
+        layout.addWidget(search_widget)
+
+        # Button bar
+        button_layout = QtWidgets.QHBoxLayout()
+        button_widget = QtWidgets.QWidget()
+        button_widget.setLayout(button_layout)
+        button_layout.setContentsMargins(5, 2, 5, 5)
+
+        # Get icon path
+        import os
+        icons_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "icons")
+
+        # Refresh button
+        self.refresh_btn = QtWidgets.QPushButton("⟳")
+        self.refresh_btn.setFixedSize(25, 25)
+        self.refresh_btn.setToolTip("Refresh")
+        self.refresh_btn.clicked.connect(self.refresh)
+        button_layout.addWidget(self.refresh_btn)
+
+        # Add selected button
+        self.add_btn = QtWidgets.QPushButton()
+        self.add_btn.setFixedSize(25, 25)
+        self.add_btn.setToolTip("Add selected to list")
+        add_icon_path = os.path.join(icons_path, "mgear_plus-square.svg")
+        if os.path.exists(add_icon_path):
+            self.add_btn.setIcon(QtGui.QIcon(add_icon_path))
+        else:
+            self.add_btn.setText("+")
+        self.add_btn.clicked.connect(self.add_selected_to_list)
+        button_layout.addWidget(self.add_btn)
+
+        # Remove selected button
+        self.remove_btn = QtWidgets.QPushButton()
+        self.remove_btn.setFixedSize(25, 25)
+        self.remove_btn.setToolTip("Remove selected from list")
+        remove_icon_path = os.path.join(icons_path, "mgear_minus-square.svg")
+        if os.path.exists(remove_icon_path):
+            self.remove_btn.setIcon(QtGui.QIcon(remove_icon_path))
+        else:
+            self.remove_btn.setText("-")
+        self.remove_btn.clicked.connect(self.remove_selected_from_list)
+        button_layout.addWidget(self.remove_btn)
+
+        button_layout.addStretch()
+
+        layout.addWidget(button_widget)
 
         # Model - 3 columns: Node name, Connected nodes, Visibility
         self.model = QStandardItemModel()
@@ -713,6 +751,58 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                 child_index = self.model.indexFromItem(child)
                 self.collapse_all_children(child_index)
                 self.tree.collapse(child_index)
+
+    def add_selected_to_list(self):
+        """Add Maya selected nodes to the current list"""
+        selection = cmds.ls(selection=True, long=True) or []
+        if not selection:
+            return
+
+        # Get currently listed nodes to avoid duplicates
+        listed_nodes = set()
+
+        def collect_nodes(parent):
+            for row in range(parent.rowCount()):
+                item = parent.child(row, 0)
+                if item:
+                    node = item.data(NODE_ROLE)
+                    if node:
+                        listed_nodes.add(node)
+                    collect_nodes(item)
+
+        collect_nodes(self.model.invisibleRootItem())
+
+        # Add new nodes
+        for node in selection:
+            if node not in listed_nodes:
+                self.add_node(node, self.model.invisibleRootItem())
+
+    def remove_selected_from_list(self):
+        """Remove Maya selected nodes from the current list"""
+        selection = cmds.ls(selection=True, long=True) or []
+        if not selection:
+            return
+
+        selection_set = set(selection)
+
+        # Find and remove matching items
+        def remove_matching(parent):
+            rows_to_remove = []
+            for row in range(parent.rowCount()):
+                item = parent.child(row, 0)
+                if item:
+                    node = item.data(NODE_ROLE)
+                    if node in selection_set:
+                        rows_to_remove.append(row)
+                    else:
+                        # Check children recursively
+                        remove_matching(item)
+
+            # Remove rows in reverse order to maintain indices
+            for row in reversed(rows_to_remove):
+                parent.removeRow(row)
+
+        remove_matching(self.model.invisibleRootItem())
 
     def refresh(self):
         """Load hierarchy"""
