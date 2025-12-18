@@ -243,22 +243,6 @@ class IndentLineDelegate(QtWidgets.QStyledItemDelegate):
             painter.restore()
 
 
-class XPlorerTreeView(QtWidgets.QTreeView):
-    """Custom tree view that properly handles keyboard events in Maya"""
-
-    # Signal emitted when arrow keys are pressed
-    arrowKeyPressed = QtCore.Signal(QtCore.QModelIndex)
-
-    def __init__(self, parent=None):
-        super(XPlorerTreeView, self).__init__(parent)
-        self.setFocusPolicy(Qt.StrongFocus)
-
-    def mousePressEvent(self, event):
-        """Ensure focus is set when clicking"""
-        super(XPlorerTreeView, self).mousePressEvent(event)
-        self.setFocus(Qt.MouseFocusReason)
-
-
 class ConnectedNodesWidget(QtWidgets.QWidget):
     """Widget to display multiple Maya icons for connected nodes"""
 
@@ -453,8 +437,8 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.model = QStandardItemModel()
         self.model.setHorizontalHeaderLabels(["Node", "Connected", "Vis"])
 
-        # Tree - use custom subclass for proper keyboard handling in Maya
-        self.tree = XPlorerTreeView()
+        # Tree
+        self.tree = QtWidgets.QTreeView()
         self.tree.setModel(self.model)
         self.tree.setHeaderHidden(False)
         self.tree.setAlternatingRowColors(True)
@@ -463,11 +447,11 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.tree.collapsed.connect(self.on_collapsed)
         self.tree.clicked.connect(self.on_clicked)
 
-        # Install application-level event filter for keyboard handling
-        QtWidgets.QApplication.instance().installEventFilter(self)
-
         # Connect selection model to sync Maya selection with tree selection
         self.tree.selectionModel().selectionChanged.connect(self.on_selection_changed)
+
+        # Install application-level event filter for keyboard handling
+        QtWidgets.QApplication.instance().installEventFilter(self)
 
         # Enable right-click context menu on tree
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -973,46 +957,27 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         QtWidgets.QApplication.instance().removeEventFilter(self)
         super(XPlorer, self).closeEvent(event)
 
-    def _is_xplorer_active(self):
-        """Check if xPlorer window is active and mouse is over tree"""
-        # Check if mouse is over our tree widget
+    def _is_mouse_over_tree(self):
+        """Check if mouse is over tree widget"""
         global_pos = QtGui.QCursor.pos()
         widget_at = QtWidgets.QApplication.widgetAt(global_pos)
-        if widget_at is None:
-            return False
-        # Walk up to see if it's our tree or a child of it
         while widget_at is not None:
-            if widget_at == self.tree or widget_at == self:
+            if widget_at == self.tree:
                 return True
             widget_at = widget_at.parent()
         return False
 
     def eventFilter(self, obj, event):
         """Handle keyboard and mouse events"""
-        # Application-level keyboard events - catch arrow keys when xPlorer is active
-        if event.type() == QtCore.QEvent.KeyPress:
-            if self._is_xplorer_active():
-                key = event.key()
-                # Arrow keys - handle navigation
-                if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right):
-                    # Let tree handle navigation
-                    self.tree.keyPressEvent(event)
-                    # Select node in Maya
-                    current = self.tree.currentIndex()
-                    if current.isValid():
-                        if current.column() != 0:
-                            current = current.sibling(current.row(), 0)
-                        item = self.model.itemFromIndex(current)
-                        if item:
-                            node = item.data(NODE_ROLE)
-                            if node and cmds.objExists(node):
-                                cmds.select(node, replace=True)
-                                self.update_attribute_editor(node)
-                    return True  # Consume event
-                # F key - frame in hierarchy
-                if key == Qt.Key_F:
-                    self.frame_in_hierarchy()
-                    return True
+        # Keyboard events - F key and arrow keys when mouse is over tree
+        if event.type() == QtCore.QEvent.KeyPress and self._is_mouse_over_tree():
+            key = event.key()
+            if key == Qt.Key_F:
+                self.frame_in_hierarchy()
+                return True
+            if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right):
+                self.tree.keyPressEvent(event)
+                return True
 
         # Mouse events on tree viewport
         if obj == self.tree.viewport():
@@ -1317,16 +1282,9 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         """Handle click - scroll to item and update AE"""
         column = index.column()
 
-        # Column 0: Select node and scroll
+        # Column 0: Scroll to item (selection is handled by on_selection_changed)
         if column == 0:
             self.scroll_to_item_horizontal(index)
-            # Always update selection and AE (handles re-clicking same row)
-            item = self.model.itemFromIndex(index)
-            if item:
-                node = item.data(NODE_ROLE)
-                if node and cmds.objExists(node):
-                    cmds.select(node, replace=True)
-                    self.update_attribute_editor(node)
 
         # Column 1: Handled by eventFilter
         # Column 2: Handled by eventFilter -> toggle_visibility_for_selection
