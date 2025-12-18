@@ -603,6 +603,31 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.auto_adjust_column = True
         self.auto_adjust_column_action.triggered.connect(self.on_auto_adjust_column_changed)
 
+        settings_menu.addSeparator()
+
+        # Search limit submenu
+        search_limit_menu = settings_menu.addMenu("Search All Nodes Limit")
+        self.search_limit = 50  # Default limit
+        self.search_limit_group = QtGui.QActionGroup(self)
+        for limit in [25, 50, 100, 200, 500, 0]:  # 0 = unlimited
+            label = "Unlimited" if limit == 0 else str(limit)
+            action = search_limit_menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(limit)
+            action.setChecked(limit == self.search_limit)
+            action.triggered.connect(self._make_limit_handler(limit))
+            self.search_limit_group.addAction(action)
+
+        # Store pending search matches for "Load More" functionality
+        self._pending_matches = []
+        self._current_match_index = 0
+
+        # Search debounce timer (delays search until user stops typing)
+        self.search_timer = QtCore.QTimer()
+        self.search_timer.setSingleShot(True)
+        self.search_timer.timeout.connect(self._do_filter_tree)
+        self._pending_search_text = ""
+
         # Load persistent settings
         self.load_settings()
 
@@ -729,6 +754,12 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         layout.addWidget(self.tree)
 
+        # "Load More" button (hidden by default)
+        self.load_more_btn = QtWidgets.QPushButton("Load More Results...")
+        self.load_more_btn.setVisible(False)
+        self.load_more_btn.clicked.connect(self.load_more_search_results)
+        layout.addWidget(self.load_more_btn)
+
         # Load data
         self.refresh()
 
@@ -831,6 +862,17 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.auto_adjust_column = checked
         self.save_settings()
 
+    def _make_limit_handler(self, limit):
+        """Create a handler for search limit change (avoids lambda closure issues)"""
+        def handler(checked=None):
+            self.on_search_limit_changed(limit)
+        return handler
+
+    def on_search_limit_changed(self, limit):
+        """Handle search limit change"""
+        self.search_limit = limit
+        self.save_settings()
+
     def load_settings(self):
         """Load persistent settings from Maya optionVar"""
         # Search listed only
@@ -855,11 +897,22 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         else:
             self.auto_adjust_column = True
 
+        # Search limit
+        if cmds.optionVar(exists='xplorer_search_limit'):
+            val = cmds.optionVar(q='xplorer_search_limit')
+            self.search_limit = int(val)
+            # Update the menu checkmark
+            for action in self.search_limit_group.actions():
+                if action.data() == self.search_limit:
+                    action.setChecked(True)
+                    break
+
     def save_settings(self):
         """Save persistent settings to Maya optionVar"""
         cmds.optionVar(iv=('xplorer_search_listed_only', int(self.search_listed_only)))
         cmds.optionVar(iv=('xplorer_list_selected_only', int(self.list_selected_only)))
         cmds.optionVar(iv=('xplorer_auto_adjust_column', int(self.auto_adjust_column)))
+        cmds.optionVar(iv=('xplorer_search_limit', int(self.search_limit)))
 
     def on_tree_context_menu(self, pos):
         """Show context menu on tree right-click"""
@@ -1045,6 +1098,11 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
     def refresh(self):
         """Load hierarchy"""
         self.model.removeRows(0, self.model.rowCount())
+
+        # Reset search state
+        self.load_more_btn.setVisible(False)
+        self._pending_matches = []
+        self._current_match_index = 0
 
         if self.list_selected_only:
             # List only selected nodes - use OpenMaya for selection
@@ -1753,11 +1811,29 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.tree.setColumnWidth(column, int(total_width))
 
     def filter_tree(self, text):
-        """Filter tree by search text. Space-separated terms are OR-matched."""
-        text = text.lower().strip()
+        """Filter tree by search text - debounced for performance."""
+        self._pending_search_text = text
+
+        # For "search all nodes" mode, debounce to avoid searching on every keystroke
+        if not self.search_listed_only and text.strip():
+            self.search_timer.start(300)  # 300ms delay
+        else:
+            # For listed-only search, execute immediately (fast)
+            self.search_timer.stop()
+            self._do_filter_tree()
+
+    def _do_filter_tree(self):
+        """Actually perform the tree filtering."""
+        text = self._pending_search_text.lower().strip()
 
         # Split by spaces to get multiple search terms
         search_terms = [t for t in text.split() if t] if text else []
+
+        # Hide "Load More" button when not in search-all mode or search is cleared
+        if not search_terms or self.search_listed_only:
+            self.load_more_btn.setVisible(False)
+            self._pending_matches = []
+            self._current_match_index = 0
 
         # If searching all nodes (not just listed), search Maya and reveal matches
         if search_terms and not self.search_listed_only:
@@ -1815,10 +1891,22 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             name = node_path.split('|')[-1].lower()
             return any(term in name for term in search_terms)
 
-        matches = [n for n in all_dag if matches_any_term(n)]
+        all_matches = [n for n in all_dag if matches_any_term(n)]
+        total_matches = len(all_matches)
 
-        # Limit results to avoid performance issues
-        matches = matches[:50]
+        # Store all matches for "Load More" functionality
+        self._pending_matches = all_matches
+        self._current_match_index = 0
+
+        # Determine how many to show initially
+        if self.search_limit > 0:
+            matches_to_show = all_matches[:self.search_limit]
+            self._current_match_index = len(matches_to_show)
+            has_more = total_matches > self.search_limit
+        else:
+            matches_to_show = all_matches
+            self._current_match_index = total_matches
+            has_more = False
 
         # First, hide all items
         root = self.model.invisibleRootItem()
@@ -1834,8 +1922,44 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         hide_all(root)
 
         # Reveal each match
-        for match in matches:
+        for match in matches_to_show:
             self.reveal_node_for_search(match)
+
+        # Update "Load More" button
+        if has_more:
+            remaining = total_matches - self._current_match_index
+            self.load_more_btn.setText(f"Load More Results... ({remaining} remaining)")
+            self.load_more_btn.setVisible(True)
+        else:
+            self.load_more_btn.setVisible(False)
+
+    def load_more_search_results(self):
+        """Load more search results when 'Load More' button is clicked"""
+        if not self._pending_matches:
+            self.load_more_btn.setVisible(False)
+            return
+
+        total_matches = len(self._pending_matches)
+        start_index = self._current_match_index
+
+        # Determine batch size (use search_limit or default to 50)
+        batch_size = self.search_limit if self.search_limit > 0 else 50
+        end_index = min(start_index + batch_size, total_matches)
+
+        # Get next batch of matches
+        next_batch = self._pending_matches[start_index:end_index]
+        self._current_match_index = end_index
+
+        # Reveal each match in the batch
+        for match in next_batch:
+            self.reveal_node_for_search(match)
+
+        # Update button or hide if no more results
+        if self._current_match_index >= total_matches:
+            self.load_more_btn.setVisible(False)
+        else:
+            remaining = total_matches - self._current_match_index
+            self.load_more_btn.setText(f"Load More Results... ({remaining} remaining)")
 
     def reveal_node_for_search(self, node_path):
         """Reveal a node in the tree for search results"""
