@@ -462,7 +462,8 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         # Search field
         self.search_field = QtWidgets.QLineEdit()
-        self.search_field.setPlaceholderText("Search...")
+        self.search_field.setPlaceholderText("Search... (space separates terms)")
+        self.search_field.setClearButtonEnabled(True)
         self.search_field.textChanged.connect(self.filter_tree)
         search_layout.addWidget(self.search_field)
 
@@ -1531,21 +1532,31 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.tree.setColumnWidth(column, int(total_width))
 
     def filter_tree(self, text):
-        """Filter tree by search text"""
-        text = text.lower()
+        """Filter tree by search text. Space-separated terms are OR-matched."""
+        text = text.lower().strip()
+
+        # Split by spaces to get multiple search terms
+        search_terms = [t for t in text.split() if t] if text else []
 
         # If searching all nodes (not just listed), search Maya and reveal matches
-        if text and not self.search_listed_only:
-            self.search_all_nodes(text)
+        if search_terms and not self.search_listed_only:
+            self.search_all_nodes(search_terms)
             return
+
+        def matches_search(name):
+            """Check if name matches any search term"""
+            if not search_terms:
+                return True
+            name_lower = name.lower()
+            return any(term in name_lower for term in search_terms)
 
         def filter_item(item, parent_visible=False):
             """Recursively filter items, returns True if item should be visible"""
             if not item or item.text() == "Loading...":
                 return False
 
-            name = item.text().lower()
-            matches = text in name if text else True
+            name = item.text()
+            matches = matches_search(name)
 
             # Check children (children are on column 0 item)
             child_visible = False
@@ -1562,7 +1573,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             self.tree.setRowHidden(index.row(), index.parent(), not visible)
 
             # Expand if has matching children
-            if child_visible and text:
+            if child_visible and search_terms:
                 self.tree.expand(index)
 
             return visible
@@ -1574,11 +1585,16 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             if item:
                 filter_item(item)
 
-    def search_all_nodes(self, text):
+    def search_all_nodes(self, search_terms):
         """Search all Maya DAG nodes and reveal matches"""
-        # Get all DAG nodes matching the search
+        # Get all DAG nodes matching any search term
         all_dag = cmds.ls(dag=True, long=True) or []
-        matches = [n for n in all_dag if text in n.split('|')[-1].lower()]
+
+        def matches_any_term(node_path):
+            name = node_path.split('|')[-1].lower()
+            return any(term in name for term in search_terms)
+
+        matches = [n for n in all_dag if matches_any_term(n)]
 
         # Limit results to avoid performance issues
         matches = matches[:50]
