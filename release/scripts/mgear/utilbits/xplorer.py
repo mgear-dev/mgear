@@ -253,10 +253,13 @@ class ConnectedNodesWidget(QtWidgets.QWidget):
         self.connected_nodes = connected_nodes or []
         self.icon_size = 18
         self.icon_rects = []  # Store rects for click detection
+        self.is_truncated = False
+        self.visible_count = 0
 
-        # Set size based on number of icons
-        width = max(20, len(self.connected_nodes) * (self.icon_size + 2))
-        self.setFixedSize(width, self.icon_size + 2)
+        # Calculate natural width (all icons)
+        self.natural_width = max(20, len(self.connected_nodes) * (self.icon_size + 2))
+        # Set minimum size but allow expansion
+        self.setMinimumSize(20, self.icon_size + 2)
         self.setMouseTracking(True)
 
         # Cache icons
@@ -266,27 +269,97 @@ class ConnectedNodesWidget(QtWidgets.QWidget):
             icon = get_maya_icon(node_type)
             self.icons.append(icon)
 
+    def sizeHint(self):
+        """Return preferred size (all icons visible)"""
+        return QtCore.QSize(self.natural_width, self.icon_size + 2)
+
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
 
         self.icon_rects = []
         x = 2
+        available_width = self.width()
+        ellipsis_width = 14  # Width reserved for "..." indicator
+
+        self.is_truncated = False
+        self.visible_count = 0
 
         for i, icon in enumerate(self.icons):
+            icon_width = self.icon_size + 2
+            is_last = (i == len(self.icons) - 1)
+
+            # Check if this icon fits
+            if is_last:
+                # Last icon - just needs to fit
+                if x + icon_width > available_width:
+                    # Doesn't fit - show ellipsis
+                    self.is_truncated = True
+                    break
+            else:
+                # Not last - need space for icon + potential ellipsis
+                if x + icon_width + ellipsis_width > available_width:
+                    # Won't fit with ellipsis - show ellipsis and stop
+                    self.is_truncated = True
+                    break
+
+            # Draw this icon
             rect = QtCore.QRect(x, 1, self.icon_size, self.icon_size)
             self.icon_rects.append(rect)
+            self.visible_count = i + 1
 
             if icon and not icon.isNull():
                 icon.paint(painter, rect)
 
-            x += self.icon_size + 2
+            x += icon_width
+
+        # Draw ellipsis if truncated
+        if self.is_truncated and x + ellipsis_width <= available_width:
+            painter.setPen(QtGui.QColor(150, 150, 150))
+            font = painter.font()
+            font.setBold(True)
+            painter.setFont(font)
+            painter.drawText(x, 1, ellipsis_width, self.icon_size,
+                           Qt.AlignCenter, "...")
 
         painter.end()
 
     def mousePressEvent(self, event):
-        # Let the event propagate to parent (tree viewport) for handling
+        # Right click - show context menu with all connected nodes
+        if event.button() == Qt.RightButton:
+            self.show_context_menu(event.globalPos())
+            return
+        # Left click - let the event propagate to parent (tree viewport) for handling
         event.ignore()
+
+    def show_context_menu(self, global_pos):
+        """Show context menu with all connected nodes"""
+        if not self.connected_nodes:
+            return
+
+        menu = QtWidgets.QMenu(self)
+
+        for node_info in self.connected_nodes:
+            node_name = node_info.get('name', 'Unknown')
+            node_type = node_info.get('type', 'transform')
+            node_path = node_info.get('path', '')
+
+            # Get icon for this node type
+            icon = get_maya_icon(node_type)
+
+            # Create action with icon and name
+            action = menu.addAction(icon, f"{node_name}  ({node_type})")
+            action.setData(node_path)
+
+        # Execute menu and handle selection
+        action = menu.exec_(global_pos)
+        if action:
+            node_path = action.data()
+            if node_path:
+                self.clicked.emit(node_path)
+                # Also select in Maya directly
+                if cmds.objExists(node_path):
+                    cmds.select(node_path, replace=True)
 
     def mouseMoveEvent(self, event):
         """Update tooltip based on hovered icon"""
@@ -299,7 +372,12 @@ class ConnectedNodesWidget(QtWidgets.QWidget):
                 tooltip = f"{node_name}\n({node_type})"
                 self.setToolTip(tooltip)
                 return
-        self.setToolTip("")
+        # Show hint about right-click if truncated
+        if self.is_truncated:
+            hidden_count = len(self.connected_nodes) - self.visible_count
+            self.setToolTip(f"+{hidden_count} more (right-click to see all)")
+        else:
+            self.setToolTip("")
 
     def enterEvent(self, event):
         self.setCursor(Qt.PointingHandCursor)
