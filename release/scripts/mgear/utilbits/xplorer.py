@@ -451,8 +451,8 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.tree.collapsed.connect(self.on_collapsed)
         self.tree.clicked.connect(self.on_clicked)
 
-        # Connect selection model to handle arrow key navigation
-        self.tree.selectionModel().currentChanged.connect(self.on_current_changed)
+        # Connect selection model to sync Maya selection with tree selection
+        self.tree.selectionModel().selectionChanged.connect(self.on_selection_changed)
 
         # Enable right-click context menu on tree
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -1241,25 +1241,12 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             return 'locked'
 
     def on_clicked(self, index):
-        """Handle click - select node"""
+        """Handle click - scroll to item"""
         column = index.column()
 
-        # Column 0: Select node
+        # Column 0: Scroll horizontally to make sure item is visible
         if column == 0:
-            item = self.model.itemFromIndex(index)
-            if item:
-                node = item.data(NODE_ROLE)
-                if node and cmds.objExists(node):
-                    modifiers = QtWidgets.QApplication.keyboardModifiers()
-                    if modifiers == Qt.ShiftModifier:
-                        cmds.select(node, add=True)
-                    elif modifiers == Qt.ControlModifier:
-                        cmds.select(node, toggle=True)
-                    else:
-                        cmds.select(node, replace=True)
-
-                    # Scroll horizontally to make sure item is visible
-                    self.scroll_to_item_horizontal(index)
+            self.scroll_to_item_horizontal(index)
 
         # Column 1: Handled by ConnectedNodesWidget
         # Column 2: Handled by eventFilter -> toggle_visibility_for_selection
@@ -1326,20 +1313,25 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                 except Exception as e:
                     print(f"Error toggling visibility for {node}: {e}")
 
-    def on_current_changed(self, current, previous):
-        """Handle arrow key navigation - select node in Maya"""
-        if not current.isValid():
-            return
+    def on_selection_changed(self, selected, deselected):
+        """Sync Maya selection with tree selection"""
+        # Get all currently selected rows in the tree
+        selected_indexes = self.tree.selectionModel().selectedRows(0)
 
-        # Get the item from column 0 (node column)
-        if current.column() != 0:
-            current = current.sibling(current.row(), 0)
+        # Collect all nodes from selected rows
+        nodes_to_select = []
+        for sel_index in selected_indexes:
+            item = self.model.itemFromIndex(sel_index)
+            if item:
+                node = item.data(NODE_ROLE)
+                if node and cmds.objExists(node):
+                    nodes_to_select.append(node)
 
-        item = self.model.itemFromIndex(current)
-        if item:
-            node = item.data(NODE_ROLE)
-            if node and cmds.objExists(node):
-                cmds.select(node, replace=True)
+        # Update Maya selection
+        if nodes_to_select:
+            cmds.select(nodes_to_select, replace=True)
+        else:
+            cmds.select(clear=True)
 
     def scroll_to_item_horizontal(self, index):
         """Resize Node column to fit selected row and scroll to show item"""
