@@ -446,6 +446,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.tree.setModel(self.model)
         self.tree.setHeaderHidden(False)
         self.tree.setAlternatingRowColors(True)
+        self.tree.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.tree.expanded.connect(self.on_expanded)
         self.tree.collapsed.connect(self.on_collapsed)
         self.tree.clicked.connect(self.on_clicked)
@@ -960,15 +961,23 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                 self.frame_in_hierarchy()
                 return True
 
-        # Middle click on tree viewport - for connected column icons
+        # Mouse events on tree viewport
         if obj == self.tree.viewport():
             if event.type() == QtCore.QEvent.MouseButtonPress:
+                pos = event.pos()
+                index = self.tree.indexAt(pos)
+
+                # Middle click on connected column
                 if event.button() == Qt.MiddleButton:
-                    pos = event.pos()
-                    index = self.tree.indexAt(pos)
                     if index.isValid() and index.column() == 1:
                         self.on_middle_click_connected(index, pos)
                         return True
+
+                # Left click on visibility column - handle before selection changes
+                if event.button() == Qt.LeftButton:
+                    if index.isValid() and index.column() == 2:
+                        self.toggle_visibility_for_selection(index)
+                        return True  # Consume the event to prevent selection change
 
         return False
 
@@ -1232,7 +1241,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             return 'locked'
 
     def on_clicked(self, index):
-        """Handle click - select node or toggle visibility"""
+        """Handle click - select node"""
         column = index.column()
 
         # Column 0: Select node
@@ -1253,26 +1262,69 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                     self.scroll_to_item_horizontal(index)
 
         # Column 1: Handled by ConnectedNodesWidget
+        # Column 2: Handled by eventFilter -> toggle_visibility_for_selection
 
-        # Column 2: Toggle visibility
-        elif column == 2:
-            item = self.model.itemFromIndex(index)
-            if not item:
+    def toggle_visibility_for_selection(self, clicked_index):
+        """Toggle visibility for all selected items, syncing to clicked item's new state"""
+        # Get the clicked visibility item
+        clicked_vis_item = self.model.itemFromIndex(clicked_index)
+        if not clicked_vis_item:
+            return
+
+        clicked_node = clicked_vis_item.data(NODE_ROLE)
+        clicked_vis_state = clicked_vis_item.data(VIS_ROLE)
+
+        # Determine target visibility from clicked item
+        if clicked_node and clicked_vis_state in ['visible', 'hidden']:
+            try:
+                current = cmds.getAttr(f"{clicked_node}.visibility")
+                target_visible = not current
+            except:
                 return
+        else:
+            return
 
-            node = item.data(NODE_ROLE)
-            vis_state = item.data(VIS_ROLE)
+        # Get all selected rows
+        selected_indexes = self.tree.selectionModel().selectedRows(0)
 
-            if node and vis_state in ['visible', 'hidden']:
+        # Collect all visibility items from selected rows
+        vis_items_to_update = []
+        for sel_index in selected_indexes:
+            # Get the visibility item (column 2) for this row
+            vis_index = sel_index.sibling(sel_index.row(), 2)
+            vis_item = self.model.itemFromIndex(vis_index)
+            if vis_item:
+                vis_items_to_update.append(vis_item)
+
+        # Check if clicked item's row is in selection
+        clicked_row_index = clicked_index.sibling(clicked_index.row(), 0)
+        clicked_in_selection = any(
+            sel_index.row() == clicked_row_index.row() and
+            sel_index.parent() == clicked_row_index.parent()
+            for sel_index in selected_indexes
+        )
+
+        # If clicked item is not in selection, only toggle that one
+        if not vis_items_to_update or not clicked_in_selection:
+            vis_items_to_update = [clicked_vis_item]
+
+        # Toggle visibility for all items
+        for vis_item in vis_items_to_update:
+            node = vis_item.data(NODE_ROLE)
+            vis_state = vis_item.data(VIS_ROLE)
+
+            # Skip locked attributes
+            if vis_state == 'locked':
+                continue
+
+            if node and cmds.objExists(node):
                 try:
-                    current = cmds.getAttr(f"{node}.visibility")
-                    cmds.setAttr(f"{node}.visibility", not current)
-
-                    new_state = 'hidden' if current else 'visible'
-                    item.setData(new_state, VIS_ROLE)
-                    item.setIcon(VIS_ICONS.get(new_state, VIS_ICONS['locked']))
+                    cmds.setAttr(f"{node}.visibility", target_visible)
+                    new_state = 'visible' if target_visible else 'hidden'
+                    vis_item.setData(new_state, VIS_ROLE)
+                    vis_item.setIcon(VIS_ICONS.get(new_state, VIS_ICONS['locked']))
                 except Exception as e:
-                    print(f"Error toggling visibility: {e}")
+                    print(f"Error toggling visibility for {node}: {e}")
 
     def on_current_changed(self, current, previous):
         """Handle arrow key navigation - select node in Maya"""
