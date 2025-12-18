@@ -603,6 +603,12 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.auto_adjust_column = True
         self.auto_adjust_column_action.triggered.connect(self.on_auto_adjust_column_changed)
 
+        self.stretch_connected_action = settings_menu.addAction("Stretch Connected Column")
+        self.stretch_connected_action.setCheckable(True)
+        self.stretch_connected_action.setChecked(True)
+        self.stretch_connected_column = True
+        self.stretch_connected_action.triggered.connect(self.on_stretch_connected_changed)
+
         settings_menu.addSeparator()
 
         # Search limit submenu
@@ -735,10 +741,12 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         header = self.tree.header()
         header.setContextMenuPolicy(Qt.CustomContextMenu)
         header.customContextMenuRequested.connect(self.on_header_context_menu)
-        # Stretch the Connected column (index 1) to fill available space
-        # This pushes the Vis column to the right edge
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+        # Apply stretch setting for Connected column (loaded from settings)
+        if self.stretch_connected_column:
+            header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+        else:
+            header.setSectionResizeMode(1, QtWidgets.QHeaderView.Interactive)
         # Make header compact
         header.setMinimumSectionSize(20)
         header.setDefaultSectionSize(50)
@@ -788,6 +796,16 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         """Handle show shapes toggle"""
         self.show_shapes = checked
         self.refresh()
+
+    def on_stretch_connected_changed(self, checked):
+        """Handle stretch connected column toggle"""
+        self.stretch_connected_column = checked
+        header = self.tree.header()
+        if checked:
+            header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+        else:
+            header.setSectionResizeMode(1, QtWidgets.QHeaderView.Interactive)
+        self.save_settings()
 
     def setup_branch_icons(self):
         """Create bigger triangle arrow icons for branch indicators"""
@@ -913,12 +931,21 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                     action.setChecked(True)
                     break
 
+        # Stretch connected column
+        if cmds.optionVar(exists='xplorer_stretch_connected_column'):
+            val = cmds.optionVar(q='xplorer_stretch_connected_column')
+            self.stretch_connected_column = bool(val)
+            self.stretch_connected_action.setChecked(self.stretch_connected_column)
+        else:
+            self.stretch_connected_column = True
+
     def save_settings(self):
         """Save persistent settings to Maya optionVar"""
         cmds.optionVar(iv=('xplorer_search_listed_only', int(self.search_listed_only)))
         cmds.optionVar(iv=('xplorer_list_selected_only', int(self.list_selected_only)))
         cmds.optionVar(iv=('xplorer_auto_adjust_column', int(self.auto_adjust_column)))
         cmds.optionVar(iv=('xplorer_search_limit', int(self.search_limit)))
+        cmds.optionVar(iv=('xplorer_stretch_connected_column', int(self.stretch_connected_column)))
 
     def on_tree_context_menu(self, pos):
         """Show context menu on tree right-click"""
