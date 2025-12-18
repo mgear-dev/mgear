@@ -338,6 +338,8 @@ class ConnectedNodesWidget(QtWidgets.QWidget):
             return
 
         menu = QtWidgets.QMenu(self)
+        # Ensure icons are visible in multi-column layout
+        menu.setStyleSheet("QMenu::item { padding-left: 24px; } QMenu::icon { left: 4px; }")
 
         for node_info in self.connected_nodes:
             node_name = node_info.get('name', 'Unknown')
