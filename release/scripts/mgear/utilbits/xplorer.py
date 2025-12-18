@@ -1282,9 +1282,19 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         """Handle click - scroll to item and update AE"""
         column = index.column()
 
-        # Column 0: Scroll to item (selection is handled by on_selection_changed)
+        # Column 0: Scroll to item and ensure node is selected
         if column == 0:
             self.scroll_to_item_horizontal(index)
+            # Handle re-clicking same row (on_selection_changed won't fire)
+            item = self.model.itemFromIndex(index)
+            if item:
+                node = item.data(NODE_ROLE)
+                if node and cmds.objExists(node):
+                    # Check if this is the only selected item
+                    selected_indexes = self.tree.selectionModel().selectedRows(0)
+                    if len(selected_indexes) == 1:
+                        cmds.select(node, replace=True)
+                        self.update_attribute_editor(node)
 
         # Column 1: Handled by eventFilter
         # Column 2: Handled by eventFilter -> toggle_visibility_for_selection
