@@ -695,7 +695,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         # Model - 3 columns: Node name, Connected nodes, Visibility
         self.model = QStandardItemModel()
-        self.model.setHorizontalHeaderLabels(["Node", "Connected", "Vis"])
+        self.model.setHorizontalHeaderLabels(["Node", "Connected", ""])
 
         # Tree
         self.tree = QtWidgets.QTreeView()
@@ -731,11 +731,17 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.tree.setFocusPolicy(Qt.StrongFocus)
         self.tree.installEventFilter(self)
 
-        # Header context menu
+        # Header context menu and compact styling
         header = self.tree.header()
         header.setContextMenuPolicy(Qt.CustomContextMenu)
         header.customContextMenuRequested.connect(self.on_header_context_menu)
+        # Stretch the Connected column (index 1) to fill available space
+        # This pushes the Vis column to the right edge
         header.setStretchLastSection(False)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+        # Make header compact
+        header.setMinimumSectionSize(20)
+        header.setDefaultSectionSize(50)
 
         # Smaller indentation for deep hierarchies
         self.tree.setIndentation(15)
@@ -747,10 +753,10 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.indent_delegate = IndentLineDelegate(self.tree, self.tree)
         self.tree.setItemDelegateForColumn(0, self.indent_delegate)
 
-        # Column widths
+        # Column widths - Vis column as narrow as possible (icon is ~18px)
         self.tree.setColumnWidth(0, 200)
         self.tree.setColumnWidth(1, 120)
-        self.tree.setColumnWidth(2, 30)
+        self.tree.setColumnWidth(2, 22)
 
         layout.addWidget(self.tree)
 
