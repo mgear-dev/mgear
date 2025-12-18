@@ -1722,14 +1722,26 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                     print(f"Error toggling visibility for {node}: {e}")
 
     def update_attribute_editor(self, node):
-        """Force Attribute Editor to show the node's main tab"""
+        """Update Attribute Editor to show the node's main tab (only if AE is the active/raised tab)"""
         import maya.mel as mel
         try:
+            # Check if Attribute Editor is the currently raised/active tab
+            # workspaceControl -q -r returns True only if it's the raised tab in its tab group
+            ae_is_raised = False
+            try:
+                ae_is_raised = cmds.workspaceControl('AttributeEditor', q=True, r=True)
+            except:
+                pass
+
+            if not ae_is_raised:
+                return
+
             # Get short name for AE commands
             short_name = node.split('|')[-1]
-            # Update AE and switch to main object tab
+            # Update AE content and switch to the transform's tab
             mel.eval('updateAE "%s"' % short_name)
-            mel.eval('evalDeferred "showEditorExact \\"%s\\""' % short_name)
+            # Switch to the node's tab in the AE (shows transform, not shape)
+            mel.eval('showEditorExact "%s"' % short_name)
         except:
             pass
 
