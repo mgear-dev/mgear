@@ -450,6 +450,9 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.tree.collapsed.connect(self.on_collapsed)
         self.tree.clicked.connect(self.on_clicked)
 
+        # Connect selection model to handle arrow key navigation
+        self.tree.selectionModel().currentChanged.connect(self.on_current_changed)
+
         # Enable right-click context menu on tree
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.on_tree_context_menu)
@@ -1270,6 +1273,21 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                     item.setIcon(VIS_ICONS.get(new_state, VIS_ICONS['locked']))
                 except Exception as e:
                     print(f"Error toggling visibility: {e}")
+
+    def on_current_changed(self, current, previous):
+        """Handle arrow key navigation - select node in Maya"""
+        if not current.isValid():
+            return
+
+        # Get the item from column 0 (node column)
+        if current.column() != 0:
+            current = current.sibling(current.row(), 0)
+
+        item = self.model.itemFromIndex(current)
+        if item:
+            node = item.data(NODE_ROLE)
+            if node and cmds.objExists(node):
+                cmds.select(node, replace=True)
 
     def scroll_to_item_horizontal(self, index):
         """Resize Node column to fit selected row and scroll to show item"""
