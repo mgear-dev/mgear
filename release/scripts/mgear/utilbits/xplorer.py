@@ -285,15 +285,8 @@ class ConnectedNodesWidget(QtWidgets.QWidget):
         painter.end()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            pos = event.pos()
-            for i, rect in enumerate(self.icon_rects):
-                if rect.contains(pos) and i < len(self.connected_nodes):
-                    node_path = self.connected_nodes[i].get('path', '')
-                    if node_path:
-                        self.clicked.emit(node_path)
-                    return
-        super(ConnectedNodesWidget, self).mousePressEvent(event)
+        # Let the event propagate to parent (tree viewport) for handling
+        event.ignore()
 
     def mouseMoveEvent(self, event):
         """Update tooltip based on hovered icon"""
@@ -973,8 +966,25 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                         self.on_middle_click_connected(index, pos)
                         return True
 
-                # Left click on visibility column - handle before selection changes
+                # Left click handling
                 if event.button() == Qt.LeftButton:
+                    # Connected column - select the row and trigger connected node action
+                    if index.isValid() and index.column() == 1:
+                        widget = self.tree.indexWidget(index)
+                        if widget and isinstance(widget, ConnectedNodesWidget):
+                            widget_pos = widget.mapFromGlobal(self.tree.viewport().mapToGlobal(pos))
+                            for i, rect in enumerate(widget.icon_rects):
+                                if rect.contains(widget_pos) and i < len(widget.connected_nodes):
+                                    # Select this row in the tree
+                                    row_index = index.sibling(index.row(), 0)
+                                    self.tree.setCurrentIndex(row_index)
+                                    # Trigger the connected node click action
+                                    node_path = widget.connected_nodes[i].get('path', '')
+                                    if node_path:
+                                        self.on_connected_node_clicked(node_path)
+                                    return True
+
+                    # Visibility column - handle before selection changes
                     if index.isValid() and index.column() == 2:
                         self.toggle_visibility_for_selection(index)
                         return True  # Consume the event to prevent selection change
