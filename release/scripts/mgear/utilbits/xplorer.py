@@ -1,5 +1,6 @@
 
 import maya.cmds as cmds
+import maya.api.OpenMaya as om2
 
 VERSION = "1.0.0"
 
@@ -18,6 +19,107 @@ try:
 except:
     class MayaQWidgetDockableMixin:
         pass
+
+
+# =============================================================================
+# OpenMaya 2.0 Helper Functions for Performance
+# =============================================================================
+
+def om_get_mobject(node_path):
+    """Get MObject from node path using OpenMaya 2.0"""
+    try:
+        sel = om2.MSelectionList()
+        sel.add(node_path)
+        return sel.getDependNode(0)
+    except:
+        return None
+
+
+def om_get_dag_path(node_path):
+    """Get MDagPath from node path using OpenMaya 2.0"""
+    try:
+        sel = om2.MSelectionList()
+        sel.add(node_path)
+        return sel.getDagPath(0)
+    except:
+        return None
+
+
+def om_get_node_type(mobj):
+    """Get node type name from MObject"""
+    try:
+        return mobj.apiTypeStr.replace('kPluginShape', 'mesh').replace('k', '').lower()
+    except:
+        return None
+
+
+def om_get_node_type_name(mobj):
+    """Get the actual node type name from MObject"""
+    try:
+        fn = om2.MFnDependencyNode(mobj)
+        return fn.typeName
+    except:
+        return 'unknown'
+
+
+def om_is_shape(mobj):
+    """Check if MObject is a shape node"""
+    try:
+        return mobj.hasFn(om2.MFn.kShape)
+    except:
+        return False
+
+
+def om_get_shapes(dag_path):
+    """Get shape MDagPaths under a transform"""
+    shapes = []
+    try:
+        # Check if this is a transform
+        if not dag_path.node().hasFn(om2.MFn.kTransform):
+            return shapes
+
+        # Get number of shapes
+        num_shapes = dag_path.numberOfShapesDirectlyBelow()
+        for i in range(num_shapes):
+            shape_path = om2.MDagPath(dag_path)
+            shape_path.extendToShapeDirectlyBelow(i)
+            shapes.append(shape_path)
+    except:
+        pass
+    return shapes
+
+
+def om_get_children(dag_path):
+    """Get child MDagPaths under a DAG node"""
+    children = []
+    try:
+        for i in range(dag_path.childCount()):
+            child_obj = dag_path.child(i)
+            if child_obj.hasFn(om2.MFn.kDagNode):
+                child_fn = om2.MFnDagNode(child_obj)
+                child_path = child_fn.getPath()
+                children.append(child_path)
+    except:
+        pass
+    return children
+
+
+def om_get_visibility(dag_path):
+    """Get visibility state using OpenMaya - returns 'visible', 'hidden', or 'locked'"""
+    try:
+        fn = om2.MFnDagNode(dag_path)
+        plug = fn.findPlug('visibility', False)
+
+        # Check if locked
+        if plug.isLocked:
+            return 'locked'
+
+        # Get value
+        if plug.asBool():
+            return 'visible'
+        return 'hidden'
+    except:
+        return 'locked'
 
 
 # Data roles
@@ -69,6 +171,9 @@ def create_text_icon(text, size=18, bg_color='#555555', text_color='#ffffff'):
 # Cache for text icons
 _text_icon_cache = {}
 
+# Cache for Maya icons (type -> QIcon)
+_maya_icon_cache = {}
+
 
 def get_text_icon(node_type):
     """Get or create a text-based icon for a node type"""
@@ -78,43 +183,99 @@ def get_text_icon(node_type):
 
 
 def get_maya_icon(node_type):
-    """Get Maya's built-in icon for a node type"""
+    """Get Maya's built-in icon for a node type (cached)"""
+    # Check cache first
+    if node_type in _maya_icon_cache:
+        return _maya_icon_cache[node_type]
+
     # First check manual fallback map
     lookup_type = ICON_FALLBACK_MAP.get(node_type, node_type)
 
+    icon = None
     try:
         # Get the icon name from Maya
         icon_name = cmds.resourceManager(nameFilter=f"out_{lookup_type}.png")
         if icon_name:
             icon_path = f":/{icon_name[0]}"
             icon = QtGui.QIcon(icon_path)
-            if not icon.isNull():
-                return icon
+            if icon.isNull():
+                icon = None
 
         # Try without 'out_' prefix
-        icon_name = cmds.resourceManager(nameFilter=f"{lookup_type}.png")
-        if icon_name:
-            icon_path = f":/{icon_name[0]}"
-            icon = QtGui.QIcon(icon_path)
-            if not icon.isNull():
-                return icon
+        if not icon:
+            icon_name = cmds.resourceManager(nameFilter=f"{lookup_type}.png")
+            if icon_name:
+                icon_path = f":/{icon_name[0]}"
+                icon = QtGui.QIcon(icon_path)
+                if icon.isNull():
+                    icon = None
 
         # Fallback: use nodeIconFilePath
-        icon_path = cmds.nodeIconFilePath(lookup_type)
-        if icon_path:
-            icon = QtGui.QIcon(icon_path)
-            if not icon.isNull():
-                return icon
+        if not icon:
+            icon_path = cmds.nodeIconFilePath(lookup_type)
+            if icon_path:
+                icon = QtGui.QIcon(icon_path)
+                if icon.isNull():
+                    icon = None
 
     except:
         pass
 
     # Final fallback: create text icon with first 2 letters
-    return get_text_icon(node_type)
+    if not icon:
+        icon = get_text_icon(node_type)
+
+    # Cache and return
+    _maya_icon_cache[node_type] = icon
+    return icon
+
+
+def get_node_icon_om(dag_path, node_path=None):
+    """Get appropriate Maya icon for a node using OpenMaya (faster)"""
+    try:
+        mobj = dag_path.node()
+        node_type = om_get_node_type_name(mobj)
+
+        # For transforms, check if they have a shape
+        if mobj.hasFn(om2.MFn.kTransform):
+            shapes = om_get_shapes(dag_path)
+            if shapes:
+                shape_type = om_get_node_type_name(shapes[0].node())
+                icon = get_maya_icon(shape_type)
+                if icon and not icon.isNull():
+                    return icon
+            else:
+                # No shapes from OpenMaya, try cmds as fallback for shapes
+                if node_path:
+                    try:
+                        cmds_shapes = cmds.listRelatives(node_path, shapes=True, fullPath=True) or []
+                        if cmds_shapes:
+                            shape_type = cmds.nodeType(cmds_shapes[0])
+                            icon = get_maya_icon(shape_type)
+                            if icon and not icon.isNull():
+                                return icon
+                    except:
+                        pass
+
+        # Get icon for the node type
+        icon = get_maya_icon(node_type)
+        if icon and not icon.isNull():
+            return icon
+
+    except:
+        pass
+
+    # Return default transform icon or text icon
+    return get_maya_icon('transform')
 
 
 def get_node_icon(node):
-    """Get appropriate Maya icon for a node"""
+    """Get appropriate Maya icon for a node (wrapper that uses OpenMaya)"""
+    dag_path = om_get_dag_path(node)
+    if dag_path:
+        return get_node_icon_om(dag_path, node)
+
+    # Fallback to cmds if OpenMaya fails
     try:
         node_type = cmds.nodeType(node)
 
@@ -127,16 +288,9 @@ def get_node_icon(node):
                 if icon and not icon.isNull():
                     return icon
 
-        # Get icon for the node type
-        icon = get_maya_icon(node_type)
-        if icon and not icon.isNull():
-            return icon
-
+        return get_maya_icon(node_type)
     except:
-        pass
-
-    # Return default transform icon or text icon
-    return get_maya_icon('transform')
+        return get_maya_icon('transform')
 
 
 def create_dot_icon(color, size=18):
@@ -893,48 +1047,77 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.model.removeRows(0, self.model.rowCount())
 
         if self.list_selected_only:
-            # List only selected nodes
-            selection = cmds.ls(selection=True, long=True) or []
-            for node in selection:
-                self.add_node(node, self.model.invisibleRootItem())
+            # List only selected nodes - use OpenMaya for selection
+            sel = om2.MGlobal.getActiveSelectionList()
+            for i in range(sel.length()):
+                try:
+                    dag_path = sel.getDagPath(i)
+                    node = dag_path.fullPathName()
+                    self.add_node(node, self.model.invisibleRootItem(), dag_path=dag_path)
+                except:
+                    # Not a DAG node, skip
+                    pass
         else:
-            # Get root DAG nodes
-            all_dag = cmds.ls(dag=True, long=True) or []
-            roots = [n for n in all_dag if '|' not in n[1:]]
-
-            for node in roots:
-                self.add_node(node, self.model.invisibleRootItem())
+            # Get root DAG nodes using OpenMaya iterator
+            dag_iter = om2.MItDag(om2.MItDag.kDepthFirst, om2.MFn.kTransform)
+            while not dag_iter.isDone():
+                # Only get root level transforms (depth 0 or 1 for world)
+                if dag_iter.depth() <= 1:
+                    try:
+                        dag_path = dag_iter.getPath()
+                        # Check if it's a root (parent is world)
+                        if dag_path.length() == 1:
+                            node = dag_path.fullPathName()
+                            self.add_node(node, self.model.invisibleRootItem(), dag_path=dag_path)
+                    except:
+                        pass
+                dag_iter.next()
 
         # Clear search
         self.search_field.clear()
 
-    def add_node(self, node, parent, load_children=False):
-        """Add node to tree. If load_children=False, only add placeholder."""
+    def add_node(self, node, parent, load_children=False, dag_path=None):
+        """Add node to tree. If load_children=False, only add placeholder.
+
+        Args:
+            node: Full path string of the node
+            parent: Parent QStandardItem
+            load_children: Whether to load children immediately
+            dag_path: Optional MDagPath for performance (avoids re-lookup)
+        """
         name = node.split('|')[-1]
 
-        # Check if this is a shape node
-        is_shape = False
-        try:
-            is_shape = cmds.objectType(node, isAType='shape')
-        except:
-            pass
+        # Get or create dag_path for OpenMaya operations
+        if dag_path is None:
+            dag_path = om_get_dag_path(node)
+
+        # Use OpenMaya for fast checks when available
+        if dag_path:
+            mobj = dag_path.node()
+            is_shape = om_is_shape(mobj)
+            node_type = om_get_node_type_name(mobj)
+            vis_state = om_get_visibility(dag_path)
+            node_icon = get_node_icon_om(dag_path, node)
+        else:
+            # Fallback to cmds
+            is_shape = False
+            try:
+                is_shape = cmds.objectType(node, isAType='shape')
+            except:
+                pass
+            try:
+                node_type = cmds.nodeType(node)
+            except:
+                node_type = "unknown"
+            vis_state = self.get_visibility_state(node)
+            node_icon = get_node_icon(node)
 
         # Skip shapes if not showing them
         if is_shape and not self.show_shapes:
             return None
 
-        # Get visibility state
-        vis_state = self.get_visibility_state(node)
-
-        # Get node type for tooltip
-        try:
-            node_type = cmds.nodeType(node)
-        except:
-            node_type = "unknown"
-
         # Column 0: Node name with Maya icon
         name_item = QStandardItem(name)
-        node_icon = get_node_icon(node)
         if node_icon:
             name_item.setIcon(node_icon)
         name_item.setData(node, NODE_ROLE)
@@ -967,20 +1150,29 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             index = self.model.indexFromItem(connected_item)
             self.tree.setIndexWidget(index, connected_widget)
 
-        # Check if has children - add placeholder if yes
-        children = cmds.listRelatives(node, children=True, fullPath=True) or []
+        # Check if has children using OpenMaya when available
         has_visible_children = False
-
-        for child in children:
-            try:
-                child_is_shape = cmds.objectType(child, isAType='shape')
+        if dag_path:
+            children = om_get_children(dag_path)
+            for child_path in children:
+                child_is_shape = om_is_shape(child_path.node())
                 if child_is_shape and not self.show_shapes:
                     continue
                 has_visible_children = True
                 break
-            except:
-                has_visible_children = True
-                break
+        else:
+            # Fallback to cmds
+            children = cmds.listRelatives(node, children=True, fullPath=True) or []
+            for child in children:
+                try:
+                    child_is_shape = cmds.objectType(child, isAType='shape')
+                    if child_is_shape and not self.show_shapes:
+                        continue
+                    has_visible_children = True
+                    break
+                except:
+                    has_visible_children = True
+                    break
 
         if has_visible_children:
             if load_children:
@@ -1012,17 +1204,27 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             if first_child and first_child.text() == "Loading...":
                 parent_item.removeRow(0)
 
-        # Get and add children
-        children = cmds.listRelatives(node, children=True, fullPath=True) or []
-        for child in children:
-            # Pre-check if child is shape to skip
-            try:
-                child_is_shape = cmds.objectType(child, isAType='shape')
-                if child_is_shape and not self.show_shapes:
+        # Try OpenMaya first for performance
+        dag_path = om_get_dag_path(node)
+        if dag_path:
+            children = om_get_children(dag_path)
+            for child_path in children:
+                # Pre-check if child is shape to skip
+                if om_is_shape(child_path.node()) and not self.show_shapes:
                     continue
-            except:
-                pass
-            self.add_node(child, parent_item, load_children=False)
+                child_full_path = child_path.fullPathName()
+                self.add_node(child_full_path, parent_item, load_children=False, dag_path=child_path)
+        else:
+            # Fallback to cmds
+            children = cmds.listRelatives(node, children=True, fullPath=True) or []
+            for child in children:
+                try:
+                    child_is_shape = cmds.objectType(child, isAType='shape')
+                    if child_is_shape and not self.show_shapes:
+                        continue
+                except:
+                    pass
+                self.add_node(child, parent_item, load_children=False)
 
         # Mark as loaded
         parent_item.setData(True, CHILDREN_LOADED_ROLE)
@@ -1227,14 +1429,20 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         seen_paths = set()  # Track by path to avoid duplicates
 
         try:
-            # Get shapes first
+            # Get shapes - always use cmds for reliability, it's only called once per node
             shapes = cmds.listRelatives(node, shapes=True, fullPath=True) or []
             for shape in shapes:
                 if shape in seen_paths:
                     continue
                 seen_paths.add(shape)
 
-                shape_type = cmds.nodeType(shape)
+                # Use OpenMaya for node type if possible
+                shape_dag = om_get_dag_path(shape)
+                if shape_dag:
+                    shape_type = om_get_node_type_name(shape_dag.node())
+                else:
+                    shape_type = cmds.nodeType(shape)
+
                 short_name = shape.split('|')[-1]
                 connected.append({
                     'name': short_name,
@@ -1255,7 +1463,9 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                             continue
                         seen_paths.add(mat)
 
-                        mat_type = cmds.nodeType(mat)
+                        # Use OpenMaya for node type
+                        mat_obj = om_get_mobject(mat)
+                        mat_type = om_get_node_type_name(mat_obj) if mat_obj else cmds.nodeType(mat)
                         connected.append({
                             'name': mat,
                             'type': mat_type,
@@ -1266,17 +1476,20 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             # Check for deformers, constraints, etc.
             history = cmds.listHistory(node, pruneDagObjects=True, interestLevel=1) or []
 
+            # Skip types set for fast lookup
+            skip_types = {'groupId', 'groupParts', 'tweak', 'objectSet', 'initialShadingGroup'}
+
             for hist_node in history[:10]:  # Limit to avoid too many
                 if hist_node == node:
                     continue
                 if hist_node in seen_paths:
                     continue
 
-                node_type = cmds.nodeType(hist_node)
+                # Use OpenMaya for node type lookup
+                hist_obj = om_get_mobject(hist_node)
+                node_type = om_get_node_type_name(hist_obj) if hist_obj else cmds.nodeType(hist_node)
 
                 # Skip common uninteresting types
-                skip_types = ['groupId', 'groupParts', 'tweak', 'objectSet',
-                             'initialShadingGroup']
                 if node_type in skip_types or hist_node in skip_types:
                     continue
 
@@ -1294,7 +1507,9 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                     continue
                 seen_paths.add(const)
 
-                const_type = cmds.nodeType(const)
+                # Use OpenMaya for node type if possible
+                const_obj = om_get_mobject(const)
+                const_type = om_get_node_type_name(const_obj) if const_obj else cmds.nodeType(const)
                 connected.append({
                     'name': const,
                     'type': const_type,
@@ -1348,6 +1563,12 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
     def get_visibility_state(self, node):
         """Get visibility state: visible, hidden, or locked"""
+        # Try OpenMaya first for performance
+        dag_path = om_get_dag_path(node)
+        if dag_path:
+            return om_get_visibility(dag_path)
+
+        # Fallback to cmds
         try:
             if not cmds.objExists(node):
                 return 'locked'
