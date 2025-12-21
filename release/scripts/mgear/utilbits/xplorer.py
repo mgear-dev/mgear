@@ -1,18 +1,15 @@
+import tempfile
+import os
 
 import maya.cmds as cmds
 import maya.api.OpenMaya as om2
+import maya.mel as mel
+
+from mgear.vendor.Qt import QtWidgets
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtGui
 
 VERSION = "1.0.0"
-
-
-try:
-    from PySide6 import QtWidgets, QtCore, QtGui
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QStandardItemModel, QStandardItem
-except ImportError:
-    from PySide2 import QtWidgets, QtCore, QtGui
-    from PySide2.QtCore import Qt
-    from PySide2.QtGui import QStandardItemModel, QStandardItem
 
 try:
     from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
@@ -123,10 +120,10 @@ def om_get_visibility(dag_path):
 
 
 # Data roles
-NODE_ROLE = Qt.UserRole + 1
-VIS_ROLE = Qt.UserRole + 2
-CONNECTED_NODES_ROLE = Qt.UserRole + 3
-CHILDREN_LOADED_ROLE = Qt.UserRole + 4
+NODE_ROLE = QtCore.Qt.UserRole + 1
+VIS_ROLE = QtCore.Qt.UserRole + 2
+CONNECTED_NODES_ROLE = QtCore.Qt.UserRole + 3
+CHILDREN_LOADED_ROLE = QtCore.Qt.UserRole + 4
 
 
 # =============================================================================
@@ -161,7 +158,7 @@ def create_text_icon(text, size=18, bg_color='#555555', text_color='#ffffff'):
     font.setPixelSize(int(size * 0.6))
     font.setBold(True)
     painter.setFont(font)
-    painter.drawText(pixmap.rect(), Qt.AlignCenter, text[:2].upper())
+    painter.drawText(pixmap.rect(), QtCore.Qt.AlignCenter, text[:2].upper())
 
     painter.end()
 
@@ -296,12 +293,12 @@ def get_node_icon(node):
 def create_dot_icon(color, size=18):
     """Create a colored dot icon for visibility"""
     pixmap = QtGui.QPixmap(size, size)
-    pixmap.fill(Qt.transparent)
+    pixmap.fill(QtCore.Qt.transparent)
 
     painter = QtGui.QPainter(pixmap)
     painter.setRenderHint(QtGui.QPainter.Antialiasing)
     painter.setBrush(QtGui.QBrush(QtGui.QColor(color)))
-    painter.setPen(Qt.NoPen)
+    painter.setPen(QtCore.Qt.NoPen)
     painter.drawEllipse(2, 2, size - 4, size - 4)
     painter.end()
 
@@ -359,7 +356,7 @@ class IndentLineDelegate(QtWidgets.QStyledItemDelegate):
 
             # Use same color as the arrow/branch indicator (no transparency)
             line_color = option.palette.color(QtGui.QPalette.Text)
-            pen = QtGui.QPen(line_color, 1, Qt.SolidLine)
+            pen = QtGui.QPen(line_color, 1, QtCore.Qt.SolidLine)
             painter.setPen(pen)
 
             # Draw vertical lines only where there are more siblings
@@ -474,13 +471,13 @@ class ConnectedNodesWidget(QtWidgets.QWidget):
             font.setBold(True)
             painter.setFont(font)
             painter.drawText(x, 1, ellipsis_width, self.icon_size,
-                           Qt.AlignCenter, "...")
+                           QtCore.Qt.AlignCenter, "...")
 
         painter.end()
 
     def mousePressEvent(self, event):
         # Right click - show context menu with all connected nodes
-        if event.button() == Qt.RightButton:
+        if event.button() == QtCore.Qt.RightButton:
             self.show_context_menu(event.globalPos())
             return
         # Left click - let the event propagate to parent (tree viewport) for handling
@@ -536,10 +533,10 @@ class ConnectedNodesWidget(QtWidgets.QWidget):
             self.setToolTip("")
 
     def enterEvent(self, event):
-        self.setCursor(Qt.PointingHandCursor)
+        self.setCursor(QtCore.Qt.PointingHandCursor)
 
     def leaveEvent(self, event):
-        self.setCursor(Qt.ArrowCursor)
+        self.setCursor(QtCore.Qt.ArrowCursor)
         self.setToolTip("")
 
 
@@ -614,7 +611,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         # Search limit submenu
         search_limit_menu = settings_menu.addMenu("Search All Nodes Limit")
         self.search_limit = 50  # Default limit
-        self.search_limit_group = QtGui.QActionGroup(self)
+        self.search_limit_group = QtWidgets.QActionGroup(self)
         for limit in [25, 50, 100, 200, 500, 0]:  # 0 = unlimited
             label = "Unlimited" if limit == 0 else str(limit)
             action = search_limit_menu.addAction(label)
@@ -661,7 +658,6 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         button_layout.setContentsMargins(5, 2, 5, 5)
 
         # Get icon path
-        import os
         icons_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "icons")
 
         # Refresh button
@@ -700,7 +696,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         layout.addWidget(button_widget)
 
         # Model - 3 columns: Node name, Connected nodes, Visibility
-        self.model = QStandardItemModel()
+        self.model = QtGui.QStandardItemModel()
         self.model.setHorizontalHeaderLabels(["Node", "Connected", ""])
 
         # Tree
@@ -720,26 +716,26 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         QtWidgets.QApplication.instance().installEventFilter(self)
 
         # Enable right-click context menu on tree
-        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.on_tree_context_menu)
 
         # Install event filter for middle click
         self.tree.viewport().installEventFilter(self)
 
         # Enable horizontal scrollbar
-        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.tree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         self.tree.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
 
         # Disable auto-scroll to selection
         self.tree.setAutoScroll(False)
 
         # Enable keyboard focus
-        self.tree.setFocusPolicy(Qt.StrongFocus)
+        self.tree.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.tree.installEventFilter(self)
 
         # Header context menu and compact styling
         header = self.tree.header()
-        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         header.customContextMenuRequested.connect(self.on_header_context_menu)
         header.setStretchLastSection(False)
         # Apply stretch setting for Connected column (loaded from settings)
@@ -789,7 +785,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         # Shift+expand all
         modifiers = QtWidgets.QApplication.keyboardModifiers()
-        if modifiers == Qt.ShiftModifier:
+        if modifiers == QtCore.Qt.ShiftModifier:
             self.expand_all_children(index)
 
     def on_show_shapes_changed(self, checked):
@@ -809,8 +805,6 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
     def setup_branch_icons(self):
         """Create bigger triangle arrow icons for branch indicators"""
-        import tempfile
-        import os
 
         size = 18
 
@@ -819,10 +813,10 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         # Create right arrow (collapsed) ▶
         right_pixmap = QtGui.QPixmap(size, size)
-        right_pixmap.fill(Qt.transparent)
+        right_pixmap.fill(QtCore.Qt.transparent)
         painter = QtGui.QPainter(right_pixmap)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
+        painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(color)
 
         # Draw right triangle
@@ -836,10 +830,10 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         # Create down arrow (expanded) ▼
         down_pixmap = QtGui.QPixmap(size, size)
-        down_pixmap.fill(Qt.transparent)
+        down_pixmap.fill(QtCore.Qt.transparent)
         painter = QtGui.QPainter(down_pixmap)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
+        painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(color)
 
         # Draw down triangle
@@ -1038,7 +1032,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
     def on_collapsed(self, index):
         """Handle collapse - if shift held, collapse all children"""
         modifiers = QtWidgets.QApplication.keyboardModifiers()
-        if modifiers == Qt.ShiftModifier:
+        if modifiers == QtCore.Qt.ShiftModifier:
             self.collapse_all_children(index)
 
     def expand_all_children(self, index):
@@ -1208,7 +1202,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             return None
 
         # Column 0: Node name with Maya icon
-        name_item = QStandardItem(name)
+        name_item = QtGui.QStandardItem(name)
         if node_icon:
             name_item.setIcon(node_icon)
         name_item.setData(node, NODE_ROLE)
@@ -1220,12 +1214,12 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
         # Column 1: Connected nodes (empty item, widget added later)
         connected_nodes = self.get_connected_nodes(node)
-        connected_item = QStandardItem()
+        connected_item = QtGui.QStandardItem()
         connected_item.setData(connected_nodes, CONNECTED_NODES_ROLE)
         connected_item.setEditable(False)
 
         # Column 2: Visibility icon
-        vis_item = QStandardItem()
+        vis_item = QtGui.QStandardItem()
         vis_item.setIcon(VIS_ICONS.get(vis_state, VIS_ICONS['locked']))
         vis_item.setData(node, NODE_ROLE)
         vis_item.setData(vis_state, VIS_ROLE)
@@ -1271,9 +1265,9 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                 self.load_children(name_item)
             else:
                 # Add placeholder for lazy loading
-                placeholder = QStandardItem("Loading...")
+                placeholder = QtGui.QStandardItem("Loading...")
                 placeholder.setEnabled(False)
-                name_item.appendRow([placeholder, QStandardItem(), QStandardItem()])
+                name_item.appendRow([placeholder, QtGui.QStandardItem(), QtGui.QStandardItem()])
         else:
             # No children, mark as loaded
             name_item.setData(True, CHILDREN_LOADED_ROLE)
@@ -1346,10 +1340,10 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         # Keyboard events - F key and arrow keys when mouse is over tree
         if event.type() == QtCore.QEvent.KeyPress and self._is_mouse_over_tree():
             key = event.key()
-            if key == Qt.Key_F:
+            if key == QtCore.Qt.Key_F:
                 self.frame_in_hierarchy()
                 return True
-            if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right):
+            if key in (QtCore.Qt.Key_Up, QtCore.Qt.Key_Down, QtCore.Qt.Key_Left, QtCore.Qt.Key_Right):
                 self.tree.keyPressEvent(event)
                 return True
 
@@ -1360,13 +1354,13 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                 index = self.tree.indexAt(pos)
 
                 # Middle click on connected column
-                if event.button() == Qt.MiddleButton:
+                if event.button() == QtCore.Qt.MiddleButton:
                     if index.isValid() and index.column() == 1:
                         self.on_middle_click_connected(index, pos)
                         return True
 
                 # Left click handling
-                if event.button() == Qt.LeftButton:
+                if event.button() == QtCore.Qt.LeftButton:
                     # Connected column - select the row and trigger connected node action
                     if index.isValid() and index.column() == 1:
                         widget = self.tree.indexWidget(index)
@@ -1413,7 +1407,6 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                     cmds.select(node_path, replace=True)
 
                     # Open Attribute Editor copy window - deferred so AE updates first
-                    import maya.mel as mel
                     try:
                         mel.eval('evalDeferred "copyAEWindow"')
                     except Exception as e:
@@ -1438,7 +1431,6 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             print(f"Selected: {node}")
 
             # Open Attribute Editor with copy tab
-            import maya.mel as mel
             try:
                 # Open/focus Attribute Editor
                 mel.eval('openAEWindow')
@@ -1756,7 +1748,6 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
     def update_attribute_editor(self, node):
         """Update Attribute Editor to show the node's main tab (only if AE is the active/raised tab)"""
-        import maya.mel as mel
         try:
             # Check if Attribute Editor is the currently raised/active tab
             # workspaceControl -q -r returns True only if it's the raised tab in its tab group
