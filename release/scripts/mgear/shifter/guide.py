@@ -1479,7 +1479,7 @@ class HelperSlots(object):
                     )
                 else:
                     runPath = stepPath
-
+                runPath = os.path.expandvars(runPath)
                 customStep = imp.load_source(fileName, runPath)
                 if hasattr(customStep, "CustomShifterStep"):
                     argspec = inspect.getfullargspec(
