@@ -355,6 +355,9 @@ class Rig(object):
     def _extractActiveStepsFromJson(self, items):
         """Extract active step paths from JSON items list.
 
+        For referenced groups, loads fresh step data from the source .scs file.
+        Falls back to embedded data if source file is not available.
+
         Args:
             items (list): List of item dicts (steps and groups)
 
@@ -372,9 +375,81 @@ class Rig(object):
             elif item_type == "group":
                 # Only process group items if the group itself is active
                 if item.get("active", True):
-                    group_items = item.get("items", [])
+                    # Check if this is a referenced group
+                    if item.get("referenced", False):
+                        group_items = self._loadReferencedGroupSteps(item)
+                    else:
+                        group_items = item.get("items", [])
                     steps.extend(self._extractActiveStepsFromJson(group_items))
         return steps
+
+    def _loadReferencedGroupSteps(self, group_item):
+        """Load step items from a referenced group's source file.
+
+        Tries to load fresh data from the source .scs file.
+        Falls back to embedded data if source file is not available.
+
+        Args:
+            group_item (dict): The group item dict with 'source_file' and 'name'
+
+        Returns:
+            list: List of step item dicts from source file or embedded data
+        """
+        source_file = group_item.get("source_file", "")
+        group_name = group_item.get("name", "")
+        embedded_items = group_item.get("items", [])
+
+        if not source_file:
+            return embedded_items
+
+        # Resolve the source file path
+        resolved_source = custom_step_widget._resolve_source_path(source_file)
+
+        if not os.path.exists(resolved_source):
+            mgear.log(
+                "Source file not found for referenced group '{}': {}. "
+                "Using embedded data.".format(group_name, resolved_source),
+                mgear.sev_warning
+            )
+            return embedded_items
+
+        # Try to load from source file
+        try:
+            with open(resolved_source, "r") as f:
+                config_dict = json.load(f)
+
+            # Find the matching group in the source file
+            for item_data in config_dict.get("items", []):
+                if item_data.get("type") == "group":
+                    if item_data.get("name") == group_name:
+                        mgear.log(
+                            "Loading referenced group '{}' from: {}".format(
+                                group_name, resolved_source
+                            )
+                        )
+                        return item_data.get("items", [])
+
+            mgear.log(
+                "Group '{}' not found in source file: {}. "
+                "Using embedded data.".format(group_name, resolved_source),
+                mgear.sev_warning
+            )
+            return embedded_items
+
+        except json.JSONDecodeError as e:
+            mgear.log(
+                "JSON error in source file {}: {}. "
+                "Using embedded data.".format(resolved_source, str(e)),
+                mgear.sev_warning
+            )
+            return embedded_items
+        except Exception as e:
+            mgear.log(
+                "Error loading referenced group '{}': {}. "
+                "Using embedded data.".format(group_name, str(e)),
+                mgear.sev_warning
+            )
+            return embedded_items
 
     def from_dict_custom_step(self, conf_dict, pre=True):
         if pre:

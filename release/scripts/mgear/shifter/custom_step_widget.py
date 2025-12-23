@@ -25,6 +25,64 @@ else:
 
 
 # ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def _resolve_source_path(source_file):
+    """Resolve a source file path using the environment variable if needed.
+
+    Args:
+        source_file (str): The source file path (may be relative)
+
+    Returns:
+        str: The resolved full path
+    """
+    env_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+    if env_path and not os.path.isabs(source_file):
+        env_path = os.path.normpath(env_path)
+        if not env_path.endswith(os.sep):
+            env_path = env_path + os.sep
+        return os.path.normpath(os.path.join(env_path, source_file))
+    return source_file
+
+
+def _get_step_path_from_source_file(source_file, group_name, step_name):
+    """Load a step's path from a source .scs file.
+
+    Args:
+        source_file (str): Full path to the .scs file
+        group_name (str): Name of the group to find
+        step_name (str): Name of the step to find
+
+    Returns:
+        str: The step's path from the source file, or None if not found
+    """
+    try:
+        if not os.path.exists(source_file):
+            return None
+
+        with open(source_file, "r") as f:
+            config_dict = json.load(f)
+
+        # Find the group
+        for item_data in config_dict.get("items", []):
+            if item_data.get("type") == "group":
+                if item_data.get("name") == group_name:
+                    # Find the step in this group
+                    for step_item in item_data.get("items", []):
+                        if step_item.get("name") == step_name:
+                            return step_item.get("path", "")
+        return None
+    except Exception as e:
+        import mgear.pymaya as pm
+        pm.displayWarning(
+            "Error reading source file {}: {}".format(source_file, str(e))
+        )
+        return None
+
+
+# ============================================================================
 # Custom Step Data Model
 # ============================================================================
 
@@ -125,11 +183,17 @@ class CustomStepData(object):
         Returns:
             str: Full path to the file
         """
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            return os.path.join(
-                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""),
-                self._path
-            )
+        env_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+        if env_path and self._path:
+            # Normalize the env path to ensure proper joining on Windows
+            # os.path.join("W:", "path") returns "W:path" not "W:\path"
+            # so we need to ensure proper path separator
+            env_path = os.path.normpath(env_path)
+            if not env_path.endswith(os.sep):
+                env_path = env_path + os.sep
+            return os.path.normpath(os.path.join(env_path, self._path))
+        elif env_path:
+            return os.path.normpath(env_path)
         return self._path
 
     def file_exists(self):
@@ -1045,6 +1109,24 @@ class GroupWidget(QtWidgets.QFrame):
             self._add_step_widget(step_data)
         self._update_step_appearances()
 
+    def _refresh_step_widgets(self):
+        """Refresh step widgets from the group data.
+
+        Clears existing step widgets and recreates them from the current
+        group data items. Used when the data is updated from an external source.
+        """
+        # Clear existing step widgets
+        for widget in self._step_widgets:
+            widget.setParent(None)
+            widget.deleteLater()
+        self._step_widgets = []
+
+        # Recreate step widgets from updated data
+        self._populate()
+
+        # Update the header item count
+        self._header._update_count()
+
     def _add_step_widget(self, step_data):
         """Add a step widget for the given step data.
 
@@ -1125,10 +1207,42 @@ class GroupWidget(QtWidgets.QFrame):
                 CustomStepMixin._editFile(fullpath)
 
     def _on_step_run_requested(self, widget):
-        """Handle step run request."""
+        """Handle step run request.
+
+        For referenced groups, tries to load fresh data from the source .scs file.
+        Falls back to embedded data if source file is not available.
+        """
         step_data = widget.get_step_data()
-        if step_data:
-            CustomStepMixin.runStep(step_data.path, customStepDic={})
+        if not step_data:
+            return
+
+        step_path = step_data.path
+
+        # For referenced groups, try to load fresh data from source file
+        if self._group_data.referenced:
+            source_file = self._group_data.source_file
+            group_name = self._group_data.name
+            step_name = step_data.name
+
+            if source_file:
+                resolved_source = _resolve_source_path(source_file)
+                fresh_step_path = _get_step_path_from_source_file(
+                    resolved_source, group_name, step_name
+                )
+                if fresh_step_path:
+                    step_path = fresh_step_path
+                    pm.displayInfo(
+                        "Running step '{}' from source file: {}".format(
+                            step_name, resolved_source
+                        )
+                    )
+                else:
+                    pm.displayWarning(
+                        "Could not load '{}' from source file, "
+                        "using embedded data".format(step_name)
+                    )
+
+        CustomStepMixin.runStep(step_path, customStepDic={})
 
     # Public API
 
@@ -1772,7 +1886,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             lambda: self._edit_group_step(step_widget)
         )
         run_action.triggered.connect(
-            lambda: self._run_group_step(step_widget)
+            lambda: self._run_group_step(step_widget, group_widget)
         )
         move_out_action.triggered.connect(
             lambda: self._move_step_to_top_level(step_widget, group_widget)
@@ -1792,11 +1906,47 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             if fullpath:
                 CustomStepMixin._editFile(fullpath)
 
-    def _run_group_step(self, step_widget):
-        """Run a step from a group."""
+    def _run_group_step(self, step_widget, group_widget=None):
+        """Run a step from a group.
+
+        For referenced groups, tries to load fresh data from the source .scs file.
+        Falls back to embedded data if source file is not available.
+
+        Args:
+            step_widget (CustomStepItemWidget): The step widget to run
+            group_widget (GroupWidget): The parent group widget (optional)
+        """
         step_data = step_widget.get_step_data()
-        if step_data:
-            runStep(step_data.path, customStepDic={})
+        if not step_data:
+            return
+
+        step_path = step_data.path
+
+        # For referenced groups, try to load fresh data from source file
+        if group_widget and group_widget.is_referenced():
+            source_file = group_widget.get_source_file()
+            group_name = group_widget.get_group_data().name
+            step_name = step_data.name
+
+            if source_file:
+                resolved_source = _resolve_source_path(source_file)
+                fresh_step_path = _get_step_path_from_source_file(
+                    resolved_source, group_name, step_name
+                )
+                if fresh_step_path:
+                    step_path = fresh_step_path
+                    pm.displayInfo(
+                        "Running step '{}' from source file: {}".format(
+                            step_name, resolved_source
+                        )
+                    )
+                else:
+                    pm.displayWarning(
+                        "Could not load '{}' from source file, "
+                        "using embedded data".format(step_name)
+                    )
+
+        runStep(step_path, customStepDic={})
 
     def _move_step_to_top_level(self, step_widget, group_widget):
         """Move a step from a group to the top level.
@@ -2992,6 +3142,10 @@ class Ui_Form(object):
         self.utilsMenu = self.menuBar.addMenu("Utils")
         self.printConfig_action = self.utilsMenu.addAction("Print Configuration")
         self.printConfig_action.setIcon(pyqt.get_icon("mgear_file-text"))
+        self.refreshReferences_action = self.utilsMenu.addAction(
+            "Refresh Referenced Groups"
+        )
+        self.refreshReferences_action.setIcon(pyqt.get_icon("mgear_refresh-cw"))
 
         self.mainLayout.setMenuBar(self.menuBar)
 
@@ -3057,13 +3211,6 @@ class Ui_Form(object):
         self.info_referenced_label = QtWidgets.QLabel("-")
         self.infoLayout.addRow("Referenced:", self.info_referenced_label)
 
-        self.info_source_label = QtWidgets.QLabel("-")
-        self.info_source_label.setWordWrap(True)
-        self.info_source_label.setTextInteractionFlags(
-            QtCore.Qt.TextSelectableByMouse
-        )
-        self.infoLayout.addRow("Source:", self.info_source_label)
-
         self.info_exists_label = QtWidgets.QLabel("-")
         self.infoLayout.addRow("Exists:", self.info_exists_label)
 
@@ -3072,26 +3219,37 @@ class Ui_Form(object):
 
         self.infoCollapsible.addWidget(infoWidget)
 
-        # Path in its own layout for better display
+        # Path section with form layout for better organization
         pathWidget = QtWidgets.QWidget()
-        pathLayout = QtWidgets.QVBoxLayout(pathWidget)
+        pathLayout = QtWidgets.QFormLayout(pathWidget)
         pathLayout.setContentsMargins(4, 0, 4, 2)
-        pathLayout.setSpacing(0)
+        pathLayout.setSpacing(4)
 
-        pathHeaderLayout = QtWidgets.QHBoxLayout()
-        pathHeaderLayout.setContentsMargins(0, 0, 0, 0)
-        pathLabel = QtWidgets.QLabel("Path:")
-        pathHeaderLayout.addWidget(pathLabel)
-        pathHeaderLayout.addStretch()
-        pathLayout.addLayout(pathHeaderLayout)
+        self.info_path_type_label = QtWidgets.QLabel("-")
+        pathLayout.addRow("Path Type:", self.info_path_type_label)
 
         self.info_path_label = QtWidgets.QLabel("-")
         self.info_path_label.setWordWrap(True)
         self.info_path_label.setTextInteractionFlags(
             QtCore.Qt.TextSelectableByMouse
         )
-        self.info_path_label.setStyleSheet("padding-left: 10px;")
-        pathLayout.addWidget(self.info_path_label)
+        pathLayout.addRow("Path:", self.info_path_label)
+
+        # Source file (for referenced groups)
+        self.info_source_label = QtWidgets.QLabel("-")
+        self.info_source_label.setWordWrap(True)
+        self.info_source_label.setTextInteractionFlags(
+            QtCore.Qt.TextSelectableByMouse
+        )
+        pathLayout.addRow("Source:", self.info_source_label)
+
+        # Resolved path (full path when source is relative)
+        self.info_resolved_label = QtWidgets.QLabel("-")
+        self.info_resolved_label.setWordWrap(True)
+        self.info_resolved_label.setTextInteractionFlags(
+            QtCore.Qt.TextSelectableByMouse
+        )
+        pathLayout.addRow("Resolved:", self.info_resolved_label)
 
         self.infoCollapsible.addWidget(pathWidget)
 
@@ -3358,6 +3516,9 @@ class CustomStepMixin(object):
             partial(self.referenceCustomStep, False)
         )
         csTap.printConfig_action.triggered.connect(self.print_configuration)
+        csTap.refreshReferences_action.triggered.connect(
+            self.refreshReferencedGroups
+        )
 
         # Event filters for drag/drop order changes
         csTap.preCustomStep_listWidget.installEventFilter(self)
@@ -3518,6 +3679,11 @@ class CustomStepMixin(object):
         else:
             stepWidget = csTap.postCustomStep_listWidget
 
+        # Skip if we're handling a group step click - the groupStepClicked
+        # signal handler will update the info panel instead
+        if stepWidget._handling_group_step_click:
+            return
+
         row = stepWidget.row(item)
 
         # Check if this is a group row
@@ -3575,10 +3741,23 @@ class CustomStepMixin(object):
         # Check referenced status (from parent group)
         if group_data and group_data.referenced:
             cs_referenced = "Yes"
-            cs_source = group_data.source_file
+            cs_source = group_data.source_file if group_data.source_file else "-"
         else:
             cs_referenced = "No"
             cs_source = "-"
+
+        # Path info - show stored path and resolved full path
+        cs_path = step_data.path if step_data.path else "-"  # The stored path (relative or absolute)
+        cs_resolved = cs_fullpath if cs_fullpath else "-"  # The full resolved path (same as Edit button uses)
+
+        # Determine path type (relative to env var or absolute)
+        env_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+        if os.path.isabs(cs_path):
+            cs_path_type = "Absolute"
+        elif env_path:
+            cs_path_type = "Relative (MGEAR_SHIFTER_CUSTOMSTEP_PATH)"
+        else:
+            cs_path_type = "Relative"
 
         # Check file existence and get modification time
         if step_data.file_exists():
@@ -3600,10 +3779,14 @@ class CustomStepMixin(object):
         csTap.info_status_label.setText(cs_status)
         csTap.info_shared_label.setText(cs_shared)
         csTap.info_referenced_label.setText(cs_referenced)
-        csTap.info_source_label.setText(cs_source)
         csTap.info_exists_label.setText(cs_exists)
         csTap.info_modified_label.setText(cs_modified)
-        csTap.info_path_label.setText(cs_fullpath)
+
+        # Update path section labels
+        csTap.info_path_type_label.setText(cs_path_type)
+        csTap.info_path_label.setText(cs_path)
+        csTap.info_source_label.setText(cs_source)
+        csTap.info_resolved_label.setText(cs_resolved)
 
         # Color code the status
         if cs_status == "Active":
@@ -3647,15 +3830,48 @@ class CustomStepMixin(object):
         # Check referenced status
         if group_data.referenced:
             cs_referenced = "Yes"
-            cs_source = group_data.source_file
+            cs_source = group_data.source_file if group_data.source_file else "-"
+            # Compute resolved path for source file using helper function
+            if cs_source != "-":
+                cs_resolved = _resolve_source_path(cs_source)
+                # Determine path type
+                env_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+                if os.path.isabs(cs_source):
+                    cs_path_type = "Absolute"
+                elif env_path:
+                    cs_path_type = "Relative (MGEAR_SHIFTER_CUSTOMSTEP_PATH)"
+                else:
+                    cs_path_type = "Relative"
+            else:
+                cs_resolved = "-"
+                cs_path_type = "-"
         else:
             cs_referenced = "No"
             cs_source = "-"
+            cs_resolved = "-"
+            cs_path_type = "-"
 
-        # Groups don't have file paths
-        cs_exists = "-"
-        cs_modified = "-"
-        cs_fullpath = "-"
+        # For referenced groups, show source file info
+        # For non-referenced groups, path fields are not applicable
+        if group_data.referenced:
+            cs_path = cs_source  # Path shows the stored source path
+            # Check if source file exists
+            if cs_resolved != "-" and os.path.exists(cs_resolved):
+                cs_exists = "Yes"
+                try:
+                    mtime = os.path.getmtime(cs_resolved)
+                    cs_modified = datetime.datetime.fromtimestamp(mtime).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+                except Exception:
+                    cs_modified = "Unknown"
+            else:
+                cs_exists = "No (File not found)" if cs_source != "-" else "-"
+                cs_modified = "-"
+        else:
+            cs_path = "-"
+            cs_exists = "-"
+            cs_modified = "-"
 
         # Update labels
         csTap.info_name_label.setText(cs_name)
@@ -3663,10 +3879,14 @@ class CustomStepMixin(object):
         csTap.info_status_label.setText(cs_status)
         csTap.info_shared_label.setText(cs_shared)
         csTap.info_referenced_label.setText(cs_referenced)
-        csTap.info_source_label.setText(cs_source)
         csTap.info_exists_label.setText(cs_exists)
         csTap.info_modified_label.setText(cs_modified)
-        csTap.info_path_label.setText(cs_fullpath)
+
+        # Update path section labels
+        csTap.info_path_type_label.setText(cs_path_type)
+        csTap.info_path_label.setText(cs_path)
+        csTap.info_source_label.setText("-")  # Source not applicable for groups
+        csTap.info_resolved_label.setText(cs_resolved)
 
         # Color code the status
         if cs_status == "Active":
@@ -3674,8 +3894,13 @@ class CustomStepMixin(object):
         else:
             csTap.info_status_label.setStyleSheet("color: #B40000;")
 
-        # Reset file existence color
-        csTap.info_exists_label.setStyleSheet("")
+        # Color code file existence (for referenced groups)
+        if cs_exists == "Yes":
+            csTap.info_exists_label.setStyleSheet("color: #00A000;")
+        elif cs_exists.startswith("No"):
+            csTap.info_exists_label.setStyleSheet("color: #B40000;")
+        else:
+            csTap.info_exists_label.setStyleSheet("")
 
         # Color code referenced status
         if cs_referenced == "Yes":
@@ -4359,6 +4584,148 @@ class CustomShifterStep(cstp.customShifterMainStep):
         pm.displayInfo(
             "Referenced {} groups from: {}".format(count, filePath)
         )
+
+    def refreshReferencedGroups(self):
+        """Refresh all referenced groups from their source .scs files.
+
+        Updates the embedded step data in referenced groups by re-reading
+        their source .scs files. This affects both pre and post custom steps.
+        """
+        csTap = self.customStepTab
+        pre_widget = csTap.preCustomStep_listWidget
+        post_widget = csTap.postCustomStep_listWidget
+
+        total_refreshed = 0
+        total_failed = 0
+
+        # Refresh pre custom step referenced groups
+        pre_refreshed, pre_failed = self._refreshReferencedGroupsInWidget(
+            pre_widget, "preCustomStep"
+        )
+        total_refreshed += pre_refreshed
+        total_failed += pre_failed
+
+        # Refresh post custom step referenced groups
+        post_refreshed, post_failed = self._refreshReferencedGroupsInWidget(
+            post_widget, "postCustomStep"
+        )
+        total_refreshed += post_refreshed
+        total_failed += post_failed
+
+        if total_refreshed > 0 or total_failed > 0:
+            if total_failed == 0:
+                pm.displayInfo(
+                    "Refreshed {} referenced group(s) successfully.".format(
+                        total_refreshed
+                    )
+                )
+            else:
+                pm.displayWarning(
+                    "Refreshed {} group(s), {} failed to refresh.".format(
+                        total_refreshed, total_failed
+                    )
+                )
+        else:
+            pm.displayInfo("No referenced groups found to refresh.")
+
+    def _refreshReferencedGroupsInWidget(self, stepWidget, stepAttr):
+        """Refresh referenced groups in a step widget.
+
+        Args:
+            stepWidget: The CustomStepListWidget to refresh
+            stepAttr (str): The Maya attribute name ('preCustomStep' or 'postCustomStep')
+
+        Returns:
+            tuple: (number of groups refreshed, number of failures)
+        """
+        refreshed = 0
+        failed = 0
+        changed = False
+
+        # Iterate through all items to find referenced groups
+        for row in range(stepWidget.count()):
+            if not stepWidget.isGroupRow(row):
+                continue
+
+            group_widget = stepWidget.getGroupWidget(row)
+            if not group_widget or not group_widget.is_referenced():
+                continue
+
+            group_data = group_widget.get_group_data()
+            source_file = group_data.source_file
+            group_name = group_data.name
+
+            if not source_file:
+                failed += 1
+                pm.displayWarning(
+                    "Group '{}' has no source file path.".format(group_name)
+                )
+                continue
+
+            # Resolve the source file path
+            resolved_source = _resolve_source_path(source_file)
+
+            if not os.path.exists(resolved_source):
+                failed += 1
+                pm.displayWarning(
+                    "Source file not found for group '{}': {}".format(
+                        group_name, resolved_source
+                    )
+                )
+                continue
+
+            # Load fresh data from source file
+            try:
+                with open(resolved_source, "r") as f:
+                    config_dict = json.load(f)
+
+                # Find the matching group in the source file
+                source_group_data = None
+                for item_data in config_dict.get("items", []):
+                    if item_data.get("type") == "group":
+                        if item_data.get("name") == group_name:
+                            source_group_data = GroupData.from_dict(item_data)
+                            break
+
+                if not source_group_data:
+                    failed += 1
+                    pm.displayWarning(
+                        "Group '{}' not found in source file: {}".format(
+                            group_name, resolved_source
+                        )
+                    )
+                    continue
+
+                # Update the group's items with fresh data
+                group_data._items = source_group_data.items
+
+                # Update the group widget to reflect the new items
+                group_widget._refresh_step_widgets()
+
+                refreshed += 1
+                changed = True
+                pm.displayInfo(
+                    "Refreshed group '{}' from: {}".format(
+                        group_name, resolved_source
+                    )
+                )
+
+            except json.JSONDecodeError as e:
+                failed += 1
+                pm.displayWarning(
+                    "JSON error in source file {}: {}".format(resolved_source, str(e))
+                )
+            except Exception as e:
+                failed += 1
+                pm.displayWarning(
+                    "Error refreshing group '{}': {}".format(group_name, str(e))
+                )
+
+        # Update the Maya attribute if any changes were made
+        if changed:
+            self._updateStepListAttr(stepWidget, stepAttr)
+
+        return refreshed, failed
 
     def _customStepMenu(self, cs_listWidget, stepAttr, QPos, pre=True):
         """Right click context menu for custom step."""
