@@ -24,14 +24,526 @@ else:
     string_types = (str,)
 
 
+# ============================================================================
+# Custom Step Data Model
+# ============================================================================
+
+
+class CustomStepData(object):
+    """Data model for a custom step entry.
+
+    Handles parsing and serializing custom step data from/to the stored format.
+    The stored format is: "name | path" or "*name | path" for deactivated steps.
+
+    Attributes:
+        name (str): The display name of the custom step (without leading *)
+        path (str): The relative or absolute path to the .py file
+        active (bool): Whether the step is active (True) or deactivated (False)
+    """
+
+    def __init__(self, name="", path="", active=True):
+        """Initialize CustomStepData.
+
+        Args:
+            name (str): Display name of the step
+            path (str): Path to the .py file
+            active (bool): Whether step is active
+        """
+        self._name = name
+        self._path = path
+        self._active = active
+
+    @property
+    def name(self):
+        """str: The display name of the custom step."""
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    @property
+    def path(self):
+        """str: The path to the custom step file."""
+        return self._path
+
+    @path.setter
+    def path(self, value):
+        self._path = value
+
+    @property
+    def active(self):
+        """bool: Whether the step is active."""
+        return self._active
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+
+    @property
+    def is_shared(self):
+        """bool: Whether the step is a shared step (path contains '_shared')."""
+        return "_shared" in self._path
+
+    @classmethod
+    def from_string(cls, data_string):
+        """Create CustomStepData from stored string format.
+
+        Args:
+            data_string (str): String in format "name | path" or "*name | path"
+
+        Returns:
+            CustomStepData: Parsed data object
+        """
+        if not data_string or not data_string.strip():
+            return cls()
+
+        parts = data_string.split("|")
+        name_part = parts[0].strip() if parts else ""
+        path_part = parts[-1].strip() if len(parts) > 1 else ""
+
+        # Check for deactivated marker
+        active = True
+        if name_part.startswith("*"):
+            active = False
+            name_part = name_part[1:]
+
+        return cls(name=name_part, path=path_part, active=active)
+
+    def to_string(self):
+        """Convert to stored string format.
+
+        Returns:
+            str: String in format "name | path" or "*name | path"
+        """
+        prefix = "" if self._active else "*"
+        return "{}{} | {}".format(prefix, self._name, self._path)
+
+    def get_full_path(self):
+        """Get the full filesystem path to the custom step file.
+
+        Returns:
+            str: Full path to the file
+        """
+        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
+            return os.path.join(
+                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""),
+                self._path
+            )
+        return self._path
+
+    def file_exists(self):
+        """Check if the custom step file exists.
+
+        Returns:
+            bool: True if file exists
+        """
+        return os.path.exists(self.get_full_path())
+
+    def __repr__(self):
+        return "CustomStepData(name={!r}, path={!r}, active={!r})".format(
+            self._name, self._path, self._active
+        )
+
+
+# ============================================================================
+# Custom Step Item Widget
+# ============================================================================
+
+
+class CustomStepItemWidget(QtWidgets.QWidget):
+    """Widget for displaying a single custom step in the list.
+
+    This widget provides:
+    - Toggle button (left) to activate/deactivate the step
+    - Name label (center) showing the step name
+    - Edit button (right) to open the file in editor
+    - Run button (right) to execute the step
+
+    Signals:
+        toggled: Emitted when the active state changes
+        editRequested: Emitted when edit button is clicked
+        runRequested: Emitted when run button is clicked
+    """
+
+    # Signals
+    toggled = QtCore.Signal(bool)
+    editRequested = QtCore.Signal()
+    runRequested = QtCore.Signal()
+
+    # Style constants
+    SHARED_COLOR = "#2E7D32"  # Green for shared steps
+    INACTIVE_COLOR = "#8B4444"  # Pale red for deactivated steps
+    NORMAL_COLOR = "transparent"
+    ICON_SIZE = 16
+    BUTTON_SIZE = 20
+
+    def __init__(self, step_data=None, parent=None):
+        """Initialize the custom step item widget.
+
+        Args:
+            step_data (CustomStepData): The data for this step
+            parent (QWidget): Parent widget
+        """
+        super(CustomStepItemWidget, self).__init__(parent)
+        self._step_data = step_data or CustomStepData()
+        self._setup_ui()
+        self._update_appearance()
+
+    def _setup_ui(self):
+        """Set up the widget UI."""
+        # Main layout
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(4)
+
+        # Toggle button (left side)
+        self._toggle_btn = QtWidgets.QPushButton()
+        self._toggle_btn.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self._toggle_btn.setCheckable(True)
+        self._toggle_btn.setChecked(self._step_data.active)
+        self._toggle_btn.setToolTip("Toggle step active/inactive")
+        self._toggle_btn.setFlat(True)
+        self._toggle_btn.clicked.connect(self._on_toggle_clicked)
+        layout.addWidget(self._toggle_btn)
+
+        # Name label (center, expandable)
+        self._name_label = QtWidgets.QLabel(self._step_data.name)
+        self._name_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Preferred
+        )
+        layout.addWidget(self._name_label)
+
+        # Edit button
+        self._edit_btn = QtWidgets.QPushButton()
+        self._edit_btn.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self._edit_btn.setToolTip("Edit step file")
+        self._edit_btn.setFlat(True)
+        self._edit_btn.setIcon(pyqt.get_icon("mgear_edit", self.ICON_SIZE))
+        self._edit_btn.clicked.connect(self.editRequested.emit)
+        layout.addWidget(self._edit_btn)
+
+        # Run button
+        self._run_btn = QtWidgets.QPushButton()
+        self._run_btn.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self._run_btn.setToolTip("Run step")
+        self._run_btn.setFlat(True)
+        self._run_btn.setIcon(pyqt.get_icon("mgear_play", self.ICON_SIZE))
+        self._run_btn.clicked.connect(self.runRequested.emit)
+        layout.addWidget(self._run_btn)
+
+        self._update_toggle_icon()
+
+    def _update_toggle_icon(self):
+        """Update the toggle button icon based on state."""
+        if self._step_data.active:
+            icon = pyqt.get_icon("mgear_check-circle", self.ICON_SIZE)
+        else:
+            icon = pyqt.get_icon("mgear_x-circle", self.ICON_SIZE)
+        self._toggle_btn.setIcon(icon)
+
+    def _update_appearance(self):
+        """Update the widget appearance based on step state."""
+        # Update toggle icon
+        self._update_toggle_icon()
+        self._toggle_btn.setChecked(self._step_data.active)
+
+        # Update name label
+        self._name_label.setText(self._step_data.name)
+
+        # Update background color based on state
+        if not self._step_data.active:
+            bg_color = self.INACTIVE_COLOR
+        elif self._step_data.is_shared:
+            bg_color = self.SHARED_COLOR
+        else:
+            bg_color = self.NORMAL_COLOR
+
+        self.setStyleSheet(
+            "CustomStepItemWidget {{ background-color: {}; }}".format(bg_color)
+        )
+
+    def _on_toggle_clicked(self):
+        """Handle toggle button click."""
+        self._step_data.active = self._toggle_btn.isChecked()
+        self._update_appearance()
+        self.toggled.emit(self._step_data.active)
+
+    # Public API
+
+    def get_step_data(self):
+        """Get the step data.
+
+        Returns:
+            CustomStepData: The current step data
+        """
+        return self._step_data
+
+    def set_step_data(self, step_data):
+        """Set the step data and update appearance.
+
+        Args:
+            step_data (CustomStepData): New step data
+        """
+        self._step_data = step_data
+        self._update_appearance()
+
+    def set_active(self, active):
+        """Set the active state.
+
+        Args:
+            active (bool): New active state
+        """
+        self._step_data.active = active
+        self._update_appearance()
+
+    def is_active(self):
+        """Check if step is active.
+
+        Returns:
+            bool: True if active
+        """
+        return self._step_data.active
+
+    def get_name(self):
+        """Get the step name.
+
+        Returns:
+            str: Step name
+        """
+        return self._step_data.name
+
+    def get_path(self):
+        """Get the step path.
+
+        Returns:
+            str: Step path
+        """
+        return self._step_data.path
+
+    def get_full_path(self):
+        """Get the full filesystem path.
+
+        Returns:
+            str: Full path to the file
+        """
+        return self._step_data.get_full_path()
+
+    def to_string(self):
+        """Convert to stored string format.
+
+        Returns:
+            str: String in format "name | path" or "*name | path"
+        """
+        return self._step_data.to_string()
+
+    def set_highlighted(self, highlighted):
+        """Set whether this item should be highlighted (for search).
+
+        Args:
+            highlighted (bool): Whether to highlight
+        """
+        if highlighted:
+            self._name_label.setStyleSheet("background-color: #808080;")
+        else:
+            self._name_label.setStyleSheet("")
+
+
 class CustomStepListWidget(QtWidgets.QListWidget):
-    """QListWidget that accepts .py file drops from external sources."""
+    """QListWidget that displays custom step widgets with drag-drop support.
+
+    This widget manages CustomStepItemWidget instances and provides:
+    - External file drops (.py files)
+    - Internal drag-drop reordering
+    - Item widget management
+
+    Signals:
+        filesDropped: Emitted when .py files are dropped from external sources
+        stepToggled: Emitted when a step's active state changes (row, active)
+        stepEditRequested: Emitted when edit is requested for a step (row)
+        stepRunRequested: Emitted when run is requested for a step (row)
+        orderChanged: Emitted when items are reordered
+    """
 
     filesDropped = QtCore.Signal(list)
+    stepToggled = QtCore.Signal(int, bool)
+    stepEditRequested = QtCore.Signal(int)
+    stepRunRequested = QtCore.Signal(int)
+    orderChanged = QtCore.Signal()
 
     def __init__(self, parent=None):
         super(CustomStepListWidget, self).__init__(parent)
         self.setAcceptDrops(True)
+        self.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
+        self.setDefaultDropAction(QtCore.Qt.MoveAction)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.setAlternatingRowColors(False)
+
+        # Track widgets for proper cleanup
+        self._item_widgets = {}
+
+    def addStepItem(self, step_data):
+        """Add a new custom step item to the list.
+
+        Args:
+            step_data (CustomStepData or str): Step data or string to parse
+
+        Returns:
+            int: The row index of the added item
+        """
+        if isinstance(step_data, string_types):
+            step_data = CustomStepData.from_string(step_data)
+
+        # Skip empty entries
+        if not step_data.name and not step_data.path:
+            return -1
+
+        # Create list item
+        item = QtWidgets.QListWidgetItem(self)
+        item.setSizeHint(QtCore.QSize(0, 28))
+
+        # Store the data string in the item for compatibility
+        item.setData(QtCore.Qt.UserRole, step_data.to_string())
+
+        # Create and set the widget
+        widget = CustomStepItemWidget(step_data)
+        self.setItemWidget(item, widget)
+
+        # Track the widget
+        self._item_widgets[id(item)] = widget
+
+        # Connect signals
+        widget.toggled.connect(
+            lambda active, it=item: self._on_step_toggled(it, active)
+        )
+        widget.editRequested.connect(
+            lambda it=item: self._on_edit_requested(it)
+        )
+        widget.runRequested.connect(
+            lambda it=item: self._on_run_requested(it)
+        )
+
+        return self.row(item)
+
+    def _on_step_toggled(self, item, active):
+        """Handle step toggle event."""
+        widget = self.itemWidget(item)
+        if widget:
+            # Update the stored data
+            item.setData(QtCore.Qt.UserRole, widget.to_string())
+            self.stepToggled.emit(self.row(item), active)
+
+    def _on_edit_requested(self, item):
+        """Handle edit request event."""
+        self.stepEditRequested.emit(self.row(item))
+
+    def _on_run_requested(self, item):
+        """Handle run request event."""
+        self.stepRunRequested.emit(self.row(item))
+
+    def getStepWidget(self, row):
+        """Get the CustomStepItemWidget for a given row.
+
+        Args:
+            row (int): Row index
+
+        Returns:
+            CustomStepItemWidget or None: The widget at the row
+        """
+        item = self.item(row)
+        if item:
+            return self.itemWidget(item)
+        return None
+
+    def getStepData(self, row):
+        """Get the CustomStepData for a given row.
+
+        Args:
+            row (int): Row index
+
+        Returns:
+            CustomStepData or None: The step data at the row
+        """
+        widget = self.getStepWidget(row)
+        if widget:
+            return widget.get_step_data()
+        return None
+
+    def getAllStepData(self):
+        """Get all step data as a list.
+
+        Returns:
+            list: List of CustomStepData objects
+        """
+        result = []
+        for i in range(self.count()):
+            data = self.getStepData(i)
+            if data:
+                result.append(data)
+        return result
+
+    def getStepStrings(self):
+        """Get all step data as strings (for storage).
+
+        Returns:
+            list: List of step strings in storage format
+        """
+        result = []
+        for i in range(self.count()):
+            widget = self.getStepWidget(i)
+            if widget:
+                result.append(widget.to_string())
+        return result
+
+    def setStepActive(self, row, active):
+        """Set the active state of a step.
+
+        Args:
+            row (int): Row index
+            active (bool): New active state
+        """
+        widget = self.getStepWidget(row)
+        if widget:
+            widget.set_active(active)
+            item = self.item(row)
+            if item:
+                item.setData(QtCore.Qt.UserRole, widget.to_string())
+
+    def toggleStepActive(self, row):
+        """Toggle the active state of a step.
+
+        Args:
+            row (int): Row index
+        """
+        widget = self.getStepWidget(row)
+        if widget:
+            widget.set_active(not widget.is_active())
+            item = self.item(row)
+            if item:
+                item.setData(QtCore.Qt.UserRole, widget.to_string())
+
+    def highlightSearch(self, search_text):
+        """Highlight items matching the search text.
+
+        Args:
+            search_text (str): Text to search for
+        """
+        search_lower = search_text.lower() if search_text else ""
+        for i in range(self.count()):
+            widget = self.getStepWidget(i)
+            if widget:
+                if search_lower and search_lower in widget.get_name().lower():
+                    widget.set_highlighted(True)
+                else:
+                    widget.set_highlighted(False)
+
+    def clear(self):
+        """Clear all items and widgets."""
+        self._item_widgets.clear()
+        super(CustomStepListWidget, self).clear()
+
+    # Drag and drop handling
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -62,8 +574,67 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 event.acceptProposedAction()
                 self.filesDropped.emit(py_files)
                 return
-        # Fall back to default behavior for internal moves
-        super(CustomStepListWidget, self).dropEvent(event)
+
+        # For internal moves, we need to handle widget reassignment
+        if event.source() == self:
+            # Let the base class handle the move
+            super(CustomStepListWidget, self).dropEvent(event)
+
+            # Reassign widgets after move (they get detached during move)
+            self._reassign_widgets()
+            self.orderChanged.emit()
+        else:
+            super(CustomStepListWidget, self).dropEvent(event)
+
+    def _reassign_widgets(self):
+        """Reassign item widgets after a drag-drop reorder.
+
+        When items are moved via drag-drop, the widgets get detached.
+        This method recreates widgets from the stored data.
+        """
+        for i in range(self.count()):
+            item = self.item(i)
+            if item:
+                # Check if widget is missing or detached
+                current_widget = self.itemWidget(item)
+                if current_widget is None:
+                    # Get stored data and recreate widget
+                    data_string = item.data(QtCore.Qt.UserRole)
+                    if data_string:
+                        step_data = CustomStepData.from_string(data_string)
+                        widget = CustomStepItemWidget(step_data)
+                        self.setItemWidget(item, widget)
+
+                        # Reconnect signals
+                        widget.toggled.connect(
+                            lambda active, it=item: self._on_step_toggled(
+                                it, active
+                            )
+                        )
+                        widget.editRequested.connect(
+                            lambda it=item: self._on_edit_requested(it)
+                        )
+                        widget.runRequested.connect(
+                            lambda it=item: self._on_run_requested(it)
+                        )
+
+    # Legacy compatibility methods
+
+    def addItem(self, text):
+        """Add item using legacy text format (for backwards compatibility).
+
+        Args:
+            text (str): Step string in format "name | path"
+        """
+        self.addStepItem(text)
+
+    def findItems(self, text, flags):
+        """Find items containing text (legacy compatibility).
+
+        Note: This returns QListWidgetItems, use getStepStrings() for
+        getting the actual step strings.
+        """
+        return super(CustomStepListWidget, self).findItems(text, flags)
 
 
 class Ui_Form(object):
@@ -109,15 +680,6 @@ class Ui_Form(object):
         self.preCollapsible.addWidget(self.preSearch_lineEdit)
 
         self.preCustomStep_listWidget = CustomStepListWidget()
-        self.preCustomStep_listWidget.setDragDropOverwriteMode(True)
-        self.preCustomStep_listWidget.setDragDropMode(
-            QtWidgets.QAbstractItemView.InternalMove
-        )
-        self.preCustomStep_listWidget.setDefaultDropAction(QtCore.Qt.MoveAction)
-        self.preCustomStep_listWidget.setAlternatingRowColors(True)
-        self.preCustomStep_listWidget.setSelectionMode(
-            QtWidgets.QAbstractItemView.ExtendedSelection
-        )
         self.preCollapsible.addWidget(self.preCustomStep_listWidget)
 
         # =============================================
@@ -136,15 +698,6 @@ class Ui_Form(object):
         self.postCollapsible.addWidget(self.postSearch_lineEdit)
 
         self.postCustomStep_listWidget = CustomStepListWidget()
-        self.postCustomStep_listWidget.setDragDropOverwriteMode(True)
-        self.postCustomStep_listWidget.setDragDropMode(
-            QtWidgets.QAbstractItemView.InternalMove
-        )
-        self.postCustomStep_listWidget.setDefaultDropAction(QtCore.Qt.MoveAction)
-        self.postCustomStep_listWidget.setAlternatingRowColors(True)
-        self.postCustomStep_listWidget.setSelectionMode(
-            QtWidgets.QAbstractItemView.ExtendedSelection
-        )
         self.postCollapsible.addWidget(self.postCustomStep_listWidget)
 
         # =============================================
@@ -235,16 +788,8 @@ class CustomStepMixin(object):
     This mixin expects the host class to have:
         - self.root: The Maya node with custom step attributes
         - self.customStepTab: A CustomStepTab instance
-        - Color brushes: greenBrush, redBrush, whiteBrush, whiteDownBrush, orangeBrush
         - Helper methods: populateCheck, updateCheck, updateListAttr
     """
-
-    # Color brushes (should be defined in host class, but provide defaults)
-    greenBrush = QtGui.QColor(0, 160, 0)
-    redBrush = QtGui.QColor(180, 0, 0)
-    whiteBrush = QtGui.QColor(255, 255, 255)
-    whiteDownBrush = QtGui.QColor(160, 160, 160)
-    orangeBrush = QtGui.QColor(240, 160, 0)
 
     def setup_custom_step_hover_info(self):
         """Set up hover info for custom step list widgets."""
@@ -264,13 +809,16 @@ class CustomStepMixin(object):
 
     def hover_info_item_entered(self, view, index):
         if index.isValid():
-            info_data = self.format_info(index.data())
-            QtWidgets.QToolTip.showText(
-                QtGui.QCursor.pos(),
-                info_data,
-                view.viewport(),
-                view.visualRect(index),
-            )
+            # Get data from UserRole (the step string)
+            data = index.data(QtCore.Qt.UserRole)
+            if data:
+                info_data = self.format_info(data)
+                QtWidgets.QToolTip.showText(
+                    QtGui.QCursor.pos(),
+                    info_data,
+                    view.viewport(),
+                    view.visualRect(index),
+                )
 
     def populate_custom_step_controls(self):
         """Populate custom step tab controls from Maya attributes."""
@@ -278,15 +826,13 @@ class CustomStepMixin(object):
             self.customStepTab.preCustomStep_checkBox, "doPreCustomStep"
         )
         for item in self.root.attr("preCustomStep").get().split(","):
-            self.customStepTab.preCustomStep_listWidget.addItem(item)
-        self.refreshStatusColor(self.customStepTab.preCustomStep_listWidget)
+            self.customStepTab.preCustomStep_listWidget.addStepItem(item)
 
         self.populateCheck(
             self.customStepTab.postCustomStep_checkBox, "doPostCustomStep"
         )
         for item in self.root.attr("postCustomStep").get().split(","):
-            self.customStepTab.postCustomStep_listWidget.addItem(item)
-        self.refreshStatusColor(self.customStepTab.postCustomStep_listWidget)
+            self.customStepTab.postCustomStep_listWidget.addStepItem(item)
 
     def create_custom_step_connections(self):
         """Create signal connections for custom step tab."""
@@ -320,9 +866,39 @@ class CustomStepMixin(object):
             partial(self.importCustomStep, False)
         )
 
-        # Event filters for drag/drop
+        # Event filters for drag/drop order changes
         csTap.preCustomStep_listWidget.installEventFilter(self)
         csTap.postCustomStep_listWidget.installEventFilter(self)
+
+        # Order changed signals (for drag-drop reorder)
+        csTap.preCustomStep_listWidget.orderChanged.connect(
+            partial(self._onStepOrderChanged, pre=True)
+        )
+        csTap.postCustomStep_listWidget.orderChanged.connect(
+            partial(self._onStepOrderChanged, pre=False)
+        )
+
+        # Step toggled signals (from widget toggle buttons)
+        csTap.preCustomStep_listWidget.stepToggled.connect(
+            partial(self._onStepToggled, pre=True)
+        )
+        csTap.postCustomStep_listWidget.stepToggled.connect(
+            partial(self._onStepToggled, pre=False)
+        )
+
+        # Step edit/run signals (from widget buttons)
+        csTap.preCustomStep_listWidget.stepEditRequested.connect(
+            partial(self._onStepEditRequested, pre=True)
+        )
+        csTap.postCustomStep_listWidget.stepEditRequested.connect(
+            partial(self._onStepEditRequested, pre=False)
+        )
+        csTap.preCustomStep_listWidget.stepRunRequested.connect(
+            partial(self._onStepRunRequested, pre=True)
+        )
+        csTap.postCustomStep_listWidget.stepRunRequested.connect(
+            partial(self._onStepRunRequested, pre=False)
+        )
 
         # Right click context menus
         csTap.preCustomStep_listWidget.setContextMenuPolicy(
@@ -358,38 +934,94 @@ class CustomStepMixin(object):
             partial(self.onFilesDropped, pre=False)
         )
 
+    def _onStepOrderChanged(self, pre=True):
+        """Handle step order change from drag-drop."""
+        if pre:
+            self._updateStepListAttr(
+                self.customStepTab.preCustomStep_listWidget, "preCustomStep"
+            )
+        else:
+            self._updateStepListAttr(
+                self.customStepTab.postCustomStep_listWidget, "postCustomStep"
+            )
+
+    def _onStepToggled(self, _row, _active, pre=True):
+        """Handle step toggle from widget button."""
+        if pre:
+            self._updateStepListAttr(
+                self.customStepTab.preCustomStep_listWidget, "preCustomStep"
+            )
+        else:
+            self._updateStepListAttr(
+                self.customStepTab.postCustomStep_listWidget, "postCustomStep"
+            )
+
+    def _onStepEditRequested(self, row, pre=True):
+        """Handle edit request from widget button."""
+        if pre:
+            stepWidget = self.customStepTab.preCustomStep_listWidget
+        else:
+            stepWidget = self.customStepTab.postCustomStep_listWidget
+
+        step_data = stepWidget.getStepData(row)
+        if step_data:
+            fullpath = step_data.get_full_path()
+            if fullpath:
+                self._editFile(fullpath)
+
+    def _onStepRunRequested(self, row, pre=True):
+        """Handle run request from widget button."""
+        if pre:
+            stepWidget = self.customStepTab.preCustomStep_listWidget
+        else:
+            stepWidget = self.customStepTab.postCustomStep_listWidget
+
+        step_data = stepWidget.getStepData(row)
+        if step_data:
+            self.runStep(step_data.path, customStepDic={})
+
+    def _updateStepListAttr(self, stepWidget, stepAttr):
+        """Update Maya attribute from step widget contents."""
+        step_strings = stepWidget.getStepStrings()
+        new_value = ",".join(step_strings)
+        self.root.attr(stepAttr).set(new_value)
+
     def updateInfoPanel(self, item, pre=True):
         """Update the info panel with details about the clicked custom step."""
         if not item:
             return
 
-        data = item.text()
         csTap = self.customStepTab
 
-        # Parse step name
-        data_parts = data.split("|")
-        cs_name = data_parts[0].strip()
-        if cs_name.startswith("*"):
-            cs_status = "Deactivated"
-            cs_name = cs_name[1:]
+        # Get step data from the item's UserRole or widget
+        if pre:
+            stepWidget = csTap.preCustomStep_listWidget
         else:
-            cs_status = "Active"
+            stepWidget = csTap.postCustomStep_listWidget
 
-        # Get full path
-        cs_fullpath = self.get_cs_file_fullpath(data)
+        row = stepWidget.row(item)
+        step_data = stepWidget.getStepData(row)
+
+        if not step_data:
+            return
+
+        # Get step info from data model
+        cs_name = step_data.name
+        cs_status = "Active" if step_data.active else "Deactivated"
+        cs_fullpath = step_data.get_full_path()
 
         # Determine step type (Pre or Post)
         cs_type = "Pre Custom Step" if pre else "Post Custom Step"
 
         # Check shared status
-        if "_shared" in data:
+        if step_data.is_shared:
             cs_shared_owner = self.shared_owner(cs_fullpath)
             cs_shared = "Yes ({})".format(cs_shared_owner)
         else:
             cs_shared = "No (Local)"
 
         # Check file existence and get modification time
-        if os.path.exists(cs_fullpath):
+        if step_data.file_exists():
             cs_exists = "Yes"
             try:
                 mtime = os.path.getmtime(cs_fullpath)
@@ -427,10 +1059,10 @@ class CustomStepMixin(object):
         """Handle custom step list widget events. Call from eventFilter."""
         if event.type() == QtCore.QEvent.ChildRemoved:
             if sender == self.customStepTab.preCustomStep_listWidget:
-                self.updateListAttr(sender, "preCustomStep")
+                self._updateStepListAttr(sender, "preCustomStep")
                 return True
             elif sender == self.customStepTab.postCustomStep_listWidget:
-                self.updateListAttr(sender, "postCustomStep")
+                self._updateStepListAttr(sender, "postCustomStep")
                 return True
         return False
 
@@ -457,17 +1089,20 @@ class CustomStepMixin(object):
 
     def editFile(self, widgetList):
         """Edit selected custom step files."""
-        for cs in widgetList.selectedItems():
+        for item in widgetList.selectedItems():
             try:
-                cs_data = cs.text()
-                fullpath = self.get_cs_file_fullpath(cs_data)
-
-                if fullpath:
-                    self._editFile(fullpath)
+                row = widgetList.row(item)
+                step_data = widgetList.getStepData(row)
+                if step_data:
+                    fullpath = step_data.get_full_path()
+                    if fullpath:
+                        self._editFile(fullpath)
+                    else:
+                        pm.displayWarning("Please select one item from the list")
                 else:
                     pm.displayWarning("Please select one item from the list")
             except Exception:
-                pm.displayError("The step can't be find or does't exists")
+                pm.displayError("The step can't be found or doesn't exist")
 
     def format_info(self, data):
         """Format custom step info for tooltip display."""
@@ -608,7 +1243,10 @@ class CustomStepMixin(object):
         """Run selected custom steps manually."""
         selItems = widgetList.selectedItems()
         for item in selItems:
-            self.runStep(item.text().split("|")[-1][1:], customStepDic={})
+            row = widgetList.row(item)
+            step_data = widgetList.getStepData(row)
+            if step_data:
+                self.runStep(step_data.path, customStepDic={})
 
     def _processCustomStepPath(self, filePath):
         """Process a file path for custom step, making it relative if needed.
@@ -663,21 +1301,17 @@ class CustomStepMixin(object):
 
         Args:
             filePaths: List of file paths to add
-            stepWidget: The QListWidget to add items to
+            stepWidget: The CustomStepListWidget to add items to
             stepAttr: The Maya attribute name to update
         """
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
-
         for filePath in filePaths:
             fileName, processedPath = self._processCustomStepPath(filePath)
-            stepWidget.addItem(fileName + " | " + processedPath)
+            step_data = CustomStepData(
+                name=fileName, path=processedPath, active=True
+            )
+            stepWidget.addStepItem(step_data)
 
-        self.updateListAttr(stepWidget, stepAttr)
-        self.refreshStatusColor(stepWidget)
+        self._updateStepListAttr(stepWidget, stepAttr)
 
     def addCustomStep(self, pre=True, *args):
         """Add a new custom step.
@@ -795,23 +1429,13 @@ class CustomShifterStep(cstp.customShifterMainStep):
         f.write(rawString + "\n")
         f.close()
 
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
-
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            filePath = os.path.abspath(filePath)
-            baseReplace = os.path.abspath(
-                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            )
-            filePath = filePath.replace(baseReplace, "")[1:]
-
-        fileName = os.path.split(filePath)[1].split(".")[0]
-        stepWidget.addItem(fileName + " | " + filePath)
-        self.updateListAttr(stepWidget, stepAttr)
-        self.refreshStatusColor(stepWidget)
+        # Process the path and add to widget
+        fileName, processedPath = self._processCustomStepPath(filePath)
+        step_data = CustomStepData(
+            name=fileName, path=processedPath, active=True
+        )
+        stepWidget.addStepItem(step_data)
+        self._updateStepListAttr(stepWidget, stepAttr)
 
     def duplicateCustomStep(self, pre=True, *args):
         """Duplicate the selected custom step.
@@ -831,10 +1455,18 @@ class CustomShifterStep(cstp.customShifterMainStep):
         else:
             startDir = self.root.attr(stepAttr).get()
 
+        # Get source path from selected item
+        sourcePath = None
         if stepWidget.selectedItems():
-            sourcePath = (
-                stepWidget.selectedItems()[0].text().split("|")[-1][1:]
-            )
+            item = stepWidget.selectedItems()[0]
+            row = stepWidget.row(item)
+            step_data = stepWidget.getStepData(row)
+            if step_data:
+                sourcePath = step_data.path
+
+        if not sourcePath:
+            pm.displayWarning("Please select a step to duplicate")
+            return
 
         filePath = pm.fileDialog2(
             fileMode=0,
@@ -847,27 +1479,20 @@ class CustomShifterStep(cstp.customShifterMainStep):
         if not isinstance(filePath, string_types):
             filePath = filePath[0]
 
+        # Get full source path and copy
         if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            sourcePath = os.path.join(startDir, sourcePath)
-        shutil.copy(sourcePath, filePath)
+            fullSourcePath = os.path.join(startDir, sourcePath)
+        else:
+            fullSourcePath = sourcePath
+        shutil.copy(fullSourcePath, filePath)
 
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
-
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            filePath = os.path.abspath(filePath)
-            baseReplace = os.path.abspath(
-                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            )
-            filePath = filePath.replace(baseReplace, "")[1:]
-
-        fileName = os.path.split(filePath)[1].split(".")[0]
-        stepWidget.addItem(fileName + " | " + filePath)
-        self.updateListAttr(stepWidget, stepAttr)
-        self.refreshStatusColor(stepWidget)
+        # Process the path and add to widget
+        fileName, processedPath = self._processCustomStepPath(filePath)
+        step_data = CustomStepData(
+            name=fileName, path=processedPath, active=True
+        )
+        stepWidget.addStepItem(step_data)
+        self._updateStepListAttr(stepWidget, stepAttr)
 
     def exportCustomStep(self, pre=True, *args):
         """Export custom steps to a JSON file.
@@ -880,28 +1505,24 @@ class CustomShifterStep(cstp.customShifterMainStep):
         else:
             stepWidget = self.customStepTab.postCustomStep_listWidget
 
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
+        # Get all step data
+        all_step_data = stepWidget.getAllStepData()
+        if not all_step_data:
+            pm.displayWarning("No custom steps to export.")
+            return
 
+        # Build list of full paths
         if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
             startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
             itemsList = [
-                os.path.join(startDir, i.text().split("|")[-1][1:])
-                for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
+                os.path.join(startDir, sd.path) for sd in all_step_data
             ]
         else:
-            itemsList = [
-                i.text().split("|")[-1][1:]
-                for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-            ]
+            itemsList = [sd.path for sd in all_step_data]
             if itemsList:
                 startDir = os.path.split(itemsList[-1])[0]
             else:
-                pm.displayWarning("No custom steps to export.")
-                return
+                startDir = pm.workspace(q=True, rootDirectory=True)
 
         stepsDict = self.get_steps_dict(itemsList)
         data_string = json.dumps(stepsDict, indent=4, sort_keys=True)
@@ -982,23 +1603,14 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
         if option in ["Only Path", "Unpack"]:
             for item in stepsList:
-                itemsList = [
-                    i.text()
-                    for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-                ]
-                if itemsList and not itemsList[0]:
-                    stepWidget.takeItem(0)
+                # Process the path and add to widget
+                fileName, processedPath = self._processCustomStepPath(item)
+                step_data = CustomStepData(
+                    name=fileName, path=processedPath, active=True
+                )
+                stepWidget.addStepItem(step_data)
 
-                if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                    item = os.path.abspath(item)
-                    baseReplace = os.path.abspath(
-                        os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-                    )
-                    item = item.replace(baseReplace, "")[1:]
-
-                fileName = os.path.split(item)[1].split(".")[0]
-                stepWidget.addItem(fileName + " | " + item)
-                self.updateListAttr(stepWidget, stepAttr)
+            self._updateStepListAttr(stepWidget, stepAttr)
 
     def _customStepMenu(self, cs_listWidget, stepAttr, QPos, pre=True):
         """Right click context menu for custom step."""
@@ -1114,15 +1726,10 @@ class CustomShifterStep(cstp.customShifterMainStep):
         """Toggle the active status of selected custom steps."""
         items = cs_listWidget.selectedItems()
         for item in items:
-            if item.text().startswith("*"):
-                item.setText(item.text()[1:])
-                item.setForeground(self.whiteDownBrush)
-            else:
-                item.setText("*" + item.text())
-                item.setForeground(self.redBrush)
+            row = cs_listWidget.row(item)
+            cs_listWidget.toggleStepActive(row)
 
-        self.updateListAttr(cs_listWidget, stepAttr)
-        self.refreshStatusColor(cs_listWidget)
+        self._updateStepListAttr(cs_listWidget, stepAttr)
 
     def setStatusCustomStep(
         self, cs_listWidget, stepAttr, status=True, selected=True
@@ -1137,60 +1744,26 @@ class CustomShifterStep(cstp.customShifterMainStep):
         """
         if selected:
             items = cs_listWidget.selectedItems()
+            for item in items:
+                row = cs_listWidget.row(item)
+                cs_listWidget.setStepActive(row, status)
         else:
-            items = self.getAllItems(cs_listWidget)
+            # All items
+            for i in range(cs_listWidget.count()):
+                cs_listWidget.setStepActive(i, status)
 
-        for item in items:
-            off = item.text().startswith("*")
-            if status and off:
-                item.setText(item.text()[1:])
-            elif not status and not off:
-                item.setText("*" + item.text())
-            self.setStatusColor(item)
-
-        self.updateListAttr(cs_listWidget, stepAttr)
-        self.refreshStatusColor(cs_listWidget)
-
-    def getAllItems(self, cs_listWidget):
-        """Get all items from a list widget."""
-        return [cs_listWidget.item(i) for i in range(cs_listWidget.count())]
-
-    def setStatusColor(self, item):
-        """Set the color of a custom step item based on its status."""
-        if item.text().startswith("*"):
-            item.setForeground(self.redBrush)
-        elif "_shared" in item.text():
-            item.setForeground(self.greenBrush)
-        else:
-            item.setForeground(self.whiteDownBrush)
-
-    def refreshStatusColor(self, cs_listWidget):
-        """Refresh the colors of all items in a custom step list."""
-        items = self.getAllItems(cs_listWidget)
-        for i in items:
-            self.setStatusColor(i)
-
-    def _highlightSearch(self, cs_listWidget, searchText):
-        """Highlight items matching search text."""
-        items = self.getAllItems(cs_listWidget)
-        for i in items:
-            if searchText and searchText.lower() in i.text().lower():
-                i.setBackground(QtGui.QColor(128, 128, 128, 255))
-            else:
-                i.setBackground(QtGui.QColor(255, 255, 255, 0))
+        self._updateStepListAttr(cs_listWidget, stepAttr)
 
     def preHighlightSearch(self):
         """Highlight pre custom step items matching search."""
         searchText = self.customStepTab.preSearch_lineEdit.text()
-        self._highlightSearch(
-            self.customStepTab.preCustomStep_listWidget, searchText
-        )
+        self.customStepTab.preCustomStep_listWidget.highlightSearch(searchText)
 
     def postHighlightSearch(self):
         """Highlight post custom step items matching search."""
         searchText = self.customStepTab.postSearch_lineEdit.text()
-        self._highlightSearch(
-            self.customStepTab.postCustomStep_listWidget, searchText
+        self.customStepTab.postCustomStep_listWidget.highlightSearch(
+            searchText
         )
 
 
