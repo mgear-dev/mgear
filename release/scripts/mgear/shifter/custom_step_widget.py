@@ -11,6 +11,7 @@ import traceback
 from functools import partial
 
 import mgear.pymaya as pm
+from mgear.core import pyqt
 from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
 
 MGEAR_SHIFTER_CUSTOMSTEP_KEY = "MGEAR_SHIFTER_CUSTOMSTEP_PATH"
@@ -36,12 +37,16 @@ class Ui_Form(object):
         # Pre Custom Step menu
         self.preMenu = self.menuBar.addMenu("Pre")
         self.preExport_action = self.preMenu.addAction("Export")
+        self.preExport_action.setIcon(pyqt.get_icon("mgear_log-out"))
         self.preImport_action = self.preMenu.addAction("Import")
+        self.preImport_action.setIcon(pyqt.get_icon("mgear_log-in"))
 
         # Post Custom Step menu
         self.postMenu = self.menuBar.addMenu("Post")
         self.postExport_action = self.postMenu.addAction("Export")
+        self.postExport_action.setIcon(pyqt.get_icon("mgear_log-out"))
         self.postImport_action = self.postMenu.addAction("Import")
+        self.postImport_action.setIcon(pyqt.get_icon("mgear_log-in"))
 
         self.mainLayout.setMenuBar(self.menuBar)
 
@@ -743,7 +748,9 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
         # Add/New actions (always available)
         add_action = self.csMenu.addAction("Add")
+        add_action.setIcon(pyqt.get_icon("mgear_folder-plus"))
         new_action = self.csMenu.addAction("New")
+        new_action.setIcon(pyqt.get_icon("mgear_file-plus"))
 
         self.csMenu.addSeparator()
 
@@ -751,33 +758,42 @@ class CustomShifterStep(cstp.customShifterMainStep):
         hasSelection = len(cs_listWidget.selectedItems()) > 0
 
         run_action = self.csMenu.addAction("Run Selected")
+        run_action.setIcon(pyqt.get_icon("mgear_play"))
         run_action.setEnabled(hasSelection)
 
         edit_action = self.csMenu.addAction("Edit")
+        edit_action.setIcon(pyqt.get_icon("mgear_edit"))
         edit_action.setEnabled(hasSelection)
 
         duplicate_action = self.csMenu.addAction("Duplicate")
+        duplicate_action.setIcon(pyqt.get_icon("mgear_copy"))
         duplicate_action.setEnabled(hasSelection)
 
         remove_action = self.csMenu.addAction("Remove")
+        remove_action.setIcon(pyqt.get_icon("mgear_trash-2"))
         remove_action.setEnabled(hasSelection)
 
         self.csMenu.addSeparator()
 
         # Toggle status actions
         toggle_action = self.csMenu.addAction("Toggle Status")
+        toggle_action.setIcon(pyqt.get_icon("mgear_refresh-cw"))
         toggle_action.setEnabled(hasSelection)
 
         off_selected_action = self.csMenu.addAction("Turn OFF Selected")
+        off_selected_action.setIcon(pyqt.get_icon("mgear_toggle-left"))
         off_selected_action.setEnabled(hasSelection)
 
         on_selected_action = self.csMenu.addAction("Turn ON Selected")
+        on_selected_action.setIcon(pyqt.get_icon("mgear_toggle-right"))
         on_selected_action.setEnabled(hasSelection)
 
         self.csMenu.addSeparator()
 
         off_all_action = self.csMenu.addAction("Turn OFF All")
+        off_all_action.setIcon(pyqt.get_icon("mgear_x-circle"))
         on_all_action = self.csMenu.addAction("Turn ON All")
+        on_all_action.setIcon(pyqt.get_icon("mgear_check-circle"))
 
         # Connect actions
         add_action.triggered.connect(partial(self.addCustomStep, pre))
