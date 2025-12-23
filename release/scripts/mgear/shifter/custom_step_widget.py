@@ -27,39 +27,39 @@ class Ui_Form(object):
     def setupUi(self, Form):
         Form.resize(312, 655)
 
-        self.gridLayout = QtWidgets.QGridLayout(Form)
+        self.mainLayout = QtWidgets.QVBoxLayout(Form)
+        self.mainLayout.setContentsMargins(0, 0, 0, 0)
+
+        # Menu bar
+        self.menuBar = QtWidgets.QMenuBar(Form)
+
+        # Pre Custom Step menu
+        self.preMenu = self.menuBar.addMenu("Pre")
+        self.preExport_action = self.preMenu.addAction("Export")
+        self.preImport_action = self.preMenu.addAction("Import")
+
+        # Post Custom Step menu
+        self.postMenu = self.menuBar.addMenu("Post")
+        self.postExport_action = self.postMenu.addAction("Export")
+        self.postImport_action = self.postMenu.addAction("Import")
+
+        self.mainLayout.setMenuBar(self.menuBar)
 
         # Main group box
         self.groupBox = QtWidgets.QGroupBox("Custom Steps", Form)
-        self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
+        self.mainLayout.addWidget(self.groupBox)
 
-        self.gridLayout_2 = QtWidgets.QGridLayout(self.groupBox)
-        self.verticalLayout_3 = QtWidgets.QVBoxLayout()
-        self.gridLayout_2.addLayout(self.verticalLayout_3, 0, 0, 1, 1)
+        self.groupBoxLayout = QtWidgets.QVBoxLayout(self.groupBox)
 
         # Pre Custom Step section
-        self.verticalLayout = QtWidgets.QVBoxLayout()
-        self.verticalLayout_3.addLayout(self.verticalLayout)
-
         self.preCustomStep_checkBox = QtWidgets.QCheckBox(
             "Pre Custom Step", self.groupBox
         )
-        self.verticalLayout.addWidget(self.preCustomStep_checkBox)
+        self.groupBoxLayout.addWidget(self.preCustomStep_checkBox)
 
         self.preSearch_lineEdit = QtWidgets.QLineEdit(self.groupBox)
-        self.preSearch_lineEdit.setSizePolicy(
-            QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed
-        )
-        self.verticalLayout.addWidget(self.preSearch_lineEdit)
-
-        self.preCustomStep_horizontalLayout = QtWidgets.QHBoxLayout()
-        self.verticalLayout.addLayout(self.preCustomStep_horizontalLayout)
-
-        # Pre list widget
-        self.preCustomStep_verticalLayout_1 = QtWidgets.QVBoxLayout()
-        self.preCustomStep_horizontalLayout.addLayout(
-            self.preCustomStep_verticalLayout_1
-        )
+        self.preSearch_lineEdit.setPlaceholderText("Search...")
+        self.groupBoxLayout.addWidget(self.preSearch_lineEdit)
 
         self.preCustomStep_listWidget = QtWidgets.QListWidget(self.groupBox)
         self.preCustomStep_listWidget.setDragDropOverwriteMode(True)
@@ -71,104 +71,24 @@ class Ui_Form(object):
         self.preCustomStep_listWidget.setSelectionMode(
             QtWidgets.QAbstractItemView.ExtendedSelection
         )
-        self.preCustomStep_verticalLayout_1.addWidget(
-            self.preCustomStep_listWidget
-        )
-
-        # Pre buttons
-        self.preCustomStep_verticalLayout_2 = QtWidgets.QVBoxLayout()
-        self.preCustomStep_horizontalLayout.addLayout(
-            self.preCustomStep_verticalLayout_2
-        )
-
-        self.preCustomStepAdd_pushButton = QtWidgets.QPushButton(
-            "Add", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepAdd_pushButton
-        )
-
-        self.preCustomStepNew_pushButton = QtWidgets.QPushButton(
-            "New", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepNew_pushButton
-        )
-
-        self.preCustomStepDuplicate_pushButton = QtWidgets.QPushButton(
-            "Duplicate", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepDuplicate_pushButton
-        )
-
-        self.preCustomStepRemove_pushButton = QtWidgets.QPushButton(
-            "Remove", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepRemove_pushButton
-        )
-
-        self.preCustomStepRun_pushButton = QtWidgets.QPushButton(
-            "Run Sel.", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepRun_pushButton
-        )
-
-        self.preCustomStepEdit_pushButton = QtWidgets.QPushButton(
-            "Edit", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepEdit_pushButton
-        )
-
-        self.preCustomStepExport_pushButton = QtWidgets.QPushButton(
-            "Export", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepExport_pushButton
-        )
-
-        self.preCustomStepImport_pushButton = QtWidgets.QPushButton(
-            "Import", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_2.addWidget(
-            self.preCustomStepImport_pushButton
-        )
-
-        self.preCustomStep_verticalLayout_2.addStretch()
+        self.groupBoxLayout.addWidget(self.preCustomStep_listWidget)
 
         # Separator line
         self.line = QtWidgets.QFrame(self.groupBox)
         self.line.setLineWidth(3)
         self.line.setFrameShape(QtWidgets.QFrame.HLine)
         self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.verticalLayout_3.addWidget(self.line)
+        self.groupBoxLayout.addWidget(self.line)
 
         # Post Custom Step section
-        self.verticalLayout_2 = QtWidgets.QVBoxLayout()
-        self.verticalLayout_3.addLayout(self.verticalLayout_2)
-
         self.postCustomStep_checkBox = QtWidgets.QCheckBox(
             "Post Custom Step", self.groupBox
         )
-        self.verticalLayout_2.addWidget(self.postCustomStep_checkBox)
+        self.groupBoxLayout.addWidget(self.postCustomStep_checkBox)
 
         self.postSearch_lineEdit = QtWidgets.QLineEdit(self.groupBox)
-        self.postSearch_lineEdit.setSizePolicy(
-            QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed
-        )
-        self.verticalLayout_2.addWidget(self.postSearch_lineEdit)
-
-        self.preCustomStep_horizontalLayout_2 = QtWidgets.QHBoxLayout()
-        self.verticalLayout_2.addLayout(self.preCustomStep_horizontalLayout_2)
-
-        # Post list widget
-        self.preCustomStep_verticalLayout_3 = QtWidgets.QVBoxLayout()
-        self.preCustomStep_horizontalLayout_2.addLayout(
-            self.preCustomStep_verticalLayout_3
-        )
+        self.postSearch_lineEdit.setPlaceholderText("Search...")
+        self.groupBoxLayout.addWidget(self.postSearch_lineEdit)
 
         self.postCustomStep_listWidget = QtWidgets.QListWidget(self.groupBox)
         self.postCustomStep_listWidget.setDragDropOverwriteMode(True)
@@ -180,73 +100,7 @@ class Ui_Form(object):
         self.postCustomStep_listWidget.setSelectionMode(
             QtWidgets.QAbstractItemView.ExtendedSelection
         )
-        self.preCustomStep_verticalLayout_3.addWidget(
-            self.postCustomStep_listWidget
-        )
-
-        # Post buttons
-        self.preCustomStep_verticalLayout_4 = QtWidgets.QVBoxLayout()
-        self.preCustomStep_horizontalLayout_2.addLayout(
-            self.preCustomStep_verticalLayout_4
-        )
-
-        self.postCustomStepAdd_pushButton = QtWidgets.QPushButton(
-            "Add", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepAdd_pushButton
-        )
-
-        self.postCustomStepNew_pushButton = QtWidgets.QPushButton(
-            "New", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepNew_pushButton
-        )
-
-        self.postCustomStepDuplicate_pushButton = QtWidgets.QPushButton(
-            "Duplicate", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepDuplicate_pushButton
-        )
-
-        self.postCustomStepRemove_pushButton = QtWidgets.QPushButton(
-            "Remove", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepRemove_pushButton
-        )
-
-        self.postCustomStepRun_pushButton = QtWidgets.QPushButton(
-            "Run Sel.", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepRun_pushButton
-        )
-
-        self.postCustomStepEdit_pushButton = QtWidgets.QPushButton(
-            "Edit", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepEdit_pushButton
-        )
-
-        self.postCustomStepExport_pushButton = QtWidgets.QPushButton(
-            "Export", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepExport_pushButton
-        )
-
-        self.postCustomStepImport_pushButton = QtWidgets.QPushButton(
-            "Import", self.groupBox
-        )
-        self.preCustomStep_verticalLayout_4.addWidget(
-            self.postCustomStepImport_pushButton
-        )
-
-        self.preCustomStep_verticalLayout_4.addStretch()
+        self.groupBoxLayout.addWidget(self.postCustomStep_listWidget)
 
 
 class CustomStepTab(QtWidgets.QDialog, Ui_Form):
@@ -320,7 +174,7 @@ class CustomStepMixin(object):
         """Create signal connections for custom step tab."""
         csTap = self.customStepTab
 
-        # Pre custom step connections
+        # Pre custom step checkbox
         csTap.preCustomStep_checkBox.stateChanged.connect(
             partial(
                 self.updateCheck,
@@ -328,33 +182,8 @@ class CustomStepMixin(object):
                 "doPreCustomStep",
             )
         )
-        csTap.preCustomStepAdd_pushButton.clicked.connect(self.addCustomStep)
-        csTap.preCustomStepNew_pushButton.clicked.connect(self.newCustomStep)
-        csTap.preCustomStepDuplicate_pushButton.clicked.connect(
-            self.duplicateCustomStep
-        )
-        csTap.preCustomStepExport_pushButton.clicked.connect(
-            self.exportCustomStep
-        )
-        csTap.preCustomStepImport_pushButton.clicked.connect(
-            self.importCustomStep
-        )
-        csTap.preCustomStepRemove_pushButton.clicked.connect(
-            partial(
-                self.removeSelectedFromListWidget,
-                csTap.preCustomStep_listWidget,
-                "preCustomStep",
-            )
-        )
-        csTap.preCustomStep_listWidget.installEventFilter(self)
-        csTap.preCustomStepRun_pushButton.clicked.connect(
-            partial(self.runManualStep, csTap.preCustomStep_listWidget)
-        )
-        csTap.preCustomStepEdit_pushButton.clicked.connect(
-            partial(self.editFile, csTap.preCustomStep_listWidget)
-        )
 
-        # Post custom step connections
+        # Post custom step checkbox
         csTap.postCustomStep_checkBox.stateChanged.connect(
             partial(
                 self.updateCheck,
@@ -362,37 +191,22 @@ class CustomStepMixin(object):
                 "doPostCustomStep",
             )
         )
-        csTap.postCustomStepAdd_pushButton.clicked.connect(
-            partial(self.addCustomStep, False)
-        )
-        csTap.postCustomStepNew_pushButton.clicked.connect(
-            partial(self.newCustomStep, False)
-        )
-        csTap.postCustomStepDuplicate_pushButton.clicked.connect(
-            partial(self.duplicateCustomStep, False)
-        )
-        csTap.postCustomStepExport_pushButton.clicked.connect(
+
+        # Menu bar actions
+        csTap.preExport_action.triggered.connect(self.exportCustomStep)
+        csTap.preImport_action.triggered.connect(self.importCustomStep)
+        csTap.postExport_action.triggered.connect(
             partial(self.exportCustomStep, False)
         )
-        csTap.postCustomStepImport_pushButton.clicked.connect(
+        csTap.postImport_action.triggered.connect(
             partial(self.importCustomStep, False)
         )
-        csTap.postCustomStepRemove_pushButton.clicked.connect(
-            partial(
-                self.removeSelectedFromListWidget,
-                csTap.postCustomStep_listWidget,
-                "postCustomStep",
-            )
-        )
-        csTap.postCustomStep_listWidget.installEventFilter(self)
-        csTap.postCustomStepRun_pushButton.clicked.connect(
-            partial(self.runManualStep, csTap.postCustomStep_listWidget)
-        )
-        csTap.postCustomStepEdit_pushButton.clicked.connect(
-            partial(self.editFile, csTap.postCustomStep_listWidget)
-        )
 
-        # Right click menus
+        # Event filters for drag/drop
+        csTap.preCustomStep_listWidget.installEventFilter(self)
+        csTap.postCustomStep_listWidget.installEventFilter(self)
+
+        # Right click context menus
         csTap.preCustomStep_listWidget.setContextMenuPolicy(
             QtCore.Qt.CustomContextMenu
         )
@@ -922,38 +736,79 @@ class CustomShifterStep(cstp.customShifterMainStep):
                 stepWidget.addItem(fileName + " | " + item)
                 self.updateListAttr(stepWidget, stepAttr)
 
-    def _customStepMenu(self, cs_listWidget, stepAttr, QPos):
+    def _customStepMenu(self, cs_listWidget, stepAttr, QPos, pre=True):
         """Right click context menu for custom step."""
-        currentSelection = cs_listWidget.currentItem()
-        if currentSelection is None:
-            return
-
         self.csMenu = QtWidgets.QMenu()
         parentPosition = cs_listWidget.mapToGlobal(QtCore.QPoint(0, 0))
 
-        menu_item_01 = self.csMenu.addAction("Toggle Custom Step")
-        self.csMenu.addSeparator()
-        menu_item_02 = self.csMenu.addAction("Turn OFF Selected")
-        menu_item_03 = self.csMenu.addAction("Turn ON Selected")
-        self.csMenu.addSeparator()
-        menu_item_04 = self.csMenu.addAction("Turn OFF All")
-        menu_item_05 = self.csMenu.addAction("Turn ON All")
+        # Add/New actions (always available)
+        add_action = self.csMenu.addAction("Add")
+        new_action = self.csMenu.addAction("New")
 
-        menu_item_01.triggered.connect(
+        self.csMenu.addSeparator()
+
+        # Selection-dependent actions
+        hasSelection = len(cs_listWidget.selectedItems()) > 0
+
+        run_action = self.csMenu.addAction("Run Selected")
+        run_action.setEnabled(hasSelection)
+
+        edit_action = self.csMenu.addAction("Edit")
+        edit_action.setEnabled(hasSelection)
+
+        duplicate_action = self.csMenu.addAction("Duplicate")
+        duplicate_action.setEnabled(hasSelection)
+
+        remove_action = self.csMenu.addAction("Remove")
+        remove_action.setEnabled(hasSelection)
+
+        self.csMenu.addSeparator()
+
+        # Toggle status actions
+        toggle_action = self.csMenu.addAction("Toggle Status")
+        toggle_action.setEnabled(hasSelection)
+
+        off_selected_action = self.csMenu.addAction("Turn OFF Selected")
+        off_selected_action.setEnabled(hasSelection)
+
+        on_selected_action = self.csMenu.addAction("Turn ON Selected")
+        on_selected_action.setEnabled(hasSelection)
+
+        self.csMenu.addSeparator()
+
+        off_all_action = self.csMenu.addAction("Turn OFF All")
+        on_all_action = self.csMenu.addAction("Turn ON All")
+
+        # Connect actions
+        add_action.triggered.connect(partial(self.addCustomStep, pre))
+        new_action.triggered.connect(partial(self.newCustomStep, pre))
+        run_action.triggered.connect(
+            partial(self.runManualStep, cs_listWidget)
+        )
+        edit_action.triggered.connect(partial(self.editFile, cs_listWidget))
+        duplicate_action.triggered.connect(
+            partial(self.duplicateCustomStep, pre)
+        )
+        remove_action.triggered.connect(
+            partial(
+                self.removeSelectedFromListWidget, cs_listWidget, stepAttr
+            )
+        )
+        toggle_action.triggered.connect(
             partial(self.toggleStatusCustomStep, cs_listWidget, stepAttr)
         )
-        menu_item_02.triggered.connect(
+        off_selected_action.triggered.connect(
             partial(self.setStatusCustomStep, cs_listWidget, stepAttr, False)
         )
-        menu_item_03.triggered.connect(
+        on_selected_action.triggered.connect(
             partial(self.setStatusCustomStep, cs_listWidget, stepAttr, True)
         )
-        menu_item_04.triggered.connect(
+        off_all_action.triggered.connect(
             partial(
                 self.setStatusCustomStep, cs_listWidget, stepAttr, False, False
             )
         )
-        menu_item_05.triggered.connect(
+        on_all_action.triggered.connect(
             partial(
                 self.setStatusCustomStep, cs_listWidget, stepAttr, True, False
             )
@@ -965,7 +820,10 @@ class CustomShifterStep(cstp.customShifterMainStep):
     def preCustomStepMenu(self, QPos):
         """Show pre custom step context menu."""
         self._customStepMenu(
-            self.customStepTab.preCustomStep_listWidget, "preCustomStep", QPos
+            self.customStepTab.preCustomStep_listWidget,
+            "preCustomStep",
+            QPos,
+            pre=True,
         )
 
     def postCustomStepMenu(self, QPos):
@@ -974,6 +832,7 @@ class CustomShifterStep(cstp.customShifterMainStep):
             self.customStepTab.postCustomStep_listWidget,
             "postCustomStep",
             QPos,
+            pre=False,
         )
 
     def toggleStatusCustomStep(self, cs_listWidget, stepAttr):
