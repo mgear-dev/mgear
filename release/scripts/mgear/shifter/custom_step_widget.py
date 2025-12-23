@@ -2887,6 +2887,11 @@ class Ui_Form(object):
         self.postImport_action = self.postMenu.addAction("Import")
         self.postImport_action.setIcon(pyqt.get_icon("mgear_log-in"))
 
+        # Utils menu
+        self.utilsMenu = self.menuBar.addMenu("Utils")
+        self.printConfig_action = self.utilsMenu.addAction("Print Configuration")
+        self.printConfig_action.setIcon(pyqt.get_icon("mgear_file-text"))
+
         self.mainLayout.setMenuBar(self.menuBar)
 
         # =============================================
@@ -3014,34 +3019,48 @@ class CustomStepMixin(object):
         - Helper methods: populateCheck, updateCheck, updateListAttr
     """
 
-    def setup_custom_step_hover_info(self):
-        """Set up hover info for custom step list widgets."""
-        self.pre_cs = self.customStepTab.preCustomStep_listWidget
-        self.pre_cs.setMouseTracking(True)
-        self.pre_cs.entered.connect(self.pre_info)
+    def print_configuration(self):
+        """Print the custom step configuration as formatted JSON."""
+        pre_data = self.root.attr("preCustomStep").get()
+        post_data = self.root.attr("postCustomStep").get()
 
-        self.post_cs = self.customStepTab.postCustomStep_listWidget
-        self.post_cs.setMouseTracking(True)
-        self.post_cs.entered.connect(self.post_info)
+        print("\n" + "=" * 60)
+        print("CUSTOM STEP CONFIGURATION")
+        print("=" * 60)
 
-    def pre_info(self, index):
-        self.hover_info_item_entered(self.pre_cs, index)
+        print("\n--- Pre Custom Steps ---")
+        if pre_data:
+            try:
+                # Try parsing as JSON
+                if pre_data.strip().startswith("{"):
+                    parsed = json.loads(pre_data)
+                    print(json.dumps(parsed, indent=2))
+                else:
+                    # Legacy format
+                    print("(Legacy format)")
+                    print(pre_data)
+            except (json.JSONDecodeError, ValueError):
+                print(pre_data)
+        else:
+            print("(empty)")
 
-    def post_info(self, index):
-        self.hover_info_item_entered(self.post_cs, index)
+        print("\n--- Post Custom Steps ---")
+        if post_data:
+            try:
+                # Try parsing as JSON
+                if post_data.strip().startswith("{"):
+                    parsed = json.loads(post_data)
+                    print(json.dumps(parsed, indent=2))
+                else:
+                    # Legacy format
+                    print("(Legacy format)")
+                    print(post_data)
+            except (json.JSONDecodeError, ValueError):
+                print(post_data)
+        else:
+            print("(empty)")
 
-    def hover_info_item_entered(self, view, index):
-        if index.isValid():
-            # Get data from UserRole (the step string)
-            data = index.data(QtCore.Qt.UserRole)
-            if data:
-                info_data = self.format_info(data)
-                QtWidgets.QToolTip.showText(
-                    QtGui.QCursor.pos(),
-                    info_data,
-                    view.viewport(),
-                    view.visualRect(index),
-                )
+        print("\n" + "=" * 60)
 
     def populate_custom_step_controls(self):
         """Populate custom step tab controls from Maya attributes."""
@@ -3090,6 +3109,7 @@ class CustomStepMixin(object):
         csTap.postImport_action.triggered.connect(
             partial(self.importCustomStep, False)
         )
+        csTap.printConfig_action.triggered.connect(self.print_configuration)
 
         # Event filters for drag/drop order changes
         csTap.preCustomStep_listWidget.installEventFilter(self)
@@ -3368,45 +3388,6 @@ class CustomStepMixin(object):
                     pm.displayWarning("Please select one item from the list")
             except Exception:
                 pm.displayError("The step can't be found or doesn't exist")
-
-    def format_info(self, data):
-        """Format custom step info for tooltip display."""
-        data_parts = data.split("|")
-        cs_name = data_parts[0]
-        if cs_name.startswith("*"):
-            cs_status = "Deactivated"
-            cs_name = cs_name[1:]
-        else:
-            cs_status = "Active"
-
-        cs_fullpath = self.get_cs_file_fullpath(data)
-        if "_shared" in data:
-            cs_shared_owner = self.shared_owner(cs_fullpath)
-            cs_shared_status = "Shared"
-        else:
-            cs_shared_status = "Local"
-            cs_shared_owner = "None"
-
-        info = '<html><head/><body><p><span style=" font-weight:600;">\
-        {0}</span></p><p>------------------</p><p><span style=" \
-        font-weight:600;">Status</span>: {1}</p><p><span style=" \
-        font-weight:600;">Shared Status:</span> {2}</p><p><span \
-        style=" font-weight:600;">Shared Owner:</span> \
-        {3}</p><p><span style=" font-weight:600;">Full Path</span>: \
-        {4}</p></body></html>'.format(
-            cs_name, cs_status, cs_shared_status, cs_shared_owner, cs_fullpath
-        )
-        return info
-
-    def shared_owner(self, cs_fullpath):
-        """Get the owner of a shared custom step."""
-        scan_dir = os.path.abspath(os.path.join(cs_fullpath, os.pardir))
-        while not scan_dir.endswith("_shared"):
-            scan_dir = os.path.abspath(os.path.join(scan_dir, os.pardir))
-            if scan_dir == "/":
-                break
-        scan_dir = os.path.abspath(os.path.join(scan_dir, os.pardir))
-        return os.path.split(scan_dir)[1]
 
     @classmethod
     def get_steps_dict(cls, itemsList):

@@ -1433,9 +1433,6 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
 
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
 
-        # hover info for custom steps
-        self.setup_custom_step_hover_info()
-
     def setup_SettingWindow(self):
         self.mayaMainWindow = pyqt.maya_main_window()
 
