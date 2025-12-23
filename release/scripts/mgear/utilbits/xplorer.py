@@ -5,6 +5,7 @@ import maya.cmds as cmds
 import maya.api.OpenMaya as om2
 import maya.mel as mel
 
+from mgear.core import pyqt
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
@@ -656,14 +657,16 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         button_widget = QtWidgets.QWidget()
         button_widget.setLayout(button_layout)
         button_layout.setContentsMargins(5, 2, 5, 5)
+        button_layout.setSpacing(0)
 
-        # Get icon path
-        icons_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "icons")
+        # Icon size for buttons
+        ICON_SIZE = 18
 
         # Refresh button
-        self.refresh_btn = QtWidgets.QPushButton("⟳")
+        self.refresh_btn = QtWidgets.QPushButton()
         self.refresh_btn.setFixedSize(25, 25)
         self.refresh_btn.setToolTip("Refresh")
+        self.refresh_btn.setIcon(QtGui.QIcon(pyqt.get_icon("mgear_refresh-cw", ICON_SIZE)))
         self.refresh_btn.clicked.connect(self.refresh)
         button_layout.addWidget(self.refresh_btn)
 
@@ -671,11 +674,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.add_btn = QtWidgets.QPushButton()
         self.add_btn.setFixedSize(25, 25)
         self.add_btn.setToolTip("Add selected to list")
-        add_icon_path = os.path.join(icons_path, "mgear_plus-square.svg")
-        if os.path.exists(add_icon_path):
-            self.add_btn.setIcon(QtGui.QIcon(add_icon_path))
-        else:
-            self.add_btn.setText("+")
+        self.add_btn.setIcon(QtGui.QIcon(pyqt.get_icon("mgear_plus-square", ICON_SIZE)))
         self.add_btn.clicked.connect(self.add_selected_to_list)
         button_layout.addWidget(self.add_btn)
 
@@ -683,11 +682,7 @@ class XPlorer(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         self.remove_btn = QtWidgets.QPushButton()
         self.remove_btn.setFixedSize(25, 25)
         self.remove_btn.setToolTip("Remove selected from list")
-        remove_icon_path = os.path.join(icons_path, "mgear_minus-square.svg")
-        if os.path.exists(remove_icon_path):
-            self.remove_btn.setIcon(QtGui.QIcon(remove_icon_path))
-        else:
-            self.remove_btn.setText("-")
+        self.remove_btn.setIcon(QtGui.QIcon(pyqt.get_icon("mgear_minus-square", ICON_SIZE)))
         self.remove_btn.clicked.connect(self.remove_selected_from_list)
         button_layout.addWidget(self.remove_btn)
 
