@@ -12,7 +12,7 @@ from mgear.pymaya import versions
 
 # mgear
 import mgear
-from . import guide, component
+from . import guide, component, custom_step_widget
 
 from mgear.core import primitive, attribute, skin, dag, icon, node
 from mgear import shifter_classic_components
@@ -330,7 +330,7 @@ class Rig(object):
                 if not self.stopBuild:
                     if step.startswith("*"):
                         continue
-                    self.stopBuild = guide.helperSlots.runStep(
+                    self.stopBuild = custom_step_widget.runStep(
                         step.split("|")[-1][1:], self.customStepDic
                     )
                 else:
