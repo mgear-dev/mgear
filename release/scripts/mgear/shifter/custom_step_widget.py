@@ -423,7 +423,8 @@ class CustomStepItemWidget(QtWidgets.QFrame):
 
     def _update_toggle_icon(self):
         """Update the toggle button icon based on state."""
-        if self._step_data.active:
+        # Show inactive icon if step is inactive OR if parent group is inactive
+        if self._step_data.active and not self._group_inactive:
             icon = pyqt.get_icon("mgear_check-circle", self.ICON_SIZE)
         else:
             icon = pyqt.get_icon("mgear_x-circle", self.ICON_SIZE)
@@ -1445,6 +1446,10 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Track selected steps inside groups: list of (widget, group_widget) tuples
         self._selected_group_steps = []
 
+        # Flag to prevent _on_selection_changed from clearing group step selections
+        # when the selection change is triggered by clicking inside a group
+        self._handling_group_step_click = False
+
         # Connect selection changed signal
         self.itemSelectionChanged.connect(self._on_selection_changed)
 
@@ -1492,64 +1497,26 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     def eventFilter(self, obj, event):
         """Filter events on the viewport.
 
-        Handles mouse events for steps inside groups with proper modifier handling.
+        Note: Click handling for steps inside groups is done by the widget signals
+        (clicked -> stepClicked -> _on_group_step_clicked). The event filter does
+        NOT intercept these clicks because they go directly to the child widgets.
         """
-        if obj is self.viewport():
-            if event.type() == QtCore.QEvent.MouseButtonPress:
-                if event.button() == QtCore.Qt.LeftButton:
-                    step_widget, group_widget = self._find_step_widget_at_pos(event.pos())
-                    if step_widget is not None:
-                        # Store drag start position and widget for potential drag
-                        self._group_step_drag_start_pos = event.pos()
-                        self._group_step_drag_widget = step_widget
-                        self._group_step_drag_group = group_widget
-                        # Handle click with modifiers directly
-                        self._handle_group_step_click_internal(step_widget, group_widget, event.modifiers())
-                        # Set flag to prevent signal chain from also handling this click
-                        self._handling_group_step_click = True
-                        QtCore.QTimer.singleShot(50, self._clear_click_handling_flag)
-                        return True  # Consume the event
-
-            elif event.type() == QtCore.QEvent.MouseMove:
-                if event.buttons() & QtCore.Qt.LeftButton:
-                    if hasattr(self, '_group_step_drag_start_pos') and self._group_step_drag_start_pos:
-                        distance = (event.pos() - self._group_step_drag_start_pos).manhattanLength()
-                        if distance >= QtWidgets.QApplication.startDragDistance():
-                            step_widget = getattr(self, '_group_step_drag_widget', None)
-                            group_widget = getattr(self, '_group_step_drag_group', None)
-                            if step_widget is not None and group_widget is not None:
-                                self._on_group_step_drag_started(step_widget, group_widget)
-                                # Clear drag state
-                                self._group_step_drag_start_pos = None
-                                self._group_step_drag_widget = None
-                                self._group_step_drag_group = None
-                                return True
-
-            elif event.type() == QtCore.QEvent.MouseButtonRelease:
-                # Clear drag state on release
-                self._group_step_drag_start_pos = None
-                self._group_step_drag_widget = None
-                self._group_step_drag_group = None
-
         return super(CustomStepListWidget, self).eventFilter(obj, event)
-
-    def _clear_click_handling_flag(self):
-        """Clear the click handling flag after timer."""
-        self._handling_group_step_click = False
 
     def _on_selection_changed(self):
         """Handle selection change and update widget appearances."""
         # Get selected rows as a set (rows are hashable, items are not in PySide6)
         selected_rows = set(self.row(item) for item in self.selectedItems())
+
         for i in range(self.count()):
             widget = self.getItemWidget(i)
             if widget and hasattr(widget, 'set_selected'):
                 widget.set_selected(i in selected_rows)
 
         # Only clear group step selections if actual list items are selected
-        # This prevents clearing when the selection change is due to programmatic
-        # clearSelection() calls (which happen when clicking inside groups)
-        if selected_rows and self._selected_group_steps:
+        # AND we're not currently handling a group step click
+        # (clicking inside a group also triggers selection of the group row)
+        if selected_rows and self._selected_group_steps and not self._handling_group_step_click:
             self._clear_group_step_selections()
 
     def _clear_all_selections(self):
@@ -1579,17 +1546,12 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         """Handle click on a step inside a group (signal handler).
 
         This is connected to the stepClicked signal from GroupWidget.
-        If the click was already handled by the event filter, this returns early.
 
         Args:
             step_widget (CustomStepItemWidget): The clicked step widget
             group_widget (GroupWidget): The group containing the step
             modifiers (Qt.KeyboardModifiers): Keyboard modifiers during click
         """
-        # Skip if already handled by event filter (prevents duplicate handling)
-        if getattr(self, '_handling_group_step_click', False):
-            return
-
         self._handle_group_step_click_internal(step_widget, group_widget, modifiers)
 
     def _handle_group_step_click_internal(self, step_widget, group_widget, modifiers):
@@ -1603,11 +1565,24 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             group_widget (GroupWidget): The group containing the step
             modifiers (Qt.KeyboardModifiers): Keyboard modifiers during click
         """
+        # Set flag to prevent _on_selection_changed from clearing our selections
+        # This is needed because clicking inside a group also triggers Qt to select
+        # the group's row, which would otherwise clear our group step selections
+        self._handling_group_step_click = True
+
         # Clear list widget selection
         self.clearSelection()
 
-        ctrl_pressed = modifiers & QtCore.Qt.ControlModifier
-        shift_pressed = modifiers & QtCore.Qt.ShiftModifier
+        # Check modifiers - handle both PySide2 and PySide6 enum types
+        # Always use bitwise AND to check modifiers, even when modifiers is NoModifier (0)
+        # In PySide6, Qt.NoModifier is still truthy as an enum object
+        try:
+            ctrl_pressed = bool(modifiers & QtCore.Qt.ControlModifier)
+            shift_pressed = bool(modifiers & QtCore.Qt.ShiftModifier)
+        except TypeError:
+            # Fallback if modifiers is None or incompatible type
+            ctrl_pressed = False
+            shift_pressed = False
 
         if ctrl_pressed:
             # Toggle selection of this step
@@ -1661,6 +1636,15 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         step_data = step_widget.get_step_data()
         if step_data:
             self.groupStepClicked.emit(step_data)
+
+        # Reset the flag after a short delay to allow any pending selection
+        # change events to be processed first (Qt may fire itemSelectionChanged
+        # after this handler returns)
+        QtCore.QTimer.singleShot(0, self._reset_group_step_click_flag)
+
+    def _reset_group_step_click_flag(self):
+        """Reset the group step click handling flag."""
+        self._handling_group_step_click = False
 
     def _on_group_step_context_menu(self, step_widget, global_pos, group_widget):
         """Handle context menu request for a step inside a group.
@@ -3061,6 +3045,24 @@ class CustomStepMixin(object):
             print("(empty)")
 
         print("\n" + "=" * 60)
+
+    def shared_owner(self, fullpath):
+        """Get the shared folder name that owns a step file.
+
+        Args:
+            fullpath (str): Full path to the step file
+
+        Returns:
+            str: Name of the shared folder (e.g., "_shared"), or empty string if not shared
+        """
+        # Normalize path separators
+        normalized = fullpath.replace("\\", "/")
+        # Look for _shared folder in the path
+        parts = normalized.split("/")
+        for part in parts:
+            if part.startswith("_shared"):
+                return part
+        return ""
 
     def populate_custom_step_controls(self):
         """Populate custom step tab controls from Maya attributes."""
