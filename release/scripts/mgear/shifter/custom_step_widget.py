@@ -1,5 +1,6 @@
 """Custom Step Tab widget and mixin for Guide Settings."""
 
+import datetime
 import imp
 import inspect
 import json
@@ -106,6 +107,48 @@ class Ui_Form(object):
             QtWidgets.QAbstractItemView.ExtendedSelection
         )
         self.groupBoxLayout.addWidget(self.postCustomStep_listWidget)
+
+        # Info panel at bottom
+        self.infoGroupBox = QtWidgets.QGroupBox("Step Info", Form)
+        self.mainLayout.addWidget(self.infoGroupBox)
+
+        self.infoLayout = QtWidgets.QFormLayout(self.infoGroupBox)
+        self.infoLayout.setContentsMargins(6, 6, 6, 6)
+        self.infoLayout.setSpacing(4)
+        self.infoLayout.setFieldGrowthPolicy(
+            QtWidgets.QFormLayout.ExpandingFieldsGrow
+        )
+        self.infoLayout.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+
+        # Info labels
+        self.info_name_label = QtWidgets.QLabel("-")
+        self.info_name_label.setWordWrap(True)
+        self.infoLayout.addRow("Name:", self.info_name_label)
+
+        self.info_type_label = QtWidgets.QLabel("-")
+        self.infoLayout.addRow("Type:", self.info_type_label)
+
+        self.info_status_label = QtWidgets.QLabel("-")
+        self.infoLayout.addRow("Status:", self.info_status_label)
+
+        self.info_shared_label = QtWidgets.QLabel("-")
+        self.infoLayout.addRow("Shared:", self.info_shared_label)
+
+        self.info_exists_label = QtWidgets.QLabel("-")
+        self.infoLayout.addRow("Exists:", self.info_exists_label)
+
+        self.info_modified_label = QtWidgets.QLabel("-")
+        self.infoLayout.addRow("Modified:", self.info_modified_label)
+
+        self.info_path_label = QtWidgets.QLabel("-")
+        self.info_path_label.setWordWrap(True)
+        self.info_path_label.setTextInteractionFlags(
+            QtCore.Qt.TextSelectableByMouse
+        )
+        self.info_path_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        self.infoLayout.addRow("Path:", self.info_path_label)
 
 
 class CustomStepTab(QtWidgets.QDialog, Ui_Form):
@@ -228,6 +271,79 @@ class CustomStepMixin(object):
         # Search highlight
         csTap.preSearch_lineEdit.textChanged.connect(self.preHighlightSearch)
         csTap.postSearch_lineEdit.textChanged.connect(self.postHighlightSearch)
+
+        # Item click to update info panel
+        csTap.preCustomStep_listWidget.itemClicked.connect(
+            partial(self.updateInfoPanel, pre=True)
+        )
+        csTap.postCustomStep_listWidget.itemClicked.connect(
+            partial(self.updateInfoPanel, pre=False)
+        )
+
+    def updateInfoPanel(self, item, pre=True):
+        """Update the info panel with details about the clicked custom step."""
+        if not item:
+            return
+
+        data = item.text()
+        csTap = self.customStepTab
+
+        # Parse step name
+        data_parts = data.split("|")
+        cs_name = data_parts[0].strip()
+        if cs_name.startswith("*"):
+            cs_status = "Deactivated"
+            cs_name = cs_name[1:]
+        else:
+            cs_status = "Active"
+
+        # Get full path
+        cs_fullpath = self.get_cs_file_fullpath(data)
+
+        # Determine step type (Pre or Post)
+        cs_type = "Pre Custom Step" if pre else "Post Custom Step"
+
+        # Check shared status
+        if "_shared" in data:
+            cs_shared_owner = self.shared_owner(cs_fullpath)
+            cs_shared = "Yes ({})".format(cs_shared_owner)
+        else:
+            cs_shared = "No (Local)"
+
+        # Check file existence and get modification time
+        if os.path.exists(cs_fullpath):
+            cs_exists = "Yes"
+            try:
+                mtime = os.path.getmtime(cs_fullpath)
+                cs_modified = datetime.datetime.fromtimestamp(mtime).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+            except Exception:
+                cs_modified = "Unknown"
+        else:
+            cs_exists = "No (File not found)"
+            cs_modified = "-"
+
+        # Update labels
+        csTap.info_name_label.setText(cs_name)
+        csTap.info_type_label.setText(cs_type)
+        csTap.info_status_label.setText(cs_status)
+        csTap.info_shared_label.setText(cs_shared)
+        csTap.info_exists_label.setText(cs_exists)
+        csTap.info_modified_label.setText(cs_modified)
+        csTap.info_path_label.setText(cs_fullpath)
+
+        # Color code the status
+        if cs_status == "Active":
+            csTap.info_status_label.setStyleSheet("color: #00A000;")
+        else:
+            csTap.info_status_label.setStyleSheet("color: #B40000;")
+
+        # Color code file existence
+        if cs_exists == "Yes":
+            csTap.info_exists_label.setStyleSheet("color: #00A000;")
+        else:
+            csTap.info_exists_label.setStyleSheet("color: #B40000;")
 
     def custom_step_event_filter(self, sender, event):
         """Handle custom step list widget events. Call from eventFilter."""
