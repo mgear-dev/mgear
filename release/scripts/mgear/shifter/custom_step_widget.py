@@ -191,9 +191,12 @@ class GroupData(object):
         collapsed (bool): Whether the group is visually collapsed
         active (bool): Whether the group (and all children) are active
         items (list): List of CustomStepData objects in this group
+        referenced (bool): Whether this is a referenced group (read-only internal structure)
+        source_file (str): Path to the source .scs file if referenced
     """
 
-    def __init__(self, name="", collapsed=False, active=True, items=None):
+    def __init__(self, name="", collapsed=False, active=True, items=None,
+                 referenced=False, source_file=""):
         """Initialize GroupData.
 
         Args:
@@ -201,11 +204,15 @@ class GroupData(object):
             collapsed (bool): Whether group is collapsed
             active (bool): Whether group is active
             items (list): List of CustomStepData objects
+            referenced (bool): Whether this is a referenced group
+            source_file (str): Path to source .scs file if referenced
         """
         self._name = name
         self._collapsed = collapsed
         self._active = active
         self._items = items if items is not None else []
+        self._referenced = referenced
+        self._source_file = source_file
 
     @property
     def name(self):
@@ -238,6 +245,24 @@ class GroupData(object):
     def items(self):
         """list: List of CustomStepData objects in this group."""
         return self._items
+
+    @property
+    def referenced(self):
+        """bool: Whether this is a referenced group (read-only internal structure)."""
+        return self._referenced
+
+    @referenced.setter
+    def referenced(self, value):
+        self._referenced = bool(value)
+
+    @property
+    def source_file(self):
+        """str: Path to the source .scs file if this is a referenced group."""
+        return self._source_file
+
+    @source_file.setter
+    def source_file(self, value):
+        self._source_file = value
 
     def add_item(self, step_data):
         """Add a CustomStepData to this group.
@@ -283,13 +308,18 @@ class GroupData(object):
         Returns:
             dict: Dictionary representation of the group
         """
-        return {
+        result = {
             "type": "group",
             "name": self._name,
             "collapsed": self._collapsed,
             "active": self._active,
             "items": [item.to_dict() for item in self._items]
         }
+        # Only include referenced fields if this is a referenced group
+        if self._referenced:
+            result["referenced"] = True
+            result["source_file"] = self._source_file
+        return result
 
     @classmethod
     def from_dict(cls, data):
@@ -309,7 +339,9 @@ class GroupData(object):
             name=data.get("name", ""),
             collapsed=data.get("collapsed", False),
             active=data.get("active", True),
-            items=items
+            items=items,
+            referenced=data.get("referenced", False),
+            source_file=data.get("source_file", "")
         )
 
     def __repr__(self):
@@ -600,6 +632,19 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         self._group_inactive = group_inactive
         self._update_appearance()
 
+    def set_edit_enabled(self, enabled):
+        """Enable or disable the edit button.
+
+        Args:
+            enabled (bool): Whether the edit button should be enabled
+        """
+        self._edit_btn.setEnabled(enabled)
+        # Also update appearance
+        if not enabled:
+            self._edit_btn.setToolTip("Edit disabled (referenced group)")
+        else:
+            self._edit_btn.setToolTip("Edit step file")
+
     def mousePressEvent(self, event):
         """Handle mouse press for selection and drag initiation."""
         if event.button() == QtCore.Qt.LeftButton:
@@ -661,8 +706,10 @@ class GroupHeaderWidget(QtWidgets.QFrame):
     GROUP_COLOR = "#4A4A5A"  # Darker purple-gray for groups
     INACTIVE_COLOR = "#5A4444"  # Darker red for inactive groups
     SELECTED_COLOR = "#4A6B8A"  # Pale blue for selected
+    REFERENCED_COLOR = "#3A5A4A"  # Greenish for referenced groups
     BORDER_COLOR = "#666666"
     SELECTED_BORDER_COLOR = "#6A9BCA"
+    REFERENCED_BORDER_COLOR = "#5A8A6A"  # Greenish border for referenced
     BORDER_RADIUS = 4
     ICON_SIZE = 16
     BUTTON_SIZE = 20
@@ -761,6 +808,9 @@ class GroupHeaderWidget(QtWidgets.QFrame):
         elif not self._group_data.active:
             bg_color = self.INACTIVE_COLOR
             border_color = self.BORDER_COLOR
+        elif self._group_data.referenced:
+            bg_color = self.REFERENCED_COLOR
+            border_color = self.REFERENCED_BORDER_COLOR
         else:
             bg_color = self.GROUP_COLOR
             border_color = self.BORDER_COLOR
@@ -809,6 +859,10 @@ class GroupHeaderWidget(QtWidgets.QFrame):
 
     def mouseDoubleClickEvent(self, event):
         """Handle double-click for inline name editing."""
+        # Don't allow editing for referenced groups
+        if self._group_data.referenced:
+            super(GroupHeaderWidget, self).mouseDoubleClickEvent(event)
+            return
         if self._name_label.geometry().contains(event.pos()) and not self._editing:
             self._start_editing()
         else:
@@ -1005,6 +1059,10 @@ class GroupWidget(QtWidgets.QFrame):
         self._steps_layout.addWidget(widget)
         self._step_widgets.append(widget)
 
+        # Disable edit button for referenced groups
+        if self._group_data.referenced:
+            widget.set_edit_enabled(False)
+
         # Connect signals
         widget.toggled.connect(self._on_step_toggled)
         widget.editRequested.connect(
@@ -1056,6 +1114,9 @@ class GroupWidget(QtWidgets.QFrame):
 
     def _on_step_edit_requested(self, widget):
         """Handle step edit request."""
+        # Don't allow editing for steps inside referenced groups
+        if self._group_data.referenced:
+            return
         # Find the step data and emit with path
         step_data = widget.get_step_data()
         if step_data:
@@ -1345,6 +1406,22 @@ class GroupWidget(QtWidgets.QFrame):
         self._header._update_appearance()
         self._update_step_appearances()
 
+    def is_referenced(self):
+        """Check if this is a referenced group (read-only internal structure).
+
+        Returns:
+            bool: True if this is a referenced group
+        """
+        return self._group_data.referenced
+
+    def get_source_file(self):
+        """Get the source file path for referenced groups.
+
+        Returns:
+            str: Path to the source .scs file, or empty string if not referenced
+        """
+        return self._group_data.source_file
+
     def highlight_matching_steps(self, search_text):
         """Highlight steps matching the search text.
 
@@ -1426,7 +1503,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     stepRunRequested = QtCore.Signal(int)
     orderChanged = QtCore.Signal()
     dataChanged = QtCore.Signal()
-    groupStepClicked = QtCore.Signal(object)  # Emitted when step in group clicked (CustomStepData)
+    groupStepClicked = QtCore.Signal(object, object)  # Emitted when step in group clicked (CustomStepData, GroupData)
 
     # Item type markers stored in UserRole
     ITEM_TYPE_STEP = "step"
@@ -1634,8 +1711,9 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
         # Emit signal for info panel update
         step_data = step_widget.get_step_data()
+        group_data = group_widget.get_group_data() if group_widget else None
         if step_data:
-            self.groupStepClicked.emit(step_data)
+            self.groupStepClicked.emit(step_data, group_data)
 
         # Reset the flag after a short delay to allow any pending selection
         # change events to be processed first (Qt may fire itemSelectionChanged
@@ -1658,6 +1736,9 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         if not step_widget.is_selected():
             self._on_group_step_clicked(step_widget, group_widget, QtCore.Qt.NoModifier)
 
+        # Check if this is a referenced group
+        is_referenced = group_widget.is_referenced()
+
         # Create context menu - store as instance variable like main menu
         # Use self (the list widget) as parent to ensure menu stays alive
         self._group_step_menu = QtWidgets.QMenu(self)
@@ -1665,6 +1746,8 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Edit action
         edit_action = self._group_step_menu.addAction("Edit")
         edit_action.setIcon(pyqt.get_icon("mgear_edit"))
+        # Disable edit for steps in referenced groups
+        edit_action.setEnabled(not is_referenced)
 
         # Run action
         run_action = self._group_step_menu.addAction("Run")
@@ -1675,10 +1758,14 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Move to top level action
         move_out_action = self._group_step_menu.addAction("Move to Top Level")
         move_out_action.setIcon(pyqt.get_icon("mgear_arrow-up"))
+        # Disable move for steps in referenced groups
+        move_out_action.setEnabled(not is_referenced)
 
         # Remove from group action
         remove_action = self._group_step_menu.addAction("Remove")
         remove_action.setIcon(pyqt.get_icon("mgear_trash-2"))
+        # Disable remove for steps in referenced groups
+        remove_action.setEnabled(not is_referenced)
 
         # Connect actions using lambdas to capture current step/group
         edit_action.triggered.connect(
@@ -2542,6 +2629,10 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         if not group_widget:
             return False
 
+        # Don't allow dropping into referenced groups
+        if group_widget.is_referenced():
+            return False
+
         # Collect selected step data (only steps, not groups)
         selected_items = self.selectedItems()
         steps_to_add = []
@@ -2620,6 +2711,11 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             event.ignore()
             return
 
+        # Don't allow dragging steps out of referenced groups
+        if source_group_widget.is_referenced():
+            event.ignore()
+            return
+
         # Determine drop target
         drop_pos = event.pos()
         target_item = self.itemAt(drop_pos)
@@ -2628,6 +2724,10 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Check if dropping onto a group
         if target_item and self._get_item_type(target_item) == self.ITEM_TYPE_GROUP:
             target_group_widget = self.getGroupWidget(target_row)
+            # Don't allow dropping into referenced groups
+            if target_group_widget and target_group_widget.is_referenced():
+                event.ignore()
+                return
             if target_group_widget and target_group_widget is not source_group_widget:
                 # Move step from one group to another
                 step_data = CustomStepData.from_dict(step_dict)
@@ -2700,6 +2800,11 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             event.ignore()
             return
 
+        # Don't allow dragging steps out of referenced groups
+        if source_group_widget.is_referenced():
+            event.ignore()
+            return
+
         # Determine drop target
         drop_pos = event.pos()
         target_item = self.itemAt(drop_pos)
@@ -2708,6 +2813,10 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Check if dropping onto a group
         if target_item and self._get_item_type(target_item) == self.ITEM_TYPE_GROUP:
             target_group_widget = self.getGroupWidget(target_row)
+            # Don't allow dropping into referenced groups
+            if target_group_widget and target_group_widget.is_referenced():
+                event.ignore()
+                return
             if target_group_widget and target_group_widget is not source_group_widget:
                 # Move steps from one group to another
                 # Remove in reverse order to preserve indices
@@ -2861,15 +2970,23 @@ class Ui_Form(object):
         self.preMenu = self.menuBar.addMenu("Pre")
         self.preExport_action = self.preMenu.addAction("Export")
         self.preExport_action.setIcon(pyqt.get_icon("mgear_log-out"))
-        self.preImport_action = self.preMenu.addAction("Import")
+        self.preImport_action = self.preMenu.addAction("Import (Replace)")
         self.preImport_action.setIcon(pyqt.get_icon("mgear_log-in"))
+        self.preAppend_action = self.preMenu.addAction("Import (Append)")
+        self.preAppend_action.setIcon(pyqt.get_icon("mgear_plus"))
+        self.preReference_action = self.preMenu.addAction("Reference")
+        self.preReference_action.setIcon(pyqt.get_icon("mgear_link"))
 
         # Post Custom Step menu
         self.postMenu = self.menuBar.addMenu("Post")
         self.postExport_action = self.postMenu.addAction("Export")
         self.postExport_action.setIcon(pyqt.get_icon("mgear_log-out"))
-        self.postImport_action = self.postMenu.addAction("Import")
+        self.postImport_action = self.postMenu.addAction("Import (Replace)")
         self.postImport_action.setIcon(pyqt.get_icon("mgear_log-in"))
+        self.postAppend_action = self.postMenu.addAction("Import (Append)")
+        self.postAppend_action.setIcon(pyqt.get_icon("mgear_plus"))
+        self.postReference_action = self.postMenu.addAction("Reference")
+        self.postReference_action.setIcon(pyqt.get_icon("mgear_link"))
 
         # Utils menu
         self.utilsMenu = self.menuBar.addMenu("Utils")
@@ -2937,6 +3054,16 @@ class Ui_Form(object):
         self.info_shared_label = QtWidgets.QLabel("-")
         self.infoLayout.addRow("Shared:", self.info_shared_label)
 
+        self.info_referenced_label = QtWidgets.QLabel("-")
+        self.infoLayout.addRow("Referenced:", self.info_referenced_label)
+
+        self.info_source_label = QtWidgets.QLabel("-")
+        self.info_source_label.setWordWrap(True)
+        self.info_source_label.setTextInteractionFlags(
+            QtCore.Qt.TextSelectableByMouse
+        )
+        self.infoLayout.addRow("Source:", self.info_source_label)
+
         self.info_exists_label = QtWidgets.QLabel("-")
         self.infoLayout.addRow("Exists:", self.info_exists_label)
 
@@ -2984,6 +3111,117 @@ class Ui_Form(object):
         self.mainLayout.setStretch(0, 1 if pre_expanded else 0)
         self.mainLayout.setStretch(1, 1 if post_expanded else 0)
         self.mainLayout.setStretch(2, 0)  # Info always minimal
+
+
+# ============================================================================
+# Group Selection Dialog
+# ============================================================================
+
+
+class GroupSelectionDialog(QtWidgets.QDialog):
+    """Dialog for selecting groups to reference from a .scs file.
+
+    Shows a list of groups from the file and allows the user to select
+    which ones to reference.
+    """
+
+    def __init__(self, groups, source_file, parent=None):
+        """Initialize the dialog.
+
+        Args:
+            groups (list): List of GroupData objects to choose from
+            source_file (str): Path to the source .scs file
+            parent (QWidget): Parent widget
+        """
+        super(GroupSelectionDialog, self).__init__(parent)
+        self._groups = groups
+        self._source_file = source_file
+        self._selected_groups = []
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Set up the dialog UI."""
+        self.setWindowTitle("Select Groups to Reference")
+        self.setMinimumWidth(400)
+        self.setMinimumHeight(300)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Info label
+        info_label = QtWidgets.QLabel(
+            "Select the groups you want to reference from:\n{}".format(
+                os.path.basename(self._source_file)
+            )
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        # Group list with checkboxes
+        self._list_widget = QtWidgets.QListWidget()
+        self._list_widget.setSelectionMode(
+            QtWidgets.QAbstractItemView.NoSelection
+        )
+        for group in self._groups:
+            item = QtWidgets.QListWidgetItem()
+            checkbox = QtWidgets.QCheckBox(
+                "{} ({} steps)".format(group.name, len(group.items))
+            )
+            checkbox.setChecked(True)  # Default to selected
+            item.setSizeHint(checkbox.sizeHint())
+            self._list_widget.addItem(item)
+            self._list_widget.setItemWidget(item, checkbox)
+        layout.addWidget(self._list_widget)
+
+        # Select all / None buttons
+        btn_layout = QtWidgets.QHBoxLayout()
+        select_all_btn = QtWidgets.QPushButton("Select All")
+        select_all_btn.clicked.connect(self._select_all)
+        select_none_btn = QtWidgets.QPushButton("Select None")
+        select_none_btn.clicked.connect(self._select_none)
+        btn_layout.addWidget(select_all_btn)
+        btn_layout.addWidget(select_none_btn)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        # Dialog buttons
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        button_box.accepted.connect(self._on_accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def _select_all(self):
+        """Select all groups."""
+        for i in range(self._list_widget.count()):
+            item = self._list_widget.item(i)
+            checkbox = self._list_widget.itemWidget(item)
+            checkbox.setChecked(True)
+
+    def _select_none(self):
+        """Deselect all groups."""
+        for i in range(self._list_widget.count()):
+            item = self._list_widget.item(i)
+            checkbox = self._list_widget.itemWidget(item)
+            checkbox.setChecked(False)
+
+    def _on_accept(self):
+        """Handle accept - collect selected groups."""
+        self._selected_groups = []
+        for i in range(self._list_widget.count()):
+            item = self._list_widget.item(i)
+            checkbox = self._list_widget.itemWidget(item)
+            if checkbox.isChecked():
+                self._selected_groups.append(self._groups[i])
+        self.accept()
+
+    def get_selected_groups(self):
+        """Get the list of selected groups.
+
+        Returns:
+            list: List of selected GroupData objects
+        """
+        return self._selected_groups
 
 
 class CustomStepTab(QtWidgets.QDialog, Ui_Form):
@@ -3105,11 +3343,19 @@ class CustomStepMixin(object):
         # Menu bar actions
         csTap.preExport_action.triggered.connect(self.exportCustomStep)
         csTap.preImport_action.triggered.connect(self.importCustomStep)
+        csTap.preAppend_action.triggered.connect(self.appendCustomStep)
+        csTap.preReference_action.triggered.connect(self.referenceCustomStep)
         csTap.postExport_action.triggered.connect(
             partial(self.exportCustomStep, False)
         )
         csTap.postImport_action.triggered.connect(
             partial(self.importCustomStep, False)
+        )
+        csTap.postAppend_action.triggered.connect(
+            partial(self.appendCustomStep, False)
+        )
+        csTap.postReference_action.triggered.connect(
+            partial(self.referenceCustomStep, False)
         )
         csTap.printConfig_action.triggered.connect(self.print_configuration)
 
@@ -3183,10 +3429,10 @@ class CustomStepMixin(object):
 
         # Group step click to update info panel
         csTap.preCustomStep_listWidget.groupStepClicked.connect(
-            partial(self._updateInfoPanelFromData, pre=True)
+            partial(self._onGroupStepClicked, pre=True)
         )
         csTap.postCustomStep_listWidget.groupStepClicked.connect(
-            partial(self._updateInfoPanelFromData, pre=False)
+            partial(self._onGroupStepClicked, pre=False)
         )
 
         # File drop connections
@@ -3273,6 +3519,14 @@ class CustomStepMixin(object):
             stepWidget = csTap.postCustomStep_listWidget
 
         row = stepWidget.row(item)
+
+        # Check if this is a group row
+        if stepWidget.isGroupRow(row):
+            group_data = stepWidget.getGroupData(row)
+            if group_data:
+                self._updateInfoPanelFromGroupData(group_data, pre)
+            return
+
         step_data = stepWidget.getStepData(row)
 
         if not step_data:
@@ -3280,12 +3534,23 @@ class CustomStepMixin(object):
 
         self._updateInfoPanelFromData(step_data, pre)
 
-    def _updateInfoPanelFromData(self, step_data, pre=True):
+    def _onGroupStepClicked(self, step_data, group_data, pre=True):
+        """Handle click on a step inside a group for info panel update.
+
+        Args:
+            step_data (CustomStepData): The step data
+            group_data (GroupData): The parent group data
+            pre (bool): Whether this is a pre or post step
+        """
+        self._updateInfoPanelFromData(step_data, pre, group_data)
+
+    def _updateInfoPanelFromData(self, step_data, pre=True, group_data=None):
         """Update the info panel from step data directly.
 
         Args:
             step_data (CustomStepData): The step data to display
             pre (bool): Whether this is a pre or post step
+            group_data (GroupData): Optional group data if step is in a referenced group
         """
         if not step_data:
             return
@@ -3307,6 +3572,14 @@ class CustomStepMixin(object):
         else:
             cs_shared = "No (Local)"
 
+        # Check referenced status (from parent group)
+        if group_data and group_data.referenced:
+            cs_referenced = "Yes"
+            cs_source = group_data.source_file
+        else:
+            cs_referenced = "No"
+            cs_source = "-"
+
         # Check file existence and get modification time
         if step_data.file_exists():
             cs_exists = "Yes"
@@ -3326,6 +3599,8 @@ class CustomStepMixin(object):
         csTap.info_type_label.setText(cs_type)
         csTap.info_status_label.setText(cs_status)
         csTap.info_shared_label.setText(cs_shared)
+        csTap.info_referenced_label.setText(cs_referenced)
+        csTap.info_source_label.setText(cs_source)
         csTap.info_exists_label.setText(cs_exists)
         csTap.info_modified_label.setText(cs_modified)
         csTap.info_path_label.setText(cs_fullpath)
@@ -3341,6 +3616,72 @@ class CustomStepMixin(object):
             csTap.info_exists_label.setStyleSheet("color: #00A000;")
         else:
             csTap.info_exists_label.setStyleSheet("color: #B40000;")
+
+        # Color code referenced status
+        if cs_referenced == "Yes":
+            csTap.info_referenced_label.setStyleSheet("color: #5A8A6A;")
+        else:
+            csTap.info_referenced_label.setStyleSheet("")
+
+    def _updateInfoPanelFromGroupData(self, group_data, pre=True):
+        """Update the info panel from group data directly.
+
+        Args:
+            group_data (GroupData): The group data to display
+            pre (bool): Whether this is a pre or post group
+        """
+        if not group_data:
+            return
+
+        csTap = self.customStepTab
+
+        # Get group info from data model
+        cs_name = group_data.name
+        cs_status = "Active" if group_data.active else "Deactivated"
+        cs_type = "Pre Custom Step Group" if pre else "Post Custom Step Group"
+        cs_type += " ({} items)".format(len(group_data.items))
+
+        # Groups are not shared
+        cs_shared = "-"
+
+        # Check referenced status
+        if group_data.referenced:
+            cs_referenced = "Yes"
+            cs_source = group_data.source_file
+        else:
+            cs_referenced = "No"
+            cs_source = "-"
+
+        # Groups don't have file paths
+        cs_exists = "-"
+        cs_modified = "-"
+        cs_fullpath = "-"
+
+        # Update labels
+        csTap.info_name_label.setText(cs_name)
+        csTap.info_type_label.setText(cs_type)
+        csTap.info_status_label.setText(cs_status)
+        csTap.info_shared_label.setText(cs_shared)
+        csTap.info_referenced_label.setText(cs_referenced)
+        csTap.info_source_label.setText(cs_source)
+        csTap.info_exists_label.setText(cs_exists)
+        csTap.info_modified_label.setText(cs_modified)
+        csTap.info_path_label.setText(cs_fullpath)
+
+        # Color code the status
+        if cs_status == "Active":
+            csTap.info_status_label.setStyleSheet("color: #00A000;")
+        else:
+            csTap.info_status_label.setStyleSheet("color: #B40000;")
+
+        # Reset file existence color
+        csTap.info_exists_label.setStyleSheet("")
+
+        # Color code referenced status
+        if cs_referenced == "Yes":
+            csTap.info_referenced_label.setStyleSheet("color: #5A8A6A;")
+        else:
+            csTap.info_referenced_label.setStyleSheet("")
 
     def custom_step_event_filter(self, sender, event):
         """Handle custom step list widget events. Call from eventFilter."""
@@ -3846,6 +4187,179 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
         pm.displayInfo("Custom steps imported from: {}".format(filePath))
 
+    def _loadScsFile(self, filePath=None):
+        """Load and validate a .scs configuration file.
+
+        Args:
+            filePath (str): Path to the .scs file, or None to show file dialog
+
+        Returns:
+            tuple: (config_dict, filePath) or (None, None) if failed
+        """
+        if not filePath:
+            # Get starting directory for file dialog
+            if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
+                startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+            else:
+                startDir = pm.workspace(q=True, rootDirectory=True)
+
+            filePath = pm.fileDialog2(
+                fileMode=1,
+                startingDirectory=startDir,
+                fileFilter="Shifter Custom Steps .scs (*.scs)",
+            )
+            if not filePath:
+                return None, None
+            if not isinstance(filePath, string_types):
+                filePath = filePath[0]
+
+        # Load the JSON configuration
+        try:
+            with open(filePath, "r") as f:
+                config_dict = json.load(f)
+        except json.JSONDecodeError as e:
+            pm.displayError("Invalid JSON file: {}".format(str(e)))
+            return None, None
+        except IOError as e:
+            pm.displayError("Could not read file: {}".format(str(e)))
+            return None, None
+
+        # Validate the configuration format
+        if not isinstance(config_dict, dict):
+            pm.displayError("Invalid configuration format.")
+            return None, None
+
+        # Check if it's a version 2 format
+        if config_dict.get("version") != 2:
+            pm.displayError(
+                "Unsupported configuration version. Expected version 2."
+            )
+            return None, None
+
+        return config_dict, filePath
+
+    def appendCustomStep(self, pre=True, *args):
+        """Import custom steps and append to existing configuration.
+
+        Unlike importCustomStep which replaces, this adds imported items
+        to the end of the current step/group list.
+
+        Args:
+            pre: If True, appends to pre step list; otherwise to post
+        """
+        if pre:
+            stepAttr = "preCustomStep"
+            stepWidget = self.customStepTab.preCustomStep_listWidget
+        else:
+            stepAttr = "postCustomStep"
+            stepWidget = self.customStepTab.postCustomStep_listWidget
+
+        config_dict, filePath = self._loadScsFile()
+        if config_dict is None:
+            return
+
+        # Parse items from the imported configuration
+        items = config_dict.get("items", [])
+        if not items:
+            pm.displayWarning("No items found in the configuration file.")
+            return
+
+        # Add each item to the existing list
+        count = 0
+        for item_data in items:
+            item_type = item_data.get("type")
+            if item_type == "step":
+                step_data = CustomStepData.from_dict(item_data)
+                stepWidget.addStepItem(step_data)
+                count += 1
+            elif item_type == "group":
+                group_data = GroupData.from_dict(item_data)
+                stepWidget.addGroupItem(group_data)
+                count += 1
+
+        # Update the Maya attribute
+        self._updateStepListAttr(stepWidget, stepAttr)
+
+        pm.displayInfo(
+            "Appended {} items from: {}".format(count, filePath)
+        )
+
+    def referenceCustomStep(self, pre=True, *args):
+        """Reference groups from another .scs configuration file.
+
+        Referenced groups are read-only and can be moved but not edited.
+        Only groups can be referenced; standalone steps are ignored.
+
+        Args:
+            pre: If True, adds to pre step list; otherwise to post
+        """
+        if pre:
+            stepAttr = "preCustomStep"
+            stepWidget = self.customStepTab.preCustomStep_listWidget
+        else:
+            stepAttr = "postCustomStep"
+            stepWidget = self.customStepTab.postCustomStep_listWidget
+
+        config_dict, filePath = self._loadScsFile()
+        if config_dict is None:
+            return
+
+        # Extract only groups from the configuration
+        items = config_dict.get("items", [])
+        groups = []
+        for item_data in items:
+            if item_data.get("type") == "group":
+                group_data = GroupData.from_dict(item_data)
+                groups.append(group_data)
+
+        if not groups:
+            pm.displayWarning(
+                "No groups found in the configuration file. "
+                "Only groups can be referenced."
+            )
+            return
+
+        # If only one group, reference it directly
+        if len(groups) == 1:
+            selected_groups = groups
+        else:
+            # Show selection dialog
+            dialog = GroupSelectionDialog(groups, filePath, parent=pyqt.maya_main_window())
+            if dialog.exec_() != QtWidgets.QDialog.Accepted:
+                return
+            selected_groups = dialog.get_selected_groups()
+
+        if not selected_groups:
+            pm.displayWarning("No groups selected.")
+            return
+
+        # Compute relative path from MGEAR_SHIFTER_CUSTOMSTEP_PATH if set
+        source_path = filePath
+        env_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+        if env_path:
+            # Normalize paths for comparison
+            norm_file = os.path.normpath(filePath).lower()
+            norm_env = os.path.normpath(env_path).lower()
+            if norm_file.startswith(norm_env):
+                # Store relative path
+                source_path = os.path.relpath(filePath, env_path)
+
+        # Add selected groups as referenced
+        count = 0
+        for group in selected_groups:
+            # Mark as referenced and set source file (relative if possible)
+            group.referenced = True
+            group.source_file = source_path
+            stepWidget.addGroupItem(group)
+            count += 1
+
+        # Update the Maya attribute
+        self._updateStepListAttr(stepWidget, stepAttr)
+
+        pm.displayInfo(
+            "Referenced {} groups from: {}".format(count, filePath)
+        )
+
     def _customStepMenu(self, cs_listWidget, stepAttr, QPos, pre=True):
         """Right click context menu for custom step."""
         # Check if clicking on a step inside a group first
@@ -3895,6 +4409,11 @@ class CustomShifterStep(cstp.customShifterMainStep):
         hasSelection = len(selectedItems) > 0
 
         isClickedGroup = clickedRow >= 0 and cs_listWidget.isGroupRow(clickedRow)
+        isClickedReferenced = False
+        if isClickedGroup:
+            clicked_group_widget = cs_listWidget.getGroupWidget(clickedRow)
+            if clicked_group_widget:
+                isClickedReferenced = clicked_group_widget.is_referenced()
 
         # Check if selection contains only steps (no groups)
         hasStepSelection = False
@@ -3932,9 +4451,13 @@ class CustomShifterStep(cstp.customShifterMainStep):
         if isClickedGroup:
             rename_group_action = self.csMenu.addAction("Rename Group")
             rename_group_action.setIcon(pyqt.get_icon("mgear_edit-2"))
+            # Disable rename for referenced groups
+            rename_group_action.setEnabled(not isClickedReferenced)
 
             ungroup_action = self.csMenu.addAction("Ungroup (Keep Items)")
             ungroup_action.setIcon(pyqt.get_icon("mgear_minimize-2"))
+            # Disable ungroup for referenced groups
+            ungroup_action.setEnabled(not isClickedReferenced)
 
             delete_group_action = self.csMenu.addAction("Delete Group...")
             delete_group_action.setIcon(pyqt.get_icon("mgear_trash-2"))
