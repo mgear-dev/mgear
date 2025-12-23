@@ -25,10 +25,10 @@ class Component(component.Main):
         self.WIP = self.options["mode"]
 
         rot_offset = [
-                self.settings["joint_rot_offset_x"],
-                self.settings["joint_rot_offset_y"],
-                self.settings["joint_rot_offset_z"],
-            ]
+            self.settings["joint_rot_offset_x"],
+            self.settings["joint_rot_offset_y"],
+            self.settings["joint_rot_offset_z"],
+        ]
 
         if self.negate and self.settings["overrideNegate"]:
             self.negate = False
