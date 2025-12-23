@@ -968,7 +968,8 @@ class GroupWidget(QtWidgets.QFrame):
         # Body container for step items
         self._body = QtWidgets.QWidget()
         body_layout = QtWidgets.QVBoxLayout(self._body)
-        body_layout.setContentsMargins(self.CHILD_INDENT, 2, 0, 2)
+        # Bottom margin provides extra drop zone space for dropping as last item
+        body_layout.setContentsMargins(self.CHILD_INDENT, 2, 0, 12)
         body_layout.setSpacing(2)
 
         # Steps container
@@ -1235,6 +1236,51 @@ class GroupWidget(QtWidgets.QFrame):
 
         self.dataChanged.emit()
 
+    def move_steps(self, from_indices, to_index):
+        """Move multiple steps to a new position within the group.
+
+        The steps will be moved as a block, preserving their relative order.
+
+        Args:
+            from_indices (list): List of indices of steps to move (sorted)
+            to_index (int): Target index where steps should be inserted
+        """
+        if not from_indices:
+            return
+
+        # Validate indices
+        for idx in from_indices:
+            if not (0 <= idx < len(self._step_widgets)):
+                return
+
+        # Collect widgets and data in order
+        items_to_move = []
+        for idx in sorted(from_indices):
+            items_to_move.append((
+                self._step_widgets[idx],
+                self._group_data.items[idx]
+            ))
+
+        # Calculate effective target index after removal
+        # Count how many items before target will be removed
+        items_before_target = sum(1 for idx in from_indices if idx < to_index)
+        effective_target = to_index - items_before_target
+
+        # Remove from current positions (in reverse order to preserve indices)
+        for idx in sorted(from_indices, reverse=True):
+            widget = self._step_widgets.pop(idx)
+            self._group_data.items.pop(idx)
+            self._steps_layout.removeWidget(widget)
+
+        # Insert at new position
+        for i, (widget, step_data) in enumerate(items_to_move):
+            insert_idx = effective_target + i
+            self._step_widgets.insert(insert_idx, widget)
+            self._group_data.items.insert(insert_idx, step_data)
+            self._steps_layout.insertWidget(insert_idx, widget)
+
+        self.dataChanged.emit()
+
     def get_step_count(self):
         """Get the number of steps in this group.
 
@@ -1343,7 +1389,15 @@ class GroupWidget(QtWidgets.QFrame):
             if y < widget_center_y:
                 return i
 
-        # If past all widgets, insert at end
+        # If past all widgets or in the bottom padding zone, insert at end
+        # Also check if we're in the body area (after last widget)
+        if self._step_widgets:
+            last_widget = self._step_widgets[-1]
+            last_widget_bottom = last_widget.geometry().bottom()
+            # If cursor is below the last widget, definitely add to end
+            if y >= last_widget_bottom:
+                return len(self._step_widgets)
+
         return len(self._step_widgets)
 
 
@@ -1391,11 +1445,6 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Track selected steps inside groups: list of (widget, group_widget) tuples
         self._selected_group_steps = []
 
-        # Track drag start for group steps
-        self._drag_start_pos = None
-        self._drag_step_widget = None
-        self._drag_group_widget = None
-
         # Connect selection changed signal
         self.itemSelectionChanged.connect(self._on_selection_changed)
 
@@ -1441,45 +1490,52 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         return None, None
 
     def eventFilter(self, obj, event):
-        """Filter events on the viewport to handle clicks on group steps."""
-        if obj == self.viewport():
+        """Filter events on the viewport.
+
+        Handles mouse events for steps inside groups with proper modifier handling.
+        """
+        if obj is self.viewport():
             if event.type() == QtCore.QEvent.MouseButtonPress:
                 if event.button() == QtCore.Qt.LeftButton:
-                    pos = event.pos()
-                    step_widget, group_widget = self._find_step_widget_at_pos(pos)
-                    if step_widget:
-                        # Click is on a step inside a group
-                        self._on_group_step_clicked(
-                            step_widget, group_widget, event.modifiers()
-                        )
-                        # Track for potential drag
-                        self._drag_start_pos = pos
-                        self._drag_step_widget = step_widget
-                        self._drag_group_widget = group_widget
-                        return True  # Event handled
+                    step_widget, group_widget = self._find_step_widget_at_pos(event.pos())
+                    if step_widget is not None:
+                        # Store drag start position and widget for potential drag
+                        self._group_step_drag_start_pos = event.pos()
+                        self._group_step_drag_widget = step_widget
+                        self._group_step_drag_group = group_widget
+                        # Handle click with modifiers directly
+                        self._handle_group_step_click_internal(step_widget, group_widget, event.modifiers())
+                        # Set flag to prevent signal chain from also handling this click
+                        self._handling_group_step_click = True
+                        QtCore.QTimer.singleShot(50, self._clear_click_handling_flag)
+                        return True  # Consume the event
 
             elif event.type() == QtCore.QEvent.MouseMove:
                 if event.buttons() & QtCore.Qt.LeftButton:
-                    if self._drag_start_pos and self._drag_step_widget:
-                        distance = (event.pos() - self._drag_start_pos).manhattanLength()
+                    if hasattr(self, '_group_step_drag_start_pos') and self._group_step_drag_start_pos:
+                        distance = (event.pos() - self._group_step_drag_start_pos).manhattanLength()
                         if distance >= QtWidgets.QApplication.startDragDistance():
-                            # Start drag operation
-                            self._on_group_step_drag_started(
-                                self._drag_step_widget, self._drag_group_widget
-                            )
-                            # Reset drag tracking
-                            self._drag_start_pos = None
-                            self._drag_step_widget = None
-                            self._drag_group_widget = None
-                            return True
+                            step_widget = getattr(self, '_group_step_drag_widget', None)
+                            group_widget = getattr(self, '_group_step_drag_group', None)
+                            if step_widget is not None and group_widget is not None:
+                                self._on_group_step_drag_started(step_widget, group_widget)
+                                # Clear drag state
+                                self._group_step_drag_start_pos = None
+                                self._group_step_drag_widget = None
+                                self._group_step_drag_group = None
+                                return True
 
             elif event.type() == QtCore.QEvent.MouseButtonRelease:
-                # Reset drag tracking on mouse release
-                self._drag_start_pos = None
-                self._drag_step_widget = None
-                self._drag_group_widget = None
+                # Clear drag state on release
+                self._group_step_drag_start_pos = None
+                self._group_step_drag_widget = None
+                self._group_step_drag_group = None
 
         return super(CustomStepListWidget, self).eventFilter(obj, event)
+
+    def _clear_click_handling_flag(self):
+        """Clear the click handling flag after timer."""
+        self._handling_group_step_click = False
 
     def _on_selection_changed(self):
         """Handle selection change and update widget appearances."""
@@ -1490,8 +1546,10 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             if widget and hasattr(widget, 'set_selected'):
                 widget.set_selected(i in selected_rows)
 
-        # Clear group step selections when list selection changes
-        if self._selected_group_steps:
+        # Only clear group step selections if actual list items are selected
+        # This prevents clearing when the selection change is due to programmatic
+        # clearSelection() calls (which happen when clicking inside groups)
+        if selected_rows and self._selected_group_steps:
             self._clear_group_step_selections()
 
     def _clear_all_selections(self):
@@ -1502,7 +1560,13 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     def _clear_group_step_selections(self):
         """Clear all step selections inside groups."""
         for step_widget, _ in self._selected_group_steps:
-            step_widget.set_selected(False)
+            # Check if widget is still valid (not deleted)
+            try:
+                if step_widget is not None:
+                    step_widget.set_selected(False)
+            except RuntimeError:
+                # Widget was deleted (C++ object already deleted)
+                pass
         self._selected_group_steps = []
 
         # Also clear any selected steps in all groups (safety)
@@ -1512,7 +1576,27 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 widget.clear_step_selections()
 
     def _on_group_step_clicked(self, step_widget, group_widget, modifiers):
-        """Handle click on a step inside a group.
+        """Handle click on a step inside a group (signal handler).
+
+        This is connected to the stepClicked signal from GroupWidget.
+        If the click was already handled by the event filter, this returns early.
+
+        Args:
+            step_widget (CustomStepItemWidget): The clicked step widget
+            group_widget (GroupWidget): The group containing the step
+            modifiers (Qt.KeyboardModifiers): Keyboard modifiers during click
+        """
+        # Skip if already handled by event filter (prevents duplicate handling)
+        if getattr(self, '_handling_group_step_click', False):
+            return
+
+        self._handle_group_step_click_internal(step_widget, group_widget, modifiers)
+
+    def _handle_group_step_click_internal(self, step_widget, group_widget, modifiers):
+        """Internal handler for group step click logic.
+
+        This contains the actual click handling logic and is called either from
+        the event filter (directly) or from _on_group_step_clicked (via signal).
 
         Args:
             step_widget (CustomStepItemWidget): The clicked step widget
@@ -1559,10 +1643,19 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 step_widget.set_selected(True)
                 self._selected_group_steps.append((step_widget, group_widget))
         else:
-            # Normal click - clear previous and select this one
-            self._clear_group_step_selections()
-            step_widget.set_selected(True)
-            self._selected_group_steps.append((step_widget, group_widget))
+            # Normal click - check if clicking on an already selected item
+            # If so, preserve the selection (for drag operations)
+            is_already_selected = any(
+                w is step_widget for w, _ in self._selected_group_steps
+            )
+            if is_already_selected and len(self._selected_group_steps) > 1:
+                # Keep the multi-selection intact for potential drag
+                pass
+            else:
+                # Clear previous and select this one
+                self._clear_group_step_selections()
+                step_widget.set_selected(True)
+                self._selected_group_steps.append((step_widget, group_widget))
 
         # Emit signal for info panel update
         step_data = step_widget.get_step_data()
@@ -1767,14 +1860,39 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         drag = QtGui.QDrag(self)
         mime_data = QtCore.QMimeData()
 
-        # Store information about the dragged step
-        step_data = step_widget.get_step_data()
-        drag_info = {
-            "type": "group_step",
-            "step": step_data.to_dict() if step_data else {},
-            "group_row": self._find_group_row(group_widget),
-            "step_index": group_widget.get_step_index(step_widget)
-        }
+        # Collect all selected steps from the same group for multi-drag
+        selected_in_same_group = [
+            (w, g) for w, g in self._selected_group_steps
+            if g is group_widget
+        ]
+
+        if len(selected_in_same_group) > 1:
+            # Multi-selection drag - include all selected steps
+            steps_info = []
+            for w, g in selected_in_same_group:
+                step_data = w.get_step_data()
+                steps_info.append({
+                    "step": step_data.to_dict() if step_data else {},
+                    "step_index": group_widget.get_step_index(w)
+                })
+            # Sort by index to preserve order
+            steps_info.sort(key=lambda x: x["step_index"])
+
+            drag_info = {
+                "type": "group_steps_multi",
+                "group_row": self._find_group_row(group_widget),
+                "steps": steps_info
+            }
+        else:
+            # Single step drag
+            step_data = step_widget.get_step_data()
+            drag_info = {
+                "type": "group_step",
+                "step": step_data.to_dict() if step_data else {},
+                "group_row": self._find_group_row(group_widget),
+                "step_index": group_widget.get_step_index(step_widget)
+            }
+
         mime_data.setData(
             "application/x-mgear-customstep",
             json.dumps(drag_info).encode('utf-8')
@@ -2478,7 +2596,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         return True
 
     def _handle_group_step_drop(self, event):
-        """Handle drop of a step dragged from a group.
+        """Handle drop of step(s) dragged from a group.
 
         Args:
             event: The drop event
@@ -2490,10 +2608,21 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             event.ignore()
             return
 
-        if drag_info.get("type") != "group_step":
+        drag_type = drag_info.get("type")
+        if drag_type == "group_steps_multi":
+            self._handle_multi_step_drop(event, drag_info)
+        elif drag_type == "group_step":
+            self._handle_single_step_drop(event, drag_info)
+        else:
             event.ignore()
-            return
 
+    def _handle_single_step_drop(self, event, drag_info):
+        """Handle drop of a single step from a group.
+
+        Args:
+            event: The drop event
+            drag_info (dict): Parsed drag information
+        """
         source_group_row = drag_info.get("group_row", -1)
         step_index = drag_info.get("step_index", -1)
         step_dict = drag_info.get("step", {})
@@ -2563,6 +2692,91 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         if target_row < 0:
             target_row = self.count()
         self.insertStepItem(target_row, step_data)
+
+        event.acceptProposedAction()
+        self._clear_group_step_selections()
+        self.dataChanged.emit()
+
+    def _handle_multi_step_drop(self, event, drag_info):
+        """Handle drop of multiple steps from a group.
+
+        Args:
+            event: The drop event
+            drag_info (dict): Parsed drag information with 'steps' list
+        """
+        source_group_row = drag_info.get("group_row", -1)
+        steps_info = drag_info.get("steps", [])
+
+        if source_group_row < 0 or not steps_info:
+            event.ignore()
+            return
+
+        source_group_widget = self.getGroupWidget(source_group_row)
+        if not source_group_widget:
+            event.ignore()
+            return
+
+        # Determine drop target
+        drop_pos = event.pos()
+        target_item = self.itemAt(drop_pos)
+        target_row = self.row(target_item) if target_item else self.count()
+
+        # Check if dropping onto a group
+        if target_item and self._get_item_type(target_item) == self.ITEM_TYPE_GROUP:
+            target_group_widget = self.getGroupWidget(target_row)
+            if target_group_widget and target_group_widget is not source_group_widget:
+                # Move steps from one group to another
+                # Remove in reverse order to preserve indices
+                steps_data = []
+                for info in reversed(steps_info):
+                    step_data = CustomStepData.from_dict(info["step"])
+                    steps_data.insert(0, step_data)
+                    source_group_widget.remove_step(info["step_index"])
+
+                # Add all steps to target group
+                for step_data in steps_data:
+                    target_group_widget.add_step(step_data)
+
+                self._update_group_item_height(source_group_row)
+                self._update_group_item_height(target_row)
+                event.acceptProposedAction()
+                self._clear_group_step_selections()
+                self.dataChanged.emit()
+                return
+            elif target_group_widget is source_group_widget:
+                # Reorder within same group
+                group_local_pos = target_group_widget.mapFromGlobal(
+                    self.mapToGlobal(drop_pos)
+                )
+                target_index = target_group_widget.get_drop_index_at_pos(group_local_pos)
+
+                # Get sorted indices (already sorted in drag_info)
+                step_indices = [info["step_index"] for info in steps_info]
+
+                # Move steps as a block
+                source_group_widget.move_steps(step_indices, target_index)
+                event.acceptProposedAction()
+                self._clear_group_step_selections()
+                self.dataChanged.emit()
+                return
+
+        # Dropping onto top level (not a group)
+        # Remove in reverse order to preserve indices, collect step data
+        steps_data = []
+        for info in reversed(steps_info):
+            step_data = CustomStepData.from_dict(info["step"])
+            steps_data.insert(0, step_data)
+            source_group_widget.remove_step(info["step_index"])
+
+        self._update_group_item_height(source_group_row)
+
+        # Insert at target position
+        if target_row < 0:
+            target_row = self.count()
+
+        # Insert all steps at target position
+        for i, step_data in enumerate(steps_data):
+            self.insertStepItem(target_row + i, step_data)
 
         event.acceptProposedAction()
         self._clear_group_step_selections()
