@@ -3392,18 +3392,6 @@ class CustomStepMixin(object):
                 pm.displayError("The step can't be found or doesn't exist")
 
     @classmethod
-    def get_steps_dict(cls, itemsList):
-        """Get dictionary of step paths and their contents."""
-        stepsDict = {}
-        stepsDict["itemsList"] = itemsList
-        for item in itemsList:
-            step = open(item, "r")
-            data = step.read()
-            stepsDict[item] = data
-            step.close()
-        return stepsDict
-
-    @classmethod
     def runStep(cls, stepPath, customStepDic):
         """Run a custom step.
 
@@ -3743,7 +3731,9 @@ class CustomShifterStep(cstp.customShifterMainStep):
         self._updateStepListAttr(stepWidget, stepAttr)
 
     def exportCustomStep(self, pre=True, *args):
-        """Export custom steps to a JSON file.
+        """Export custom steps configuration to a JSON file (.scs).
+
+        Exports the current step/group configuration in the internal JSON format.
 
         Args:
             pre: If True, exports from pre step list; otherwise from post
@@ -3753,44 +3743,50 @@ class CustomShifterStep(cstp.customShifterMainStep):
         else:
             stepWidget = self.customStepTab.postCustomStep_listWidget
 
-        # Get all step data
-        all_step_data = stepWidget.getAllStepData()
-        if not all_step_data:
+        # Get the JSON configuration from the widget
+        json_config = stepWidget.toJson()
+        if not json_config or json_config == "":
             pm.displayWarning("No custom steps to export.")
             return
 
-        # Build list of full paths
+        # Parse and re-serialize with nice formatting
+        try:
+            config_dict = json.loads(json_config)
+        except json.JSONDecodeError:
+            pm.displayWarning("Invalid configuration data.")
+            return
+
+        data_string = json.dumps(config_dict, indent=4)
+
+        # Get starting directory for file dialog
         if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
             startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            itemsList = [
-                os.path.join(startDir, sd.path) for sd in all_step_data
-            ]
         else:
-            itemsList = [sd.path for sd in all_step_data]
-            if itemsList:
-                startDir = os.path.split(itemsList[-1])[0]
-            else:
-                startDir = pm.workspace(q=True, rootDirectory=True)
-
-        stepsDict = self.get_steps_dict(itemsList)
-        data_string = json.dumps(stepsDict, indent=4, sort_keys=True)
+            startDir = pm.workspace(q=True, rootDirectory=True)
 
         filePath = pm.fileDialog2(
             fileMode=0,
             startingDirectory=startDir,
-            fileFilter="Shifter Custom Steps .scs (*%s)" % ".scs",
+            fileFilter="Shifter Custom Steps .scs (*.scs)",
         )
         if not filePath:
             return
         if not isinstance(filePath, string_types):
             filePath = filePath[0]
 
-        f = open(filePath, "w")
-        f.write(data_string)
-        f.close()
+        # Ensure .scs extension
+        if not filePath.lower().endswith(".scs"):
+            filePath += ".scs"
+
+        with open(filePath, "w") as f:
+            f.write(data_string)
+
+        pm.displayInfo("Custom steps exported to: {}".format(filePath))
 
     def importCustomStep(self, pre=True, *args):
-        """Import custom steps from a JSON file.
+        """Import custom steps configuration from a JSON file (.scs).
+
+        Replaces the current step/group configuration with the imported one.
 
         Args:
             pre: If True, imports to pre step list; otherwise to post
@@ -3802,63 +3798,53 @@ class CustomShifterStep(cstp.customShifterMainStep):
             stepAttr = "postCustomStep"
             stepWidget = self.customStepTab.postCustomStep_listWidget
 
-        option = pm.confirmDialog(
-            title="Shifter Custom Step Import Style",
-            message="Do you want to import only the path or"
-            " unpack and import?",
-            button=["Only Path", "Unpack", "Cancel"],
-            defaultButton="Only Path",
-            cancelButton="Cancel",
-            dismissString="Cancel",
+        # Get starting directory for file dialog
+        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
+            startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+        else:
+            startDir = pm.workspace(q=True, rootDirectory=True)
+
+        filePath = pm.fileDialog2(
+            fileMode=1,
+            startingDirectory=startDir,
+            fileFilter="Shifter Custom Steps .scs (*.scs)",
         )
+        if not filePath:
+            return
+        if not isinstance(filePath, string_types):
+            filePath = filePath[0]
 
-        if option in ["Only Path", "Unpack"]:
-            if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            else:
-                startDir = pm.workspace(q=True, rootDirectory=True)
+        # Load the JSON configuration
+        try:
+            with open(filePath, "r") as f:
+                config_dict = json.load(f)
+        except json.JSONDecodeError as e:
+            pm.displayError("Invalid JSON file: {}".format(str(e)))
+            return
+        except IOError as e:
+            pm.displayError("Could not read file: {}".format(str(e)))
+            return
 
-            filePath = pm.fileDialog2(
-                fileMode=1,
-                startingDirectory=startDir,
-                fileFilter="Shifter Custom Steps .scs (*%s)" % ".scs",
+        # Validate the configuration format
+        if not isinstance(config_dict, dict):
+            pm.displayError("Invalid configuration format.")
+            return
+
+        # Check if it's a version 2 format or needs conversion
+        if config_dict.get("version") != 2:
+            pm.displayError(
+                "Unsupported configuration version. Expected version 2."
             )
-            if not filePath:
-                return
-            if not isinstance(filePath, string_types):
-                filePath = filePath[0]
-            stepDict = json.load(open(filePath))
-            stepsList = []
+            return
 
-        if option == "Only Path":
-            for item in stepDict["itemsList"]:
-                stepsList.append(item)
+        # Load from JSON (loadFromJson handles clearing internally)
+        json_string = json.dumps(config_dict)
+        stepWidget.loadFromJson(json_string)
 
-        elif option == "Unpack":
-            unPackDir = pm.fileDialog2(fileMode=2, startingDirectory=startDir)
-            if not filePath:
-                return
-            if not isinstance(unPackDir, string_types):
-                unPackDir = unPackDir[0]
+        # Update the Maya attribute
+        self._updateStepListAttr(stepWidget, stepAttr)
 
-            for item in stepDict["itemsList"]:
-                fileName = os.path.split(item)[1]
-                fileNewPath = os.path.join(unPackDir, fileName)
-                stepsList.append(fileNewPath)
-                f = open(fileNewPath, "w")
-                f.write(stepDict[item])
-                f.close()
-
-        if option in ["Only Path", "Unpack"]:
-            for item in stepsList:
-                # Process the path and add to widget
-                fileName, processedPath = self._processCustomStepPath(item)
-                step_data = CustomStepData(
-                    name=fileName, path=processedPath, active=True
-                )
-                stepWidget.addStepItem(step_data)
-
-            self._updateStepListAttr(stepWidget, stepAttr)
+        pm.displayInfo("Custom steps imported from: {}".format(filePath))
 
     def _customStepMenu(self, cs_listWidget, stepAttr, QPos, pre=True):
         """Right click context menu for custom step."""
