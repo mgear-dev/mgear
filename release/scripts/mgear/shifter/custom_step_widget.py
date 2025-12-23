@@ -342,7 +342,7 @@ class CustomStepItemWidget(QtWidgets.QFrame):
     toggled = QtCore.Signal(bool)
     editRequested = QtCore.Signal()
     runRequested = QtCore.Signal()
-    clicked = QtCore.Signal(object)  # Emitted when clicked (passes self)
+    clicked = QtCore.Signal(object, object)  # Emitted when clicked (self, Qt.KeyboardModifiers)
     contextMenuRequested = QtCore.Signal(object, object)  # (self, QPoint global pos)
     dragStarted = QtCore.Signal(object)  # Emitted when drag starts (passes self)
 
@@ -603,7 +603,7 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         """Handle mouse press for selection and drag initiation."""
         if event.button() == QtCore.Qt.LeftButton:
             self._drag_start_pos = event.pos()
-            self.clicked.emit(self)
+            self.clicked.emit(self, event.modifiers())
         super(CustomStepItemWidget, self).mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -931,7 +931,7 @@ class GroupWidget(QtWidgets.QFrame):
     collapsed = QtCore.Signal(bool)
     nameChanged = QtCore.Signal(str)
     dataChanged = QtCore.Signal()
-    stepClicked = QtCore.Signal(object, object)  # (step_widget, group_widget)
+    stepClicked = QtCore.Signal(object, object, object)  # (step_widget, group_widget, modifiers)
     stepContextMenu = QtCore.Signal(object, object, object)  # (step_widget, pos, group_widget)
     stepDragStarted = QtCore.Signal(object, object)  # (step_widget, group_widget)
 
@@ -1013,7 +1013,7 @@ class GroupWidget(QtWidgets.QFrame):
         )
         # Connect mouse event signals for selection/drag/context menu
         widget.clicked.connect(
-            lambda w=widget: self.stepClicked.emit(w, self)
+            lambda w, mods, widget=widget: self.stepClicked.emit(widget, self, mods)
         )
         widget.contextMenuRequested.connect(
             lambda _, pos, wid=widget: self.stepContextMenu.emit(wid, pos, self)
@@ -1189,7 +1189,7 @@ class GroupWidget(QtWidgets.QFrame):
             lambda w=widget: self._on_step_run_requested(w)
         )
         widget.clicked.connect(
-            lambda w=widget: self.stepClicked.emit(w, self)
+            lambda w, mods, widget=widget: self.stepClicked.emit(widget, self, mods)
         )
         widget.contextMenuRequested.connect(
             lambda _, pos, wid=widget: self.stepContextMenu.emit(wid, pos, self)
@@ -1320,6 +1320,32 @@ class GroupWidget(QtWidgets.QFrame):
         # Groups themselves don't get highlighted, but their name could
         pass
 
+    def get_drop_index_at_pos(self, pos):
+        """Get the insertion index for a drop at the given position.
+
+        Args:
+            pos (QPoint): Position in body coordinates
+
+        Returns:
+            int: Index where an item should be inserted
+        """
+        if not self._step_widgets:
+            return 0
+
+        # Get the Y position relative to the steps container
+        container_pos = self._steps_container.mapFrom(self, pos)
+        y = container_pos.y()
+
+        # Find insertion point based on widget positions
+        for i, widget in enumerate(self._step_widgets):
+            widget_rect = widget.geometry()
+            widget_center_y = widget_rect.y() + widget_rect.height() / 2
+            if y < widget_center_y:
+                return i
+
+        # If past all widgets, insert at end
+        return len(self._step_widgets)
+
 
 class CustomStepListWidget(QtWidgets.QListWidget):
     """QListWidget that displays custom step widgets with drag-drop support.
@@ -1345,6 +1371,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     stepRunRequested = QtCore.Signal(int)
     orderChanged = QtCore.Signal()
     dataChanged = QtCore.Signal()
+    groupStepClicked = QtCore.Signal(object)  # Emitted when step in group clicked (CustomStepData)
 
     # Item type markers stored in UserRole
     ITEM_TYPE_STEP = "step"
@@ -1361,8 +1388,8 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Track widgets for proper cleanup
         self._item_widgets = {}
 
-        # Track selected step inside a group (widget, group_widget)
-        self._selected_group_step = None
+        # Track selected steps inside groups: list of (widget, group_widget) tuples
+        self._selected_group_steps = []
 
         # Track drag start for group steps
         self._drag_start_pos = None
@@ -1422,7 +1449,9 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                     step_widget, group_widget = self._find_step_widget_at_pos(pos)
                     if step_widget:
                         # Click is on a step inside a group
-                        self._on_group_step_clicked(step_widget, group_widget)
+                        self._on_group_step_clicked(
+                            step_widget, group_widget, event.modifiers()
+                        )
                         # Track for potential drag
                         self._drag_start_pos = pos
                         self._drag_step_widget = step_widget
@@ -1461,11 +1490,9 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             if widget and hasattr(widget, 'set_selected'):
                 widget.set_selected(i in selected_rows)
 
-        # Clear group step selection when list selection changes
-        if self._selected_group_step:
-            step_widget, _ = self._selected_group_step
-            step_widget.set_selected(False)
-            self._selected_group_step = None
+        # Clear group step selections when list selection changes
+        if self._selected_group_steps:
+            self._clear_group_step_selections()
 
     def _clear_all_selections(self):
         """Clear both list selections and group step selections."""
@@ -1474,33 +1501,73 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
     def _clear_group_step_selections(self):
         """Clear all step selections inside groups."""
-        if self._selected_group_step:
-            step_widget, _ = self._selected_group_step
+        for step_widget, _ in self._selected_group_steps:
             step_widget.set_selected(False)
-            self._selected_group_step = None
+        self._selected_group_steps = []
 
-        # Also clear any selected steps in all groups
+        # Also clear any selected steps in all groups (safety)
         for i in range(self.count()):
             widget = self.getItemWidget(i)
             if isinstance(widget, GroupWidget):
                 widget.clear_step_selections()
 
-    def _on_group_step_clicked(self, step_widget, group_widget):
+    def _on_group_step_clicked(self, step_widget, group_widget, modifiers):
         """Handle click on a step inside a group.
 
         Args:
             step_widget (CustomStepItemWidget): The clicked step widget
             group_widget (GroupWidget): The group containing the step
+            modifiers (Qt.KeyboardModifiers): Keyboard modifiers during click
         """
         # Clear list widget selection
         self.clearSelection()
 
-        # Clear previous group step selection
-        self._clear_group_step_selections()
+        ctrl_pressed = modifiers & QtCore.Qt.ControlModifier
+        shift_pressed = modifiers & QtCore.Qt.ShiftModifier
 
-        # Select this step
-        step_widget.set_selected(True)
-        self._selected_group_step = (step_widget, group_widget)
+        if ctrl_pressed:
+            # Toggle selection of this step
+            if step_widget.is_selected():
+                step_widget.set_selected(False)
+                self._selected_group_steps = [
+                    (w, g) for w, g in self._selected_group_steps
+                    if w is not step_widget
+                ]
+            else:
+                step_widget.set_selected(True)
+                self._selected_group_steps.append((step_widget, group_widget))
+        elif shift_pressed and self._selected_group_steps:
+            # Range selection within the same group
+            last_widget, last_group = self._selected_group_steps[-1]
+            if last_group is group_widget:
+                # Get indices
+                start_idx = group_widget.get_step_index(last_widget)
+                end_idx = group_widget.get_step_index(step_widget)
+                if start_idx >= 0 and end_idx >= 0:
+                    min_idx = min(start_idx, end_idx)
+                    max_idx = max(start_idx, end_idx)
+                    # Select range
+                    step_widgets = group_widget.get_step_widgets()
+                    for i in range(min_idx, max_idx + 1):
+                        w = step_widgets[i]
+                        if not w.is_selected():
+                            w.set_selected(True)
+                            self._selected_group_steps.append((w, group_widget))
+            else:
+                # Different group - just select this one
+                self._clear_group_step_selections()
+                step_widget.set_selected(True)
+                self._selected_group_steps.append((step_widget, group_widget))
+        else:
+            # Normal click - clear previous and select this one
+            self._clear_group_step_selections()
+            step_widget.set_selected(True)
+            self._selected_group_steps.append((step_widget, group_widget))
+
+        # Emit signal for info panel update
+        step_data = step_widget.get_step_data()
+        if step_data:
+            self.groupStepClicked.emit(step_data)
 
     def _on_group_step_context_menu(self, step_widget, global_pos, group_widget):
         """Handle context menu request for a step inside a group.
@@ -1510,18 +1577,13 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             global_pos (QPoint): Global position for menu
             group_widget (GroupWidget): The group containing the step
         """
-        print("[DEBUG] _on_group_step_context_menu called!")
-        print("[DEBUG] step_widget:", step_widget)
-        print("[DEBUG] global_pos:", global_pos)
-        print("[DEBUG] group_widget:", group_widget)
-
-        # Select the step first
-        self._on_group_step_clicked(step_widget, group_widget)
+        # Select the step if not already selected
+        if not step_widget.is_selected():
+            self._on_group_step_clicked(step_widget, group_widget, QtCore.Qt.NoModifier)
 
         # Create context menu - store as instance variable like main menu
         # Use self (the list widget) as parent to ensure menu stays alive
         self._group_step_menu = QtWidgets.QMenu(self)
-        print("[DEBUG] menu created:", self._group_step_menu)
 
         # Edit action
         edit_action = self._group_step_menu.addAction("Edit")
@@ -1556,9 +1618,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         )
 
         # Show menu using exec_() which blocks until menu closes
-        print("[DEBUG] about to call exec_() at global_pos:", global_pos)
-        result = self._group_step_menu.exec_(global_pos)
-        print("[DEBUG] exec_() returned:", result)
+        self._group_step_menu.exec_(global_pos)
 
     def _edit_group_step(self, step_widget):
         """Edit a step from a group."""
@@ -1697,8 +1757,11 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             step_widget (CustomStepItemWidget): The step being dragged
             group_widget (GroupWidget): The group containing the step
         """
-        # Select the step
-        self._on_group_step_clicked(step_widget, group_widget)
+        # Select the step if not already selected
+        if not step_widget.is_selected():
+            self._on_group_step_clicked(
+                step_widget, group_widget, QtCore.Qt.NoModifier
+            )
 
         # Start a drag operation
         drag = QtGui.QDrag(self)
@@ -2465,8 +2528,23 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 return
             elif target_group_widget is source_group_widget:
                 # Reorder within same group - determine position based on Y coordinate
-                # This is handled by checking where in the group we dropped
-                event.ignore()
+                # Map the drop position to the group widget coordinates
+                group_local_pos = target_group_widget.mapFromGlobal(
+                    self.mapToGlobal(drop_pos)
+                )
+                target_index = target_group_widget.get_drop_index_at_pos(group_local_pos)
+
+                # Adjust target index if dragging down (since we remove first)
+                if target_index > step_index:
+                    target_index -= 1
+
+                if target_index != step_index:
+                    target_group_widget.move_step(step_index, target_index)
+                    event.acceptProposedAction()
+                    self._clear_group_step_selections()
+                    self.dataChanged.emit()
+                else:
+                    event.ignore()
                 return
 
         # Dropping onto top level (not a group)
@@ -2867,6 +2945,14 @@ class CustomStepMixin(object):
             partial(self.updateInfoPanel, pre=False)
         )
 
+        # Group step click to update info panel
+        csTap.preCustomStep_listWidget.groupStepClicked.connect(
+            partial(self._updateInfoPanelFromData, pre=True)
+        )
+        csTap.postCustomStep_listWidget.groupStepClicked.connect(
+            partial(self._updateInfoPanelFromData, pre=False)
+        )
+
         # File drop connections
         csTap.preCustomStep_listWidget.filesDropped.connect(
             partial(self.onFilesDropped, pre=True)
@@ -2955,6 +3041,20 @@ class CustomStepMixin(object):
 
         if not step_data:
             return
+
+        self._updateInfoPanelFromData(step_data, pre)
+
+    def _updateInfoPanelFromData(self, step_data, pre=True):
+        """Update the info panel from step data directly.
+
+        Args:
+            step_data (CustomStepData): The step data to display
+            pre (bool): Whether this is a pre or post step
+        """
+        if not step_data:
+            return
+
+        csTap = self.customStepTab
 
         # Get step info from data model
         cs_name = step_data.name
@@ -3565,31 +3665,22 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
     def _customStepMenu(self, cs_listWidget, stepAttr, QPos, pre=True):
         """Right click context menu for custom step."""
-        print("[DEBUG] _customStepMenu called with QPos:", QPos)
         # Check if clicking on a step inside a group first
         clickedItem = cs_listWidget.itemAt(QPos)
         clickedRow = cs_listWidget.row(clickedItem) if clickedItem else -1
-        print("[DEBUG] clickedRow:", clickedRow)
 
         if clickedRow >= 0 and cs_listWidget.isGroupRow(clickedRow):
-            print("[DEBUG] clicked on a group row")
             # Check if the click is on a step widget inside the group
             group_widget = cs_listWidget.getGroupWidget(clickedRow)
-            print("[DEBUG] group_widget:", group_widget, "collapsed:", group_widget.is_collapsed() if group_widget else "N/A")
             if group_widget and not group_widget.is_collapsed():
                 # Map the position to global coordinates using viewport
-                # QPos from customContextMenuRequested is in widget coords
-                # For QListWidget, we should use viewport mapping for child widget checks
                 global_pos = cs_listWidget.viewport().mapToGlobal(QPos)
-                print("[DEBUG] global_pos (via viewport):", global_pos)
 
                 # Check each step widget in the group using global rect
                 step_widgets = group_widget.get_step_widgets()
-                print("[DEBUG] step_widgets count:", len(step_widgets))
                 for step_widget in step_widgets:
                     # Skip if widget is not visible
                     if not step_widget.isVisible():
-                        print("[DEBUG] step_widget not visible, skipping")
                         continue
                     # Get the step widget's global rectangle
                     widget_global_pos = step_widget.mapToGlobal(
@@ -3598,15 +3689,12 @@ class CustomShifterStep(cstp.customShifterMainStep):
                     widget_rect = QtCore.QRect(
                         widget_global_pos, step_widget.size()
                     )
-                    print("[DEBUG] step_widget rect:", widget_rect, "contains global_pos:", widget_rect.contains(global_pos))
                     if widget_rect.contains(global_pos):
                         # Click is on a step inside the group - show group step menu
-                        print("[DEBUG] HIT! calling _on_group_step_context_menu")
                         cs_listWidget._on_group_step_context_menu(
                             step_widget, global_pos, group_widget
                         )
                         return
-                print("[DEBUG] no step widget hit")
 
         self.csMenu = QtWidgets.QMenu()
         parentPosition = cs_listWidget.mapToGlobal(QtCore.QPoint(0, 0))
@@ -3797,7 +3885,6 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
     def preCustomStepMenu(self, QPos):
         """Show pre custom step context menu."""
-        print("[DEBUG] preCustomStepMenu called with QPos:", QPos)
         self._customStepMenu(
             self.customStepTab.preCustomStep_listWidget,
             "preCustomStep",
@@ -3807,7 +3894,6 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
     def postCustomStepMenu(self, QPos):
         """Show post custom step context menu."""
-        print("[DEBUG] postCustomStepMenu called with QPos:", QPos)
         self._customStepMenu(
             self.customStepTab.postCustomStep_listWidget,
             "postCustomStep",
