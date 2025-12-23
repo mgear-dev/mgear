@@ -238,6 +238,7 @@ class Rig(object):
         mgear.log("\n" + "= SHIFTER RIG SYSTEM " + "=" * 46)
 
         self.stopBuild = False
+        build_data = None
         selection = pm.ls(selection=True)
         if not selection:
             selection = pm.ls("guide")
@@ -271,8 +272,6 @@ class Rig(object):
             # Collect post-build data
             if self.options["data_collector_embedded"] or self.options["data_collector"]:
                 build_data = self.collect_build_data()
-            else:
-                build_data = None
 
             endTime = datetime.datetime.now()
             finalTime = endTime - startTime
@@ -308,9 +307,74 @@ class Rig(object):
 
     def stepsList(self, checker, attr):
         if self.options[checker] and self.options[attr]:
-            return self.options[attr].split(",")
+            return self._parseCustomSteps(self.options[attr])
         else:
             return None
+
+    def _parseCustomSteps(self, customStepsStr):
+        """Parse custom steps from JSON or legacy comma-separated format.
+
+        Args:
+            customStepsStr (str): The custom steps string from Maya attribute
+
+        Returns:
+            list: List of active step path strings (e.g., ["_shared\\step.py"])
+        """
+        if not customStepsStr:
+            return []
+
+        # Try JSON format first (version 2)
+        customStepsStr = customStepsStr.strip()
+        if customStepsStr.startswith("{"):
+            try:
+                data = json.loads(customStepsStr)
+                if isinstance(data, dict) and data.get("version") == 2:
+                    return self._extractActiveStepsFromJson(data.get("items", []))
+            except json.JSONDecodeError:
+                pass
+
+        # Fall back to legacy comma-separated format
+        steps = []
+        for step in customStepsStr.split(","):
+            step = step.strip()
+            if not step:
+                continue
+            if step.startswith("*"):
+                # Inactive step in legacy format
+                continue
+            # Extract path from "name | path" format
+            if "|" in step:
+                path = step.split("|")[-1].strip()
+                if path.startswith(" "):
+                    path = path[1:]
+                steps.append(path)
+            else:
+                steps.append(step)
+        return steps
+
+    def _extractActiveStepsFromJson(self, items):
+        """Extract active step paths from JSON items list.
+
+        Args:
+            items (list): List of item dicts (steps and groups)
+
+        Returns:
+            list: List of active step path strings
+        """
+        steps = []
+        for item in items:
+            item_type = item.get("type", "step")
+            if item_type == "step":
+                if item.get("active", True):
+                    path = item.get("path", "")
+                    if path:
+                        steps.append(path)
+            elif item_type == "group":
+                # Only process group items if the group itself is active
+                if item.get("active", True):
+                    group_items = item.get("items", [])
+                    steps.extend(self._extractActiveStepsFromJson(group_items))
+        return steps
 
     def from_dict_custom_step(self, conf_dict, pre=True):
         if pre:
@@ -322,16 +386,19 @@ class Rig(object):
         p_val = conf_dict["guide_root"]["param_values"]
         if p_val[pre_post]:
             customSteps = p_val[pre_post_path]
-            self.customStep(customSteps.split(","))
+            self.customStep(self._parseCustomSteps(customSteps))
 
     def customStep(self, customSteps=None):
+        """Execute custom steps.
+
+        Args:
+            customSteps (list): List of step path strings (e.g., ["_shared\\step.py"])
+        """
         if customSteps:
             for step in customSteps:
                 if not self.stopBuild:
-                    if step.startswith("*"):
-                        continue
                     self.stopBuild = custom_step_widget.runStep(
-                        step.split("|")[-1][1:], self.customStepDic
+                        step, self.customStepDic
                     )
                 else:
                     pm.displayWarning("Build Stopped")
@@ -342,17 +409,14 @@ class Rig(object):
             selection[0].hasAttr("ismodel")
             and selection[0].attr("doPreCustomStep").get()
         ):
-            customSteps = selection[0].attr("preCustomStep").get()
-            if customSteps:
+            customStepsStr = selection[0].attr("preCustomStep").get()
+            if customStepsStr:
                 mgear.log("\n" + "= PRE CUSTOM STEPS " + "=" * 46)
+                customSteps = self._parseCustomSteps(customStepsStr)
                 # use forward slash for OS compatibility
                 if sys.platform.startswith("darwin"):
-                    customSteps = [
-                        cs.replace("\\", "/") for cs in customSteps.split(",")
-                    ]
-                    self.customStep(customSteps)
-                else:
-                    self.customStep(customSteps.split(","))
+                    customSteps = [cs.replace("\\", "/") for cs in customSteps]
+                self.customStep(customSteps)
 
     def postCustomStep(self):
         customSteps = self.stepsList("doPostCustomStep", "postCustomStep")

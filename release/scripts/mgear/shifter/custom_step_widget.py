@@ -140,9 +140,181 @@ class CustomStepData(object):
         """
         return os.path.exists(self.get_full_path())
 
+    def to_dict(self):
+        """Serialize to dictionary for JSON storage.
+
+        Returns:
+            dict: Dictionary representation of the step data
+        """
+        return {
+            "type": "step",
+            "name": self._name,
+            "path": self._path,
+            "active": self._active
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Create CustomStepData from dictionary.
+
+        Args:
+            data (dict): Dictionary with name, path, active keys
+
+        Returns:
+            CustomStepData: New instance from dictionary data
+        """
+        return cls(
+            name=data.get("name", ""),
+            path=data.get("path", ""),
+            active=data.get("active", True)
+        )
+
     def __repr__(self):
         return "CustomStepData(name={!r}, path={!r}, active={!r})".format(
             self._name, self._path, self._active
+        )
+
+
+# ============================================================================
+# Group Data Model
+# ============================================================================
+
+
+class GroupData(object):
+    """Data model for a custom step group.
+
+    Groups can contain multiple CustomStepData items and can be
+    collapsed/expanded and activated/deactivated as a unit.
+
+    Attributes:
+        name (str): Display name of the group
+        collapsed (bool): Whether the group is visually collapsed
+        active (bool): Whether the group (and all children) are active
+        items (list): List of CustomStepData objects in this group
+    """
+
+    def __init__(self, name="", collapsed=False, active=True, items=None):
+        """Initialize GroupData.
+
+        Args:
+            name (str): Display name of the group
+            collapsed (bool): Whether group is collapsed
+            active (bool): Whether group is active
+            items (list): List of CustomStepData objects
+        """
+        self._name = name
+        self._collapsed = collapsed
+        self._active = active
+        self._items = items if items is not None else []
+
+    @property
+    def name(self):
+        """str: The display name of the group."""
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    @property
+    def collapsed(self):
+        """bool: Whether the group is collapsed."""
+        return self._collapsed
+
+    @collapsed.setter
+    def collapsed(self, value):
+        self._collapsed = bool(value)
+
+    @property
+    def active(self):
+        """bool: Whether the group is active."""
+        return self._active
+
+    @active.setter
+    def active(self, value):
+        self._active = bool(value)
+
+    @property
+    def items(self):
+        """list: List of CustomStepData objects in this group."""
+        return self._items
+
+    def add_item(self, step_data):
+        """Add a CustomStepData to this group.
+
+        Args:
+            step_data (CustomStepData): Step to add
+        """
+        self._items.append(step_data)
+
+    def remove_item(self, step_data):
+        """Remove a CustomStepData from this group.
+
+        Args:
+            step_data (CustomStepData): Step to remove
+        """
+        if step_data in self._items:
+            self._items.remove(step_data)
+
+    def insert_item(self, index, step_data):
+        """Insert a CustomStepData at a specific index.
+
+        Args:
+            index (int): Index to insert at
+            step_data (CustomStepData): Step to insert
+        """
+        self._items.insert(index, step_data)
+
+    def get_active_items(self):
+        """Get list of items that are effectively active.
+
+        Items are only active if both the group and the item are active.
+
+        Returns:
+            list: List of active CustomStepData objects
+        """
+        if not self._active:
+            return []
+        return [item for item in self._items if item.active]
+
+    def to_dict(self):
+        """Serialize to dictionary for JSON storage.
+
+        Returns:
+            dict: Dictionary representation of the group
+        """
+        return {
+            "type": "group",
+            "name": self._name,
+            "collapsed": self._collapsed,
+            "active": self._active,
+            "items": [item.to_dict() for item in self._items]
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Create GroupData from dictionary.
+
+        Args:
+            data (dict): Dictionary with group data
+
+        Returns:
+            GroupData: New instance from dictionary data
+        """
+        items = [
+            CustomStepData.from_dict(item_data)
+            for item_data in data.get("items", [])
+        ]
+        return cls(
+            name=data.get("name", ""),
+            collapsed=data.get("collapsed", False),
+            active=data.get("active", True),
+            items=items
+        )
+
+    def __repr__(self):
+        return "GroupData(name={!r}, collapsed={!r}, active={!r}, items={!r})".format(
+            self._name, self._collapsed, self._active, self._items
         )
 
 
@@ -192,6 +364,7 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         super(CustomStepItemWidget, self).__init__(parent)
         self._step_data = step_data or CustomStepData()
         self._selected = False
+        self._group_inactive = False  # True if parent group is inactive
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.setFrameShadow(QtWidgets.QFrame.Raised)
         self._setup_ui()
@@ -260,10 +433,11 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         self._name_label.setText(self._step_data.name)
 
         # Determine background and border colors based on state
+        # Priority: selected > group_inactive > step_inactive > shared > normal
         if self._selected:
             bg_color = self.SELECTED_COLOR
             border_color = self.SELECTED_BORDER_COLOR
-        elif not self._step_data.active:
+        elif self._group_inactive or not self._step_data.active:
             bg_color = self.INACTIVE_COLOR
             border_color = self.BORDER_COLOR
         elif self._step_data.is_shared:
@@ -408,14 +582,598 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         """
         return self._selected
 
+    def set_group_inactive(self, group_inactive):
+        """Set whether this item's parent group is inactive.
+
+        When a group is inactive, all contained steps appear dimmed.
+
+        Args:
+            group_inactive (bool): Whether the parent group is inactive
+        """
+        self._group_inactive = group_inactive
+        self._update_appearance()
+
+
+# ============================================================================
+# Group Widget
+# ============================================================================
+
+
+class GroupHeaderWidget(QtWidgets.QFrame):
+    """Header widget for a custom step group.
+
+    Provides:
+    - Collapse/expand arrow (left)
+    - Toggle button for group activation
+    - Editable group name label (double-click to edit)
+    - Item count indicator
+
+    Signals:
+        toggled: Emitted when active state changes
+        collapseToggled: Emitted when collapse state changes
+        nameChanged: Emitted when name is edited
+    """
+
+    toggled = QtCore.Signal(bool)
+    collapseToggled = QtCore.Signal(bool)
+    nameChanged = QtCore.Signal(str)
+
+    # Style constants - slightly different shade for groups
+    GROUP_COLOR = "#4A4A5A"  # Darker purple-gray for groups
+    INACTIVE_COLOR = "#5A4444"  # Darker red for inactive groups
+    SELECTED_COLOR = "#4A6B8A"  # Pale blue for selected
+    BORDER_COLOR = "#666666"
+    SELECTED_BORDER_COLOR = "#6A9BCA"
+    BORDER_RADIUS = 4
+    ICON_SIZE = 16
+    BUTTON_SIZE = 20
+
+    def __init__(self, group_data=None, parent=None):
+        """Initialize the group header widget.
+
+        Args:
+            group_data (GroupData): The data for this group
+            parent (QWidget): Parent widget
+        """
+        super(GroupHeaderWidget, self).__init__(parent)
+        self._group_data = group_data or GroupData()
+        self._selected = False
+        self._editing = False
+        self.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.setFrameShadow(QtWidgets.QFrame.Raised)
+        self._setup_ui()
+        self._update_appearance()
+
+    def _setup_ui(self):
+        """Set up the widget UI."""
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(4)
+
+        # Collapse arrow button
+        self._collapse_btn = QtWidgets.QPushButton()
+        self._collapse_btn.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self._collapse_btn.setFlat(True)
+        self._collapse_btn.setToolTip("Expand/Collapse group")
+        self._collapse_btn.clicked.connect(self._on_collapse_clicked)
+        layout.addWidget(self._collapse_btn)
+
+        # Toggle button for group activation
+        self._toggle_btn = QtWidgets.QPushButton()
+        self._toggle_btn.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self._toggle_btn.setCheckable(True)
+        self._toggle_btn.setChecked(self._group_data.active)
+        self._toggle_btn.setToolTip("Toggle group active/inactive")
+        self._toggle_btn.setFlat(True)
+        self._toggle_btn.clicked.connect(self._on_toggle_clicked)
+        layout.addWidget(self._toggle_btn)
+
+        # Name label (editable on double-click)
+        self._name_label = QtWidgets.QLabel(self._group_data.name)
+        self._name_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Preferred
+        )
+        font = self._name_label.font()
+        font.setBold(True)
+        self._name_label.setFont(font)
+        layout.addWidget(self._name_label)
+
+        # Item count label
+        self._count_label = QtWidgets.QLabel()
+        self._count_label.setStyleSheet("color: #888888;")
+        layout.addWidget(self._count_label)
+
+        self._update_icons()
+        self._update_count()
+
+    def _update_icons(self):
+        """Update button icons based on state."""
+        # Collapse icon
+        if self._group_data.collapsed:
+            collapse_icon = pyqt.get_icon("mgear_chevron-right", self.ICON_SIZE)
+        else:
+            collapse_icon = pyqt.get_icon("mgear_chevron-down", self.ICON_SIZE)
+        self._collapse_btn.setIcon(collapse_icon)
+
+        # Toggle icon
+        if self._group_data.active:
+            toggle_icon = pyqt.get_icon("mgear_check-circle", self.ICON_SIZE)
+        else:
+            toggle_icon = pyqt.get_icon("mgear_x-circle", self.ICON_SIZE)
+        self._toggle_btn.setIcon(toggle_icon)
+
+    def _update_count(self):
+        """Update the item count display."""
+        count = len(self._group_data.items)
+        self._count_label.setText("({})".format(count))
+
+    def _update_appearance(self):
+        """Update the widget appearance based on state."""
+        self._update_icons()
+        self._toggle_btn.setChecked(self._group_data.active)
+        self._name_label.setText(self._group_data.name)
+        self._update_count()
+
+        # Determine background and border colors
+        if self._selected:
+            bg_color = self.SELECTED_COLOR
+            border_color = self.SELECTED_BORDER_COLOR
+        elif not self._group_data.active:
+            bg_color = self.INACTIVE_COLOR
+            border_color = self.BORDER_COLOR
+        else:
+            bg_color = self.GROUP_COLOR
+            border_color = self.BORDER_COLOR
+
+        self.setStyleSheet(
+            """
+            GroupHeaderWidget {{
+                background-color: {bg};
+                border: 1px solid {border};
+                border-radius: {radius}px;
+                padding: 2px;
+            }}
+            GroupHeaderWidget QPushButton {{
+                background-color: transparent;
+                border: none;
+            }}
+            GroupHeaderWidget QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 30);
+                border-radius: 3px;
+            }}
+            GroupHeaderWidget QPushButton:pressed {{
+                background-color: rgba(255, 255, 255, 50);
+            }}
+            GroupHeaderWidget QLabel {{
+                background-color: transparent;
+                border: none;
+            }}
+            """.format(
+                bg=bg_color,
+                border=border_color,
+                radius=self.BORDER_RADIUS
+            )
+        )
+
+    def _on_collapse_clicked(self):
+        """Handle collapse button click."""
+        self._group_data.collapsed = not self._group_data.collapsed
+        self._update_icons()
+        self.collapseToggled.emit(self._group_data.collapsed)
+
+    def _on_toggle_clicked(self):
+        """Handle toggle button click."""
+        self._group_data.active = self._toggle_btn.isChecked()
+        self._update_appearance()
+        self.toggled.emit(self._group_data.active)
+
+    def mouseDoubleClickEvent(self, event):
+        """Handle double-click for inline name editing."""
+        if self._name_label.geometry().contains(event.pos()) and not self._editing:
+            self._start_editing()
+        else:
+            super(GroupHeaderWidget, self).mouseDoubleClickEvent(event)
+
+    def _start_editing(self):
+        """Replace label with line edit for name editing."""
+        self._editing = True
+
+        # Create line edit
+        self._edit = QtWidgets.QLineEdit(self._group_data.name)
+        self._edit.selectAll()
+        self._edit.editingFinished.connect(self._finish_editing)
+        self._edit.installEventFilter(self)
+
+        # Replace label with edit in layout
+        layout = self.layout()
+        index = layout.indexOf(self._name_label)
+        self._name_label.hide()
+        layout.insertWidget(index, self._edit)
+        self._edit.setFocus()
+
+    def _finish_editing(self):
+        """Finish editing and restore label."""
+        if not self._editing:
+            return
+
+        new_name = self._edit.text().strip()
+        if new_name and new_name != self._group_data.name:
+            self._group_data.name = new_name
+            self._name_label.setText(new_name)
+            self.nameChanged.emit(new_name)
+
+        self._edit.deleteLater()
+        self._name_label.show()
+        self._editing = False
+
+    def eventFilter(self, obj, event):
+        """Handle escape key to cancel editing."""
+        if obj == getattr(self, '_edit', None):
+            if event.type() == QtCore.QEvent.KeyPress:
+                if event.key() == QtCore.Qt.Key_Escape:
+                    # Cancel editing without saving
+                    self._edit.deleteLater()
+                    self._name_label.show()
+                    self._editing = False
+                    return True
+        return super(GroupHeaderWidget, self).eventFilter(obj, event)
+
+    # Public API
+
+    def get_group_data(self):
+        """Get the group data.
+
+        Returns:
+            GroupData: The current group data
+        """
+        return self._group_data
+
+    def set_group_data(self, group_data):
+        """Set the group data and update appearance.
+
+        Args:
+            group_data (GroupData): New group data
+        """
+        self._group_data = group_data
+        self._update_appearance()
+
+    def set_selected(self, selected):
+        """Set whether this header is selected.
+
+        Args:
+            selected (bool): Whether the header is selected
+        """
+        if self._selected != selected:
+            self._selected = selected
+            self._update_appearance()
+
+    def is_selected(self):
+        """Check if this header is selected.
+
+        Returns:
+            bool: True if selected
+        """
+        return self._selected
+
+    def is_collapsed(self):
+        """Check if the group is collapsed.
+
+        Returns:
+            bool: True if collapsed
+        """
+        return self._group_data.collapsed
+
+    def set_collapsed(self, collapsed):
+        """Set the collapsed state.
+
+        Args:
+            collapsed (bool): New collapsed state
+        """
+        self._group_data.collapsed = collapsed
+        self._update_icons()
+
+
+class GroupWidget(QtWidgets.QFrame):
+    """Collapsible group container for custom steps.
+
+    Contains a header and a body that holds CustomStepItemWidgets.
+
+    Signals:
+        toggled: Group activation changed
+        collapsed: Group collapse state changed
+        nameChanged: Group name changed
+        dataChanged: Data in group was modified
+    """
+
+    toggled = QtCore.Signal(bool)
+    collapsed = QtCore.Signal(bool)
+    nameChanged = QtCore.Signal(str)
+    dataChanged = QtCore.Signal()
+
+    # Indent for child items
+    CHILD_INDENT = 20
+
+    def __init__(self, group_data=None, parent=None):
+        """Initialize the group widget.
+
+        Args:
+            group_data (GroupData): The data for this group
+            parent (QWidget): Parent widget
+        """
+        super(GroupWidget, self).__init__(parent)
+        self._group_data = group_data or GroupData()
+        self._step_widgets = []
+        self._selected = False
+        self._setup_ui()
+        self._populate()
+
+    def _setup_ui(self):
+        """Set up the widget UI."""
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        # Header
+        self._header = GroupHeaderWidget(self._group_data)
+        self._header.toggled.connect(self._on_header_toggled)
+        self._header.collapseToggled.connect(self._on_collapse_toggled)
+        self._header.nameChanged.connect(self._on_name_changed)
+        layout.addWidget(self._header)
+
+        # Body container for step items
+        self._body = QtWidgets.QWidget()
+        body_layout = QtWidgets.QVBoxLayout(self._body)
+        body_layout.setContentsMargins(self.CHILD_INDENT, 2, 0, 2)
+        body_layout.setSpacing(2)
+
+        # Steps container
+        self._steps_container = QtWidgets.QWidget()
+        self._steps_layout = QtWidgets.QVBoxLayout(self._steps_container)
+        self._steps_layout.setContentsMargins(0, 0, 0, 0)
+        self._steps_layout.setSpacing(2)
+        body_layout.addWidget(self._steps_container)
+
+        layout.addWidget(self._body)
+
+        # Set initial collapse state
+        self._body.setVisible(not self._group_data.collapsed)
+
+    def _populate(self):
+        """Populate the group with step widgets from data."""
+        for step_data in self._group_data.items:
+            self._add_step_widget(step_data)
+        self._update_step_appearances()
+
+    def _add_step_widget(self, step_data):
+        """Add a step widget for the given step data.
+
+        Args:
+            step_data (CustomStepData): Step data to create widget for
+
+        Returns:
+            CustomStepItemWidget: The created widget
+        """
+        widget = CustomStepItemWidget(step_data)
+        self._steps_layout.addWidget(widget)
+        self._step_widgets.append(widget)
+
+        # Connect signals
+        widget.toggled.connect(self._on_step_toggled)
+        widget.editRequested.connect(
+            lambda w=widget: self._on_step_edit_requested(w)
+        )
+        widget.runRequested.connect(
+            lambda w=widget: self._on_step_run_requested(w)
+        )
+
+        return widget
+
+    def _update_step_appearances(self):
+        """Update all step widget appearances based on group state."""
+        group_inactive = not self._group_data.active
+        for widget in self._step_widgets:
+            if hasattr(widget, 'set_group_inactive'):
+                widget.set_group_inactive(group_inactive)
+
+    def _on_header_toggled(self, active):
+        """Handle header toggle."""
+        self._update_step_appearances()
+        self.toggled.emit(active)
+        self.dataChanged.emit()
+
+    def _on_collapse_toggled(self, is_collapsed):
+        """Handle collapse toggle."""
+        self._body.setVisible(not is_collapsed)
+        self.collapsed.emit(is_collapsed)
+        self.dataChanged.emit()
+
+    def _on_name_changed(self, new_name):
+        """Handle name change."""
+        self.nameChanged.emit(new_name)
+        self.dataChanged.emit()
+
+    def _on_step_toggled(self, active):
+        """Handle step toggle."""
+        self.dataChanged.emit()
+
+    def _on_step_edit_requested(self, widget):
+        """Handle step edit request."""
+        # Find the step data and emit with path
+        step_data = widget.get_step_data()
+        if step_data:
+            fullpath = step_data.get_full_path()
+            if fullpath:
+                CustomStepMixin._editFile(fullpath)
+
+    def _on_step_run_requested(self, widget):
+        """Handle step run request."""
+        step_data = widget.get_step_data()
+        if step_data:
+            CustomStepMixin.runStep(step_data.path, customStepDic={})
+
+    # Public API
+
+    def get_group_data(self):
+        """Get the group data.
+
+        Returns:
+            GroupData: The current group data
+        """
+        return self._group_data
+
+    def add_step(self, step_data):
+        """Add a step to this group.
+
+        Args:
+            step_data (CustomStepData): Step to add
+        """
+        self._group_data.add_item(step_data)
+        widget = self._add_step_widget(step_data)
+        self._update_step_appearances()
+        self._header._update_count()
+        self.dataChanged.emit()
+        return widget
+
+    def remove_step(self, index):
+        """Remove step at index.
+
+        Args:
+            index (int): Index of step to remove
+
+        Returns:
+            CustomStepData: The removed step data, or None
+        """
+        if 0 <= index < len(self._step_widgets):
+            widget = self._step_widgets.pop(index)
+            step_data = widget.get_step_data()
+            self._steps_layout.removeWidget(widget)
+            widget.deleteLater()
+
+            if index < len(self._group_data.items):
+                self._group_data.items.pop(index)
+
+            self._header._update_count()
+            self.dataChanged.emit()
+            return step_data
+        return None
+
+    def remove_step_widget(self, widget):
+        """Remove a specific step widget.
+
+        Args:
+            widget (CustomStepItemWidget): Widget to remove
+
+        Returns:
+            CustomStepData: The removed step data, or None
+        """
+        if widget in self._step_widgets:
+            index = self._step_widgets.index(widget)
+            return self.remove_step(index)
+        return None
+
+    def get_step_widgets(self):
+        """Get all step widgets in this group.
+
+        Returns:
+            list: List of CustomStepItemWidget instances
+        """
+        return self._step_widgets[:]
+
+    def get_step_count(self):
+        """Get the number of steps in this group.
+
+        Returns:
+            int: Number of steps
+        """
+        return len(self._step_widgets)
+
+    def set_selected(self, selected):
+        """Set whether this group is selected.
+
+        Args:
+            selected (bool): Whether the group is selected
+        """
+        if self._selected != selected:
+            self._selected = selected
+            self._header.set_selected(selected)
+
+    def is_selected(self):
+        """Check if this group is selected.
+
+        Returns:
+            bool: True if selected
+        """
+        return self._selected
+
+    def is_collapsed(self):
+        """Check if the group is collapsed.
+
+        Returns:
+            bool: True if collapsed
+        """
+        return self._group_data.collapsed
+
+    def set_collapsed(self, collapsed):
+        """Set the collapsed state.
+
+        Args:
+            collapsed (bool): New collapsed state
+        """
+        self._group_data.collapsed = collapsed
+        self._header.set_collapsed(collapsed)
+        self._body.setVisible(not collapsed)
+
+    def is_active(self):
+        """Check if the group is active.
+
+        Returns:
+            bool: True if active
+        """
+        return self._group_data.active
+
+    def set_active(self, active):
+        """Set the active state.
+
+        Args:
+            active (bool): New active state
+        """
+        self._group_data.active = active
+        self._header._group_data.active = active
+        self._header._update_appearance()
+        self._update_step_appearances()
+
+    def highlight_matching_steps(self, search_text):
+        """Highlight steps matching the search text.
+
+        Args:
+            search_text (str): Text to search for
+        """
+        search_lower = search_text.lower() if search_text else ""
+        for widget in self._step_widgets:
+            if search_lower and search_lower in widget.get_name().lower():
+                widget.set_highlighted(True)
+            else:
+                widget.set_highlighted(False)
+
+    def set_highlighted(self, highlighted):
+        """Set whether the group header should be highlighted.
+
+        Args:
+            highlighted (bool): Whether to highlight
+        """
+        # Groups themselves don't get highlighted, but their name could
+        pass
+
 
 class CustomStepListWidget(QtWidgets.QListWidget):
     """QListWidget that displays custom step widgets with drag-drop support.
 
-    This widget manages CustomStepItemWidget instances and provides:
+    This widget manages CustomStepItemWidget and GroupWidget instances and provides:
     - External file drops (.py files)
     - Internal drag-drop reordering
     - Item widget management
+    - Group support for organizing steps
 
     Signals:
         filesDropped: Emitted when .py files are dropped from external sources
@@ -423,6 +1181,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         stepEditRequested: Emitted when edit is requested for a step (row)
         stepRunRequested: Emitted when run is requested for a step (row)
         orderChanged: Emitted when items are reordered
+        dataChanged: Emitted when any data changes (for JSON storage)
     """
 
     filesDropped = QtCore.Signal(list)
@@ -430,6 +1189,11 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     stepEditRequested = QtCore.Signal(int)
     stepRunRequested = QtCore.Signal(int)
     orderChanged = QtCore.Signal()
+    dataChanged = QtCore.Signal()
+
+    # Item type markers stored in UserRole
+    ITEM_TYPE_STEP = "step"
+    ITEM_TYPE_GROUP = "group"
 
     def __init__(self, parent=None):
         super(CustomStepListWidget, self).__init__(parent)
@@ -450,9 +1214,30 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Get selected rows as a set (rows are hashable, items are not in PySide6)
         selected_rows = set(self.row(item) for item in self.selectedItems())
         for i in range(self.count()):
-            widget = self.getStepWidget(i)
+            widget = self.getItemWidget(i)
             if widget and hasattr(widget, 'set_selected'):
                 widget.set_selected(i in selected_rows)
+
+    def _get_item_type(self, item):
+        """Get the type of item (step or group).
+
+        Args:
+            item: QListWidgetItem
+
+        Returns:
+            str: 'step' or 'group'
+        """
+        data = item.data(QtCore.Qt.UserRole + 1)
+        return data if data else self.ITEM_TYPE_STEP
+
+    def _set_item_type(self, item, item_type):
+        """Set the type of item.
+
+        Args:
+            item: QListWidgetItem
+            item_type (str): 'step' or 'group'
+        """
+        item.setData(QtCore.Qt.UserRole + 1, item_type)
 
     def addStepItem(self, step_data):
         """Add a new custom step item to the list.
@@ -474,8 +1259,9 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         item = QtWidgets.QListWidgetItem(self)
         item.setSizeHint(QtCore.QSize(0, 32))  # Height to accommodate frame and padding
 
-        # Store the data string in the item for compatibility
+        # Store the data in the item
         item.setData(QtCore.Qt.UserRole, step_data.to_string())
+        self._set_item_type(item, self.ITEM_TYPE_STEP)
 
         # Create and set the widget
         widget = CustomStepItemWidget(step_data)
@@ -497,13 +1283,78 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
         return self.row(item)
 
+    def addGroupItem(self, group_data):
+        """Add a new group item to the list.
+
+        Args:
+            group_data (GroupData): Group data to add
+
+        Returns:
+            int: The row index of the added item
+        """
+        if not group_data.name:
+            group_data.name = "New Group"
+
+        # Create list item
+        item = QtWidgets.QListWidgetItem(self)
+
+        # Calculate height based on group content
+        base_height = 32  # Header height
+        if not group_data.collapsed:
+            base_height += len(group_data.items) * 32 + 8
+        item.setSizeHint(QtCore.QSize(0, base_height))
+
+        # Store data and type
+        item.setData(QtCore.Qt.UserRole, json.dumps(group_data.to_dict()))
+        self._set_item_type(item, self.ITEM_TYPE_GROUP)
+
+        # Create and set the widget
+        widget = GroupWidget(group_data)
+        self.setItemWidget(item, widget)
+
+        # Track the widget
+        self._item_widgets[id(item)] = widget
+
+        # Connect signals
+        widget.dataChanged.connect(
+            lambda it=item: self._on_group_data_changed(it)
+        )
+        widget.collapsed.connect(
+            lambda collapsed, it=item: self._on_group_collapsed(it, collapsed)
+        )
+
+        return self.row(item)
+
+    def _on_group_data_changed(self, item):
+        """Handle group data change event."""
+        widget = self.itemWidget(item)
+        if widget and isinstance(widget, GroupWidget):
+            # Update stored data
+            item.setData(
+                QtCore.Qt.UserRole,
+                json.dumps(widget.get_group_data().to_dict())
+            )
+            self.dataChanged.emit()
+
+    def _on_group_collapsed(self, item, collapsed):
+        """Handle group collapse/expand event."""
+        widget = self.itemWidget(item)
+        if widget and isinstance(widget, GroupWidget):
+            # Update item height
+            group_data = widget.get_group_data()
+            base_height = 32  # Header height
+            if not collapsed:
+                base_height += len(group_data.items) * 32 + 8
+            item.setSizeHint(QtCore.QSize(0, base_height))
+
     def _on_step_toggled(self, item, active):
         """Handle step toggle event."""
         widget = self.itemWidget(item)
-        if widget:
+        if widget and hasattr(widget, 'to_string'):
             # Update the stored data
             item.setData(QtCore.Qt.UserRole, widget.to_string())
             self.stepToggled.emit(self.row(item), active)
+            self.dataChanged.emit()
 
     def _on_edit_requested(self, item):
         """Handle edit request event."""
@@ -512,6 +1363,20 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     def _on_run_requested(self, item):
         """Handle run request event."""
         self.stepRunRequested.emit(self.row(item))
+
+    def getItemWidget(self, row):
+        """Get the widget for a given row (step or group).
+
+        Args:
+            row (int): Row index
+
+        Returns:
+            CustomStepItemWidget or GroupWidget or None
+        """
+        item = self.item(row)
+        if item:
+            return self.itemWidget(item)
+        return None
 
     def getStepWidget(self, row):
         """Get the CustomStepItemWidget for a given row.
@@ -522,10 +1387,38 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         Returns:
             CustomStepItemWidget or None: The widget at the row
         """
+        widget = self.getItemWidget(row)
+        if isinstance(widget, CustomStepItemWidget):
+            return widget
+        return None
+
+    def getGroupWidget(self, row):
+        """Get the GroupWidget for a given row.
+
+        Args:
+            row (int): Row index
+
+        Returns:
+            GroupWidget or None: The widget at the row
+        """
+        widget = self.getItemWidget(row)
+        if isinstance(widget, GroupWidget):
+            return widget
+        return None
+
+    def isGroupRow(self, row):
+        """Check if a row contains a group.
+
+        Args:
+            row (int): Row index
+
+        Returns:
+            bool: True if row contains a group
+        """
         item = self.item(row)
         if item:
-            return self.itemWidget(item)
-        return None
+            return self._get_item_type(item) == self.ITEM_TYPE_GROUP
+        return False
 
     def getStepData(self, row):
         """Get the CustomStepData for a given row.
@@ -541,58 +1434,327 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             return widget.get_step_data()
         return None
 
+    def getGroupData(self, row):
+        """Get the GroupData for a given row.
+
+        Args:
+            row (int): Row index
+
+        Returns:
+            GroupData or None: The group data at the row
+        """
+        widget = self.getGroupWidget(row)
+        if widget:
+            return widget.get_group_data()
+        return None
+
     def getAllStepData(self):
-        """Get all step data as a list.
+        """Get all step data as a flat list (including steps in groups).
 
         Returns:
             list: List of CustomStepData objects
         """
         result = []
         for i in range(self.count()):
-            data = self.getStepData(i)
-            if data:
-                result.append(data)
+            widget = self.getItemWidget(i)
+            if isinstance(widget, GroupWidget):
+                # Add all steps from the group
+                for step_data in widget.get_group_data().items:
+                    result.append(step_data)
+            elif isinstance(widget, CustomStepItemWidget):
+                result.append(widget.get_step_data())
+        return result
+
+    def getAllActiveStepData(self):
+        """Get all active step data as a flat list for building.
+
+        Respects both group and individual step active states.
+
+        Returns:
+            list: List of active CustomStepData objects
+        """
+        result = []
+        for i in range(self.count()):
+            widget = self.getItemWidget(i)
+            if isinstance(widget, GroupWidget):
+                group_data = widget.get_group_data()
+                if group_data.active:
+                    # Add active steps from active group
+                    for step_data in group_data.items:
+                        if step_data.active:
+                            result.append(step_data)
+            elif isinstance(widget, CustomStepItemWidget):
+                step_data = widget.get_step_data()
+                if step_data.active:
+                    result.append(step_data)
         return result
 
     def getStepStrings(self):
-        """Get all step data as strings (for storage).
+        """Get all step data as strings (for legacy storage).
+
+        Note: This flattens groups and loses group information.
+        Use toJson() for full data preservation.
 
         Returns:
             list: List of step strings in storage format
         """
         result = []
-        for i in range(self.count()):
-            widget = self.getStepWidget(i)
-            if widget:
-                result.append(widget.to_string())
+        for step_data in self.getAllStepData():
+            result.append(step_data.to_string())
         return result
 
+    def toJson(self):
+        """Serialize all items to JSON format for storage.
+
+        Returns:
+            str: JSON string with version and items
+        """
+        items_list = []
+        for i in range(self.count()):
+            widget = self.getItemWidget(i)
+            if isinstance(widget, GroupWidget):
+                items_list.append(widget.get_group_data().to_dict())
+            elif isinstance(widget, CustomStepItemWidget):
+                items_list.append(widget.get_step_data().to_dict())
+
+        return json.dumps({
+            "version": 2,
+            "items": items_list
+        })
+
+    def loadFromJson(self, json_string):
+        """Load items from JSON string with backwards compatibility.
+
+        Args:
+            json_string (str): JSON string or legacy comma-separated format
+        """
+        self.clear()
+        items = self._parseData(json_string)
+        for item in items:
+            if isinstance(item, GroupData):
+                self.addGroupItem(item)
+            elif isinstance(item, CustomStepData):
+                self.addStepItem(item)
+
+    @staticmethod
+    def _parseData(data_string):
+        """Parse data string and return list of items.
+
+        Handles both JSON format (v2) and legacy comma-separated format.
+
+        Args:
+            data_string (str): Data to parse
+
+        Returns:
+            list: List of CustomStepData and GroupData objects
+        """
+        if not data_string or not data_string.strip():
+            return []
+
+        # Try JSON format first
+        try:
+            data = json.loads(data_string)
+            if isinstance(data, dict) and data.get("version") == 2:
+                return CustomStepListWidget._parseV2Format(data)
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Fall back to legacy comma-separated format
+        return CustomStepListWidget._parseLegacyFormat(data_string)
+
+    @staticmethod
+    def _parseV2Format(data):
+        """Parse version 2 JSON format.
+
+        Args:
+            data (dict): Parsed JSON data
+
+        Returns:
+            list: List of CustomStepData and GroupData objects
+        """
+        items = []
+        for item_data in data.get("items", []):
+            if item_data.get("type") == "group":
+                items.append(GroupData.from_dict(item_data))
+            else:
+                items.append(CustomStepData.from_dict(item_data))
+        return items
+
+    @staticmethod
+    def _parseLegacyFormat(data_string):
+        """Parse legacy comma-separated format.
+
+        Args:
+            data_string (str): Comma-separated step strings
+
+        Returns:
+            list: List of CustomStepData objects
+        """
+        items = []
+        for entry in data_string.split(","):
+            entry = entry.strip()
+            if entry:
+                step_data = CustomStepData.from_string(entry)
+                if step_data.name or step_data.path:
+                    items.append(step_data)
+        return items
+
+    def createGroupFromSelection(self, name="New Group"):
+        """Create a group from currently selected step items.
+
+        Args:
+            name (str): Name for the new group
+
+        Returns:
+            int: Row index of the new group, or -1 if no valid selection
+        """
+        selected_items = self.selectedItems()
+        if not selected_items:
+            return -1
+
+        # Collect step data from selected items (only steps, not groups)
+        steps_to_group = []
+        rows_to_remove = []
+        for item in selected_items:
+            row = self.row(item)
+            if not self.isGroupRow(row):
+                widget = self.getStepWidget(row)
+                if widget:
+                    steps_to_group.append(widget.get_step_data())
+                    rows_to_remove.append(row)
+
+        if not steps_to_group:
+            return -1
+
+        # Get insertion position (where first selected item was)
+        insert_row = min(rows_to_remove)
+
+        # Remove items in reverse order to preserve indices
+        for row in sorted(rows_to_remove, reverse=True):
+            self.takeItem(row)
+
+        # Create group data
+        group_data = GroupData(name=name, items=steps_to_group)
+
+        # Insert group at the position
+        item = QtWidgets.QListWidgetItem()
+        base_height = 32 + len(steps_to_group) * 32 + 8
+        item.setSizeHint(QtCore.QSize(0, base_height))
+        item.setData(QtCore.Qt.UserRole, json.dumps(group_data.to_dict()))
+        self._set_item_type(item, self.ITEM_TYPE_GROUP)
+
+        self.insertItem(insert_row, item)
+
+        widget = GroupWidget(group_data)
+        self.setItemWidget(item, widget)
+        self._item_widgets[id(item)] = widget
+
+        widget.dataChanged.connect(
+            lambda it=item: self._on_group_data_changed(it)
+        )
+        widget.collapsed.connect(
+            lambda collapsed, it=item: self._on_group_collapsed(it, collapsed)
+        )
+
+        self.dataChanged.emit()
+        return insert_row
+
+    def ungroupItems(self, row, keep_items=True):
+        """Remove a group, optionally keeping its items at top level.
+
+        Args:
+            row (int): Row of the group to remove
+            keep_items (bool): If True, move items to top level
+
+        Returns:
+            list: List of CustomStepData that were in the group
+        """
+        if not self.isGroupRow(row):
+            return []
+
+        group_widget = self.getGroupWidget(row)
+        if not group_widget:
+            return []
+
+        group_data = group_widget.get_group_data()
+        items = list(group_data.items)
+
+        # Remove the group
+        self.takeItem(row)
+
+        if keep_items:
+            # Insert items at the group's position
+            for i, step_data in enumerate(items):
+                self.insertStepItem(row + i, step_data)
+
+        self.dataChanged.emit()
+        return items
+
+    def insertStepItem(self, row, step_data):
+        """Insert a step item at a specific row.
+
+        Args:
+            row (int): Row to insert at
+            step_data (CustomStepData): Step data to insert
+
+        Returns:
+            int: The row index of the inserted item
+        """
+        item = QtWidgets.QListWidgetItem()
+        item.setSizeHint(QtCore.QSize(0, 32))
+        item.setData(QtCore.Qt.UserRole, step_data.to_string())
+        self._set_item_type(item, self.ITEM_TYPE_STEP)
+
+        self.insertItem(row, item)
+
+        widget = CustomStepItemWidget(step_data)
+        self.setItemWidget(item, widget)
+        self._item_widgets[id(item)] = widget
+
+        widget.toggled.connect(
+            lambda active, it=item: self._on_step_toggled(it, active)
+        )
+        widget.editRequested.connect(
+            lambda it=item: self._on_edit_requested(it)
+        )
+        widget.runRequested.connect(
+            lambda it=item: self._on_run_requested(it)
+        )
+
+        return row
+
     def setStepActive(self, row, active):
-        """Set the active state of a step.
+        """Set the active state of a step or group.
 
         Args:
             row (int): Row index
             active (bool): New active state
         """
-        widget = self.getStepWidget(row)
-        if widget:
+        widget = self.getItemWidget(row)
+        if isinstance(widget, CustomStepItemWidget):
             widget.set_active(active)
             item = self.item(row)
             if item:
                 item.setData(QtCore.Qt.UserRole, widget.to_string())
+        elif isinstance(widget, GroupWidget):
+            widget.set_active(active)
+            item = self.item(row)
+            if item:
+                item.setData(
+                    QtCore.Qt.UserRole,
+                    json.dumps(widget.get_group_data().to_dict())
+                )
+        self.dataChanged.emit()
 
     def toggleStepActive(self, row):
-        """Toggle the active state of a step.
+        """Toggle the active state of a step or group.
 
         Args:
             row (int): Row index
         """
-        widget = self.getStepWidget(row)
-        if widget:
-            widget.set_active(not widget.is_active())
-            item = self.item(row)
-            if item:
-                item.setData(QtCore.Qt.UserRole, widget.to_string())
+        widget = self.getItemWidget(row)
+        if widget and hasattr(widget, 'is_active'):
+            self.setStepActive(row, not widget.is_active())
 
     def highlightSearch(self, search_text):
         """Highlight items matching the search text.
@@ -602,8 +1764,13 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         """
         search_lower = search_text.lower() if search_text else ""
         for i in range(self.count()):
-            widget = self.getStepWidget(i)
-            if widget:
+            widget = self.getItemWidget(i)
+            if isinstance(widget, GroupWidget):
+                # Search in group name and child steps
+                group_match = search_lower in widget.get_group_data().name.lower()
+                widget.set_highlighted(group_match)
+                widget.highlight_matching_steps(search_text)
+            elif isinstance(widget, CustomStepItemWidget):
                 if search_lower and search_lower in widget.get_name().lower():
                     widget.set_highlighted(True)
                 else:
@@ -654,6 +1821,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             # Reassign widgets after move (they get detached during move)
             self._reassign_widgets()
             self.orderChanged.emit()
+            self.dataChanged.emit()
         else:
             super(CustomStepListWidget, self).dropEvent(event)
 
@@ -669,25 +1837,44 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 # Check if widget is missing or detached
                 current_widget = self.itemWidget(item)
                 if current_widget is None:
-                    # Get stored data and recreate widget
+                    item_type = self._get_item_type(item)
                     data_string = item.data(QtCore.Qt.UserRole)
-                    if data_string:
-                        step_data = CustomStepData.from_string(data_string)
-                        widget = CustomStepItemWidget(step_data)
-                        self.setItemWidget(item, widget)
 
-                        # Reconnect signals
-                        widget.toggled.connect(
-                            lambda active, it=item: self._on_step_toggled(
-                                it, active
+                    if item_type == self.ITEM_TYPE_GROUP:
+                        # Recreate group widget
+                        try:
+                            group_dict = json.loads(data_string)
+                            group_data = GroupData.from_dict(group_dict)
+                            widget = GroupWidget(group_data)
+                            self.setItemWidget(item, widget)
+
+                            widget.dataChanged.connect(
+                                lambda it=item: self._on_group_data_changed(it)
                             )
-                        )
-                        widget.editRequested.connect(
-                            lambda it=item: self._on_edit_requested(it)
-                        )
-                        widget.runRequested.connect(
-                            lambda it=item: self._on_run_requested(it)
-                        )
+                            widget.collapsed.connect(
+                                lambda c, it=item: self._on_group_collapsed(it, c)
+                            )
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    else:
+                        # Recreate step widget
+                        if data_string:
+                            step_data = CustomStepData.from_string(data_string)
+                            widget = CustomStepItemWidget(step_data)
+                            self.setItemWidget(item, widget)
+
+                            # Reconnect signals
+                            widget.toggled.connect(
+                                lambda active, it=item: self._on_step_toggled(
+                                    it, active
+                                )
+                            )
+                            widget.editRequested.connect(
+                                lambda it=item: self._on_edit_requested(it)
+                            )
+                            widget.runRequested.connect(
+                                lambda it=item: self._on_run_requested(it)
+                            )
 
     # Legacy compatibility methods
 
@@ -896,14 +2083,16 @@ class CustomStepMixin(object):
         self.populateCheck(
             self.customStepTab.preCustomStep_checkBox, "doPreCustomStep"
         )
-        for item in self.root.attr("preCustomStep").get().split(","):
-            self.customStepTab.preCustomStep_listWidget.addStepItem(item)
+        # Load pre custom steps with backwards compatibility
+        pre_data = self.root.attr("preCustomStep").get()
+        self.customStepTab.preCustomStep_listWidget.loadFromJson(pre_data)
 
         self.populateCheck(
             self.customStepTab.postCustomStep_checkBox, "doPostCustomStep"
         )
-        for item in self.root.attr("postCustomStep").get().split(","):
-            self.customStepTab.postCustomStep_listWidget.addStepItem(item)
+        # Load post custom steps with backwards compatibility
+        post_data = self.root.attr("postCustomStep").get()
+        self.customStepTab.postCustomStep_listWidget.loadFromJson(post_data)
 
     def create_custom_step_connections(self):
         """Create signal connections for custom step tab."""
@@ -947,6 +2136,14 @@ class CustomStepMixin(object):
         )
         csTap.postCustomStep_listWidget.orderChanged.connect(
             partial(self._onStepOrderChanged, pre=False)
+        )
+
+        # Data changed signals (for group edits, toggles, etc.)
+        csTap.preCustomStep_listWidget.dataChanged.connect(
+            partial(self._onDataChanged, pre=True)
+        )
+        csTap.postCustomStep_listWidget.dataChanged.connect(
+            partial(self._onDataChanged, pre=False)
         )
 
         # Step toggled signals (from widget toggle buttons)
@@ -1016,6 +2213,17 @@ class CustomStepMixin(object):
                 self.customStepTab.postCustomStep_listWidget, "postCustomStep"
             )
 
+    def _onDataChanged(self, pre=True):
+        """Handle data change from groups or steps."""
+        if pre:
+            self._updateStepListAttr(
+                self.customStepTab.preCustomStep_listWidget, "preCustomStep"
+            )
+        else:
+            self._updateStepListAttr(
+                self.customStepTab.postCustomStep_listWidget, "postCustomStep"
+            )
+
     def _onStepToggled(self, _row, _active, pre=True):
         """Handle step toggle from widget button."""
         if pre:
@@ -1053,8 +2261,7 @@ class CustomStepMixin(object):
 
     def _updateStepListAttr(self, stepWidget, stepAttr):
         """Update Maya attribute from step widget contents."""
-        step_strings = stepWidget.getStepStrings()
-        new_value = ",".join(step_strings)
+        new_value = stepWidget.toJson()
         self.root.attr(stepAttr).set(new_value)
 
     def updateInfoPanel(self, item, pre=True):
@@ -1697,7 +2904,22 @@ class CustomShifterStep(cstp.customShifterMainStep):
         self.csMenu.addSeparator()
 
         # Selection-dependent actions
-        hasSelection = len(cs_listWidget.selectedItems()) > 0
+        selectedItems = cs_listWidget.selectedItems()
+        hasSelection = len(selectedItems) > 0
+
+        # Check if clicking on a group
+        clickedItem = cs_listWidget.itemAt(QPos)
+        clickedRow = cs_listWidget.row(clickedItem) if clickedItem else -1
+        isClickedGroup = clickedRow >= 0 and cs_listWidget.isGroupRow(clickedRow)
+
+        # Check if selection contains only steps (no groups)
+        hasStepSelection = False
+        if hasSelection:
+            for item in selectedItems:
+                row = cs_listWidget.row(item)
+                if not cs_listWidget.isGroupRow(row):
+                    hasStepSelection = True
+                    break
 
         run_action = self.csMenu.addAction("Run Selected")
         run_action.setIcon(pyqt.get_icon("mgear_play"))
@@ -1705,15 +2927,33 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
         edit_action = self.csMenu.addAction("Edit")
         edit_action.setIcon(pyqt.get_icon("mgear_edit"))
-        edit_action.setEnabled(hasSelection)
+        edit_action.setEnabled(hasSelection and not isClickedGroup)
 
         duplicate_action = self.csMenu.addAction("Duplicate")
         duplicate_action.setIcon(pyqt.get_icon("mgear_copy"))
-        duplicate_action.setEnabled(hasSelection)
+        duplicate_action.setEnabled(hasSelection and not isClickedGroup)
 
         remove_action = self.csMenu.addAction("Remove")
         remove_action.setIcon(pyqt.get_icon("mgear_trash-2"))
         remove_action.setEnabled(hasSelection)
+
+        self.csMenu.addSeparator()
+
+        # Group actions
+        create_group_action = self.csMenu.addAction("Create Group")
+        create_group_action.setIcon(pyqt.get_icon("mgear_folder"))
+        create_group_action.setEnabled(hasStepSelection)
+
+        # Group-specific actions (only if clicked on a group)
+        if isClickedGroup:
+            rename_group_action = self.csMenu.addAction("Rename Group")
+            rename_group_action.setIcon(pyqt.get_icon("mgear_edit-2"))
+
+            ungroup_action = self.csMenu.addAction("Ungroup (Keep Items)")
+            ungroup_action.setIcon(pyqt.get_icon("mgear_minimize-2"))
+
+            delete_group_action = self.csMenu.addAction("Delete Group...")
+            delete_group_action.setIcon(pyqt.get_icon("mgear_trash-2"))
 
         self.csMenu.addSeparator()
 
@@ -1752,6 +2992,22 @@ class CustomShifterStep(cstp.customShifterMainStep):
                 self.removeSelectedFromListWidget, cs_listWidget, stepAttr
             )
         )
+
+        # Group action connections
+        create_group_action.triggered.connect(
+            partial(self._createGroup, cs_listWidget, stepAttr)
+        )
+        if isClickedGroup:
+            rename_group_action.triggered.connect(
+                partial(self._renameGroup, cs_listWidget, clickedRow)
+            )
+            ungroup_action.triggered.connect(
+                partial(self._ungroupItems, cs_listWidget, stepAttr, clickedRow, True)
+            )
+            delete_group_action.triggered.connect(
+                partial(self._deleteGroupDialog, cs_listWidget, stepAttr, clickedRow)
+            )
+
         toggle_action.triggered.connect(
             partial(self.toggleStatusCustomStep, cs_listWidget, stepAttr)
         )
@@ -1774,6 +3030,57 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
         self.csMenu.move(parentPosition + QPos)
         self.csMenu.show()
+
+    def _createGroup(self, cs_listWidget, stepAttr):
+        """Create a group from selected items."""
+        # Prompt for group name
+        name, ok = QtWidgets.QInputDialog.getText(
+            None,
+            "Create Group",
+            "Group name:",
+            QtWidgets.QLineEdit.Normal,
+            "New Group"
+        )
+        if ok and name:
+            cs_listWidget.createGroupFromSelection(name)
+            self._updateStepListAttr(cs_listWidget, stepAttr)
+
+    def _renameGroup(self, cs_listWidget, row):
+        """Trigger inline rename for a group."""
+        group_widget = cs_listWidget.getGroupWidget(row)
+        if group_widget:
+            # Access the header and trigger editing
+            group_widget._header._start_editing()
+
+    def _ungroupItems(self, cs_listWidget, stepAttr, row, keep_items=True):
+        """Ungroup items at the given row."""
+        cs_listWidget.ungroupItems(row, keep_items)
+        self._updateStepListAttr(cs_listWidget, stepAttr)
+
+    def _deleteGroupDialog(self, cs_listWidget, stepAttr, row):
+        """Show dialog for group deletion options."""
+        group_widget = cs_listWidget.getGroupWidget(row)
+        if not group_widget:
+            return
+
+        group_data = group_widget.get_group_data()
+        msg = QtWidgets.QMessageBox()
+        msg.setWindowTitle("Delete Group")
+        msg.setText("Delete group '{}'?".format(group_data.name))
+        msg.setInformativeText("What should happen to the steps inside?")
+
+        keep_btn = msg.addButton("Keep Steps", QtWidgets.QMessageBox.AcceptRole)
+        delete_btn = msg.addButton("Delete Steps", QtWidgets.QMessageBox.DestructiveRole)
+        msg.addButton(QtWidgets.QMessageBox.Cancel)
+
+        msg.exec_()
+
+        if msg.clickedButton() == keep_btn:
+            cs_listWidget.ungroupItems(row, keep_items=True)
+            self._updateStepListAttr(cs_listWidget, stepAttr)
+        elif msg.clickedButton() == delete_btn:
+            cs_listWidget.ungroupItems(row, keep_items=False)
+            self._updateStepListAttr(cs_listWidget, stepAttr)
 
     def preCustomStepMenu(self, QPos):
         """Show pre custom step context menu."""
