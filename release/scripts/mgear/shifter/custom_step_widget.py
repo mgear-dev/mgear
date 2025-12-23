@@ -175,7 +175,9 @@ class CustomStepItemWidget(QtWidgets.QFrame):
     SHARED_COLOR = "#2E7D32"  # Green for shared steps
     INACTIVE_COLOR = "#8B4444"  # Pale red for deactivated steps
     NORMAL_COLOR = "#3C3C3C"  # Default dark background
+    SELECTED_COLOR = "#4A6B8A"  # Pale blue for selected items
     BORDER_COLOR = "#555555"  # Frame border color
+    SELECTED_BORDER_COLOR = "#6A9BCA"  # Lighter blue border when selected
     BORDER_RADIUS = 4
     ICON_SIZE = 16
     BUTTON_SIZE = 20
@@ -189,6 +191,7 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         """
         super(CustomStepItemWidget, self).__init__(parent)
         self._step_data = step_data or CustomStepData()
+        self._selected = False
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.setFrameShadow(QtWidgets.QFrame.Raised)
         self._setup_ui()
@@ -256,13 +259,19 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         # Update name label
         self._name_label.setText(self._step_data.name)
 
-        # Update background color based on state
-        if not self._step_data.active:
+        # Determine background and border colors based on state
+        if self._selected:
+            bg_color = self.SELECTED_COLOR
+            border_color = self.SELECTED_BORDER_COLOR
+        elif not self._step_data.active:
             bg_color = self.INACTIVE_COLOR
+            border_color = self.BORDER_COLOR
         elif self._step_data.is_shared:
             bg_color = self.SHARED_COLOR
+            border_color = self.BORDER_COLOR
         else:
             bg_color = self.NORMAL_COLOR
+            border_color = self.BORDER_COLOR
 
         # Apply stylesheet with rounded corners and frame
         # Also style buttons to have transparent background
@@ -291,7 +300,7 @@ class CustomStepItemWidget(QtWidgets.QFrame):
             }}
             """.format(
                 bg=bg_color,
-                border=self.BORDER_COLOR,
+                border=border_color,
                 radius=self.BORDER_RADIUS
             )
         )
@@ -381,6 +390,24 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         else:
             self._name_label.setStyleSheet("")
 
+    def set_selected(self, selected):
+        """Set whether this item is selected.
+
+        Args:
+            selected (bool): Whether the item is selected
+        """
+        if self._selected != selected:
+            self._selected = selected
+            self._update_appearance()
+
+    def is_selected(self):
+        """Check if this item is selected.
+
+        Returns:
+            bool: True if selected
+        """
+        return self._selected
+
 
 class CustomStepListWidget(QtWidgets.QListWidget):
     """QListWidget that displays custom step widgets with drag-drop support.
@@ -414,6 +441,18 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
         # Track widgets for proper cleanup
         self._item_widgets = {}
+
+        # Connect selection changed signal
+        self.itemSelectionChanged.connect(self._on_selection_changed)
+
+    def _on_selection_changed(self):
+        """Handle selection change and update widget appearances."""
+        # Get selected rows as a set (rows are hashable, items are not in PySide6)
+        selected_rows = set(self.row(item) for item in self.selectedItems())
+        for i in range(self.count()):
+            widget = self.getStepWidget(i)
+            if widget and hasattr(widget, 'set_selected'):
+                widget.set_selected(i in selected_rows)
 
     def addStepItem(self, step_data):
         """Add a new custom step item to the list.
