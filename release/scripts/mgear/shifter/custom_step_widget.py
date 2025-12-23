@@ -13,6 +13,7 @@ from functools import partial
 
 import mgear.pymaya as pm
 from mgear.core import pyqt
+from mgear.core.widgets import CollapsibleWidget
 from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
 
 MGEAR_SHIFTER_CUSTOMSTEP_KEY = "MGEAR_SHIFTER_CUSTOMSTEP_PATH"
@@ -31,6 +32,7 @@ class Ui_Form(object):
 
         self.mainLayout = QtWidgets.QVBoxLayout(Form)
         self.mainLayout.setContentsMargins(0, 0, 0, 0)
+        self.mainLayout.setSpacing(0)
 
         # Menu bar
         self.menuBar = QtWidgets.QMenuBar(Form)
@@ -51,23 +53,20 @@ class Ui_Form(object):
 
         self.mainLayout.setMenuBar(self.menuBar)
 
-        # Main group box
-        self.groupBox = QtWidgets.QGroupBox("Custom Steps", Form)
-        self.mainLayout.addWidget(self.groupBox)
+        # =============================================
+        # Pre Custom Step collapsible section
+        # =============================================
+        self.preCollapsible = CollapsibleWidget("Pre Custom Step", expanded=True)
+        self.mainLayout.addWidget(self.preCollapsible, 1)  # stretch factor 1
 
-        self.groupBoxLayout = QtWidgets.QVBoxLayout(self.groupBox)
+        self.preCustomStep_checkBox = QtWidgets.QCheckBox("Enable")
+        self.preCollapsible.addWidget(self.preCustomStep_checkBox)
 
-        # Pre Custom Step section
-        self.preCustomStep_checkBox = QtWidgets.QCheckBox(
-            "Pre Custom Step", self.groupBox
-        )
-        self.groupBoxLayout.addWidget(self.preCustomStep_checkBox)
-
-        self.preSearch_lineEdit = QtWidgets.QLineEdit(self.groupBox)
+        self.preSearch_lineEdit = QtWidgets.QLineEdit()
         self.preSearch_lineEdit.setPlaceholderText("Search...")
-        self.groupBoxLayout.addWidget(self.preSearch_lineEdit)
+        self.preCollapsible.addWidget(self.preSearch_lineEdit)
 
-        self.preCustomStep_listWidget = QtWidgets.QListWidget(self.groupBox)
+        self.preCustomStep_listWidget = QtWidgets.QListWidget()
         self.preCustomStep_listWidget.setDragDropOverwriteMode(True)
         self.preCustomStep_listWidget.setDragDropMode(
             QtWidgets.QAbstractItemView.InternalMove
@@ -77,26 +76,24 @@ class Ui_Form(object):
         self.preCustomStep_listWidget.setSelectionMode(
             QtWidgets.QAbstractItemView.ExtendedSelection
         )
-        self.groupBoxLayout.addWidget(self.preCustomStep_listWidget)
+        self.preCollapsible.addWidget(self.preCustomStep_listWidget)
 
-        # Separator line
-        self.line = QtWidgets.QFrame(self.groupBox)
-        self.line.setLineWidth(3)
-        self.line.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.groupBoxLayout.addWidget(self.line)
-
-        # Post Custom Step section
-        self.postCustomStep_checkBox = QtWidgets.QCheckBox(
-            "Post Custom Step", self.groupBox
+        # =============================================
+        # Post Custom Step collapsible section
+        # =============================================
+        self.postCollapsible = CollapsibleWidget(
+            "Post Custom Step", expanded=True
         )
-        self.groupBoxLayout.addWidget(self.postCustomStep_checkBox)
+        self.mainLayout.addWidget(self.postCollapsible, 1)  # stretch factor 1
 
-        self.postSearch_lineEdit = QtWidgets.QLineEdit(self.groupBox)
+        self.postCustomStep_checkBox = QtWidgets.QCheckBox("Enable")
+        self.postCollapsible.addWidget(self.postCustomStep_checkBox)
+
+        self.postSearch_lineEdit = QtWidgets.QLineEdit()
         self.postSearch_lineEdit.setPlaceholderText("Search...")
-        self.groupBoxLayout.addWidget(self.postSearch_lineEdit)
+        self.postCollapsible.addWidget(self.postSearch_lineEdit)
 
-        self.postCustomStep_listWidget = QtWidgets.QListWidget(self.groupBox)
+        self.postCustomStep_listWidget = QtWidgets.QListWidget()
         self.postCustomStep_listWidget.setDragDropOverwriteMode(True)
         self.postCustomStep_listWidget.setDragDropMode(
             QtWidgets.QAbstractItemView.InternalMove
@@ -106,19 +103,18 @@ class Ui_Form(object):
         self.postCustomStep_listWidget.setSelectionMode(
             QtWidgets.QAbstractItemView.ExtendedSelection
         )
-        self.groupBoxLayout.addWidget(self.postCustomStep_listWidget)
+        self.postCollapsible.addWidget(self.postCustomStep_listWidget)
 
-        # Info panel at bottom
-        self.infoGroupBox = QtWidgets.QGroupBox("Step Info", Form)
-        self.mainLayout.addWidget(self.infoGroupBox)
+        # =============================================
+        # Step Info collapsible section
+        # =============================================
+        self.infoCollapsible = CollapsibleWidget("Step Info", expanded=True)
+        self.mainLayout.addWidget(self.infoCollapsible, 0)  # no stretch
 
-        self.infoLayout = QtWidgets.QFormLayout(self.infoGroupBox)
-        self.infoLayout.setContentsMargins(6, 6, 6, 6)
+        infoWidget = QtWidgets.QWidget()
+        self.infoLayout = QtWidgets.QFormLayout(infoWidget)
+        self.infoLayout.setContentsMargins(4, 2, 4, 2)
         self.infoLayout.setSpacing(4)
-        self.infoLayout.setFieldGrowthPolicy(
-            QtWidgets.QFormLayout.ExpandingFieldsGrow
-        )
-        self.infoLayout.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
 
         # Info labels
         self.info_name_label = QtWidgets.QLabel("-")
@@ -140,15 +136,47 @@ class Ui_Form(object):
         self.info_modified_label = QtWidgets.QLabel("-")
         self.infoLayout.addRow("Modified:", self.info_modified_label)
 
+        self.infoCollapsible.addWidget(infoWidget)
+
+        # Path in its own layout for better display
+        pathWidget = QtWidgets.QWidget()
+        pathLayout = QtWidgets.QVBoxLayout(pathWidget)
+        pathLayout.setContentsMargins(4, 0, 4, 2)
+        pathLayout.setSpacing(0)
+
+        pathHeaderLayout = QtWidgets.QHBoxLayout()
+        pathHeaderLayout.setContentsMargins(0, 0, 0, 0)
+        pathLabel = QtWidgets.QLabel("Path:")
+        pathHeaderLayout.addWidget(pathLabel)
+        pathHeaderLayout.addStretch()
+        pathLayout.addLayout(pathHeaderLayout)
+
         self.info_path_label = QtWidgets.QLabel("-")
         self.info_path_label.setWordWrap(True)
         self.info_path_label.setTextInteractionFlags(
             QtCore.Qt.TextSelectableByMouse
         )
-        self.info_path_label.setSizePolicy(
-            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
-        )
-        self.infoLayout.addRow("Path:", self.info_path_label)
+        self.info_path_label.setStyleSheet("padding-left: 10px;")
+        pathLayout.addWidget(self.info_path_label)
+
+        self.infoCollapsible.addWidget(pathWidget)
+
+        # Connect collapsible header clicks to update stretch factors
+        self.preCollapsible.header_wgt.clicked.connect(self._updateStretchFactors)
+        self.postCollapsible.header_wgt.clicked.connect(self._updateStretchFactors)
+        self.infoCollapsible.header_wgt.clicked.connect(self._updateStretchFactors)
+
+    def _updateStretchFactors(self):
+        """Update layout stretch factors based on collapsed/expanded state."""
+        # Get expanded states (after the click has toggled)
+        pre_expanded = self.preCollapsible.header_wgt.is_expanded()
+        post_expanded = self.postCollapsible.header_wgt.is_expanded()
+
+        # Set stretch: 1 if expanded, 0 if collapsed
+        # Info section always has stretch 0 (minimum height)
+        self.mainLayout.setStretch(0, 1 if pre_expanded else 0)
+        self.mainLayout.setStretch(1, 1 if post_expanded else 0)
+        self.mainLayout.setStretch(2, 0)  # Info always minimal
 
 
 class CustomStepTab(QtWidgets.QDialog, Ui_Form):
