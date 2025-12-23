@@ -24,6 +24,48 @@ else:
     string_types = (str,)
 
 
+class CustomStepListWidget(QtWidgets.QListWidget):
+    """QListWidget that accepts .py file drops from external sources."""
+
+    filesDropped = QtCore.Signal(list)
+
+    def __init__(self, parent=None):
+        super(CustomStepListWidget, self).__init__(parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            # Check if any URL is a .py file
+            for url in event.mimeData().urls():
+                if url.toLocalFile().endswith(".py"):
+                    event.acceptProposedAction()
+                    return
+        # Fall back to default behavior for internal moves
+        super(CustomStepListWidget, self).dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.toLocalFile().endswith(".py"):
+                    event.acceptProposedAction()
+                    return
+        super(CustomStepListWidget, self).dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls():
+            py_files = []
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if file_path.endswith(".py"):
+                    py_files.append(file_path)
+            if py_files:
+                event.acceptProposedAction()
+                self.filesDropped.emit(py_files)
+                return
+        # Fall back to default behavior for internal moves
+        super(CustomStepListWidget, self).dropEvent(event)
+
+
 class Ui_Form(object):
     """UI definition for Custom Step Tab."""
 
@@ -66,7 +108,7 @@ class Ui_Form(object):
         self.preSearch_lineEdit.setPlaceholderText("Search...")
         self.preCollapsible.addWidget(self.preSearch_lineEdit)
 
-        self.preCustomStep_listWidget = QtWidgets.QListWidget()
+        self.preCustomStep_listWidget = CustomStepListWidget()
         self.preCustomStep_listWidget.setDragDropOverwriteMode(True)
         self.preCustomStep_listWidget.setDragDropMode(
             QtWidgets.QAbstractItemView.InternalMove
@@ -93,7 +135,7 @@ class Ui_Form(object):
         self.postSearch_lineEdit.setPlaceholderText("Search...")
         self.postCollapsible.addWidget(self.postSearch_lineEdit)
 
-        self.postCustomStep_listWidget = QtWidgets.QListWidget()
+        self.postCustomStep_listWidget = CustomStepListWidget()
         self.postCustomStep_listWidget.setDragDropOverwriteMode(True)
         self.postCustomStep_listWidget.setDragDropMode(
             QtWidgets.QAbstractItemView.InternalMove
@@ -306,6 +348,14 @@ class CustomStepMixin(object):
         )
         csTap.postCustomStep_listWidget.itemClicked.connect(
             partial(self.updateInfoPanel, pre=False)
+        )
+
+        # File drop connections
+        csTap.preCustomStep_listWidget.filesDropped.connect(
+            partial(self.onFilesDropped, pre=True)
+        )
+        csTap.postCustomStep_listWidget.filesDropped.connect(
+            partial(self.onFilesDropped, pre=False)
         )
 
     def updateInfoPanel(self, item, pre=True):
@@ -560,6 +610,75 @@ class CustomStepMixin(object):
         for item in selItems:
             self.runStep(item.text().split("|")[-1][1:], customStepDic={})
 
+    def _processCustomStepPath(self, filePath):
+        """Process a file path for custom step, making it relative if needed.
+
+        Args:
+            filePath: The absolute file path to process
+
+        Returns:
+            tuple: (fileName, processedPath) where processedPath is relative
+                   to MGEAR_SHIFTER_CUSTOMSTEP_PATH if that env var is set
+        """
+        customStepPath = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+
+        if customStepPath:
+            # Normalize file path - handle potential leading slash from Qt URLs
+            # on Windows (e.g., "/D:/path" -> "D:/path")
+            if (
+                sys.platform == "win32"
+                and len(filePath) > 2
+                and filePath[0] == "/"
+                and filePath[2] == ":"
+            ):
+                filePath = filePath[1:]
+
+            # Use os.path.relpath for reliable relative path calculation
+            try:
+                absFilePath = os.path.abspath(filePath)
+                absBasePath = os.path.abspath(customStepPath)
+
+                # Check if file is under the custom step path
+                # Use normcase for case-insensitive comparison on Windows
+                startswith_sep = os.path.normcase(absFilePath).startswith(
+                    os.path.normcase(absBasePath + os.sep)
+                )
+                startswith_base = os.path.normcase(absFilePath).startswith(
+                    os.path.normcase(absBasePath)
+                )
+
+                if startswith_sep or startswith_base:
+                    filePath = os.path.relpath(absFilePath, absBasePath)
+                    # Normalize to forward slashes for consistency
+                    filePath = filePath.replace("\\", "/")
+            except ValueError:
+                # relpath fails if paths are on different drives on Windows
+                pass
+
+        fileName = os.path.split(filePath)[1].split(".")[0]
+        return fileName, filePath
+
+    def _addFilesToStepWidget(self, filePaths, stepWidget, stepAttr):
+        """Add file paths to a custom step list widget.
+
+        Args:
+            filePaths: List of file paths to add
+            stepWidget: The QListWidget to add items to
+            stepAttr: The Maya attribute name to update
+        """
+        itemsList = [
+            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
+        ]
+        if itemsList and not itemsList[0]:
+            stepWidget.takeItem(0)
+
+        for filePath in filePaths:
+            fileName, processedPath = self._processCustomStepPath(filePath)
+            stepWidget.addItem(fileName + " | " + processedPath)
+
+        self.updateListAttr(stepWidget, stepAttr)
+        self.refreshStatusColor(stepWidget)
+
     def addCustomStep(self, pre=True, *args):
         """Add a new custom step.
 
@@ -587,27 +706,23 @@ class CustomStepMixin(object):
         if not filePaths:
             return
 
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
+        self._addFilesToStepWidget(filePaths, stepWidget, stepAttr)
 
-        for filePath in filePaths:
-            if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                filePath = os.path.abspath(filePath)
-                baseReplace = os.path.abspath(
-                    os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-                )
-                filePath = filePath.replace(baseReplace, "").replace("\\", "/")
-                if "/" == filePath[0]:
-                    filePath = filePath[1:]
+    def onFilesDropped(self, filePaths, pre=True):
+        """Handle .py files dropped onto the custom step list.
 
-            fileName = os.path.split(filePath)[1].split(".")[0]
-            stepWidget.addItem(fileName + " | " + filePath)
+        Args:
+            filePaths: List of file paths that were dropped
+            pre: If True, adds to pre step list; otherwise to post step list
+        """
+        if pre:
+            stepAttr = "preCustomStep"
+            stepWidget = self.customStepTab.preCustomStep_listWidget
+        else:
+            stepAttr = "postCustomStep"
+            stepWidget = self.customStepTab.postCustomStep_listWidget
 
-        self.updateListAttr(stepWidget, stepAttr)
-        self.refreshStatusColor(stepWidget)
+        self._addFilesToStepWidget(filePaths, stepWidget, stepAttr)
 
     def newCustomStep(self, pre=True, *args):
         """Create a new custom step file.
