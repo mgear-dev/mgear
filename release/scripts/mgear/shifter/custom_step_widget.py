@@ -151,7 +151,7 @@ class CustomStepData(object):
 # ============================================================================
 
 
-class CustomStepItemWidget(QtWidgets.QWidget):
+class CustomStepItemWidget(QtWidgets.QFrame):
     """Widget for displaying a single custom step in the list.
 
     This widget provides:
@@ -174,7 +174,9 @@ class CustomStepItemWidget(QtWidgets.QWidget):
     # Style constants
     SHARED_COLOR = "#2E7D32"  # Green for shared steps
     INACTIVE_COLOR = "#8B4444"  # Pale red for deactivated steps
-    NORMAL_COLOR = "transparent"
+    NORMAL_COLOR = "#3C3C3C"  # Default dark background
+    BORDER_COLOR = "#555555"  # Frame border color
+    BORDER_RADIUS = 4
     ICON_SIZE = 16
     BUTTON_SIZE = 20
 
@@ -187,6 +189,8 @@ class CustomStepItemWidget(QtWidgets.QWidget):
         """
         super(CustomStepItemWidget, self).__init__(parent)
         self._step_data = step_data or CustomStepData()
+        self.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.setFrameShadow(QtWidgets.QFrame.Raised)
         self._setup_ui()
         self._update_appearance()
 
@@ -260,8 +264,36 @@ class CustomStepItemWidget(QtWidgets.QWidget):
         else:
             bg_color = self.NORMAL_COLOR
 
+        # Apply stylesheet with rounded corners and frame
+        # Also style buttons to have transparent background
         self.setStyleSheet(
-            "CustomStepItemWidget {{ background-color: {}; }}".format(bg_color)
+            """
+            CustomStepItemWidget {{
+                background-color: {bg};
+                border: 1px solid {border};
+                border-radius: {radius}px;
+                padding: 2px;
+            }}
+            CustomStepItemWidget QPushButton {{
+                background-color: transparent;
+                border: none;
+            }}
+            CustomStepItemWidget QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 30);
+                border-radius: 3px;
+            }}
+            CustomStepItemWidget QPushButton:pressed {{
+                background-color: rgba(255, 255, 255, 50);
+            }}
+            CustomStepItemWidget QLabel {{
+                background-color: transparent;
+                border: none;
+            }}
+            """.format(
+                bg=bg_color,
+                border=self.BORDER_COLOR,
+                radius=self.BORDER_RADIUS
+            )
         )
 
     def _on_toggle_clicked(self):
@@ -401,7 +433,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
         # Create list item
         item = QtWidgets.QListWidgetItem(self)
-        item.setSizeHint(QtCore.QSize(0, 28))
+        item.setSizeHint(QtCore.QSize(0, 32))  # Height to accommodate frame and padding
 
         # Store the data string in the item for compatibility
         item.setData(QtCore.Qt.UserRole, step_data.to_string())
