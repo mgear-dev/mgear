@@ -774,6 +774,7 @@ class GroupHeaderWidget(QtWidgets.QFrame):
     toggled = QtCore.Signal(bool)
     collapseToggled = QtCore.Signal(bool)
     nameChanged = QtCore.Signal(str)
+    runRequested = QtCore.Signal()
 
     # Style constants - slightly different shade for groups
     GROUP_COLOR = "#4A4A5A"  # Darker purple-gray for groups
@@ -842,6 +843,15 @@ class GroupHeaderWidget(QtWidgets.QFrame):
         self._count_label = QtWidgets.QLabel()
         self._count_label.setStyleSheet("color: #888888;")
         layout.addWidget(self._count_label)
+
+        # Run button to execute all steps in the group
+        self._run_btn = QtWidgets.QPushButton()
+        self._run_btn.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self._run_btn.setToolTip("Run all steps in group")
+        self._run_btn.setFlat(True)
+        self._run_btn.setIcon(pyqt.get_icon("mgear_play", self.ICON_SIZE))
+        self._run_btn.clicked.connect(self.runRequested.emit)
+        layout.addWidget(self._run_btn)
 
         self._update_icons()
         self._update_count()
@@ -1053,6 +1063,7 @@ class GroupWidget(QtWidgets.QFrame):
         stepClicked: Step widget inside group was clicked (widget, group_widget)
         stepContextMenu: Step context menu requested (widget, global_pos, group_widget)
         stepDragStarted: Step drag started (widget, group_widget)
+        runRequested: Run all steps in group requested
     """
 
     toggled = QtCore.Signal(bool)
@@ -1062,6 +1073,7 @@ class GroupWidget(QtWidgets.QFrame):
     stepClicked = QtCore.Signal(object, object, object)  # (step_widget, group_widget, modifiers)
     stepContextMenu = QtCore.Signal(object, object, object)  # (step_widget, pos, group_widget)
     stepDragStarted = QtCore.Signal(object, object)  # (step_widget, group_widget)
+    runRequested = QtCore.Signal()
 
     # Indent for child items
     CHILD_INDENT = 20
@@ -1091,6 +1103,7 @@ class GroupWidget(QtWidgets.QFrame):
         self._header.toggled.connect(self._on_header_toggled)
         self._header.collapseToggled.connect(self._on_collapse_toggled)
         self._header.nameChanged.connect(self._on_name_changed)
+        self._header.runRequested.connect(self.runRequested.emit)
         layout.addWidget(self._header)
 
         # Body container for step items
@@ -1616,6 +1629,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         stepToggled: Emitted when a step's active state changes (row, active)
         stepEditRequested: Emitted when edit is requested for a step (row)
         stepRunRequested: Emitted when run is requested for a step (row)
+        groupRunRequested: Emitted when run is requested for a group (row)
         orderChanged: Emitted when items are reordered
         dataChanged: Emitted when any data changes (for JSON storage)
     """
@@ -1624,6 +1638,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     stepToggled = QtCore.Signal(int, bool)
     stepEditRequested = QtCore.Signal(int)
     stepRunRequested = QtCore.Signal(int)
+    groupRunRequested = QtCore.Signal(int)
     orderChanged = QtCore.Signal()
     dataChanged = QtCore.Signal()
     groupStepClicked = QtCore.Signal(object, object)  # Emitted when step in group clicked (CustomStepData, GroupData)
@@ -2240,6 +2255,9 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         widget.collapsed.connect(
             lambda collapsed, it=item: self._on_group_collapsed(it, collapsed)
         )
+        widget.runRequested.connect(
+            lambda it=item: self.groupRunRequested.emit(self.row(it))
+        )
         # Connect step interaction signals
         widget.stepClicked.connect(self._on_group_step_clicked)
         widget.stepContextMenu.connect(self._on_group_step_context_menu)
@@ -2576,6 +2594,9 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         )
         widget.collapsed.connect(
             lambda collapsed, it=item: self._on_group_collapsed(it, collapsed)
+        )
+        widget.runRequested.connect(
+            lambda it=item: self.groupRunRequested.emit(self.row(it))
         )
         # Connect step interaction signals
         widget.stepClicked.connect(self._on_group_step_clicked)
@@ -3062,6 +3083,11 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                             )
                             widget.collapsed.connect(
                                 lambda c, it=item: self._on_group_collapsed(it, c)
+                            )
+                            widget.runRequested.connect(
+                                lambda it=item: self.groupRunRequested.emit(
+                                    self.row(it)
+                                )
                             )
                             # Connect step interaction signals
                             widget.stepClicked.connect(self._on_group_step_clicked)
@@ -3583,6 +3609,14 @@ class CustomStepMixin(object):
             partial(self._onStepRunRequested, pre=False)
         )
 
+        # Group run signals (from group header run buttons)
+        csTap.preCustomStep_listWidget.groupRunRequested.connect(
+            partial(self._onGroupRunRequested, pre=True)
+        )
+        csTap.postCustomStep_listWidget.groupRunRequested.connect(
+            partial(self._onGroupRunRequested, pre=False)
+        )
+
         # Right click context menus
         csTap.preCustomStep_listWidget.setContextMenuPolicy(
             QtCore.Qt.CustomContextMenu
@@ -3681,6 +3715,41 @@ class CustomStepMixin(object):
         step_data = stepWidget.getStepData(row)
         if step_data:
             self.runStep(step_data.path, customStepDic={})
+
+    def _onGroupRunRequested(self, row, pre=True):
+        """Handle run request for a group - runs all active steps in the group.
+
+        Args:
+            row (int): Row index of the group
+            pre (bool): Whether this is a pre or post group
+        """
+        if pre:
+            stepWidget = self.customStepTab.preCustomStep_listWidget
+        else:
+            stepWidget = self.customStepTab.postCustomStep_listWidget
+
+        group_data = stepWidget.getGroupData(row)
+        if not group_data:
+            return
+
+        # Only run if group is active
+        if not group_data.active:
+            pm.displayWarning("Group '{}' is deactivated, skipping.".format(
+                group_data.name
+            ))
+            return
+
+        # Run all active steps in the group
+        customStepDic = {}
+        steps_run = 0
+        for step_data in group_data.items:
+            if step_data.active:
+                self.runStep(step_data.path, customStepDic)
+                steps_run += 1
+
+        pm.displayInfo("Ran {} steps from group '{}'".format(
+            steps_run, group_data.name
+        ))
 
     def _updateStepListAttr(self, stepWidget, stepAttr):
         """Update Maya attribute from step widget contents."""
@@ -4063,13 +4132,24 @@ class CustomStepMixin(object):
                 return False
 
     def runManualStep(self, widgetList):
-        """Run selected custom steps manually."""
+        """Run selected custom steps and groups manually."""
         selItems = widgetList.selectedItems()
+        customStepDic = {}
         for item in selItems:
             row = widgetList.row(item)
-            step_data = widgetList.getStepData(row)
-            if step_data:
-                self.runStep(step_data.path, customStepDic={})
+            # Check if this is a group
+            if widgetList.isGroupRow(row):
+                group_data = widgetList.getGroupData(row)
+                if group_data and group_data.active:
+                    # Run all active steps in the group
+                    for step_data in group_data.items:
+                        if step_data.active:
+                            self.runStep(step_data.path, customStepDic)
+            else:
+                # Regular step
+                step_data = widgetList.getStepData(row)
+                if step_data:
+                    self.runStep(step_data.path, customStepDic)
 
     def _processCustomStepPath(self, filePath):
         """Process a file path for custom step, making it relative if needed.
