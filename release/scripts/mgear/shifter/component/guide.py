@@ -390,19 +390,19 @@ class ComponentGuide(guide.Main):
         self.child_components = c_dict["child_components"]
 
         temp_dict = {}
-        for k in c_dict["tra"].keys():
+        for k in c_dict["tra"]:
             temp_dict[k] = datatypes.Matrix(c_dict["tra"][k])
         self.tra = temp_dict
 
         self.atra = [datatypes.Matrix(t) for t in c_dict["atra"]]
 
         temp_dict = {}
-        for k in c_dict["pos"].keys():
+        for k in c_dict["pos"]:
             temp_dict[k] = datatypes.Vector(c_dict["pos"][k])
         self.pos = temp_dict
 
         self.apos = [datatypes.Vector(v) for v in c_dict["apos"]]
-        for b in c_dict["blade"].keys():
+        for b in c_dict["blade"]:
             self.blades[b] = vector.Blade(datatypes.Matrix(c_dict["blade"][b]))
 
         self.size = self.getSize()
@@ -415,13 +415,13 @@ class ComponentGuide(guide.Main):
         c_dict["param_values"] = self.get_param_values()
 
         temp_dict = {}
-        for k in self.tra.keys():
+        for k in self.tra:
             temp_dict[k] = self.tra[k].get()
         c_dict["tra"] = temp_dict
 
         c_dict["atra"] = [t.get() for t in self.atra]
         temp_dict = {}
-        for k in self.pos.keys():
+        for k in self.pos:
             temp_dict[k] = self.pos[k].get()
         c_dict["pos"] = temp_dict
 
@@ -441,7 +441,7 @@ class ComponentGuide(guide.Main):
 
     def get_blades_transform(self):
         b_tra = {}
-        for b in self.blades.keys():
+        for b in self.blades:
             b_tra[b] = self.blades[b].transform.get()
 
         return b_tra
@@ -600,20 +600,19 @@ class ComponentGuide(guide.Main):
         #                                     oldName, oldSideIndex)
         # NOTE: Experimenta  using findComponentChildren3
         objList = dag.findComponentChildren4(self.parent, oldName, oldSideIndex)
-        newSideIndex = newSide + str(self.values["comp_index"])
+        newSideIndex = f"{newSide}{self.values['comp_index']}"
         objList.append(self.parent)
         for obj in objList:
-            tmpObjName = obj.name().split("|")[-1]
-            suffix = tmpObjName.split("_")[-1]
-            # if len(tmpObjName.split("_")) == 3:
-            #     new_name = "_".join([newName, newSideIndex, suffix])
-            #     print "new name = " + new_name
-            # else:
-            subIndex = tmpObjName.split("_")[-2]
-            if subIndex == oldSideIndex:
-                new_name = "_".join([newName, newSideIndex, suffix])
+            # Use rsplit to split only once from the right, avoiding multiple splits
+            obj_name = obj.name()
+            tmpObjName = obj_name.rsplit("|", 1)[-1]
+            parts = tmpObjName.rsplit("_", 2)  # Split into at most 3 parts from right
+            suffix = parts[-1]
+            subIndex = parts[-2] if len(parts) > 2 else ""
+            if subIndex == oldSideIndex or len(parts) <= 2:
+                new_name = f"{newName}_{newSideIndex}_{suffix}"
             else:
-                new_name = "_".join([newName, newSideIndex, subIndex, suffix])
+                new_name = f"{newName}_{newSideIndex}_{subIndex}_{suffix}"
             pm.rename(obj, new_name)
 
     # ====================================================
@@ -970,12 +969,20 @@ class ComponentGuide(guide.Main):
 
         """
         objects = {}
+        # Pre-compute prefix and its length
+        prefix = f"{self.fullName}_"
+        prefix_len = len(prefix)
+        # Get model's long name for comparison
+        model_long = model.longName() if hasattr(model, 'longName') else str(model)
 
-        for child in cmds.ls(self.fullName + "_*", type="transform"):
-            if pm.PyNode(child).getParent(-1) == model:
-                objects[
-                    child[child.index(self.fullName + "_") + len(self.fullName + "_") :]
-                ] = child
+        for child in cmds.ls(f"{self.fullName}_*", type="transform", long=True):
+            # Check if top parent matches model using string comparison (faster than PyNode)
+            # Top parent is the second element after splitting by |
+            parts = child.split("|")
+            if len(parts) > 1 and parts[1] == model_long.split("|")[-1]:
+                # Get short name for the key
+                short_name = parts[-1]
+                objects[short_name[prefix_len:]] = short_name
 
         return objects
 

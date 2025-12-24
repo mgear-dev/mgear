@@ -132,7 +132,7 @@ class Main(object):
                 self.valid = False
             else:
                 cnx = pm.listConnections(
-                    node + "." + scriptName, destination=False, source=True
+                    f"{node}.{scriptName}", destination=False, source=True
                 )
                 if isinstance(paramDef, attribute.FCurveParamDef):
                     paramDef.value = fcurve.getFCurveValues(
@@ -143,10 +143,10 @@ class Main(object):
                     paramDef.value = None
                     self.values[scriptName] = cnx[0]
                 else:
-                    paramDef.value = pm.getAttr(node + "." + scriptName)
-                    self.values[scriptName] = pm.getAttr(
-                        node + "." + scriptName
-                    )
+                    # Cache getAttr result to avoid redundant call
+                    attr_value = pm.getAttr(f"{node}.{scriptName}")
+                    paramDef.value = attr_value
+                    self.values[scriptName] = attr_value
 
     def addColorParam(self, scriptName, value=False):
         """Add color paramenter to the paramenter definition Dictionary.
@@ -569,7 +569,7 @@ class Rig(Main):
                         # Handle name clashing when parsing the guide
                         # to determine the parent component
                         if "|" in pName:
-                            pName = pName.split("|")[-1]
+                            pName = pName.rsplit("|", 1)[-1]
                         pComp = self.components[pName]
                         self.components[name].parentComponent = pComp
                         self.components[name].parentLocalName = pLocal
@@ -580,18 +580,19 @@ class Rig(Main):
                     # for localName, element in compParent.getObjects(
                     #         self.model, False).items():
                     # NOTE: getObjects3 is an experimental function
+                    # Build parent lookup dict once to avoid O(n²) nested loop
+                    parent_lookup = {}
+                    for comp_name in self.componentsIndex:
+                        comp = self.components[comp_name]
+                        parent_lookup[comp.root.getParent()] = comp
+                    # Now lookup is O(1) instead of O(n)
                     for localName, element in compParent.getObjects3(
                         self.model
                     ).items():
-                        for name in self.componentsIndex:
-                            compChild = self.components[name]
-                            compChild_parent = compChild.root.getParent()
-                            if (
-                                element is not None
-                                and element == compChild_parent
-                            ):
-                                compChild.parentComponent = compParent
-                                compChild.parentLocalName = localName
+                        if element is not None and element in parent_lookup:
+                            compChild = parent_lookup[element]
+                            compChild.parentComponent = compParent
+                            compChild.parentLocalName = localName
 
             # More option values
             self.addOptionsValues()
@@ -606,7 +607,7 @@ class Rig(Main):
 
         endTime = datetime.datetime.now()
         finalTime = endTime - startTime
-        mgear.log("Guide loaded from hierarchy in  [ " + str(finalTime) + " ]")
+        mgear.log(f"Guide loaded from hierarchy in  [ {finalTime} ]")
 
     def set_from_dict(self, guide_template_dict):
 
@@ -2015,7 +2016,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         if not isinstance(file_path, string_types):
             file_path = file_path[0]
         config = json.load(open(file_path))
-        for key in config.keys():
+        for key in config:
             self.root.attr(key).set(config[key])
         self.populate_naming_controls()
 

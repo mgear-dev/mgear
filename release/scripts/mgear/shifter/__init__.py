@@ -219,7 +219,9 @@ class Rig(object):
 
         This avoids repeated pm.ls() calls during joint creation.
         """
-        self._joint_cache = {j.name(): j for j in pm.ls(type="joint")}
+        # Simple set for O(1) existence checks - no PyNode wrapping needed
+        joint_names = cmds.ls(type="joint") or []
+        self._joint_cache = set(joint_names)
 
     def getCachedJoint(self, name):
         """Get a joint from cache by name.
@@ -232,7 +234,9 @@ class Rig(object):
         """
         if self._joint_cache is None:
             return None
-        return self._joint_cache.get(name)
+        if name in self._joint_cache:
+            return pm.PyNode(name)
+        return None
 
     @core_utils.one_undo
     def buildFromDict(self, conf_dict):
@@ -762,9 +766,13 @@ class Rig(object):
             mgear.log("Cleaning jnt org")
             jnt_org_child = dag.findChildrenPartial(self.jnt_org, "org")
             if jnt_org_child:
-                for jOrg in jnt_org_child:
-                    if not jOrg.listRelatives(c=True):
-                        pm.delete(jOrg)
+                # Use cmds for faster child checks
+                to_delete = [
+                    jOrg for jOrg in jnt_org_child
+                    if not cmds.listRelatives(jOrg.name(), c=True)
+                ]
+                if to_delete:
+                    pm.delete(to_delete)
 
         # Groups ------------------------------------------
         mgear.log("Creating groups")
@@ -816,16 +824,16 @@ class Rig(object):
         # only hides if components_finalize or All steps are done
         # if not WIP mode we will hide all the inputs
         if not self.options["mode"]:
-            # Collect all non-transform DG nodes and batch set attribute
-            # Using maya.cmds is faster than pymaya for bulk operations
+            # Use cmds for history traversal and attribute setting
             history_nodes = cmds.listHistory(
                 self.model.name(), ac=True, f=True
             ) or []
             for node_name in history_nodes:
                 if cmds.nodeType(node_name) != "transform":
-                    cmds.setAttr(
-                        node_name + ".isHistoricallyInteresting", False
-                    )
+                    try:
+                        cmds.setAttr(f"{node_name}.isHistoricallyInteresting", False)
+                    except RuntimeError:
+                        pass
             try:
                 # hide a guide if the guide_vis pram is turned off
                 if self.guide.model.hasAttr("guide_vis"):
@@ -953,11 +961,11 @@ class Rig(object):
             dagNode: The Control.
 
         """
-        if "degree" not in kwargs.keys():
+        if "degree" not in kwargs:
             kwargs["degree"] = 1
 
         bufferName = name + "_controlBuffer"
-        if bufferName in self.guide.controllers.keys():
+        if bufferName in self.guide.controllers:
             ctl_ref = self.guide.controllers[bufferName]
             ctl = primitive.addTransform(parent, name, m)
             for shape in ctl_ref.getShapes():
@@ -1004,10 +1012,7 @@ class Rig(object):
             objects = [objects]
 
         for name in names:
-            if name not in self.groups.keys():
-                self.groups[name] = []
-
-            self.groups[name].extend(objects)
+            self.groups.setdefault(name, []).extend(objects)
 
     def addToSubGroup(self, subGroups, parentGroups=["hidden"]):
         """Add the object in a collection for later SubGroup creation.
@@ -1027,9 +1032,7 @@ class Rig(object):
             subGroups = [subGroups]
 
         for pg in parentGroups:
-            if pg not in self.subGroups.keys():
-                self.subGroups[pg] = []
-            self.subGroups[pg].extend(subGroups)
+            self.subGroups.setdefault(pg, []).extend(subGroups)
 
     def add_controller_tag(self, ctl, tagParent):
         ctt = node.add_controller_tag(ctl, tagParent)
@@ -1117,13 +1120,13 @@ class Rig(object):
             return self.global_ctl
 
         relatives_map = relatives_map or {}
-        if guideName in relatives_map.keys():
+        if guideName in relatives_map:
             return relatives_map[guideName]
 
         comp_name = self.getComponentName(guideName)
         relative_name = self.getRelativeName(guideName)
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return self.global_ctl
         return self.components[comp_name].getRelation(relative_name)
 
@@ -1145,7 +1148,7 @@ class Rig(object):
         comp_name = self.getComponentName(guideName)
         relative_name = self.getRelativeName(guideName)
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return self.global_ctl
         return self.components[comp_name].getControlRelation(relative_name)
 
@@ -1167,7 +1170,7 @@ class Rig(object):
         comp_name = self.getComponentName(guideName, False)
         # comp_name = "_".join(guideName.split("_")[:2])
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return None
 
         return self.components[comp_name]
@@ -1189,7 +1192,7 @@ class Rig(object):
         comp_name = self.getComponentName(guideName, False)
         # comp_name = "_".join(guideName.split("_")[:2])
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return self.ui
 
         if self.components[comp_name].ui is None:

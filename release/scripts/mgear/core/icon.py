@@ -48,18 +48,12 @@ def create(
         dagNode: The newly created icon.
 
     """
-    if "w" not in kwargs.keys():
-        kwargs["w"] = 1
-    if "h" not in kwargs.keys():
-        kwargs["h"] = 1
-    if "d" not in kwargs.keys():
-        kwargs["d"] = 1
-    if "po" not in kwargs.keys():
-        kwargs["po"] = None
-    if "ro" not in kwargs.keys():
-        kwargs["ro"] = None
-    if "degree" not in kwargs.keys():
-        kwargs["degree"] = 3
+    kwargs.setdefault("w", 1)
+    kwargs.setdefault("h", 1)
+    kwargs.setdefault("d", 1)
+    kwargs.setdefault("po", None)
+    kwargs.setdefault("ro", None)
+    kwargs.setdefault("degree", 3)
 
     if icon == "cube":
         ctl = cube(
