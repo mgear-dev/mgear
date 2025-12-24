@@ -38,12 +38,24 @@ def _resolve_source_path(source_file):
     Returns:
         str: The resolved full path
     """
+    if not source_file:
+        return source_file
     env_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
     if env_path and not os.path.isabs(source_file):
-        env_path = os.path.normpath(env_path)
-        if not env_path.endswith(os.sep):
-            env_path = env_path + os.sep
-        return os.path.normpath(os.path.join(env_path, source_file))
+        # On Windows, os.path.join behaves unexpectedly with bare drive letters:
+        # os.path.join("W:", "file.py") returns "W:file.py" (no backslash!)
+        # We need to ensure the base path ends with a separator for proper joining
+        #
+        # Handle various input forms:
+        # - "W:" -> "W:\"
+        # - "W:\" -> "W:\" (already correct)
+        # - "W:\path" -> "W:\path\" (needs separator for joining)
+        # - "W:\path\" -> "W:\path\" (already correct)
+        env_path = env_path.rstrip("/\\")  # Remove any trailing separators
+        env_path = env_path + os.sep  # Add proper separator
+        # Join and normalize the full path
+        full_path = os.path.join(env_path, source_file)
+        return os.path.normpath(full_path)
     return source_file
 
 
@@ -185,14 +197,11 @@ class CustomStepData(object):
         """
         env_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
         if env_path and self._path:
-            # Normalize the env path to ensure proper joining on Windows
-            # os.path.join("W:", "path") returns "W:path" not "W:\path"
-            # so we need to ensure proper path separator
-            env_path = os.path.normpath(env_path)
-            if not env_path.endswith(os.sep):
-                env_path = env_path + os.sep
-            return os.path.normpath(os.path.join(env_path, self._path))
+            # Use the helper function for consistent path resolution
+            return _resolve_source_path(self._path)
         elif env_path:
+            # Ensure the env path is properly formatted (add separator for bare drive letters)
+            env_path = env_path.rstrip("/\\") + os.sep
             return os.path.normpath(env_path)
         return self._path
 
@@ -3224,6 +3233,9 @@ class Ui_Form(object):
         pathLayout = QtWidgets.QFormLayout(pathWidget)
         pathLayout.setContentsMargins(4, 0, 4, 2)
         pathLayout.setSpacing(4)
+        pathLayout.setFieldGrowthPolicy(
+            QtWidgets.QFormLayout.AllNonFixedFieldsGrow
+        )
 
         self.info_path_type_label = QtWidgets.QLabel("-")
         pathLayout.addRow("Path Type:", self.info_path_type_label)
@@ -3233,6 +3245,9 @@ class Ui_Form(object):
         self.info_path_label.setTextInteractionFlags(
             QtCore.Qt.TextSelectableByMouse
         )
+        self.info_path_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
         pathLayout.addRow("Path:", self.info_path_label)
 
         # Source file (for referenced groups)
@@ -3241,6 +3256,9 @@ class Ui_Form(object):
         self.info_source_label.setTextInteractionFlags(
             QtCore.Qt.TextSelectableByMouse
         )
+        self.info_source_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
         pathLayout.addRow("Source:", self.info_source_label)
 
         # Resolved path (full path when source is relative)
@@ -3248,6 +3266,9 @@ class Ui_Form(object):
         self.info_resolved_label.setWordWrap(True)
         self.info_resolved_label.setTextInteractionFlags(
             QtCore.Qt.TextSelectableByMouse
+        )
+        self.info_resolved_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
         pathLayout.addRow("Resolved:", self.info_resolved_label)
 
