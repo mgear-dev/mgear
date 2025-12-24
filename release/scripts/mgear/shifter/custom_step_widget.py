@@ -4947,6 +4947,7 @@ class CustomShifterStep(cstp.customShifterMainStep):
         # Selection-dependent actions
         selectedItems = cs_listWidget.selectedItems()
         hasSelection = len(selectedItems) > 0
+        selectionCount = len(selectedItems)
 
         isClickedGroup = clickedRow >= 0 and cs_listWidget.isGroupRow(clickedRow)
         isClickedReferenced = False
@@ -4955,28 +4956,41 @@ class CustomShifterStep(cstp.customShifterMainStep):
             if clicked_group_widget:
                 isClickedReferenced = clicked_group_widget.is_referenced()
 
-        # Check if selection contains only steps (no groups)
-        hasStepSelection = False
+        # Count steps and groups separately
+        stepCount = 0
+        groupCount = 0
         if hasSelection:
             for item in selectedItems:
                 row = cs_listWidget.row(item)
-                if not cs_listWidget.isGroupRow(row):
-                    hasStepSelection = True
-                    break
+                if cs_listWidget.isGroupRow(row):
+                    groupCount += 1
+                else:
+                    stepCount += 1
 
-        run_action = self.csMenu.addAction("Run Selected")
+        hasStepSelection = stepCount > 0
+        hasMultiSelection = selectionCount > 1
+
+        # Run Selected - works on both steps and groups
+        run_text = "Run Selected" if not hasMultiSelection else "Run Selected ({})".format(selectionCount)
+        run_action = self.csMenu.addAction(run_text)
         run_action.setIcon(pyqt.get_icon("mgear_play"))
         run_action.setEnabled(hasSelection)
 
-        edit_action = self.csMenu.addAction("Edit")
+        # Edit - only for steps (not groups)
+        edit_text = "Edit" if stepCount <= 1 else "Edit ({})".format(stepCount)
+        edit_action = self.csMenu.addAction(edit_text)
         edit_action.setIcon(pyqt.get_icon("mgear_edit"))
-        edit_action.setEnabled(hasSelection and not isClickedGroup)
+        edit_action.setEnabled(hasStepSelection and not isClickedGroup)
 
-        duplicate_action = self.csMenu.addAction("Duplicate")
+        # Duplicate - only for steps (not groups)
+        duplicate_text = "Duplicate" if stepCount <= 1 else "Duplicate ({})".format(stepCount)
+        duplicate_action = self.csMenu.addAction(duplicate_text)
         duplicate_action.setIcon(pyqt.get_icon("mgear_copy"))
-        duplicate_action.setEnabled(hasSelection and not isClickedGroup)
+        duplicate_action.setEnabled(hasStepSelection and not isClickedGroup)
 
-        remove_action = self.csMenu.addAction("Remove")
+        # Remove - only for steps (not groups)
+        remove_text = "Remove" if stepCount <= 1 else "Remove ({})".format(stepCount)
+        remove_action = self.csMenu.addAction(remove_text)
         remove_action.setIcon(pyqt.get_icon("mgear_trash-2"))
         remove_action.setEnabled(hasStepSelection)
 
@@ -5005,15 +5019,18 @@ class CustomShifterStep(cstp.customShifterMainStep):
         self.csMenu.addSeparator()
 
         # Toggle status actions
-        toggle_action = self.csMenu.addAction("Toggle Status")
+        toggle_text = "Toggle Status" if not hasMultiSelection else "Toggle Status ({})".format(selectionCount)
+        toggle_action = self.csMenu.addAction(toggle_text)
         toggle_action.setIcon(pyqt.get_icon("mgear_refresh-cw"))
         toggle_action.setEnabled(hasSelection)
 
-        off_selected_action = self.csMenu.addAction("Turn OFF Selected")
+        off_selected_text = "Turn OFF Selected" if not hasMultiSelection else "Turn OFF Selected ({})".format(selectionCount)
+        off_selected_action = self.csMenu.addAction(off_selected_text)
         off_selected_action.setIcon(pyqt.get_icon("mgear_toggle-left"))
         off_selected_action.setEnabled(hasSelection)
 
-        on_selected_action = self.csMenu.addAction("Turn ON Selected")
+        on_selected_text = "Turn ON Selected" if not hasMultiSelection else "Turn ON Selected ({})".format(selectionCount)
+        on_selected_action = self.csMenu.addAction(on_selected_text)
         on_selected_action.setIcon(pyqt.get_icon("mgear_toggle-right"))
         on_selected_action.setEnabled(hasSelection)
 
