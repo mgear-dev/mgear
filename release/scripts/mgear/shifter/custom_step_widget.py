@@ -1877,47 +1877,47 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         # Check if this is a referenced group
         is_referenced = group_widget.is_referenced()
 
+        # Get selection count for menu text
+        selection_count = len(self._selected_group_steps)
+        has_multi_selection = selection_count > 1
+
         # Create context menu - store as instance variable like main menu
         # Use self (the list widget) as parent to ensure menu stays alive
         self._group_step_menu = QtWidgets.QMenu(self)
 
-        # Edit action
-        edit_action = self._group_step_menu.addAction("Edit")
+        # Edit action - show count if multiple selected
+        edit_text = "Edit" if not has_multi_selection else "Edit ({})".format(selection_count)
+        edit_action = self._group_step_menu.addAction(edit_text)
         edit_action.setIcon(pyqt.get_icon("mgear_edit"))
         # Disable edit for steps in referenced groups
         edit_action.setEnabled(not is_referenced)
 
-        # Run action
-        run_action = self._group_step_menu.addAction("Run")
+        # Run action - show count if multiple selected
+        run_text = "Run" if not has_multi_selection else "Run ({})".format(selection_count)
+        run_action = self._group_step_menu.addAction(run_text)
         run_action.setIcon(pyqt.get_icon("mgear_play"))
 
         self._group_step_menu.addSeparator()
 
-        # Move to top level action
-        move_out_action = self._group_step_menu.addAction("Move to Top Level")
+        # Move to top level action - show count if multiple selected
+        move_text = "Move to Top Level" if not has_multi_selection else "Move to Top Level ({})".format(selection_count)
+        move_out_action = self._group_step_menu.addAction(move_text)
         move_out_action.setIcon(pyqt.get_icon("mgear_arrow-up"))
         # Disable move for steps in referenced groups
         move_out_action.setEnabled(not is_referenced)
 
-        # Remove from group action
-        remove_action = self._group_step_menu.addAction("Remove")
+        # Remove from group action - show count if multiple selected
+        remove_text = "Remove" if not has_multi_selection else "Remove ({})".format(selection_count)
+        remove_action = self._group_step_menu.addAction(remove_text)
         remove_action.setIcon(pyqt.get_icon("mgear_trash-2"))
         # Disable remove for steps in referenced groups
         remove_action.setEnabled(not is_referenced)
 
-        # Connect actions using lambdas to capture current step/group
-        edit_action.triggered.connect(
-            lambda: self._edit_group_step(step_widget)
-        )
-        run_action.triggered.connect(
-            lambda: self._run_group_step(step_widget, group_widget)
-        )
-        move_out_action.triggered.connect(
-            lambda: self._move_step_to_top_level(step_widget, group_widget)
-        )
-        remove_action.triggered.connect(
-            lambda: self._remove_step_from_group(step_widget, group_widget)
-        )
+        # Connect actions - all use selected steps for multi-selection support
+        edit_action.triggered.connect(self._edit_selected_group_steps)
+        run_action.triggered.connect(self._run_selected_group_steps)
+        move_out_action.triggered.connect(self._move_selected_steps_to_top_level)
+        remove_action.triggered.connect(self._remove_selected_steps_from_group)
 
         # Show menu using exec_() which blocks until menu closes
         self._group_step_menu.exec_(global_pos)
@@ -1930,7 +1930,75 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             if fullpath:
                 CustomStepMixin._editFile(fullpath)
 
-    def _run_group_step(self, step_widget, group_widget=None):
+    def _edit_selected_group_steps(self):
+        """Edit all selected steps in groups."""
+        for step_widget, _ in self._selected_group_steps:
+            self._edit_group_step(step_widget)
+
+    def _run_selected_group_steps(self):
+        """Run all selected steps in groups."""
+        customStepDic = {}
+        for step_widget, group_widget in self._selected_group_steps:
+            self._run_group_step(step_widget, group_widget, customStepDic)
+
+    def _move_selected_steps_to_top_level(self):
+        """Move all selected steps from groups to top level."""
+        # Process in reverse order to maintain correct row indices
+        # Group by group_widget to handle each group's steps together
+        steps_by_group = {}
+        for step_widget, group_widget in self._selected_group_steps:
+            if group_widget not in steps_by_group:
+                steps_by_group[group_widget] = []
+            steps_by_group[group_widget].append(step_widget)
+
+        for group_widget, step_widgets in steps_by_group.items():
+            group_row = self._find_group_row(group_widget)
+            if group_row < 0:
+                continue
+
+            # Collect step data and remove from group
+            steps_data = []
+            for step_widget in step_widgets:
+                step_data = step_widget.get_step_data()
+                if step_data:
+                    steps_data.append(step_data)
+                    group_widget.remove_step_widget(step_widget)
+
+            # Update group item height
+            self._update_group_item_height(group_row)
+
+            # Add steps to top level after the group (in order)
+            for i, step_data in enumerate(steps_data):
+                self._insert_step_at_row(group_row + 1 + i, step_data)
+
+        self._clear_group_step_selections()
+        self.dataChanged.emit()
+
+    def _remove_selected_steps_from_group(self):
+        """Remove all selected steps from their groups."""
+        # Group by group_widget to handle each group's steps together
+        steps_by_group = {}
+        for step_widget, group_widget in self._selected_group_steps:
+            if group_widget not in steps_by_group:
+                steps_by_group[group_widget] = []
+            steps_by_group[group_widget].append(step_widget)
+
+        for group_widget, step_widgets in steps_by_group.items():
+            group_row = self._find_group_row(group_widget)
+            if group_row < 0:
+                continue
+
+            # Remove each step from the group
+            for step_widget in step_widgets:
+                group_widget.remove_step_widget(step_widget)
+
+            # Update group item height
+            self._update_group_item_height(group_row)
+
+        self._clear_group_step_selections()
+        self.dataChanged.emit()
+
+    def _run_group_step(self, step_widget, group_widget=None, customStepDic=None):
         """Run a step from a group.
 
         For referenced groups, tries to load fresh data from the source .scs file.
@@ -1939,7 +2007,11 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         Args:
             step_widget (CustomStepItemWidget): The step widget to run
             group_widget (GroupWidget): The parent group widget (optional)
+            customStepDic (dict): Dictionary for sharing data between steps (optional)
         """
+        if customStepDic is None:
+            customStepDic = {}
+
         step_data = step_widget.get_step_data()
         if not step_data:
             return
@@ -1970,7 +2042,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                         "using embedded data".format(step_name)
                     )
 
-        runStep(step_path, customStepDic={})
+        runStep(step_path, customStepDic)
 
     def _move_step_to_top_level(self, step_widget, group_widget):
         """Move a step from a group to the top level.
