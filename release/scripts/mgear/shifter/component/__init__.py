@@ -138,7 +138,7 @@ class Main(object):
         # --------------------------------------------------
         # Step
         self.stepMethods = [
-            eval("self.step_0{}".format(str(i)), {"self": self})
+            getattr(self, "step_0{}".format(i))
             for i in range(len(self.steps))
         ]
 
@@ -437,13 +437,15 @@ class Main(object):
                 )
                 rule_name = self.name + rule_name
 
-            # use exiting joint
-            if pm.ls(customName) and self.options["connect_joints"]:
-                jnt = pm.ls(customName)[0]
-                keep_off = True
+            # use existing joint - prefer cached lookup over pm.ls() for speed
+            cached_custom = self.rig.getCachedJoint(customName) if customName else None
+            cached_rule = self.rig.getCachedJoint(rule_name)
 
-            elif pm.ls(rule_name) and self.options["connect_joints"]:
-                jnt = pm.ls(rule_name)[0]
+            if cached_custom and self.options["connect_joints"]:
+                jnt = cached_custom
+                keep_off = True
+            elif cached_rule and self.options["connect_joints"]:
+                jnt = cached_rule
                 keep_off = True
             else:
                 if isinstance(obj, datatypes.Matrix):
@@ -592,11 +594,9 @@ class Main(object):
                     # leaf joint
                     if leaf_joint and not UniScale:
                         leaf_joint_name = "leaf_" + jnt.name()
-                        if (
-                            pm.ls(leaf_joint_name)
-                            and self.options["connect_joints"]
-                        ):
-                            leaf_jnt = pm.PyNode(leaf_joint_name)
+                        cached_leaf = self.rig.getCachedJoint(leaf_joint_name)
+                        if cached_leaf and self.options["connect_joints"]:
+                            leaf_jnt = cached_leaf
                         else:
                             leaf_jnt = primitive.addJoint(
                                 jnt, "leaf_" + jnt.name(), t
@@ -643,25 +643,19 @@ class Main(object):
                     else:
                         driven_m = pm.getAttr(jnt + ".parentInverseMatrix[0]")
                         m = t * driven_m
-                        jnt.attr("rotateX").set(0)
-                        jnt.attr("rotateY").set(0)
-                        jnt.attr("rotateZ").set(0)
+                        jnt.rotate.set([0, 0, 0])
                         if jnt.scaleZ.get() < 0:
                             jnt.scaleZ.set(1)
                     tm = datatypes.TransformationMatrix(m)
                     r = datatypes.degrees(tm.getRotation())
-                    jnt.attr("jointOrientX").set(r[0])
-                    jnt.attr("jointOrientY").set(r[1])
-                    jnt.attr("jointOrientZ").set(r[2])
+                    jnt.jointOrient.set([r[0], r[1], r[2]])
                 elif not neutral_rot:
                     jnt.setAttr("jointOrient", 0, 0, 0)
                     driven_m = pm.getAttr(jnt + ".parentInverseMatrix[0]")
                     m = t * driven_m
                     tm = datatypes.TransformationMatrix(m)
                     r = datatypes.degrees(tm.getRotation())
-                    jnt.attr("rotateX").set(r[0])
-                    jnt.attr("rotateY").set(r[1])
-                    jnt.attr("rotateZ").set(r[2])
+                    jnt.rotate.set([r[0], r[1], r[2]])
 
                 # set not keyable
                 attribute.setNotKeyableAttributes(jnt)
@@ -808,9 +802,7 @@ class Main(object):
 
             # setting the joint orient compensation in order to have clean
             # rotation channels
-            jnt.attr("jointOrientX").set(jnt.attr("rx").get())
-            jnt.attr("jointOrientY").set(jnt.attr("ry").get())
-            jnt.attr("jointOrientZ").set(jnt.attr("rz").get())
+            jnt.jointOrient.set(jnt.rotate.get())
 
             im = m.inverse()
 

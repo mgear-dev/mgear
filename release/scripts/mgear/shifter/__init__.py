@@ -7,6 +7,7 @@ import json
 
 # Maya
 import mgear.pymaya as pm
+from maya import cmds
 from mgear.pymaya import datatypes
 from mgear.pymaya import versions
 
@@ -36,6 +37,10 @@ COMPONENT_PATH = os.path.join(os.path.dirname(__file__), "component")
 TEMPLATE_PATH = os.path.join(COMPONENT_PATH, "templates")
 
 SHIFTER_COMPONENT_ENV_KEY = "MGEAR_SHIFTER_COMPONENT_PATH"
+
+# Module-level caches for performance
+_component_directories_cache = None
+_component_module_cache = {}
 
 
 def log_window():
@@ -94,18 +99,21 @@ def log_window():
 
 
 def getComponentDirectories():
-    """Get the components directory"""
-    # TODO: ready to support multiple default directories
-    return core_utils.gatherCustomModuleDirectories(
-        SHIFTER_COMPONENT_ENV_KEY,
-        [
-            os.path.join(os.path.dirname(shifter_classic_components.__file__)),
-            os.path.join(os.path.dirname(shifter_epic_components.__file__)),
-        ],
-    )
-    # return mgear.core.utils.gatherCustomModuleDirectories(
-    #     SHIFTER_COMPONENT_ENV_KEY,
-    #     os.path.join(os.path.dirname(shifter_classic_components.__file__)))
+    """Get the components directory.
+
+    Results are cached for performance since directory contents
+    don't change during a Maya session.
+    """
+    global _component_directories_cache
+    if _component_directories_cache is None:
+        _component_directories_cache = core_utils.gatherCustomModuleDirectories(
+            SHIFTER_COMPONENT_ENV_KEY,
+            [
+                os.path.join(os.path.dirname(shifter_classic_components.__file__)),
+                os.path.join(os.path.dirname(shifter_epic_components.__file__)),
+            ],
+        )
+    return _component_directories_cache
 
 
 def importComponentGuide(comp_type):
@@ -121,7 +129,14 @@ def importComponentGuide(comp_type):
 
 
 def importComponent(comp_type):
-    """Import the Component"""
+    """Import the Component.
+
+    Results are cached per component type for performance.
+    """
+    global _component_module_cache
+    if comp_type in _component_module_cache:
+        return _component_module_cache[comp_type]
+
     dirs = getComponentDirectories()
     defFmt = "mgear.shifter.component.{}"
     customFmt = "{}"
@@ -129,7 +144,18 @@ def importComponent(comp_type):
     module = core_utils.importFromStandardOrCustomDirectories(
         dirs, defFmt, customFmt, comp_type
     )
+    _component_module_cache[comp_type] = module
     return module
+
+
+def clearComponentCache():
+    """Clear the component directory and module caches.
+
+    Call this if you add new components during a Maya session.
+    """
+    global _component_directories_cache, _component_module_cache
+    _component_directories_cache = None
+    _component_module_cache = {}
 
 
 def reloadComponents(*args):
@@ -138,6 +164,8 @@ def reloadComponents(*args):
     Args:
         *args: Dummy
     """
+    # Clear caches before reloading
+    clearComponentCache()
     compDir = getComponentDirectories()
 
     for x in compDir:
@@ -182,6 +210,29 @@ class Rig(object):
         self.customStepDic = {}
 
         self.build_data = {}
+
+        # Joint name cache for faster lookups during build
+        self._joint_cache = None
+
+    def buildJointCache(self):
+        """Build a cache of all joint names in the scene for fast lookups.
+
+        This avoids repeated pm.ls() calls during joint creation.
+        """
+        self._joint_cache = {j.name(): j for j in pm.ls(type="joint")}
+
+    def getCachedJoint(self, name):
+        """Get a joint from cache by name.
+
+        Args:
+            name (str): The joint name to look up.
+
+        Returns:
+            PyNode or None: The joint if found, None otherwise.
+        """
+        if self._joint_cache is None:
+            return None
+        return self._joint_cache.get(name)
 
     @core_utils.one_undo
     def buildFromDict(self, conf_dict):
@@ -291,6 +342,7 @@ class Rig(object):
 
         return build_data
 
+    @core_utils.viewport_off
     @core_utils.undo_off
     def build(self):
         """Build the rig."""
@@ -299,6 +351,10 @@ class Rig(object):
         self.guides = self.guide.components
 
         self.customStepDic["mgearRun"] = self
+
+        # Build joint cache if connecting to existing joints
+        if self.options.get("connect_joints"):
+            self.buildJointCache()
 
         self.initialHierarchy()
         self.processComponents()
@@ -760,9 +816,16 @@ class Rig(object):
         # only hides if components_finalize or All steps are done
         # if not WIP mode we will hide all the inputs
         if not self.options["mode"]:
-            for c in self.model.listHistory(ac=True, f=True):
-                if c.type() != "transform":
-                    c.isHistoricallyInteresting.set(False)
+            # Collect all non-transform DG nodes and batch set attribute
+            # Using maya.cmds is faster than pymaya for bulk operations
+            history_nodes = cmds.listHistory(
+                self.model.name(), ac=True, f=True
+            ) or []
+            for node_name in history_nodes:
+                if cmds.nodeType(node_name) != "transform":
+                    cmds.setAttr(
+                        node_name + ".isHistoricallyInteresting", False
+                    )
             try:
                 # hide a guide if the guide_vis pram is turned off
                 if self.guide.model.hasAttr("guide_vis"):
