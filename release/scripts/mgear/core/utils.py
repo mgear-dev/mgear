@@ -265,6 +265,35 @@ def one_undo(func):
     return wrap
 
 
+def undo_off(func):
+    """Decorator - Turn off Maya undo while func is running.
+
+    Disables the undo queue before executing the wrapped function and
+    re-enables it afterwards. If the function fails, undo is still
+    safely restored before the exception is raised.
+
+    type: (function) -> function
+
+    """
+
+    @wraps(func)
+    def wrap(*args, **kwargs):
+        # type: (*str, **str) -> None
+
+        try:
+            cmds.undoInfo(stateWithoutFlush=False)
+            pm.displayInfo("Undo off for: {}".format(func.__name__))
+            return func(*args, **kwargs)
+
+        except Exception as e:
+            raise e
+
+        finally:
+            cmds.undoInfo(stateWithoutFlush=True)
+
+    return wrap
+
+
 def timeFunc(func):
     """Use as a property to time any desired function"""
 

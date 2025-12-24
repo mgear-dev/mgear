@@ -291,6 +291,7 @@ class Rig(object):
 
         return build_data
 
+    @core_utils.undo_off
     def build(self):
         """Build the rig."""
 
