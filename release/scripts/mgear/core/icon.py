@@ -40,7 +40,7 @@ def create(
         icon (str): Icon type. Options: "cube", "pyramid", "square",
             "flower", "circle", "cylinder", "compas", "diamond",
                     "cubewithpeak", "sphere", "arrow", "crossarrow",
-                    "cross", "null"
+                    "cross", "null", "gear", "mgear"
         kwargs: The keyword arguments can vary depending of the icon type.
                     Please refear to the specific icon method for more info.
 
@@ -168,6 +168,24 @@ def create(
         )
     elif icon == "null":
         ctl = null(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
+    elif icon == "gear":
+        kwargs.setdefault("teeth", 8)
+        kwargs.setdefault("tooth_depth", 0.3)
+        ctl = gear(
+            parent,
+            name,
+            kwargs["w"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+            kwargs["teeth"],
+            kwargs["tooth_depth"],
+        )
+    elif icon == "mgear":
+        ctl = mgear_icon(
             parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
         )
 
@@ -995,6 +1013,238 @@ def cross(
         rot_offset,
     )
 
+    node = curve.addCurve(parent, name, points, True, 1, m)
+
+    setcolor(node, color)
+
+    return node
+
+
+def gear(
+    parent=None,
+    name="gear",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+    teeth=8,
+    tooth_depth=0.3,
+):
+    """Create a curve with a gear shape.
+
+    Arguments:
+        parent (dagNode): The parent object of the newly created curve.
+        name (str): Name of the curve.
+        width (float): Width of the shape.
+        color (int | list of float | tuple of float): The color in index base or RGB.
+        m (matrix): The global transformation of the curve.
+        pos_offset (vector): The xyz position offset of the curve from
+            its center.
+        rot_offset (vector): The xyz rotation offset of the curve from
+            its center. xyz in radians
+        teeth (int): Number of teeth on the gear. Default is 8.
+        tooth_depth (float): Depth of the teeth as a ratio of the radius.
+            Default is 0.3. Range 0.0-1.0 where 0 is no teeth and 1 is
+            teeth reaching the center.
+
+    Returns:
+        dagNode: The newly created icon.
+
+    """
+    dlen = width * 0.5
+    tooth_depth = max(0.0, min(1.0, tooth_depth))  # Clamp between 0 and 1
+    inner_radius = dlen * (1.0 - tooth_depth)
+    outer_radius = dlen
+
+    v_array = []
+    teeth = max(3, teeth)  # Ensure at least 3 teeth
+    angle_per_tooth = (2 * math.pi) / teeth
+
+    for i in range(teeth):
+        # Start angle for this tooth
+        base_angle = i * angle_per_tooth
+
+        # Inner point (start of tooth)
+        angle1 = base_angle
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle1) * inner_radius,
+                0,
+                math.cos(angle1) * inner_radius,
+            )
+        )
+
+        # Outer point (first corner of tooth top)
+        angle2 = base_angle + angle_per_tooth * 0.15
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle2) * outer_radius,
+                0,
+                math.cos(angle2) * outer_radius,
+            )
+        )
+
+        # Outer point (second corner of tooth top)
+        angle3 = base_angle + angle_per_tooth * 0.35
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle3) * outer_radius,
+                0,
+                math.cos(angle3) * outer_radius,
+            )
+        )
+
+        # Inner point (end of tooth)
+        angle4 = base_angle + angle_per_tooth * 0.5
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle4) * inner_radius,
+                0,
+                math.cos(angle4) * inner_radius,
+            )
+        )
+
+    points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
+
+    node = curve.addCurve(parent, name, points, True, 1, m)
+
+    setcolor(node, color)
+
+    return node
+
+
+def mgear_icon(
+    parent=None,
+    name="mgear",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
+    """Create a curve with the MGEAR logo shape as a single  curve.
+
+    Arguments:
+        parent (dagNode): The parent object of the newly created curve.
+        name (str): Name of the curve.
+        width (float): Width of the shape.
+        color (int | list of float | tuple of float): The color in index base or RGB.
+        m (matrix): The global transformation of the curve.
+        pos_offset (vector): The xyz position offset of the curve from
+            its center.
+        rot_offset (vector): The xyz rotation offset of the curve from
+            its center. xyz in radians
+
+    Returns:
+        dagNode: The newly created icon.
+
+    """
+    dlen = width * 0.5
+
+    cx, cy = 677.5, 678.5
+
+    svg_scale = 550.0
+
+    icx, icy = 657.783, 674.892
+    inner_r = 300.0
+
+    import math as _math
+
+    inner_circle_pts = []
+    start_angle = _math.radians(135)  # bottom-left of C
+    end_angle = _math.radians(-135)  # top-left where gap starts
+    num_inner_pts = 18
+    for i in range(num_inner_pts):
+        t = i / (num_inner_pts - 1)
+        angle = start_angle + t * (end_angle - start_angle)
+        px = icx + inner_r * _math.cos(angle)
+        py = icy + inner_r * _math.sin(angle)
+        inner_circle_pts.append((px, py))
+
+    svg_points = [
+        # M356.241,1095.8 - Start point
+        (356.241, 1095.8),
+        # C-body outer arc (bottom-left going to notch) - 3 pts
+        (250.0, 990.0),
+        (174.501, 860.748),
+        # L - notch
+        (272.058, 687.337),
+        (566.274, 687.337),
+        (446.906, 886.82),
+        # Inner circle (generated points)
+        *inner_circle_pts,
+        # Gap opening to tooth 2
+        (383.753, 554.6),
+        # L - tooth 2 (left)
+        (154.494, 553.394),
+        # Outer arc - 3 pts
+        (200.0, 420.0),
+        (280.0, 310.0),
+        (352.873, 256.473),
+        # Tooth 2 tip
+        (339.37, 153.042),
+        (463.408, 82.072),
+        # Tooth 3 base
+        (558.491, 166.665),
+        # Top outer edge - 3 pts
+        (610.0, 157.15),
+        (657.783, 157.15),
+        (710.0, 160.0),
+        (741.179, 163.831),
+        # Tooth 3 tip
+        (804.728, 82.679),
+        (942.291, 121.402),
+        # Tooth 4 base
+        (948.502, 246.407),
+        # Outer arc - 3 pts
+        (1000.0, 290.0),
+        (1050.0, 340.0),
+        (1078.72, 373.354),
+        # Tooth 4 tip
+        (1158.01, 353.698),
+        (1242.54, 468.925),
+        # Tooth 5 base
+        (1166.33, 577.058),
+        # Right outer edge - 3 pts
+        (1175.56, 630.0),
+        (1175.56, 674.926),
+        (1170.0, 720.0),
+        (1168.32, 761.715),
+        # Tooth 5 tip
+        (1247.19, 827.407),
+        (1204.32, 963.741),
+        # Tooth 6 base
+        (1086.04, 966.031),
+        # Bottom-right outer arc - 3 pts
+        (1040.0, 1020.0),
+        (990.0, 1070.0),
+        (953.021, 1100.33),
+        # Tooth 6 tip
+        (959.854, 1211.36),
+        (831.258, 1273.7),
+        # Back toward tooth 1
+        (744.737, 1185.42),
+        # Bottom outer edge - 3 pts
+        (700.0, 1192.69),
+        (657.783, 1192.69),
+        (610.0, 1190.0),
+        (559.465, 1183.37),
+        # Tooth 1 tip
+        (489.569, 1261.96),
+        (354.693, 1214.71),
+        # Z closes back to start
+    ]
+
+    v_array = []
+
+    for svg_x, svg_y in svg_points:
+        # Center the coordinates
+        x = (svg_x - cx) / svg_scale
+        z = (svg_y - cy) / svg_scale
+        v_array.append(datatypes.Vector(x * dlen, 0, -z * dlen))
+
+    points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
     node = curve.addCurve(parent, name, points, True, 1, m)
 
     setcolor(node, color)
