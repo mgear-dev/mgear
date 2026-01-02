@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- RBF = Radial Basis Function - interpolation nodes -->
+    <circle cx="6" cy="6" r="3"></circle>
+    <circle cx="18" cy="6" r="3"></circle>
+    <circle cx="6" cy="18" r="3"></circle>
+    <circle cx="18" cy="18" r="3"></circle>
+    <!-- Center interpolation point -->
+    <circle cx="12" cy="12" r="2" fill="white"></circle>
+    <!-- Connection lines -->
+    <line x1="8.5" y1="8" x2="10" y2="10" stroke-opacity="0.6"></line>
+    <line x1="15.5" y1="8" x2="14" y2="10" stroke-opacity="0.6"></line>
+    <line x1="8.5" y1="16" x2="10" y2="14" stroke-opacity="0.6"></line>
+    <line x1="15.5" y1="16" x2="14" y2="14" stroke-opacity="0.6"></line>
+</svg>
