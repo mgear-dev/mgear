@@ -12,6 +12,756 @@ WIP section: Please visit:
 * gotchas
 * tips
 
+.. _shifter-guide-manager:
+
+Shifter Guide Manager
+==============================================
+
+The Shifter Guide Manager is the central hub for building rigs with mGear's Shifter system. It provides tools for browsing and adding components, exploring guide hierarchies, and managing templates.
+
+Access the Guide Manager from the menu: **mGear > Shifter > Guide Manager**
+
+The Guide Manager consists of three main tabs:
+
+- **Components List**: Browse, search, and add components to your guide
+- **Guide Explorer**: Navigate and manage your guide hierarchy
+- **Templates**: Save, load, and compare guide templates
+
+.. _components-list:
+
+Components List
+----------------
+
+The Components List tab allows you to browse all available Shifter components, view their information, and add them to your guide.
+
+.. image:: images/shifter/guide_manager/guide_manager_component_list.png
+    :align: center
+
+Tools
+++++++++++++++++++
+
+**Settings**
+
+Opens the Component/Guide root settings window for the currently selected component or guide root.
+
+**Duplicate**
+
+Duplicates the selected component, creating an identical copy with an incremented index.
+
+**Duplicate Symmetry**
+
+Creates a symmetrical duplicate of the selected component on the opposite side (e.g., L to R or R to L).
+
+**Extract Controls**
+
+Extracts selected controls and stores them as a control buffer for later use.
+
+**Build From Selection**
+
+Builds the rig from the currently selected guide or components.
+
+Component Browser
+++++++++++++++++++
+
+**Search Bar**
+
+Filter the component list in real-time as you type. The search supports wildcard matching with ``*`` and ``?`` characters.
+
+- Right-click the search bar to access the "Clear" option
+
+**Component List**
+
+Displays all available Shifter components in an alphabetically sorted list.
+
+- **Single-click**: Select a component and display its information
+- **Double-click**: Draw the selected component to the scene
+- **Drag and drop**: Drag a component from the list to the scene to draw it with automatic parent assignment
+
+**Component Information Panel**
+
+When a component is selected, displays detailed information including:
+
+- Component description
+- Author name
+- URL link (if available)
+- Version number
+- Component type
+- Component name
+
+**Draw Component Button**
+
+Draws the selected component to the scene. If an object is selected in the scene, it will be used as the parent for the new component.
+
+Options
+++++++++++++++++++
+
+**Show Setting After Create New Component**
+
+When enabled, automatically opens the component settings dialog after creating a new component.
+
+**Update Guide After Setting The Specified Component Type**
+
+When enabled, automatically updates the guide after changing a component's type.
+
+Context Menu
+++++++++++++++++++
+
+Right-click on the component list to access:
+
+- **Sync The Selected Component Type To The Type Selected In The Manager**: Synchronizes the scene component's type with the manager selection
+- **Draw Component**: Draws the selected component to the scene
+- **Refresh List**: Reloads the component list from disk
+
+.. _guide-explorer:
+
+Guide Explorer
+---------------
+
+The Guide Explorer provides a hierarchical view of your guide structure, allowing you to navigate, select, and manage components efficiently.
+
+.. image:: images/shifter/guide_manager/guide_explorer.png
+    :align: center
+
+Search and Options
+++++++++++++++++++
+
+**Search Bar**
+
+Filter components by name and type using space-separated search terms. All terms must match for a component to be displayed.
+
+**Sync Selection**
+
+When enabled, provides bidirectional selection synchronization between the scene and the tree view:
+
+- Selecting in the tree updates the Maya selection
+- Selecting in Maya updates the tree selection
+
+Component Tree
+++++++++++++++++++
+
+The tree view displays your guide hierarchy with three columns:
+
+- **Visibility Toggle**: Click the eye icon to toggle component visibility
+- **Component Name**: Shows the full component name (e.g., "arm_L0")
+- **Component Type**: Displays the component type in monospace font
+
+The root item shows the guide name with a character icon, while child components display with a gear icon.
+
+Settings Panel
+++++++++++++++++++
+
+The right panel dynamically displays settings for the selected item:
+
+- **Guide Root Selected**: Shows guide-level settings
+- **Component Selected**: Shows component-specific settings
+- **Nothing Selected**: Shows a placeholder message
+
+Context Menu
+++++++++++++++++++
+
+Right-click on items in the tree to access:
+
+.. image:: images/shifter/guide_manager/guide_explorer_rigth_click_menu.png
+    :align: center
+
+- **Build**: Build rig from selection (Ctrl+B)
+- **Unbuild**: Delete the built rig (Ctrl+U)
+- **Guide Visibility**: Toggle guide visibility (H)
+- **Unhide All**: Show all hidden guides (Ctrl+H)
+- **Control Visibility**: Toggle rig control visibility (C)
+- **Joint Visibility**: Toggle rig joint visibility (J)
+- **Mirror**: Mirror the selected component
+- **Delete**: Delete the selected component (Del)
+- **Select Component**: Select the component in the scene (F)
+- **Refresh**: Refresh the tree from the scene (R)
+- **Update Component Type**: Change the component type
+
+Keyboard Shortcuts
+++++++++++++++++++
+
+- **R**: Refresh tree from scene
+- **Ctrl+B**: Build rig
+- **Ctrl+U**: Unbuild rig
+- **Del**: Delete selected component
+- **H**: Toggle guide visibility
+- **Ctrl+H**: Unhide all guides
+- **C**: Toggle control visibility
+- **J**: Toggle joint visibility
+- **F**: Select component in scene
+
+.. _templates-tab:
+
+Templates Tab
+--------------
+
+The Templates tab provides tools for saving, loading, comparing, and importing guide templates.
+
+.. image:: images/shifter/guide_manager/templates_tab.png
+    :align: center
+
+File Menu
+++++++++++++++++++
+
+**Open**
+
+Load a guide template from a JSON file using a file browser.
+
+**Load Selected Guide**
+
+Extract guide data from the currently selected guide root in the scene. The selected object must have an ``is_rig`` attribute.
+
+**Save As...**
+
+Export the current template to a JSON file. Opens a file save dialog for specifying the file name and location.
+
+**Clear**
+
+Remove the currently loaded template from the viewer.
+
+Guide Menu
+++++++++++++++++++
+
+**Build**
+
+Build a rig from the currently loaded template. A template must be loaded before building.
+
+**Import**
+
+Import the entire loaded template as a new guide structure. This creates all components defined in the template.
+
+**Import Partial**
+
+Import only the selected component from the template:
+
+- Select a component from the template tree view
+- If an object is selected in the scene, it will be used as the parent
+- Only component nodes can be imported (not other template data)
+
+**Diff Tool**
+
+Open the Guide Diff Tool for comparing templates.
+
+Template Tree View
+++++++++++++++++++
+
+Displays the loaded template as a hierarchical JSON structure:
+
+- Expandable/collapsible nodes for navigating template data
+- Select components from the tree to use with Import Partial
+- Shows guide root settings, component definitions, and custom steps
+
+Diff Tool
+++++++++++++++++++
+
+The Diff Tool allows you to compare the loaded template against a master template to identify differences.
+
+**Comparison Options:**
+
+- **Missing Guide Components**: Find components in the master template that are not in the current template
+- **Extra Guide Components**: Find components in the current template that are not in the master
+- **Transform Differences**: Detect position and rotation mismatches between components
+- **Root Settings Differences**: Compare guide root attribute settings
+- **Component Settings Differences**: Compare component-specific settings
+- **Custom Step Differences**: Check for variations in custom build steps
+
+**Usage:**
+
+1. Load a template in the Templates tab
+2. Open the Diff Tool from Guide > Diff Tool
+3. Click "Load Template" to select a master template for comparison
+4. Enable the desired comparison options
+5. Click "Run Test" to execute the comparison
+6. Review the detailed comparison report in the console
+
+Template Workflow Examples
++++++++++++++++++++++++++++
+
+**Creating a Template:**
+
+1. Build your guide in the scene
+2. Open the Templates tab
+3. Use File > Load Selected Guide to load the guide data
+4. Use File > Save As... to export as a JSON template
+
+**Building from a Template:**
+
+1. Use File > Open to load a saved template
+2. Use Guide > Build to create the rig
+
+**Importing Components:**
+
+1. Load a template containing the components you need
+2. Select a parent object in the scene (optional)
+3. Select the component in the template tree
+4. Use Guide > Import Partial to add just that component
+
+**Comparing Templates:**
+
+1. Load your current template
+2. Open Guide > Diff Tool
+3. Load a reference template to compare against
+4. Select comparison options and run the test
+5. Review differences and update as needed
+
+.. _guide-settings:
+
+Guide Settings
+==============================================
+
+The Guide Settings panel provides comprehensive control over how your rig is built. Access these settings by selecting the guide root and opening the settings from the Guide Manager or by using **Shifter > Guide Settings**.
+
+.. image:: images/shifter/guide_settings/guide_settings.png
+    :align: center
+
+.. _main-guide-settings:
+
+Main Settings
+--------------
+
+The main settings tab controls the core behavior of your rig build.
+
+Rig Identity
+++++++++++++++++++
+
+**Rig Name**
+
+The name used for the generated rig. This name is used as the root group name and affects naming throughout the rig hierarchy.
+
+**Mode**
+
+- **Final**: Production-ready rig build
+- **WIP**: Work-in-progress mode for development and testing
+
+**Build Step**
+
+Controls how much of the rig build process to execute. Useful for debugging or incremental builds:
+
+- **All Steps**: Complete rig build
+- **Objects**: Create geometry and control shapes only
+- **Properties**: Add attributes to objects
+- **Operators**: Setup deformers and constraints
+- **Connect**: Connect components together
+- **Joints**: Create joint structure
+- **Finalize**: Cleanup and optimization
+
+World Control
+++++++++++++++++++
+
+**World Control**
+
+When enabled, uses ``world_ctl`` instead of the component-based ``global_C0_ctl`` as the top-level control.
+
+**World Control Name**
+
+Custom name for the world control (default: "world_ctl").
+
+Animation Channels
+++++++++++++++++++
+
+**Proxy Channels**
+
+Add internal proxy channels for animation data transfer.
+
+**Classic Channel Names**
+
+Use unique full names for all channels, ensuring no naming conflicts across the rig.
+
+**Attribute Prefix Name**
+
+Use the component instance name instead of the type name for attribute prefixes, providing more specific attribute naming.
+
+Joint Settings
+++++++++++++++++++
+
+**Separated Joint Structure**
+
+Create a separate joint hierarchy independent from the control hierarchy. This is the recommended workflow for game engines and clean deformation setups.
+
+**Force World Oriented**
+
+Orient all joints to world space rather than inheriting local orientations.
+
+**Force Uniform Scaling**
+
+Force all joints to use uniform scaling, preventing non-uniform scale issues in deformation.
+
+**Connect to Existing Joints**
+
+Connect the rig to pre-existing joints in the scene, useful for updating rigs without losing skin weights.
+
+**Force Segment Scale Compensation**
+
+Apply segment scale compensation (SSC) to all joints for consistent scaling behavior.
+
+Skinning
+++++++++++++++++++
+
+**Import Skin**
+
+Automatically load pre-saved skin weights during rig build.
+
+**Skin Path**
+
+Path to the ``.gSkin`` file containing skin weight data.
+
+Color Settings
+++++++++++++++++++
+
+**Use RGB Color**
+
+When enabled, uses RGB color values instead of Maya's color index system for control colors.
+
+**Color Indices (0-31)**
+
+Maya color palette indices for controls:
+
+- **Left FK/IK Color**: Colors for left-side FK and IK controls
+- **Right FK/IK Color**: Colors for right-side FK and IK controls
+- **Center FK/IK Color**: Colors for center FK and IK controls
+
+**RGB Color Values**
+
+When RGB mode is enabled, specify exact RGB values for each control type.
+
+Data Collection
+++++++++++++++++++
+
+**Collect Data on External File**
+
+Save rig data to an external file for pipeline integration.
+
+**Data Collector Path**
+
+Path to the ``.gnx`` file where rig data will be saved.
+
+**Collect Data Embedded**
+
+Store rig data directly in the root joint's attributes.
+
+**Custom Joint for Data**
+
+Specify an alternative joint for storing embedded data.
+
+.. _custom-steps:
+
+Custom Steps
+--------------
+
+Custom Steps is one of the most powerful features in mGear's data-centric workflow. It allows you to extend the rig build process with custom Python scripts that execute before or after the main build, enabling infinite customization possibilities.
+
+.. image:: images/shifter/guide_settings/custom_steps.png
+    :align: center
+
+The Data-Centric Workflow
+++++++++++++++++++++++++++
+
+mGear follows a data-centric architecture where custom steps can:
+
+- **Read and modify shared data** through a step dictionary passed between all steps
+- **Access built rig components** to modify controls, joints, and connections
+- **Execute at specific build phases** (pre-build or post-build)
+- **Be organized in groups** for logical categorization and management
+- **Be referenced from external files** for team sharing and reusability
+
+This architecture enables you to build a library of reusable customization scripts that can be applied across multiple rigs and shared across teams.
+
+Pre vs Post Custom Steps
+++++++++++++++++++++++++++
+
+**Pre-Custom Steps**
+
+Execute BEFORE the main rig build process. Use these for:
+
+- Preparing the scene (cleaning up, organizing)
+- Setting up data that components will use
+- Validating guide structure before building
+- Creating helper objects that components need
+
+**Post-Custom Steps**
+
+Execute AFTER the main rig build is complete. Use these for:
+
+- Adding custom controls or attributes
+- Setting up space switches
+- Creating selection sets
+- Applying color overrides
+- Building custom deformers
+- Connecting to external systems
+
+Step Data Structure
+++++++++++++++++++++++++++
+
+Each custom step contains:
+
+- **Name**: Display name for the step (e.g., "apply_colors")
+- **Path**: Relative or absolute path to the Python script
+- **Active**: Toggle to enable/disable the step without removing it
+
+**Path Resolution**
+
+Paths can be specified as:
+
+- **Absolute paths**: Full system path to the script
+- **Relative paths**: Resolved against the ``MGEAR_SHIFTER_CUSTOMSTEP_PATH`` environment variable
+
+**Inactive Steps**
+
+Steps can be deactivated by unchecking their checkbox. Inactive steps are preserved in the configuration but skipped during execution, making it easy to temporarily disable steps for testing.
+
+Groups
+++++++++++++++++++
+
+Groups allow you to organize custom steps into logical collections. This is especially useful for complex rigs with many customization steps.
+
+**Group Features:**
+
+- **Collapsible**: Groups can be collapsed/expanded in the UI to reduce clutter
+- **Master Active Control**: Disabling a group disables all steps within it
+- **Drag and Drop**: Reorder groups and move steps between groups
+- **Visual Organization**: Group related steps (e.g., "Face Setup", "Hand Controls", "Space Switches")
+
+**Creating Groups:**
+
+1. Right-click in the custom steps area
+2. Select "Create New Group"
+3. Enter a name for the group
+4. Drag existing steps into the group or add new steps directly
+
+**Group Hierarchy:**
+
+Steps within groups inherit the group's active state. If a group is disabled, all contained steps are skipped even if individually marked as active.
+
+Context Menu
+++++++++++++++++++
+
+Right-click on steps or groups to access additional options:
+
+.. image:: images/shifter/guide_settings/custom_steps_right_click_menu.png
+    :align: center
+
+- **Edit Step**: Open the Python file in your configured external editor
+- **Run Step**: Execute the step individually for testing
+- **Toggle Active**: Enable/disable the step
+- **Delete**: Remove the step or group
+- **Create New Group**: Add a new group for organization
+- **Load Referenced Group**: Import steps from an external ``.scs`` file
+
+External File References (.scs)
+++++++++++++++++++++++++++++++++
+
+Custom steps can be referenced from external Shifter Custom Steps (``.scs``) files. This enables:
+
+- **Team Sharing**: Share step configurations across team members
+- **Version Control**: Track step configurations in source control
+- **Reusability**: Apply the same steps to multiple rigs
+- **Centralized Updates**: Update steps in one place, apply to all rigs
+
+**SCS File Format (JSON):**
+
+.. code-block:: json
+
+    {
+        "items": [
+            {
+                "type": "group",
+                "name": "Animation Setup",
+                "collapsed": false,
+                "active": true,
+                "items": [
+                    {
+                        "type": "step",
+                        "name": "space_switches",
+                        "path": "steps/space_switches.py",
+                        "active": true
+                    },
+                    {
+                        "type": "step",
+                        "name": "selection_sets",
+                        "path": "steps/selection_sets.py",
+                        "active": true
+                    }
+                ]
+            }
+        ]
+    }
+
+**Loading Referenced Groups:**
+
+1. Right-click in the custom steps area
+2. Select "Load Referenced Group"
+3. Browse to your ``.scs`` file
+4. The group is added as a read-only reference
+
+**Referenced Group Behavior:**
+
+- Referenced groups appear with a special indicator
+- Individual steps cannot be edited (read-only)
+- You can toggle the active state of the entire group
+- Updates to the source ``.scs`` file are reflected when the rig is rebuilt
+
+Writing Custom Steps
+++++++++++++++++++++++++++
+
+Custom steps are Python classes that inherit from ``customShifterMainStep``:
+
+.. code-block:: python
+
+    from mgear.shifter.custom_step import customShifterMainStep
+
+    class CustomShifterStep(customShifterMainStep):
+
+        def setup(self):
+            """Initialize the step - set the name"""
+            self.name = "my_custom_step"
+
+        def run(self):
+            """Execute the step logic"""
+            # Access the rig object
+            rig = self.rig
+
+            # Access a specific component
+            arm = self.component("arm_L0")
+
+            # Access all components of a type
+            fk_components = self.components_by_type("EPIC_arm_01")
+
+            # Access data from previous steps
+            previous_step = self.custom_step("other_step_name")
+
+            # Create organization group for custom objects
+            setup_root = self.get_or_create_setup_root()
+
+**Available Methods in Custom Steps:**
+
+- ``self.rig``: Access to the Shifter rig object
+- ``self.guide``: Access to guide data
+- ``self.component(name)``: Get a component by name (e.g., "arm_L0")
+- ``self.components_by_type(type)``: Get all components of a specific type
+- ``self.custom_step(name)``: Access previously executed custom steps
+- ``self.run_sub_step(module_name, step_path)``: Execute nested steps
+- ``self.get_or_create_setup_root()``: Create an organization group for step objects
+
+**Step Dictionary:**
+
+All steps share a common dictionary (``customStepDic``) that enables inter-step communication:
+
+- Each executed step is stored in this dictionary
+- Steps can access data set by previous steps
+- Use this for passing complex data between steps
+
+.. _naming-rules:
+
+Naming Rules
+--------------
+
+The Naming Rules panel allows you to customize how controls, joints, and other rig elements are named. This is essential for pipeline integration and studio naming conventions.
+
+.. image:: images/shifter/guide_settings/name_rules.png
+    :align: center
+
+Naming Templates
+++++++++++++++++++
+
+Naming rules use tokens that are replaced with actual values during rig build:
+
+- ``{side}``: The side identifier (L, R, C)
+- ``{component}``: The component name
+- ``{description}``: Additional description from the component
+- ``{index}``: Numerical index
+- ``{type}``: Element type (ctl, jnt, etc.)
+
+**Control Naming Rule**
+
+Template for control names. Default: ``{side}_{component}_{description}_{index}_{type}``
+
+Example result: ``L_arm_fk_001_ctl``
+
+**Joint Naming Rule**
+
+Template for joint names. Default: ``{side}_{component}_{description}_{index}_{type}``
+
+Example result: ``L_arm_fk_001_jnt``
+
+Side Names
+++++++++++++++++++
+
+Customize the side identifiers used in naming:
+
+- **Left Name**: Default "L" (e.g., could be "left" or "lf")
+- **Right Name**: Default "R" (e.g., could be "right" or "rt")
+- **Center Name**: Default "C" (e.g., could be "center" or "cn")
+
+**Joint Side Names**
+
+Separate side naming for joints if different from controls:
+
+- **Joint Left Name**: Default "L"
+- **Joint Right Name**: Default "R"
+- **Joint Center Name**: Default "C"
+
+Name Extensions
+++++++++++++++++++
+
+Suffixes added to element names:
+
+- **Control Extension**: Default "_ctl" (e.g., could be "_ctrl" or "_CON")
+- **Joint Extension**: Default "_jnt" (e.g., could be "_joint" or "_JNT")
+
+Letter Case
+++++++++++++++++++
+
+Control how descriptions are capitalized:
+
+- **Default**: Keep original case
+- **Upper Case**: Convert to uppercase (e.g., "FK" instead of "fk")
+- **Lower Case**: Convert to lowercase (e.g., "fk" instead of "FK")
+- **Capitalization**: Capitalize first letter (e.g., "Fk" instead of "fk")
+
+These can be set independently for controls and joints.
+
+Index Padding
+++++++++++++++++++
+
+Control zero-padding for numerical indices:
+
+- **Control Index Padding**: Number of digits (e.g., 3 = "001", "002")
+- **Joint Index Padding**: Number of digits for joint indices
+
+Setting to 0 uses no padding (e.g., "1", "2", "10").
+
+Import/Export Naming Configuration
+++++++++++++++++++++++++++++++++++++
+
+Save and load naming configurations for consistency across projects:
+
+**Save Configuration**
+
+Export current naming rules to a ``.naming`` JSON file for backup or sharing.
+
+**Load Configuration**
+
+Import naming rules from a previously saved ``.naming`` file.
+
+**Configuration File Format:**
+
+.. code-block:: json
+
+    {
+        "ctl_name_rule": "{side}_{component}_{description}_{index}_{type}",
+        "joint_name_rule": "{side}_{component}_{description}_{index}_{type}",
+        "side_left_name": "L",
+        "side_right_name": "R",
+        "side_center_name": "C",
+        "side_joint_left_name": "L",
+        "side_joint_right_name": "R",
+        "side_joint_center_name": "C",
+        "ctl_name_ext": "_ctl",
+        "joint_name_ext": "_jnt",
+        "ctl_description_letter_case": 0,
+        "joint_description_letter_case": 0,
+        "ctl_index_padding": 0,
+        "joint_index_padding": 0
+    }
 
 Plebes - Instant Rigged Characters Using mGear
 ==============================================
@@ -243,3 +993,716 @@ New Clips will automatically read the duration of the Maya timeline, and use tha
 
 .. image:: images/shifter/fbx_exporter/fbx_shifter_maya_anim_layers.png
         :align: center
+
+.. _shifter-guide-utils:
+
+Guide Utils Tools
+==============================================
+
+The Guide Utils submenu contains a collection of tools designed to help you work more efficiently with mGear guides. These tools provide functionality for visualizing guides, managing symmetry, organizing components, and manipulating chain structures.
+
+Access these tools from the menu: **Shifter > Guide Utils**
+
+.. image:: images/shifter/guide_utils/guide_utils_menu.png
+    :align: center
+
+.. _guide-visualizer:
+
+Guide Visualizer
+-----------------
+
+The Guide Visualizer is a comprehensive tool for customizing the visual appearance of your guides. It allows you to create display curves, adjust colors and thickness, scale control vertices, and manage guide labels.
+
+.. image:: images/shifter/guide_utils/guide_visualizer.png
+    :align: center
+
+Features
+++++++++++++++++++
+
+**Display Curves**
+
+Display curves are visual connection lines between guide nodes that help you understand the guide hierarchy and relationships.
+
+- **Create Curve**: Creates a display curve connecting selected guide nodes.
+- **Mirror Curve**: Mirrors an existing display curve to the opposite side of the rig.
+- **Select Curve**: Selects display curves for editing.
+- **Delete Curve**: Removes selected display curves.
+
+**Curve Thickness**
+
+Adjust the line width of display curves to improve visibility or match your preferred visual style.
+
+- **Individual Adjustment**: Modify the lineWidth attribute for specific curves.
+- **Global Adjustment**: Apply thickness changes to all display curves at once.
+
+**Curve Colors**
+
+Customize the color of display curves using RGB color values.
+
+- **Color Picker**: Select colors using an interactive color picker.
+- **Color History**: Access previously used colors for quick reapplication.
+- **Apply to Selection**: Apply colors to selected curve shapes.
+
+**CV Scaling**
+
+Scale the control vertices (CVs) of curves to adjust their visual size.
+
+- **Scale Up/Down**: Incrementally scale CVs with cumulative tracking.
+- **Reset Scale**: Return CVs to their original size.
+
+**Guide Labels**
+
+Create and manage annotation labels on guides for better organization and documentation.
+
+- **Create Label**: Add text annotations to guide nodes.
+- **Remove Label**: Delete existing labels.
+- **Custom Offset**: Adjust label positioning relative to the guide.
+
+**Export/Import**
+
+Save and load all visualizer settings to preserve your customizations.
+
+- **Export Settings**: Save curves, colors, and labels to a JSON file.
+- **Import Settings**: Load previously saved settings to restore your visual configuration.
+
+.. _guide-symmetry-tool:
+
+Guide Symmetry Tool
+--------------------
+
+The Guide Symmetry Tool helps you check and manage mirror symmetry in your guide setup. It identifies components that are missing their mirror counterparts and provides tools for duplicating, mirroring, and cleaning up symmetry issues.
+
+.. image:: images/shifter/guide_utils/guide_symmetry_tool.png
+    :align: center
+
+Features
+++++++++++++++++++
+
+**Mirror Report**
+
+Generates a report listing all components that are missing their mirror counterpart. This helps identify asymmetries in your guide setup.
+
+**Duplicate Symmetry**
+
+Mirror duplicate functionality for creating symmetric component structures.
+
+- **Duplicate Branch**: Mirror an entire branch of components to the opposite side.
+- **Duplicate Multi Components**: Mirror multiple selected components with symmetry.
+
+**Delete Side**
+
+Remove all components on a specific side of the rig.
+
+- **Delete Left (L)**: Remove all components with the "L" (left) side designation.
+- **Delete Right (R)**: Remove all components with the "R" (right) side designation.
+
+**Delete Side Under Selection**
+
+Remove side-specific components only beneath the currently selected nodes, preserving components elsewhere in the hierarchy.
+
+**Regex Filtering**
+
+Filter the missing mirrors list using regular expression pattern matching. This is useful for focusing on specific component types or naming patterns.
+
+**Interactive Selection**
+
+Click on items in the list to select the corresponding components in the Maya viewport, making it easy to locate and fix asymmetry issues.
+
+.. _component-type-lister:
+
+Component Type Lister
+----------------------
+
+The Component Type Lister is a browser tool that organizes and displays all mGear components in your scene grouped by their component type. This makes it easy to find, select, and manage components across complex rigs.
+
+.. image:: images/shifter/guide_utils/component_type_lister.png
+    :align: center
+
+Features
+++++++++++++++++++
+
+**Type Discovery**
+
+Automatically scans your scene and identifies all mGear components, organizing them by their ``comp_type`` attribute.
+
+**Type Listing**
+
+Displays a sortable list showing:
+
+- Component type names
+- Count of components per type
+- Quick visual overview of your rig structure
+
+**Filtering**
+
+Use regex pattern matching to filter the component types displayed. This is helpful when working with large rigs that have many component types.
+
+**Selection**
+
+Click on a component type to select all components of that type in the Maya viewport. This enables quick batch operations on related components.
+
+**Tooltips**
+
+Hover over items to see detailed tooltips showing component names and additional information.
+
+.. _chain-utils:
+
+Chain Utils
+------------
+
+Chain Utils provides specialized tools for working with chain components (such as spine chains, tail chains, finger chains, etc.). It simplifies the process of extending chains by adding new locators.
+
+.. image:: images/shifter/guide_utils/chain_utils.png
+    :align: center
+
+Features
+++++++++++++++++++
+
+**Add Locator to Chain**
+
+Extend an existing chain by adding a new locator at the end.
+
+- **Automatic Positioning**: New locators are positioned based on the existing chain direction.
+- **Index Increment**: The new locator automatically receives the correct index number.
+- **Display Curve Update**: Connection curves are regenerated to include the new locator.
+
+**X-Ray Connection**
+
+For Maya 2022 and later, the tool automatically connects the ``guide_x_ray`` attribute to new locators, maintaining consistent X-ray visualization settings.
+
+**Batch Operations**
+
+Add locators to multiple selected chains simultaneously, saving time when working with symmetric or repeated structures.
+
+How to Use
+++++++++++++++++++
+
+1. Select one or more chain guide roots in your scene.
+2. Open Chain Utils from **Shifter > Guide Utils > Chain Utils**.
+3. Click the button to add a locator to the selected chain(s).
+4. The new locator will appear at the end of each chain with proper positioning and naming.
+
+.. _bindplane-control-utils:
+
+BindPlane Control Utils
+------------------------
+
+.. note::
+    This tool is only available if the bindPlane/bindControl components are installed.
+
+The BindPlane Control Utils provides a browser and property editor for managing bindControl guides. It allows you to organize guides by bind group and edit their properties in batch.
+
+.. image:: images/shifter/guide_utils/bindplane_control_utils.png
+    :align: center
+
+Features
+++++++++++++++++++
+
+**Bind Group Browser**
+
+View all bindControl guides in your scene organized by their bind group. The tree view provides a hierarchical display of groups and their associated components.
+
+**Property Editor**
+
+Edit properties of bindControl guides:
+
+- **Control Size**: Adjust the size of the control curves.
+- **Bind Size**: Modify the bind influence size.
+- **Local Ghost**: Toggle local ghost display.
+- **Driven Layers**: Configure driven layer settings.
+
+**Filtering**
+
+Use regex pattern matching to search and filter components by name or group.
+
+**Batch Editing**
+
+Apply property changes to multiple selected guides at once, streamlining the process of configuring large numbers of bindControl components.
+
+.. _game-tools:
+
+Game Tools
+==============================================
+
+The Game Tools submenu provides utilities specifically designed for game development workflows, including joint disconnection/reconnection and rig cleanup for export.
+
+Access these tools from the menu: **Shifter > Game Tools**
+
+Disconnect Joints
+------------------
+
+Disconnects the rig's deformation joints from the control rig, allowing the joints to be manipulated independently or exported without the rig overhead.
+
+This is useful for:
+
+- Preparing joints for game engine export
+- Creating standalone skeletal meshes
+- Testing deformation without rig influence
+
+Connect Joints
+---------------
+
+Reconnects previously disconnected joints back to the rig using matrix constraints. This restores the rig's control over the deformation joints.
+
+Use this to:
+
+- Re-enable rig control after testing
+- Reconnect joints after modifications
+- Restore the full rig functionality
+
+Delete Rig + Keep Joints
+-------------------------
+
+Removes the entire rig structure while preserving the deformation joints. This is the recommended workflow for creating final game-ready assets.
+
+This operation:
+
+- Deletes all control curves and rig hierarchy
+- Preserves the joint chain with current transforms
+- Maintains skin weights and connections to geometry
+- Creates a clean skeleton ready for export
+
+Game Tool Disconnect + Assembly IO
+-----------------------------------
+
+Opens an advanced interface combining joint disconnection tools with Assembly IO functionality for complex game export workflows.
+
+Features include:
+
+- Batch disconnect/reconnect operations
+- Assembly-based export configurations
+- Custom export presets
+- Integration with FBX export pipeline
+
+.. _rig-builder:
+
+Rig Builder
+==============================================
+
+The Rig Builder provides an advanced interface for building multiple rigs or managing complex build configurations.
+
+Access from the menu: **Shifter > Rig Builder**
+
+Features
+---------
+
+- **Batch Building**: Build multiple rigs in sequence
+- **Build Configurations**: Save and load build presets
+- **Build Queue**: Manage multiple rig builds
+- **Progress Tracking**: Monitor build progress for complex operations
+- **Error Handling**: Detailed error reporting for failed builds
+
+.. _guide-template-samples:
+
+Guide Template Samples
+==============================================
+
+mGear includes several pre-built guide templates to help you get started quickly with common character types.
+
+Access from the menu: **Shifter > Guide Template Samples**
+
+Biped Templates
+----------------
+
+**Biped Template, Y-up**
+
+A standard humanoid biped template oriented for Y-up world axis. Includes:
+
+- Full body with spine, neck, and head
+- Arms with FK/IK and roll bones
+- Legs with FK/IK, reverse foot, and roll bones
+- Fingers and toes
+
+**Game Biped Template, Y-up**
+
+An optimized biped template designed specifically for game engine export with:
+
+- Simplified joint hierarchy
+- Game-friendly naming conventions
+- Optimized for real-time performance
+
+Quadruped Template
+-------------------
+
+**Quadruped Template, Y-up**
+
+A four-legged creature template suitable for animals like dogs, cats, horses, etc. Features:
+
+- Four-leg setup with FK/IK
+- Flexible spine chain
+- Tail controls
+- Head and neck with look-at functionality
+
+Unreal Engine Templates
+------------------------
+
+**UE5 MetaHuman/Manny Template, Y-up**
+
+Template matching the UE5 MetaHuman and Manny skeleton structure with Y-up orientation.
+
+**UE5 MetaHuman/Manny Template, Z-up**
+
+Same template with Z-up orientation for direct Unreal compatibility.
+
+**UE4 Mannequin Template, Y-up**
+
+Template matching the classic UE4 Mannequin skeleton with Y-up orientation.
+
+**UE4 Mannequin Template, Z-up**
+
+Same template with Z-up orientation.
+
+**UE MetaHuman/Manny Snap**
+
+Utility to snap an existing guide to match a MetaHuman or Manny skeleton in the scene.
+
+Creature Templates
+-------------------
+
+**Spider**
+
+Eight-legged arthropod template with:
+
+- Eight independent leg chains
+- Segmented body
+- Mandible controls
+
+**Giraffe**
+
+Long-necked quadruped with:
+
+- Extended neck chain
+- Four-leg quadruped setup
+- Tail controls
+
+**Mantis**
+
+Insect template featuring:
+
+- Six legs with specialized front appendages
+- Segmented body
+- Wing controls (optional)
+
+**T-Rex**
+
+Bipedal dinosaur template with:
+
+- Two-leg digitigrade setup
+- Massive tail chain
+- Small arm controls
+- Large head with jaw
+
+.. _auto-fit-guide:
+
+Auto Fit Guide
+==============================================
+
+Auto Fit Guide provides tools for automatically adjusting guide positions to match existing geometry or joint hierarchies.
+
+Access from the menu: **Shifter > Auto Fit Guide**
+
+Features
+---------
+
+- **Geometry Fitting**: Adjust guides to match mesh boundaries
+- **Joint Matching**: Snap guides to existing skeleton structures
+- **Proportional Adjustment**: Scale guide configurations to match character proportions
+- **Batch Processing**: Fit multiple guides simultaneously
+
+.. _mocap-tools:
+
+Mocap Tools
+==============================================
+
+The Mocap submenu provides tools for working with motion capture data and HumanIK integration.
+
+Access from the menu: **Shifter > Mocap**
+
+Human IK Mapper
+----------------
+
+An advanced tool for mapping mGear rigs to HumanIK definitions, enabling motion capture retargeting and character animation transfer.
+
+Features:
+
+- **Automatic Mapping**: Intelligently maps mGear joints to HumanIK definitions
+- **Custom Mapping**: Manual override for non-standard joint configurations
+- **Bidirectional Transfer**: Transfer animation to and from HumanIK characters
+- **Batch Processing**: Map multiple characters simultaneously
+
+Legacy Mocap Tools
+-------------------
+
+.. note::
+    These tools are marked as legacy and may be deprecated in future versions.
+
+**Import Mocap Skeleton Biped**
+
+Imports a standard mocap biped skeleton for animation transfer.
+
+**Characterize Biped**
+
+Sets up HumanIK characterization for a biped skeleton.
+
+**Bake Mocap Biped**
+
+Bakes motion capture animation onto the characterized biped.
+
+.. _guide-operations:
+
+Guide Operations
+==============================================
+
+These commands provide quick access to common guide manipulation tasks.
+
+Settings
+---------
+
+Opens the settings panel for the currently selected guide root or component.
+
+Access from: **Shifter > Settings** or in the Guide Manager
+
+Duplicate
+----------
+
+Creates a copy of the selected component with an incremented index number.
+
+- Preserves all component settings
+- Maintains parent-child relationships
+- Automatically assigns the next available index
+
+Access from: **Shifter > Duplicate**
+
+Duplicate Sym
+--------------
+
+Creates a mirrored copy of the selected component on the opposite side.
+
+- Mirrors position and orientation
+- Swaps side designation (L to R or R to L)
+- Preserves component settings with appropriate mirroring
+
+Access from: **Shifter > Duplicate Sym**
+
+Extract Controls
+-----------------
+
+Extracts control shapes from the selected components and stores them as a control buffer.
+
+Use this to:
+
+- Save custom control shapes for reuse
+- Transfer control shapes between components
+- Create a library of control designs
+
+Access from: **Shifter > Extract Controls**
+
+.. _build-operations:
+
+Build Operations
+==============================================
+
+Commands for building rigs from guides and templates.
+
+Build from Selection
+---------------------
+
+Builds a rig from the currently selected guide root or components.
+
+- Select a guide root to build the entire rig
+- Select specific components to build only those parts
+- Respects guide settings for build configuration
+
+Access from: **Shifter > Build from Selection**
+
+Build From Guide Template File
+-------------------------------
+
+Opens a file browser to select a guide template file (.sgt) and builds a rig directly from it without importing the guide into the scene first.
+
+This is useful for:
+
+- Rapid rig generation from saved templates
+- Automated build pipelines
+- Building rigs without modifying the current scene
+
+Access from: **Shifter > Build From Guide Template File**
+
+.. _template-operations:
+
+Template Operations
+==============================================
+
+Commands for importing and exporting guide templates.
+
+Import Guide Template
+----------------------
+
+Imports a guide template from a file (.sgt) into the current scene.
+
+The imported guide can then be:
+
+- Modified and adjusted
+- Built into a rig
+- Saved as a new template
+
+Access from: **Shifter > Import Guide Template**
+
+Export Guide Template
+----------------------
+
+Exports the selected guide to a template file (.sgt).
+
+Saved templates include:
+
+- All component configurations
+- Guide hierarchy structure
+- Custom step definitions
+- Naming rule settings
+
+Access from: **Shifter > Export Guide Template**
+
+Extract Guide From Rig
+-----------------------
+
+Recreates a guide from an existing built rig.
+
+This allows you to:
+
+- Recover a guide if the original was lost
+- Modify a rig's underlying structure
+- Create a template from a finished rig
+
+Access from: **Shifter > Extract Guide From Rig**
+
+Extract and Match Guide From Rig
+---------------------------------
+
+Extracts a guide from a built rig and matches it to the current rig pose.
+
+This is useful for:
+
+- Capturing posed rig configurations
+- Creating guides that match specific character poses
+- Updating guides to reflect rig modifications
+
+Access from: **Shifter > Extract and Match Guide From Rig**
+
+Match Guide to Selected Joint Hierarchy
+----------------------------------------
+
+Snaps the guide positions to match a selected joint hierarchy in the scene.
+
+Use this to:
+
+- Align guides to imported skeletons
+- Match guides to existing character rigs
+- Quickly position guides based on reference joints
+
+Access from: **Shifter > Match Guide to Selected Joint Hierarchy**
+
+.. _maintenance-tools:
+
+Maintenance Tools
+==============================================
+
+Utilities for maintaining and updating your Shifter setup.
+
+Update Guide
+-------------
+
+Updates an existing guide to the latest component versions and structure.
+
+This is useful when:
+
+- Upgrading to a new mGear version
+- Components have been updated with new features
+- Guide structure needs to be refreshed
+
+Access from: **Shifter > Update Guide**
+
+Reload Components
+------------------
+
+Reloads all Shifter components from disk.
+
+Use this when:
+
+- You've modified component source code
+- New components have been added to the system
+- Components need to be refreshed without restarting Maya
+
+Access from: **Shifter > Reload Components**
+
+.. _data-centric-folders:
+
+Data-Centric Folders Creator
+==============================================
+
+A utility tool for creating standardized folder structures for data-centric rigging workflows.
+
+Access from: **Shifter > Data-Centric Folders Creator**
+
+Features
+---------
+
+- **Template-Based Structure**: Create folder hierarchies from predefined templates
+- **Custom Configuration**: Define your own folder structure layouts
+- **Project Integration**: Set up folders that integrate with your pipeline
+- **Batch Creation**: Create multiple folder structures at once
+
+Standard Folder Structure
+--------------------------
+
+The tool creates organized folders for:
+
+- Guide templates
+- Custom steps
+- Control shapes
+- Skin weights
+- Build configurations
+- Export presets
+
+.. _build-log:
+
+Build Log
+==============================================
+
+The Build Log submenu provides tools for monitoring and debugging the rig build process.
+
+Access from: **Shifter > Build Log**
+
+Toggle Log
+-----------
+
+Enables or disables mGear's logging system.
+
+When enabled:
+
+- Build progress is logged to the Script Editor
+- Warnings and errors are captured
+- Performance metrics may be recorded
+
+Toggle Debug Mode
+------------------
+
+Enables or disables debug mode for detailed build information.
+
+Debug mode provides:
+
+- Verbose output during build
+- Detailed error messages
+- Component-level build information
+- Performance profiling data
+
+Shifter Log Window
+-------------------
+
+Opens a dedicated log window for monitoring Shifter operations.
+
+Features:
+
+- Real-time build progress
+- Filterable log messages
+- Error highlighting
+- Export log to file
