@@ -7,6 +7,7 @@ def install():
     """Install Shifter submenu"""
     commands = (
         ("Guide Manager", str_show_guide_manager, "mgear_list.svg"),
+        (None, guide_utils_submenu),
         ("-----", None),
         (None, game_submenu),
         ("-----", None),
@@ -148,6 +149,75 @@ def mocap_submenu(parent_menu_id):
     )
 
     mgear.menu.install("Mocap", commands, parent_menu_id)
+
+
+def _has_bindplane_component():
+    """Check if any bindPlane/bindControl component type is available.
+
+    Returns:
+        bool: True if a bindPlane component exists in available components.
+    """
+    from mgear import shifter
+    import os
+
+    comp_dirs = shifter.getComponentDirectories()
+    for path, comps in comp_dirs.items():
+        for comp_name in comps:
+            if comp_name in ["__init__.py", "__pycache__"]:
+                continue
+            # Check if component name contains bindPlane or bindControl
+            if "bindPlane" in comp_name or "bindControl" in comp_name:
+                # Verify it's a valid component directory
+                if os.path.exists(os.path.join(path, comp_name, "__init__.py")):
+                    return True
+    return False
+
+
+def guide_utils_submenu(parent_menu_id):
+    """Create the guide utils submenu
+
+    Args:
+        parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
+    """
+    commands = [
+        (
+            "Guide Visualizer",
+            str_guide_visualizer,
+            "mgear_guide_visualizer.svg",
+        ),
+        (
+            "Guide Symmetry Tool",
+            str_guide_symmetry_tool,
+            "mgear_guide_symmetry.svg",
+        ),
+        (
+            "Component Type Lister",
+            str_component_type_lister,
+            "mgear_component_type_lister.svg",
+        ),
+        (
+            "Chain Utils",
+            str_chain_utils,
+            "mgear_chain_utils.svg",
+        ),
+    ]
+
+    # Only add BindPlane Control Utils if bindPlane component is available
+    if _has_bindplane_component():
+        commands.append(
+            (
+                "BindPlane Control Utils",
+                str_bindplane_control_utils,
+                "mgear_bindplane_control.svg",
+            )
+        )
+
+    mgear.menu.install(
+        "Guide Utils",
+        tuple(commands),
+        parent_menu_id,
+        image="mgear_guide_utils.svg",
+    )
 
 
 def game_submenu(parent_menu_id):
@@ -410,4 +480,29 @@ guide_manager.snap_guide_to_root_joint()
 str_dataCentricFolders = """
 import mgear.shifter.data_centric_folder_creator as dcfc
 dcfc.openFolderStructureCreator()
+"""
+
+str_guide_visualizer = """
+from mgear.shifter.guide_tools import guide_visualizer
+guide_visualizer.show()
+"""
+
+str_guide_symmetry_tool = """
+from mgear.shifter.guide_tools import guide_symmetry_tool
+guide_symmetry_tool.open_shifter_mirror_checker()
+"""
+
+str_component_type_lister = """
+from mgear.shifter.guide_tools import component_type_lister
+component_type_lister.show()
+"""
+
+str_bindplane_control_utils = """
+from mgear.shifter.guide_tools import bindPlane_control_utils_tool
+bindPlane_control_utils_tool.show_bind_group_browser()
+"""
+
+str_chain_utils = """
+from mgear.shifter.guide_tools import chain_utils
+chain_utils.open_chain_utils()
 """
