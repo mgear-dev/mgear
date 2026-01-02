@@ -263,11 +263,15 @@ class _Node(base.Node):
             return super(_Node, self).__getattribute__(name)
         except AttributeError:
             nfnc = super(_Node, self).__getattribute__("name")
-            if cmds.ls("{}.{}".format(nfnc(), name)):
+            node_name = nfnc()  # Cache name() call
+            # Use objExists instead of ls - much faster for existence check
+            attr_path = f"{node_name}.{name}"
+            if cmds.objExists(attr_path):
                 return super(_Node, self).__getattribute__("attr")(name)
-            elif cmds.ls("{}.{}[:]".format(nfnc(), name)):
-                return geometry.BindGeometry("{}.{}[:]".format(nfnc(), name))
-            elif self.__is_transform:
+            array_path = f"{node_name}.{name}[:]"
+            if cmds.objExists(array_path):
+                return geometry.BindGeometry(array_path)
+            if self.__is_transform:
                 sp = self.getShape()
                 if sp:
                     sym = getattr(sp, name, None)
@@ -508,20 +512,20 @@ class _Node(base.Node):
             return None
 
     def getAttr(self, name, **kwargs):
-        return cmd.getAttr("{}.{}".format(self.name(), name), **kwargs)
+        return cmd.getAttr(f"{self.name()}.{name}", **kwargs)
 
     def setAttr(self, name, *args, **kwargs):
-        return cmd.setAttr("{}.{}".format(self.name(), name), *args, **kwargs)
+        return cmd.setAttr(f"{self.name()}.{name}", *args, **kwargs)
 
     def hasAttr(self, name, checkShape=True):
-        return cmds.objExists("{}.{}".format(self.name(), name))
+        return cmds.objExists(f"{self.name()}.{name}")
 
     def listAttr(self, *args, **kwargs):
         return cmd.listAttr(self.name(), *args, **kwargs)
 
     def disconnectAttr(self, attr_name):
         # Construct the full attribute name
-        full_attr = "{}.{}".format(self.name(), attr_name)
+        full_attr = f"{self.name()}.{attr_name}"
 
         # Check if the attribute exists
         if not cmds.objExists(full_attr):
@@ -603,15 +607,21 @@ class _Node(base.Node):
         return self.name().split(word)
 
     def listHistory(self, **kwargs):
-        """Lists the history nodes of the current node, supports all kwargs f
-        rom cmds.listHistory.
+        """Lists the history nodes of the current node, supports all kwargs
+        from cmds.listHistory.
 
         Args:
+            type (str, optional): Filter results to only include nodes of this
+                type. This is a convenience filter applied after querying
+                history (not a native cmds.listHistory flag).
             **kwargs: Keyword arguments to be passed to cmds.listHistory().
 
         Returns:
             list: A list of instances representing the history nodes.
         """
+        # Extract 'type' filter if provided (not a native cmds.listHistory flag)
+        type_filter = kwargs.pop("type", None)
+
         # Get the history nodes using cmds.listHistory() with the provided
         # kwargs
         history = cmds.listHistory(self.name(), **kwargs)
@@ -625,6 +635,9 @@ class _Node(base.Node):
         history_instances = []
         for hist_node in history:
             node_type = cmds.nodeType(hist_node)
+            # Skip if type filter is set and doesn't match
+            if type_filter and node_type != type_filter:
+                continue
             node_class = node_types.getTypeClass(node_type)
             if node_class:
                 history_instances.append(node_class(hist_node))
@@ -636,6 +649,7 @@ class _Node(base.Node):
 
 class _NodeTypes(object):
     __Instance = None
+    __all_node_types = None  # Cache for cmds.allNodeTypes()
 
     def __new__(self):
         if _NodeTypes.__Instance is None:
@@ -643,6 +657,14 @@ class _NodeTypes(object):
             _NodeTypes.__Instance.__types = {}
 
         return _NodeTypes.__Instance
+
+    @staticmethod
+    def _getAllNodeTypes():
+        """Get all Maya node types, cached to avoid repeated calls."""
+        if _NodeTypes.__all_node_types is None:
+            from maya import cmds as _cmds
+            _NodeTypes.__all_node_types = set(_cmds.allNodeTypes())
+        return _NodeTypes.__all_node_types
 
     def registerClass(self, typename, cls=None):
         if cls is not None:
@@ -664,7 +686,8 @@ class _NodeTypes(object):
         if typename in self_types:
             return self_types[typename]
 
-        if typename in cmds.allNodeTypes():
+        # Use cached allNodeTypes to avoid recursion and repeated calls
+        if typename in _NodeTypes._getAllNodeTypes():
             self.registerClass(typename, cls=None)
             return self_types[typename]
 

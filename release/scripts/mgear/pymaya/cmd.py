@@ -273,7 +273,7 @@ def _pymaya_cmd_wrap(func, wrap_object=True, scope=SCOPE_NODE):
         # Constraints
         if (
             func.__name__.endswith("Constraint")
-            and "query" not in kwargs.keys()
+            and "query" not in kwargs
         ):
             res = res[0] if res else None
 
@@ -800,6 +800,23 @@ def select(*args, **kwargs):
     """Wrapper for cmds.select() that supports nested lists."""
     args = _flatten_list(args)
     return _name_to_obj(cmds.select(*args, **kwargs))
+
+
+def delete(*args, **kwargs):
+    """Wrapper for cmds.delete() that handles empty lists gracefully.
+
+    Maya's delete command shows a warning when called with no arguments or
+    an empty list. This wrapper prevents that by returning early if there's
+    nothing to delete.
+    """
+    args = _flatten_list(_obj_to_name(args))
+    kwargs = _obj_to_name(kwargs)
+
+    # Skip if no objects to delete
+    if not args and not kwargs:
+        return None
+
+    return cmds.delete(*args, **kwargs)
 
 
 # set Locals dict

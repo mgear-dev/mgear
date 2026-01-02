@@ -108,13 +108,15 @@ class _SingleIndexGeom(_Geometry):
 
     def indices(self):
         if self.__indices is None:
-            self.__indices = set()
+            indices_set = set()
             it = self.IterClass()(self.dagPath(), self.component())
             while not it.isDone():
-                self.__indices.add(it.index())
+                indices_set.add(it.index())
                 it.next()
+            # Cache as list to avoid repeated set-to-list conversions
+            self.__indices = list(indices_set)
 
-        return list(self.__indices)
+        return self.__indices
 
     def toStringList(self):
         names = []
