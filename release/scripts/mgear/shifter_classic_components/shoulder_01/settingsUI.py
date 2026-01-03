@@ -35,6 +35,7 @@ class Ui_Form(object):
         self.gridLayout.setObjectName("gridLayout")
         self.upvRefArray_groupBox = QtWidgets.QGroupBox(Form)
         self.upvRefArray_groupBox.setObjectName("upvRefArray_groupBox")
+        self.upvRefArray_groupBox.setTitle("Reference Array")
         self.gridLayout_2 = QtWidgets.QGridLayout(self.upvRefArray_groupBox)
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.upvRefArray_horizontalLayout = QtWidgets.QHBoxLayout()
@@ -55,22 +56,15 @@ class Ui_Form(object):
         self.upvRefArray_verticalLayout_2.setObjectName("upvRefArray_verticalLayout_2")
         self.refArrayAdd_pushButton = QtWidgets.QPushButton(self.upvRefArray_groupBox)
         self.refArrayAdd_pushButton.setObjectName("refArrayAdd_pushButton")
+        self.refArrayAdd_pushButton.setText("<<")
         self.upvRefArray_verticalLayout_2.addWidget(self.refArrayAdd_pushButton)
         self.refArrayRemove_pushButton = QtWidgets.QPushButton(self.upvRefArray_groupBox)
         self.refArrayRemove_pushButton.setObjectName("refArrayRemove_pushButton")
+        self.refArrayRemove_pushButton.setText(">>")
         self.upvRefArray_verticalLayout_2.addWidget(self.refArrayRemove_pushButton)
         spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.upvRefArray_verticalLayout_2.addItem(spacerItem)
         self.upvRefArray_horizontalLayout.addLayout(self.upvRefArray_verticalLayout_2)
         self.gridLayout_2.addLayout(self.upvRefArray_horizontalLayout, 0, 0, 1, 1)
         self.gridLayout.addWidget(self.upvRefArray_groupBox, 0, 0, 1, 1)
-
-        self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
-
-    def retranslateUi(self, Form):
-        Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.upvRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "Reference Array", None, -1))
-        self.refArrayAdd_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
-        self.refArrayRemove_pushButton.setText(gqt.fakeTranslate("Form", ">>", None, -1))
-

@@ -171,8 +171,6 @@ class Ui_Form(object):
         self.leafJoints_label.setObjectName("leafJoints_label")
         self.formLayout.setWidget(10, QtWidgets.QFormLayout.LabelRole, self.leafJoints_label)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
-
-        self.retranslateUi(Form)
         QtCore.QObject.connect(self.softness_slider, QtCore.SIGNAL("sliderMoved(int)"), self.softness_spinBox.setValue)
         QtCore.QObject.connect(self.softness_spinBox, QtCore.SIGNAL("valueChanged(int)"), self.softness_slider.setValue)
         QtCore.QObject.connect(self.position_slider, QtCore.SIGNAL("valueChanged(int)"), self.position_spinBox.setValue)
@@ -183,20 +181,3 @@ class Ui_Form(object):
         QtCore.QObject.connect(self.lockOri_chest_slider, QtCore.SIGNAL("valueChanged(int)"), self.lockOri_chest_spinBox.setValue)
         QtCore.QObject.connect(self.softness_slider, QtCore.SIGNAL("valueChanged(int)"), self.softness_spinBox.setValue)
         QtCore.QMetaObject.connectSlotsByName(Form)
-
-    def retranslateUi(self, Form):
-        Form.setWindowTitle(QtWidgets.QApplication.translate("Form", "Form", None, -1))
-        self.softness_label.setText(QtWidgets.QApplication.translate("Form", "Softness", None, -1))
-        self.softness_label_2.setText(QtWidgets.QApplication.translate("Form", "Position", None, -1))
-        self.softness_label_3.setText(QtWidgets.QApplication.translate("Form", "Lock Orient Pelvis", None, -1))
-        self.softness_label_4.setText(QtWidgets.QApplication.translate("Form", "Lock Orient Chest", None, -1))
-        self.maxStretch_label.setText(QtWidgets.QApplication.translate("Form", "Max Stretch", None, -1))
-        self.maxSquash_label.setText(QtWidgets.QApplication.translate("Form", "Max Squash", None, -1))
-        self.divisions_label.setText(QtWidgets.QApplication.translate("Form", "Divisions", None, -1))
-        self.autoBend_label.setText(QtWidgets.QApplication.translate("Form", "Auto Bend Control", None, -1))
-        self.autoBend_label_2.setText(QtWidgets.QApplication.translate("Form", "IK CTL World Ori", None, -1))
-        self.IKWorldOri_checkBox.setToolTip(QtWidgets.QApplication.translate("Form", "<html><head/><body><p>If checked the IK controls will be oriented to world space in XYZ</p></body></html>", None, -1))
-        self.centralTangent_label.setText(QtWidgets.QApplication.translate("Form", "Central Tangent", None, -1))
-        self.squashStretchProfile_pushButton.setText(QtWidgets.QApplication.translate("Form", "Squash and Stretch Profile", None, -1))
-        self.leafJoints_label.setText(QtWidgets.QApplication.translate("Form", "Leaf Joints", None, -1))
-

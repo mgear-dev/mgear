@@ -90,18 +90,4 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.keyable_groupBox, 1, 0, 1, 1)
         spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.gridLayout.addItem(spacerItem, 2, 0, 1, 1)
-
-        self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
-
-    def retranslateUi(self, Form):
-        Form.setWindowTitle(QtWidgets.QApplication.translate("Form", "Form", None, -1))
-        self.label.setText(QtWidgets.QApplication.translate("Form", "Mirror Behaviour L and R", None, -1))
-        self.mirror_behaviour_checkbox.setToolTip(QtWidgets.QApplication.translate("Form", "<html><head/><body><p>If is active, the control will have symmetrical behaviour on Left and Right side.</p><p><br/></p><p>WARNING: There is a bug in Maya 2018 and 2018.1 that will result in an incorrect behaviour, because this option will negate one of the axis. Other Maya version should be ok.</p></body></html>", None, -1))
-        self.control_size_label.setText(QtWidgets.QApplication.translate("Form", "Control Size", None, -1))
-        self.keyable_groupBox.setTitle(QtWidgets.QApplication.translate("Form", "Range of Motion", None, -1))
-        self.negative_label.setText(QtWidgets.QApplication.translate("Form", "Negative", None, -1))
-        self.positive_label.setText(QtWidgets.QApplication.translate("Form", "Positive", None, -1))
-        self.translate_x_label.setText(QtWidgets.QApplication.translate("Form", "Translate X", None, -1))
-        self.translate_y_label.setText(QtWidgets.QApplication.translate("Form", "Translate Y", None, -1))
-

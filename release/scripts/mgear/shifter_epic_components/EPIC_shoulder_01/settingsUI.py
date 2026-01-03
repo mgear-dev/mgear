@@ -42,6 +42,7 @@ class Ui_Form(object):
         self.verticalLayout.addWidget(self.descriptionName_checkBox)
         self.upvRefArray_groupBox = QtWidgets.QGroupBox(Form)
         self.upvRefArray_groupBox.setObjectName("upvRefArray_groupBox")
+        self.upvRefArray_groupBox.setTitle("Reference Array")
         self.gridLayout_2 = QtWidgets.QGridLayout(self.upvRefArray_groupBox)
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.upvRefArray_horizontalLayout = QtWidgets.QHBoxLayout()
@@ -78,6 +79,7 @@ class Ui_Form(object):
             self.upvRefArray_groupBox
         )
         self.refArrayAdd_pushButton.setObjectName("refArrayAdd_pushButton")
+        self.refArrayAdd_pushButton.setText("<<")
         self.upvRefArray_verticalLayout_2.addWidget(
             self.refArrayAdd_pushButton
         )
@@ -87,6 +89,7 @@ class Ui_Form(object):
         self.refArrayRemove_pushButton.setObjectName(
             "refArrayRemove_pushButton"
         )
+        self.refArrayRemove_pushButton.setText(">>")
         self.upvRefArray_verticalLayout_2.addWidget(
             self.refArrayRemove_pushButton
         )
@@ -105,26 +108,4 @@ class Ui_Form(object):
         )
         self.verticalLayout.addWidget(self.upvRefArray_groupBox)
         self.gridLayout.addLayout(self.verticalLayout, 0, 0, 1, 1)
-
-        self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
-
-    def retranslateUi(self, Form):
-        Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.descriptionName_checkBox.setToolTip(
-            gqt.fakeTranslate(
-                "Form",
-                "<html><head/><body><p>If checked will use the component name as description name for joints. This is ideal for the default EPIC naming system.<br/>If we are using default mGear's naming system, is recommended to uncheck this option to avoid repetition in the names.</p></body></html>",
-                None,
-                -1,
-            )
-        )
-        self.upvRefArray_groupBox.setTitle(
-            gqt.fakeTranslate("Form", "Reference Array", None, -1)
-        )
-        self.refArrayAdd_pushButton.setText(
-            gqt.fakeTranslate("Form", "<<", None, -1)
-        )
-        self.refArrayRemove_pushButton.setText(
-            gqt.fakeTranslate("Form", ">>", None, -1)
-        )

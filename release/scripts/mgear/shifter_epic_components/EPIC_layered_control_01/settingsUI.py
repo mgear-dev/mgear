@@ -18,19 +18,24 @@ class Ui_Form(object):
         self.verticalLayout_4.setObjectName("verticalLayout_4")
         self.joint_checkBox = QtWidgets.QCheckBox(self.groupBox)
         self.joint_checkBox.setObjectName("joint_checkBox")
+        self.joint_checkBox.setText("Joint")
         self.verticalLayout_4.addWidget(self.joint_checkBox)
         self.leafJoint_checkBox = QtWidgets.QCheckBox(self.groupBox)
         self.leafJoint_checkBox.setEnabled(False)
         self.leafJoint_checkBox.setObjectName("leafJoint_checkBox")
+        self.leafJoint_checkBox.setText("is Leaf Joint (Beta)")
         self.verticalLayout_4.addWidget(self.leafJoint_checkBox)
         self.uniScale_checkBox = QtWidgets.QCheckBox(self.groupBox)
         self.uniScale_checkBox.setObjectName("uniScale_checkBox")
+        self.uniScale_checkBox.setText("Uniform Scale")
         self.verticalLayout_4.addWidget(self.uniScale_checkBox)
         self.neutralRotation_checkBox = QtWidgets.QCheckBox(self.groupBox)
         self.neutralRotation_checkBox.setObjectName("neutralRotation_checkBox")
+        self.neutralRotation_checkBox.setText("World Space Orientation Align")
         self.verticalLayout_4.addWidget(self.neutralRotation_checkBox)
         self.mirrorBehaviour_checkBox = QtWidgets.QCheckBox(self.groupBox)
         self.mirrorBehaviour_checkBox.setObjectName("mirrorBehaviour_checkBox")
+        self.mirrorBehaviour_checkBox.setText("Mirror Behaviour L and R")
         self.verticalLayout_4.addWidget(self.mirrorBehaviour_checkBox)
         self.descriptionName_checkBox = QtWidgets.QCheckBox(self.groupBox)
         self.descriptionName_checkBox.setText(
@@ -43,6 +48,7 @@ class Ui_Form(object):
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
         self.rbfLayers_label = QtWidgets.QLabel(self.groupBox)
         self.rbfLayers_label.setObjectName("rbfLayers_label")
+        self.rbfLayers_label.setText("RBF Layers")
         self.horizontalLayout_4.addWidget(self.rbfLayers_label)
         self.rbfLayers_spinBox = QtWidgets.QSpinBox(self.groupBox)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -67,6 +73,7 @@ class Ui_Form(object):
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
         self.ctlSize_label = QtWidgets.QLabel(self.groupBox)
         self.ctlSize_label.setObjectName("ctlSize_label")
+        self.ctlSize_label.setText("Ctl Size")
         self.horizontalLayout_3.addWidget(self.ctlSize_label)
         self.ctlSize_doubleSpinBox = QtWidgets.QDoubleSpinBox(self.groupBox)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -126,6 +133,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
         self.ikRefArray_groupBox = QtWidgets.QGroupBox(Form)
         self.ikRefArray_groupBox.setObjectName("ikRefArray_groupBox")
+        self.ikRefArray_groupBox.setTitle("IK Reference Array")
         self.gridLayout_3 = QtWidgets.QGridLayout(self.ikRefArray_groupBox)
         self.gridLayout_3.setObjectName("gridLayout_3")
         self.ikRefArray_horizontalLayout = QtWidgets.QHBoxLayout()
@@ -162,6 +170,7 @@ class Ui_Form(object):
             self.ikRefArray_groupBox
         )
         self.ikRefArrayAdd_pushButton.setObjectName("ikRefArrayAdd_pushButton")
+        self.ikRefArrayAdd_pushButton.setText("<<")
         self.ikRefArray_verticalLayout_2.addWidget(
             self.ikRefArrayAdd_pushButton
         )
@@ -171,6 +180,7 @@ class Ui_Form(object):
         self.ikRefArrayRemove_pushButton.setObjectName(
             "ikRefArrayRemove_pushButton"
         )
+        self.ikRefArrayRemove_pushButton.setText(">>")
         self.ikRefArray_verticalLayout_2.addWidget(
             self.ikRefArrayRemove_pushButton
         )
@@ -190,6 +200,7 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.ikRefArray_groupBox, 4, 0, 1, 1)
         self.keyable_groupBox = QtWidgets.QGroupBox(Form)
         self.keyable_groupBox.setObjectName("keyable_groupBox")
+        self.keyable_groupBox.setTitle("Keyable")
         self.gridLayout_4 = QtWidgets.QGridLayout(self.keyable_groupBox)
         self.gridLayout_4.setObjectName("gridLayout_4")
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -201,15 +212,19 @@ class Ui_Form(object):
             self.keyable_groupBox
         )
         self.translate_pushButton.setObjectName("translate_pushButton")
+        self.translate_pushButton.setText("Translate")
         self.verticalLayout.addWidget(self.translate_pushButton)
         self.tx_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.tx_checkBox.setObjectName("tx_checkBox")
+        self.tx_checkBox.setText("tx")
         self.verticalLayout.addWidget(self.tx_checkBox)
         self.ty_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.ty_checkBox.setObjectName("ty_checkBox")
+        self.ty_checkBox.setText("ty")
         self.verticalLayout.addWidget(self.ty_checkBox)
         self.tz_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.tz_checkBox.setObjectName("tz_checkBox")
+        self.tz_checkBox.setText("tz")
         self.verticalLayout.addWidget(self.tz_checkBox)
         spacerItem1 = QtWidgets.QSpacerItem(
             20,
@@ -226,18 +241,23 @@ class Ui_Form(object):
         self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.rotate_pushButton = QtWidgets.QPushButton(self.keyable_groupBox)
         self.rotate_pushButton.setObjectName("rotate_pushButton")
+        self.rotate_pushButton.setText("Rotate")
         self.verticalLayout_2.addWidget(self.rotate_pushButton)
         self.rx_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.rx_checkBox.setObjectName("rx_checkBox")
+        self.rx_checkBox.setText("rx")
         self.verticalLayout_2.addWidget(self.rx_checkBox)
         self.ry_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.ry_checkBox.setObjectName("ry_checkBox")
+        self.ry_checkBox.setText("ry")
         self.verticalLayout_2.addWidget(self.ry_checkBox)
         self.rz_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.rz_checkBox.setObjectName("rz_checkBox")
+        self.rz_checkBox.setText("rz")
         self.verticalLayout_2.addWidget(self.rz_checkBox)
         self.ro_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.ro_checkBox.setObjectName("ro_checkBox")
+        self.ro_checkBox.setText("ro")
         self.verticalLayout_2.addWidget(self.ro_checkBox)
         self.ro_comboBox = QtWidgets.QComboBox(self.keyable_groupBox)
         self.ro_comboBox.setObjectName("ro_comboBox")
@@ -253,15 +273,19 @@ class Ui_Form(object):
         self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.scale_pushButton = QtWidgets.QPushButton(self.keyable_groupBox)
         self.scale_pushButton.setObjectName("scale_pushButton")
+        self.scale_pushButton.setText("Scale")
         self.verticalLayout_3.addWidget(self.scale_pushButton)
         self.sx_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.sx_checkBox.setObjectName("sx_checkBox")
+        self.sx_checkBox.setText("sx")
         self.verticalLayout_3.addWidget(self.sx_checkBox)
         self.sy_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.sy_checkBox.setObjectName("sy_checkBox")
+        self.sy_checkBox.setText("sy")
         self.verticalLayout_3.addWidget(self.sy_checkBox)
         self.sz_checkBox = QtWidgets.QCheckBox(self.keyable_groupBox)
         self.sz_checkBox.setObjectName("sz_checkBox")
+        self.sz_checkBox.setText("sz")
         self.verticalLayout_3.addWidget(self.sz_checkBox)
         spacerItem2 = QtWidgets.QSpacerItem(
             20,
@@ -275,12 +299,14 @@ class Ui_Form(object):
         self.gridLayout.addWidget(self.keyable_groupBox, 2, 0, 1, 1)
         self.keyable_groupBox_2 = QtWidgets.QGroupBox(Form)
         self.keyable_groupBox_2.setObjectName("keyable_groupBox_2")
+        self.keyable_groupBox_2.setTitle("Multipliers")
         self.gridLayout_5 = QtWidgets.QGridLayout(self.keyable_groupBox_2)
         self.gridLayout_5.setObjectName("gridLayout_5")
         self.horizontalLayout_7 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_7.setObjectName("horizontalLayout_7")
         self.rbfLayers_label_3 = QtWidgets.QLabel(self.keyable_groupBox_2)
         self.rbfLayers_label_3.setObjectName("rbfLayers_label_3")
+        self.rbfLayers_label_3.setText("CTL Rotate Mult")
         self.horizontalLayout_7.addWidget(self.rbfLayers_label_3)
         self.ctlRotMult_doubleSpinBox = QtWidgets.QDoubleSpinBox(
             self.keyable_groupBox_2
@@ -309,6 +335,7 @@ class Ui_Form(object):
         self.horizontalLayout_8.setObjectName("horizontalLayout_8")
         self.rbfLayers_label_4 = QtWidgets.QLabel(self.keyable_groupBox_2)
         self.rbfLayers_label_4.setObjectName("rbfLayers_label_4")
+        self.rbfLayers_label_4.setText("CTL Scale Mult")
         self.horizontalLayout_8.addWidget(self.rbfLayers_label_4)
         self.ctlSclMult_doubleSpinBox = QtWidgets.QDoubleSpinBox(
             self.keyable_groupBox_2
@@ -337,6 +364,7 @@ class Ui_Form(object):
         self.horizontalLayout_6.setObjectName("horizontalLayout_6")
         self.ctlTransMult_label = QtWidgets.QLabel(self.keyable_groupBox_2)
         self.ctlTransMult_label.setObjectName("ctlTransMult_label")
+        self.ctlTransMult_label.setText("CTL Translate Mult")
         self.horizontalLayout_6.addWidget(self.ctlTransMult_label)
         self.ctlTransMult_doubleSpinBox = QtWidgets.QDoubleSpinBox(
             self.keyable_groupBox_2
@@ -364,8 +392,6 @@ class Ui_Form(object):
         self.horizontalLayout_6.addWidget(self.ctlTransMult_doubleSpinBox)
         self.gridLayout_5.addLayout(self.horizontalLayout_6, 0, 0, 1, 1)
         self.gridLayout.addWidget(self.keyable_groupBox_2, 1, 0, 1, 1)
-
-        self.retranslateUi(Form)
         QtCore.QObject.connect(
             self.translate_pushButton,
             QtCore.SIGNAL("clicked()"),
@@ -417,164 +443,3 @@ class Ui_Form(object):
             self.sz_checkBox.toggle,
         )
         QtCore.QMetaObject.connectSlotsByName(Form)
-
-    def retranslateUi(self, Form):
-        Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.joint_checkBox.setText(
-            gqt.fakeTranslate("Form", "Joint", None, -1)
-        )
-        self.leafJoint_checkBox.setToolTip(
-            gqt.fakeTranslate(
-                "Form",
-                '<html><head/><body><p>When &quot;<span style=" font-weight:600;">is Leaf Joint</span>&quot; is checked, the component will create only the joint without the controls</p><p>As the name indicates this option is meant to create leaf joints, but you can use it also to create &quot;branches&quot;</p><p>Leaf joint can be used as a deformation helpers or/and games pipelines</p></body></html>',
-                None,
-                -1,
-            )
-        )
-        self.leafJoint_checkBox.setText(
-            gqt.fakeTranslate("Form", "is Leaf Joint (Beta)", None, -1)
-        )
-        self.uniScale_checkBox.setText(
-            gqt.fakeTranslate("Form", "Uniform Scale", None, -1)
-        )
-        self.neutralRotation_checkBox.setToolTip(
-            gqt.fakeTranslate(
-                "Form",
-                "<html><head/><body><p>If is active, it will align the control with world space</p></body></html>",
-                None,
-                -1,
-            )
-        )
-        self.neutralRotation_checkBox.setText(
-            gqt.fakeTranslate(
-                "Form", "World Space Orientation Align", None, -1
-            )
-        )
-        self.mirrorBehaviour_checkBox.setToolTip(
-            gqt.fakeTranslate(
-                "Form",
-                "<html><head/><body><p>If is active, the control will have symmetrical behaviour on Left and Right side.</p><p><br/></p><p>WARNING: There is a bug in Maya 2018 and 2018.1 that will result in an incorrect behaviour, because this option will negate one of the axis. Other Maya version should be ok.</p></body></html>",
-                None,
-                -1,
-            )
-        )
-        self.mirrorBehaviour_checkBox.setText(
-            gqt.fakeTranslate("Form", "Mirror Behaviour L and R", None, -1)
-        )
-        self.descriptionName_checkBox.setToolTip(
-            gqt.fakeTranslate(
-                "Form",
-                "<html><head/><body><p>If checked will use the component name as description name for joints. This is ideal for the default EPIC naming system.<br/>If we are using default mGear's naming system, is recommended to uncheck this option to avoid repetition in the names.</p></body></html>",
-                None,
-                -1,
-            )
-        )
-        self.rbfLayers_label.setText(
-            gqt.fakeTranslate("Form", "RBF Layers", None, -1)
-        )
-        self.ctlSize_label.setText(
-            gqt.fakeTranslate("Form", "Ctl Size", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            0, gqt.fakeTranslate("Form", "Arrow", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            1, gqt.fakeTranslate("Form", "Circle", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            2, gqt.fakeTranslate("Form", "Compas", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            3, gqt.fakeTranslate("Form", "Cross", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            4, gqt.fakeTranslate("Form", "Crossarrow", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            5, gqt.fakeTranslate("Form", "Cube", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            6, gqt.fakeTranslate("Form", "Cubewithpeak", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            7, gqt.fakeTranslate("Form", "Cylinder", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            8, gqt.fakeTranslate("Form", "Diamond", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            9, gqt.fakeTranslate("Form", "Flower", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            10, gqt.fakeTranslate("Form", "Null", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            11, gqt.fakeTranslate("Form", "Pyramid", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            12, gqt.fakeTranslate("Form", "Sphere", None, -1)
-        )
-        self.controlShape_comboBox.setItemText(
-            13, gqt.fakeTranslate("Form", "Square", None, -1)
-        )
-        self.ikRefArray_groupBox.setTitle(
-            gqt.fakeTranslate("Form", "IK Reference Array", None, -1)
-        )
-        self.ikRefArrayAdd_pushButton.setText(
-            gqt.fakeTranslate("Form", "<<", None, -1)
-        )
-        self.ikRefArrayRemove_pushButton.setText(
-            gqt.fakeTranslate("Form", ">>", None, -1)
-        )
-        self.keyable_groupBox.setTitle(
-            gqt.fakeTranslate("Form", "Keyable", None, -1)
-        )
-        self.translate_pushButton.setText(
-            gqt.fakeTranslate("Form", "Translate", None, -1)
-        )
-        self.tx_checkBox.setText(gqt.fakeTranslate("Form", "tx", None, -1))
-        self.ty_checkBox.setText(gqt.fakeTranslate("Form", "ty", None, -1))
-        self.tz_checkBox.setText(gqt.fakeTranslate("Form", "tz", None, -1))
-        self.rotate_pushButton.setText(
-            gqt.fakeTranslate("Form", "Rotate", None, -1)
-        )
-        self.rx_checkBox.setText(gqt.fakeTranslate("Form", "rx", None, -1))
-        self.ry_checkBox.setText(gqt.fakeTranslate("Form", "ry", None, -1))
-        self.rz_checkBox.setText(gqt.fakeTranslate("Form", "rz", None, -1))
-        self.ro_checkBox.setText(gqt.fakeTranslate("Form", "ro", None, -1))
-        self.ro_comboBox.setItemText(
-            0, gqt.fakeTranslate("Form", "XYZ", None, -1)
-        )
-        self.ro_comboBox.setItemText(
-            1, gqt.fakeTranslate("Form", "YZX", None, -1)
-        )
-        self.ro_comboBox.setItemText(
-            2, gqt.fakeTranslate("Form", "ZXY", None, -1)
-        )
-        self.ro_comboBox.setItemText(
-            3, gqt.fakeTranslate("Form", "XZY", None, -1)
-        )
-        self.ro_comboBox.setItemText(
-            4, gqt.fakeTranslate("Form", "YXZ", None, -1)
-        )
-        self.ro_comboBox.setItemText(
-            5, gqt.fakeTranslate("Form", "ZYX", None, -1)
-        )
-        self.scale_pushButton.setText(
-            gqt.fakeTranslate("Form", "Scale", None, -1)
-        )
-        self.sx_checkBox.setText(gqt.fakeTranslate("Form", "sx", None, -1))
-        self.sy_checkBox.setText(gqt.fakeTranslate("Form", "sy", None, -1))
-        self.sz_checkBox.setText(gqt.fakeTranslate("Form", "sz", None, -1))
-        self.keyable_groupBox_2.setTitle(
-            gqt.fakeTranslate("Form", "Multipliers", None, -1)
-        )
-        self.rbfLayers_label_3.setText(
-            gqt.fakeTranslate("Form", "CTL Rotate Mult", None, -1)
-        )
-        self.rbfLayers_label_4.setText(
-            gqt.fakeTranslate("Form", "CTL Scale Mult", None, -1)
-        )
-        self.ctlTransMult_label.setText(
-            gqt.fakeTranslate("Form", "CTL Translate Mult", None, -1)
-        )

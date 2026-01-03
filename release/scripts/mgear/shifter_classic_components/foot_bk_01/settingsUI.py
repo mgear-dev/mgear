@@ -15,6 +15,7 @@ class Ui_Form(object):
         self.gridLayout.setObjectName("gridLayout")
         self.useRollCtl_checkBox = QtWidgets.QCheckBox(self.groupBox)
         self.useRollCtl_checkBox.setObjectName("useRollCtl_checkBox")
+        self.useRollCtl_checkBox.setText("Use Roll Ctl")
         self.gridLayout.addWidget(self.useRollCtl_checkBox, 0, 0, 1, 1)
         self.formLayout = QtWidgets.QFormLayout()
         self.formLayout.setObjectName("formLayout")
@@ -27,6 +28,7 @@ class Ui_Form(object):
             self.maxStretch_label.sizePolicy().hasHeightForWidth())
         self.maxStretch_label.setSizePolicy(sizePolicy)
         self.maxStretch_label.setObjectName("maxStretch_label")
+        self.maxStretch_label.setText("Default Roll Angle")
         self.formLayout.setWidget(
             0, QtWidgets.QFormLayout.LabelRole, self.maxStretch_label)
         self.rollAngle_spinBox = QtWidgets.QDoubleSpinBox(self.groupBox)
@@ -47,13 +49,4 @@ class Ui_Form(object):
             0, QtWidgets.QFormLayout.FieldRole, self.rollAngle_spinBox)
         self.gridLayout.addLayout(self.formLayout, 1, 0, 1, 1)
         self.gridLayout_2.addWidget(self.groupBox, 0, 0, 1, 1)
-
-        self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
-
-    def retranslateUi(self, Form):
-        Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.useRollCtl_checkBox.setText(
-            gqt.fakeTranslate("Form", "Use Roll Ctl", None, -1))
-        self.maxStretch_label.setText(gqt.fakeTranslate(
-            "Form", "Default Roll Angle", None, -1))
