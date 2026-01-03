@@ -12,6 +12,7 @@ Release Log
 	* Shifter: Guide Tools: Initial implementation #588
 	* Utilbits: xPlorer: New tool with multi-selection, visibility toggle, attribute editor, search functionality, and arrow navigation #602
 	* Rigbits: Eye Rigger 2.1: Simplified options and miscellaneous improvements #579
+	* Rigbits: SDK Manager: Independent channel selection for Translate/Rotate/Scale with individual X, Y, Z axis checkboxes #604
 	* Mocap Tools: HumanIK Mapper: Batch Bake to Timeline button #590
 
 **Enhancements**
@@ -29,6 +30,9 @@ Release Log
 	* RBF Manager: Added option to use custom names on RBF setups #595
 	* RBF Manager: Better naming checker and logic when custom name is cancelled #595
 	* SDK Manager: Misc fixes and UI updates #587
+	* SDK Manager: Converted .ui file to pure Python for easier maintenance #604
+	* SDK Manager: Removed driver restriction - any transform can now be used as driver #604
+	* SDK Manager: Added documentation #604
 	* PyMaya: node.addAttr return attr correctly
 	* PyMaya: Attr: added getRange() method
 	* PyMaya: Node: refactor sets members method to support Pymel like flatten flag query
