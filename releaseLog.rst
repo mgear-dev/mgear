@@ -33,6 +33,8 @@ Release Log
 	* SDK Manager: Converted .ui file to pure Python for easier maintenance #604
 	* SDK Manager: Removed driver restriction - any transform can now be used as driver #604
 	* SDK Manager: Added documentation #604
+	* Rigbits: Added comprehensive user documentation for all tools #604
+	* Animbits: Added user documentation for Cache Manager, HumanIK Mapper, Space Recorder, Spring Manager #604
 	* PyMaya: node.addAttr return attr correctly
 	* PyMaya: Attr: added getRange() method
 	* PyMaya: Node: refactor sets members method to support Pymel like flatten flag query
