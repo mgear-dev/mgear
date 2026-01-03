@@ -3455,6 +3455,93 @@ class Ui_Form(object):
 
 
 # ============================================================================
+# Template Selection Dialog
+# ============================================================================
+
+
+class TemplateSelectionDialog(QtWidgets.QDialog):
+    """Dialog for selecting a custom step template.
+
+    Shows a dropdown of available templates with descriptions.
+    """
+
+    def __init__(self, parent=None):
+        """Initialize the dialog.
+
+        Args:
+            parent (QWidget): Parent widget
+        """
+        super(TemplateSelectionDialog, self).__init__(parent)
+        self._selected_template = "blank"  # Default
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Set up the dialog UI."""
+        self.setWindowTitle("Select Custom Step Template")
+        self.setMinimumWidth(400)
+        self.setWindowFlags(
+            self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint
+        )
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Template dropdown
+        template_layout = QtWidgets.QHBoxLayout()
+        template_label = QtWidgets.QLabel("Template:")
+        self._template_combo = QtWidgets.QComboBox()
+
+        # Populate from registry
+        from mgear.shifter.custom_step_templates import get_template_names
+
+        for key, name in get_template_names():
+            self._template_combo.addItem(name, key)
+
+        template_layout.addWidget(template_label)
+        template_layout.addWidget(self._template_combo, 1)
+        layout.addLayout(template_layout)
+
+        # Description label
+        self._description_label = QtWidgets.QLabel()
+        self._description_label.setWordWrap(True)
+        self._description_label.setStyleSheet(
+            "QLabel { color: gray; padding: 10px; }"
+        )
+        layout.addWidget(self._description_label)
+
+        # Update description when selection changes
+        self._template_combo.currentIndexChanged.connect(
+            self._update_description
+        )
+        self._update_description()  # Initial update
+
+        layout.addStretch()
+
+        # Dialog buttons
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def _update_description(self):
+        """Update the description label based on current selection."""
+        from mgear.shifter.custom_step_templates import TEMPLATES
+
+        key = self._template_combo.currentData()
+        if key in TEMPLATES:
+            self._description_label.setText(TEMPLATES[key]["description"])
+
+    def get_selected_template(self):
+        """Get the selected template key.
+
+        Returns:
+            str: Template key (e.g., "blank", "import_skin_pack")
+        """
+        return self._template_combo.currentData()
+
+
+# ============================================================================
 # Group Selection Dialog
 # ============================================================================
 
@@ -4410,6 +4497,15 @@ class CustomStepMixin(object):
             stepAttr = "postCustomStep"
             stepWidget = self.customStepTab.postCustomStep_listWidget
 
+        # Show template selection dialog first
+        template_dialog = TemplateSelectionDialog(
+            parent=pyqt.maya_main_window()
+        )
+        if template_dialog.exec_() != QtWidgets.QDialog.Accepted:
+            return
+        selected_template = template_dialog.get_selected_template()
+
+        # Then show file save dialog
         if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
             startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
         else:
@@ -4429,40 +4525,10 @@ class CustomStepMixin(object):
         n, e = os.path.splitext(filePath)
         stepName = os.path.split(n)[-1]
 
-        rawString = r'''import mgear.shifter.custom_step as cstp
+        # Get template content from registry
+        from mgear.shifter.custom_step_templates import get_template_content
 
-
-class CustomShifterStep(cstp.customShifterMainStep):
-    """Custom Step description
-    """
-
-    def setup(self):
-        """
-        Setting the name property makes the custom step accessible
-        in later steps.
-
-        i.e: Running  self.custom_step("{stepName}")  from steps ran after
-             this one, will grant this step.
-        """
-        self.name = "{stepName}"
-
-    def run(self):
-        """Run method.
-
-            i.e:  self.mgear_run.global_ctl
-                gets the global_ctl from shifter rig build base
-
-            i.e:  self.component("control_C0").ctl
-                gets the ctl from shifter component called control_C0
-
-            i.e:  self.custom_step("otherCustomStepName").ctlMesh
-                gets the ctlMesh from a previous custom step called
-                "otherCustomStepName"
-
-        Returns:
-            None: None
-        """
-        return'''.format(stepName=stepName)
+        rawString = get_template_content(selected_template, stepName)
 
         f = open(filePath, "w")
         f.write(rawString + "\n")

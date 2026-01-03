@@ -649,6 +649,90 @@ All steps share a common dictionary (``customStepDic``) that enables inter-step 
 - Steps can access data set by previous steps
 - Use this for passing complex data between steps
 
+.. _custom-step-templates:
+
+Custom Step Templates
+++++++++++++++++++++++++++
+
+When creating a new custom step, mGear provides a template selection dialog that offers pre-built templates for common tasks. This accelerates development by providing ready-to-use code patterns.
+
+**Accessing Templates:**
+
+1. Click the **New** button in the Custom Steps panel
+2. A template selection dialog appears with a dropdown menu
+3. Select a template and click **OK**
+4. Choose a save location for your new custom step file
+5. The file is created with the selected template code
+
+**Available Templates:**
+
+- **Blank**: Empty custom step with ``setup()`` and ``run()`` methods. Use this as a starting point for completely custom logic.
+
+- **Import Skin Pack**: Imports skin weights from a ``.gSkinPack`` file. Useful for re-applying skin weights after rig rebuilds.
+
+- **Import Guide Visualizer Configuration**: Imports guide visualizer settings (display curves, colors, labels) from a JSON file.
+
+- **Import RBF Configuration**: Imports RBF Manager setups from a JSON file exported by the RBF Manager tool.
+
+- **Import SDK Configuration**: Imports Set Driven Keys from a JSON file exported by the SDK Manager tool.
+
+- **Import Eye Rigger Configuration**: Builds eye rigs from Eye Rigger 2.1 JSON configuration files. Supports separate left and right eye configurations.
+
+- **Import Channel Master Configuration**: Imports Channel Master node configuration from a ``.cmc`` file.
+
+- **Import Anim Picker Template**: Imports Anim Picker data from a ``.pkr`` file with an option to reparent the picker node under the rig root.
+
+**Template Configuration Options:**
+
+Each template provides three ways to configure file paths:
+
+1. **Hardcoded Path**: Set the path directly in the script for automated builds
+
+   .. code-block:: python
+
+       self.config_path = "path/to/your/config.json"
+
+2. **Relative Path**: Use a path relative to the script location
+
+   .. code-block:: python
+
+       import os
+       script_dir = os.path.dirname(__file__)
+       self.config_path = os.path.join(script_dir, "config.json")
+
+3. **File Dialog**: Leave as ``None`` to show a file dialog at runtime (default)
+
+   .. code-block:: python
+
+       self.config_path = None
+
+**Adding Custom Templates:**
+
+Templates are stored in ``mgear/shifter/custom_step_templates/``. To add a new template:
+
+1. Create a new Python file in the ``custom_step_templates`` folder
+2. Define a ``TEMPLATE`` variable containing the template code as a raw string
+3. Use ``{stepName}`` as a placeholder for the step name (replaced during creation)
+4. Escape any curly braces in the template with double braces ``{{}}``
+5. Register the template in ``__init__.py`` by adding an entry to the ``TEMPLATES`` dictionary
+
+Example template file:
+
+.. code-block:: python
+
+    """My Custom Template description."""
+
+    TEMPLATE = r'''import mgear.shifter.custom_step as cstp
+
+    class CustomShifterStep(cstp.customShifterMainStep):
+
+        def setup(self):
+            self.name = "{stepName}"
+
+        def run(self):
+            self.log("Running my custom step...")
+            return'''
+
 .. _blueprint-guide:
 
 Blueprint Guide

@@ -198,7 +198,7 @@ webbrowser.open("http://forum.mgear-framework.com/")
 
 str_docs = """
 import webbrowser
-webbrowser.open("https://mgear4.readthedocs.io/en/latest/")
+webbrowser.open("https://mgear4.readthedocs.io/en/master/")
 """
 
 str_about = """

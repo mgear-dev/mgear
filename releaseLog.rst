@@ -7,6 +7,7 @@ Release Log
 **New Features**
 	* Shifter: Blueprint Guide: New feature for defining standardized rig settings shared across multiple characters with per-section and per-component local override support. Includes Guide Explorer color coding for blueprint status visualization.
 	* Shifter: Custom Steps UI 2.0: Complete overhaul with drag and drop support, collapsible sections, custom step groups, config IO to JSON, multi-selection support, and improved visual styling #113
+	* Shifter: Custom Step Templates: Template selection dialog when creating new custom steps with pre-built templates for common tasks (Import Skin Pack, Import Guide Visualizer Config, Import RBF Config, Import SDK Config, Import Eye Rigger Config, Import Channel Master Config, Import Anim Picker)
 	* Shifter: Guide Explorer: New interface for exploring guides #592
 	* Shifter: Guide Tools: Initial implementation #588
 	* Utilbits: xPlorer: New tool with multi-selection, visibility toggle, attribute editor, search functionality, and arrow navigation #602
