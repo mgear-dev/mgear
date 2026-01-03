@@ -3254,6 +3254,54 @@ class Ui_Form(object):
         )
         self.refreshReferences_action.setIcon(pyqt.get_icon("mgear_refresh-cw"))
 
+        # Blueprint menu (actions check if blueprint is enabled before executing)
+        self.blueprintMenu = self.menuBar.addMenu("Blueprint")
+
+        # Show blueprint custom steps (view-only)
+        # Create QAction with explicit parent to prevent garbage collection
+        self.showBlueprintPre_action = QtWidgets.QAction(
+            "Show Blueprint Pre Custom Steps", self.blueprintMenu
+        )
+        self.showBlueprintPre_action.setCheckable(True)
+        self.showBlueprintPre_action.setChecked(False)
+        self.showBlueprintPre_action.setToolTip(
+            "When checked, displays the blueprint's pre custom steps (read-only).\n"
+            "Uncheck to return to local custom steps view."
+        )
+        self.blueprintMenu.addAction(self.showBlueprintPre_action)
+
+        self.showBlueprintPost_action = QtWidgets.QAction(
+            "Show Blueprint Post Custom Steps", self.blueprintMenu
+        )
+        self.showBlueprintPost_action.setCheckable(True)
+        self.showBlueprintPost_action.setChecked(False)
+        self.showBlueprintPost_action.setToolTip(
+            "When checked, displays the blueprint's post custom steps (read-only).\n"
+            "Uncheck to return to local custom steps view."
+        )
+        self.blueprintMenu.addAction(self.showBlueprintPost_action)
+
+        self.blueprintMenu.addSeparator()
+
+        # Make local actions (copy from blueprint to local)
+        self.makePreLocal_action = QtWidgets.QAction(
+            "Make Pre Custom Steps Local", self.blueprintMenu
+        )
+        self.makePreLocal_action.setToolTip(
+            "Copy the blueprint's pre custom steps configuration to local,\n"
+            "overriding the current local configuration."
+        )
+        self.blueprintMenu.addAction(self.makePreLocal_action)
+
+        self.makePostLocal_action = QtWidgets.QAction(
+            "Make Post Custom Steps Local", self.blueprintMenu
+        )
+        self.makePostLocal_action.setToolTip(
+            "Copy the blueprint's post custom steps configuration to local,\n"
+            "overriding the current local configuration."
+        )
+        self.blueprintMenu.addAction(self.makePostLocal_action)
+
         self.mainLayout.setMenuBar(self.menuBar)
 
         # =============================================
@@ -3265,10 +3313,13 @@ class Ui_Form(object):
         self.override_preCustomSteps_checkBox.setText("Local Override: Pre Custom Steps")
         self.override_preCustomSteps_checkBox.setChecked(False)  # Default to inherit from blueprint
         self.override_preCustomSteps_checkBox.setToolTip(
-            "When checked, local settings are used.\n"
-            "When unchecked, settings are inherited from blueprint."
+            '<p style="background-color: black; color: rgb(100, 180, 255);">'
+            "When checked, local settings are used.<br/>"
+            "When unchecked, settings are inherited from blueprint.</p>"
         )
-        self.override_preCustomSteps_checkBox.setStyleSheet("color: rgb(100, 180, 255);")
+        self.override_preCustomSteps_checkBox.setStyleSheet(
+            "color: rgb(100, 180, 255);"
+        )
         self.mainLayout.addWidget(self.override_preCustomSteps_checkBox)
 
         self.preCollapsible = CollapsibleWidget("Pre Custom Step", expanded=True)
@@ -3293,10 +3344,13 @@ class Ui_Form(object):
         self.override_postCustomSteps_checkBox.setText("Local Override: Post Custom Steps")
         self.override_postCustomSteps_checkBox.setChecked(False)  # Default to inherit from blueprint
         self.override_postCustomSteps_checkBox.setToolTip(
-            "When checked, local settings are used.\n"
-            "When unchecked, settings are inherited from blueprint."
+            '<p style="background-color: black; color: rgb(100, 180, 255);">'
+            "When checked, local settings are used.<br/>"
+            "When unchecked, settings are inherited from blueprint.</p>"
         )
-        self.override_postCustomSteps_checkBox.setStyleSheet("color: rgb(100, 180, 255);")
+        self.override_postCustomSteps_checkBox.setStyleSheet(
+            "color: rgb(100, 180, 255);"
+        )
         self.mainLayout.addWidget(self.override_postCustomSteps_checkBox)
 
         self.postCollapsible = CollapsibleWidget(
@@ -3317,7 +3371,9 @@ class Ui_Form(object):
         # =============================================
         # Step Info collapsible section
         # =============================================
-        self.infoCollapsible = CollapsibleWidget("Step Info", expanded=True)
+        self.infoCollapsible = CollapsibleWidget(
+            "Step Info", expanded=True, expandable=False
+        )
         self.mainLayout.addWidget(self.infoCollapsible, 0)  # no stretch
 
         infoWidget = QtWidgets.QWidget()

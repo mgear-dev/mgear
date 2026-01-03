@@ -258,9 +258,11 @@ class Rig(object):
 
         # Build
         mgear.log("\n" + "= BUILDING RIG " + "=" * 46)
-        self.from_dict_custom_step(conf_dict, pre=True)
+        # Get merged options early so custom steps use blueprint values
+        merged_options = self.guide.getMergedOptions()
+        self.from_dict_custom_step(merged_options, pre=True)
         self.build()
-        self.from_dict_custom_step(conf_dict, pre=False)
+        self.from_dict_custom_step(merged_options, pre=False)
         # Collect post-build data
         if self.options["data_collector_embedded"] or self.options["data_collector"]:
             build_data = self.collect_build_data()
@@ -513,17 +515,35 @@ class Rig(object):
             )
             return embedded_items
 
-    def from_dict_custom_step(self, conf_dict, pre=True):
+    def from_dict_custom_step(self, options, pre=True):
+        """Execute custom steps from options dictionary.
+
+        Args:
+            options (dict): Options dictionary (can be merged options with
+                blueprint values or raw param_values from conf_dict)
+            pre (bool): If True, execute pre-build custom steps.
+                If False, execute post-build custom steps.
+        """
         if pre:
             pre_post = "doPreCustomStep"
             pre_post_path = "preCustomStep"
         else:
             pre_post = "doPostCustomStep"
             pre_post_path = "postCustomStep"
-        p_val = conf_dict["guide_root"]["param_values"]
-        if p_val[pre_post]:
-            customSteps = p_val[pre_post_path]
-            self.customStep(self._parseCustomSteps(customSteps))
+
+        # Options can be passed directly (merged options) or need extraction
+        # from conf_dict structure for backward compatibility
+        if "guide_root" in options:
+            # Old format: conf_dict["guide_root"]["param_values"]
+            p_val = options["guide_root"]["param_values"]
+        else:
+            # New format: direct options dict (merged options)
+            p_val = options
+
+        if p_val.get(pre_post, False):
+            customSteps = p_val.get(pre_post_path, "")
+            if customSteps:
+                self.customStep(self._parseCustomSteps(customSteps))
 
     def customStep(self, customSteps=None):
         """Execute custom steps.
