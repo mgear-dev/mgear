@@ -83,6 +83,39 @@ def resolve_blueprint_path(path):
     return None
 
 
+def make_blueprint_path_relative(path):
+    """Convert an absolute blueprint path to relative if within custom step path.
+
+    Args:
+        path (str): Absolute or relative path to the blueprint guide file
+
+    Returns:
+        str: Relative path if within MGEAR_SHIFTER_CUSTOMSTEP_PATH, original otherwise
+    """
+    if not path:
+        return path
+
+    # Normalize path separators
+    path = os.path.normpath(path)
+
+    # If already relative, return as-is
+    if not os.path.isabs(path):
+        return path
+
+    # Try to make it relative to MGEAR_SHIFTER_CUSTOMSTEP_PATH
+    custom_step_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY)
+    if custom_step_path:
+        for base_path in custom_step_path.split(os.pathsep):
+            base_path = os.path.normpath(base_path)
+            # Use normcase for case-insensitive comparison on Windows
+            if os.path.normcase(path).startswith(
+                os.path.normcase(base_path + os.sep)
+            ):
+                return os.path.relpath(path, base_path)
+
+    return path
+
+
 def load_blueprint_guide(path):
     """Load blueprint guide settings from a serialized guide file.
 
@@ -642,11 +675,12 @@ class Rig(Main):
             )
             return merged
 
-        # Get blueprint guide settings (stored under "guide_root" key)
-        blueprint_values = blueprint_conf.get("guide_root", {})
+        # Get blueprint guide settings (stored under "guide_root" -> "param_values")
+        guide_root = blueprint_conf.get("guide_root", {})
+        blueprint_values = guide_root.get("param_values", {})
         if not blueprint_values:
             mgear.log(
-                "No guide_root settings found in blueprint",
+                "No param_values found in blueprint guide_root",
                 mgear.sev_warning
             )
             return merged
@@ -1626,6 +1660,10 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         # component root before open the settings dialog
         self.root = pm.selected()[0]
 
+        # Initialize blueprint custom steps state flags
+        self._showing_blueprint_pre = False
+        self._showing_blueprint_post = False
+
         self.guideSettingsTab = guideSettingsTab()
         self.customStepTab = customStepTab()
         self.namingRulesTab = NamingRulesTab()
@@ -1787,9 +1825,13 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         """Populate the blueprint tab controls."""
         tap = self.blueprintTab
         self.populateCheck(tap.useBlueprint_checkBox, "use_blueprint")
-        tap.blueprint_lineEdit.setText(
-            self.root.attr("blueprint_path").get()
-        )
+        # Convert to relative path for display if possible
+        blueprint_path = self.root.attr("blueprint_path").get()
+        relative_path = make_blueprint_path_relative(blueprint_path)
+        tap.blueprint_lineEdit.setText(relative_path)
+        # Also update the attribute if path was converted
+        if relative_path != blueprint_path:
+            self.root.attr("blueprint_path").set(relative_path)
         self.update_blueprint_status()
 
     def populate_override_controls(self):
@@ -1875,23 +1917,26 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         use_blueprint = self.root.attr("use_blueprint").get()
         tap = self.guideSettingsTab
 
-        # Guide Settings tab checkable GroupBoxes with their base titles
-        groupbox_titles = [
-            (tap.groupBox, "Rig Settings"),
-            (tap.groupBox_6, "Animation Channels Settings"),
-            (tap.groupBox_7, "Base Rig Control"),
-            (tap.groupBox_2, "Skinning Settings"),
-            (tap.groupBox_3, "Joint Settings"),
-            (tap.groupBox_8, "Post Build Data Collector"),
-            (tap.groupBox_5, "Color Settings"),
+        # Guide Settings tab checkable GroupBoxes with their base titles and attribute names
+        groupbox_data = [
+            (tap.groupBox, "Rig Settings", "override_rig_settings"),
+            (tap.groupBox_6, "Animation Channels Settings", "override_anim_channels"),
+            (tap.groupBox_7, "Base Rig Control", "override_base_rig_control"),
+            (tap.groupBox_2, "Skinning Settings", "override_skinning"),
+            (tap.groupBox_3, "Joint Settings", "override_joint_settings"),
+            (tap.groupBox_8, "Post Build Data Collector", "override_data_collector"),
+            (tap.groupBox_5, "Color Settings", "override_color_settings"),
         ]
 
-        # Stylesheet for blue title when blueprint is active
-        blue_title_style = "QGroupBox::title { color: rgb(100, 180, 255); }"
+        # Stylesheet for blue title and tooltip when blueprint is active
+        blue_title_style = (
+            "QGroupBox::title { color: rgb(100, 180, 255); }"
+            "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
+        )
 
         # If blueprint is not enabled, disable checkable mode and reset styling
         if not use_blueprint:
-            for groupBox, baseTitle in groupbox_titles:
+            for groupBox, baseTitle, attrName in groupbox_data:
                 # Disable checkable mode (hides the checkbox in the title)
                 groupBox.setCheckable(False)
                 # Reset to original title
@@ -1911,14 +1956,28 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             self.customStepTab.override_postCustomSteps_checkBox.setVisible(False)
             self.customStepTab.preCollapsible.setStyleSheet("")
             self.customStepTab.postCollapsible.setStyleSheet("")
+            # Reset collapsible titles to original (remove [Blueprint] prefix)
+            self.customStepTab.preCollapsible.header_wgt.set_text("Pre Custom Step")
+            self.customStepTab.postCollapsible.header_wgt.set_text("Post Custom Step")
             for child in self.customStepTab.preCollapsible.findChildren(QtWidgets.QWidget):
                 child.setEnabled(True)
             for child in self.customStepTab.postCollapsible.findChildren(QtWidgets.QWidget):
                 child.setEnabled(True)
+
+            # Reset show blueprint state flags and restore local view
+            self._showing_blueprint_pre = False
+            self._showing_blueprint_post = False
+            # Restore local custom steps view if blueprint view was active
+            self._restore_local_custom_steps_view()
         else:
             # Enable checkable mode with "Local Override:" prefix and blue styling
-            for groupBox, baseTitle in groupbox_titles:
+            for groupBox, baseTitle, attrName in groupbox_data:
+                # Block signals to prevent toggled signal from overwriting Maya attribute
+                groupBox.blockSignals(True)
                 groupBox.setCheckable(True)
+                # Set checked state from Maya attribute (default is False = inherit from blueprint)
+                groupBox.setChecked(self.root.attr(attrName).get())
+                groupBox.blockSignals(False)
                 groupBox.setTitle("Local Override: " + baseTitle)
                 groupBox.setStyleSheet(blue_title_style)
                 self.update_section_enabled_state(groupBox, groupBox)
@@ -1942,6 +2001,8 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
                 self.customStepTab.override_postCustomSteps_checkBox
             )
 
+            # Blueprint menu is always visible - handlers check use_blueprint state
+
     def update_section_enabled_state(self, groupBox, overrideCheckBox):
         """Enable/disable a section based on its override checkbox.
 
@@ -1954,14 +2015,17 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
                               (for checkable GroupBoxes, this is the same as groupBox)
         """
         is_overridden = overrideCheckBox.isChecked()
+        # Base style for blue title and tooltip
+        base_style = (
+            "QGroupBox::title { color: rgb(100, 180, 255); }"
+            "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
+        )
         # Apply visual style - keep blue title, add grey background when not overridden
         if is_overridden:
-            groupBox.setStyleSheet(
-                "QGroupBox::title { color: rgb(100, 180, 255); }"
-            )
+            groupBox.setStyleSheet(base_style)
         else:
             groupBox.setStyleSheet(
-                "QGroupBox::title { color: rgb(100, 180, 255); }"
+                base_style +
                 "QGroupBox { background-color: rgba(100, 100, 100, 30); }"
             )
 
@@ -1977,11 +2041,16 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         for child in tab.findChildren(QtWidgets.QWidget):
             if child != overrideCheckBox:
                 child.setEnabled(is_overridden)
+        # Tooltip style for consistency
+        tooltip_style = "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
         # Apply visual style
         if is_overridden:
-            tab.setStyleSheet("")
+            tab.setStyleSheet(tooltip_style)
         else:
-            tab.setStyleSheet("background-color: rgba(100, 100, 100, 30);")
+            tab.setStyleSheet(
+                tooltip_style +
+                "background-color: rgba(100, 100, 100, 30);"
+            )
 
     def update_custom_step_section_state(self, collapsible, overrideCheckBox):
         """Enable/disable a custom step section based on its override checkbox.
@@ -1994,11 +2063,343 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         # Enable children widgets
         for child in collapsible.findChildren(QtWidgets.QWidget):
             child.setEnabled(is_overridden)
+        # Tooltip style for consistency
+        tooltip_style = "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
         # Apply visual style
         if is_overridden:
-            collapsible.setStyleSheet("")
+            collapsible.setStyleSheet(tooltip_style)
         else:
-            collapsible.setStyleSheet("background-color: rgba(100, 100, 100, 30);")
+            collapsible.setStyleSheet(
+                tooltip_style +
+                "background-color: rgba(100, 100, 100, 30);"
+            )
+
+    # =========================================================================
+    # Blueprint Custom Steps Methods
+    # =========================================================================
+
+    def _restore_local_custom_steps_view(self):
+        """Restore the local custom steps view (called when blueprint is disabled)."""
+        # This method ensures local custom steps are displayed
+        # by triggering a refresh of the custom step lists
+        if hasattr(self, '_showing_blueprint_pre') and self._showing_blueprint_pre:
+            self._showing_blueprint_pre = False
+            self._refresh_pre_custom_steps_list()
+        if hasattr(self, '_showing_blueprint_post') and self._showing_blueprint_post:
+            self._showing_blueprint_post = False
+            self._refresh_post_custom_steps_list()
+
+    def _get_blueprint_custom_steps(self):
+        """Load custom steps from the blueprint guide file.
+
+        Returns:
+            tuple: (pre_custom_steps, post_custom_steps, do_pre, do_post)
+                   or (None, None, False, False) if blueprint not available
+        """
+        blueprint_path = self.root.attr("blueprint_path").get()
+        if not blueprint_path:
+            return None, None, False, False
+
+        blueprint_conf = load_blueprint_guide(blueprint_path)
+        if not blueprint_conf:
+            return None, None, False, False
+
+        guide_root = blueprint_conf.get("guide_root", {})
+        param_values = guide_root.get("param_values", {})
+
+        pre_steps = param_values.get("preCustomStep", "")
+        post_steps = param_values.get("postCustomStep", "")
+        do_pre = param_values.get("doPreCustomStep", False)
+        do_post = param_values.get("doPostCustomStep", False)
+
+        return pre_steps, post_steps, do_pre, do_post
+
+    def on_show_blueprint_pre_custom_steps(self, checked):
+        """Handle Show Blueprint Pre Custom Steps action toggle.
+
+        Args:
+            checked: Whether the action is checked (True = show blueprint)
+        """
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            try:
+                self.customStepTab.showBlueprintPre_action.setChecked(False)
+            except RuntimeError:
+                pass
+            return
+
+        self._showing_blueprint_pre = checked
+
+        if checked:
+            # When showing blueprint, uncheck local override (we're viewing blueprint, not local)
+            checkbox = self.customStepTab.override_preCustomSteps_checkBox
+            if checkbox.isChecked():
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
+                self.root.attr("override_pre_custom_steps").set(False)
+                self.update_custom_step_section_state(
+                    self.customStepTab.preCollapsible,
+                    checkbox
+                )
+
+            # Load and display blueprint pre custom steps (read-only)
+            pre_steps, _, do_pre, _ = self._get_blueprint_custom_steps()
+            if pre_steps is not None:
+                self._display_blueprint_custom_steps(
+                    self.customStepTab.preCustomStep_listWidget,
+                    self.customStepTab.preCustomStep_checkBox,
+                    pre_steps,
+                    do_pre,
+                    is_pre=True
+                )
+            else:
+                mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+                try:
+                    self.customStepTab.showBlueprintPre_action.setChecked(False)
+                except RuntimeError:
+                    pass
+                self._showing_blueprint_pre = False
+        else:
+            # Restore local pre custom steps
+            self._refresh_pre_custom_steps_list()
+
+    def on_show_blueprint_post_custom_steps(self, checked):
+        """Handle Show Blueprint Post Custom Steps action toggle.
+
+        Args:
+            checked: Whether the action is checked (True = show blueprint)
+        """
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            try:
+                self.customStepTab.showBlueprintPost_action.setChecked(False)
+            except RuntimeError:
+                pass
+            return
+
+        self._showing_blueprint_post = checked
+
+        if checked:
+            # When showing blueprint, uncheck local override (we're viewing blueprint, not local)
+            checkbox = self.customStepTab.override_postCustomSteps_checkBox
+            if checkbox.isChecked():
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
+                self.root.attr("override_post_custom_steps").set(False)
+                self.update_custom_step_section_state(
+                    self.customStepTab.postCollapsible,
+                    checkbox
+                )
+
+            # Load and display blueprint post custom steps (read-only)
+            _, post_steps, _, do_post = self._get_blueprint_custom_steps()
+            if post_steps is not None:
+                self._display_blueprint_custom_steps(
+                    self.customStepTab.postCustomStep_listWidget,
+                    self.customStepTab.postCustomStep_checkBox,
+                    post_steps,
+                    do_post,
+                    is_pre=False
+                )
+            else:
+                mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+                try:
+                    self.customStepTab.showBlueprintPost_action.setChecked(False)
+                except RuntimeError:
+                    pass
+                self._showing_blueprint_post = False
+        else:
+            # Restore local post custom steps
+            self._refresh_post_custom_steps_list()
+
+    def _display_blueprint_custom_steps(self, listWidget, enableCheckbox,
+                                         steps_string, is_enabled, is_pre):
+        """Display blueprint custom steps in read-only mode.
+
+        Args:
+            listWidget: The CustomStepListWidget to populate
+            enableCheckbox: The enable checkbox for this section
+            steps_string: The custom steps string from blueprint
+            is_enabled: Whether the custom steps are enabled in blueprint
+            is_pre: True for pre custom steps, False for post
+        """
+        # Clear existing items
+        listWidget.clear()
+
+        # Set the enable checkbox state (but don't save to Maya attribute)
+        enableCheckbox.blockSignals(True)
+        enableCheckbox.setChecked(is_enabled)
+        enableCheckbox.blockSignals(False)
+
+        # Parse and display the steps using the list widget's loadFromJson
+        listWidget.loadFromJson(steps_string)
+
+        # Make list read-only by disabling edit actions
+        listWidget.setEnabled(False)
+        enableCheckbox.setEnabled(False)
+
+        # Update the collapsible title to indicate blueprint view
+        collapsible = (self.customStepTab.preCollapsible if is_pre
+                      else self.customStepTab.postCollapsible)
+        base_title = "Pre Custom Step" if is_pre else "Post Custom Step"
+        collapsible.header_wgt.set_text("[Blueprint] " + base_title)
+        collapsible.setStyleSheet(
+            "background-color: rgba(100, 180, 255, 30);"
+        )
+
+    def _refresh_pre_custom_steps_list(self):
+        """Refresh the pre custom steps list with local values."""
+        listWidget = self.customStepTab.preCustomStep_listWidget
+        enableCheckbox = self.customStepTab.preCustomStep_checkBox
+
+        # Re-enable widgets
+        listWidget.setEnabled(True)
+        enableCheckbox.setEnabled(True)
+
+        # Restore title
+        self.customStepTab.preCollapsible.header_wgt.set_text("Pre Custom Step")
+
+        # Reload from Maya attribute
+        steps_string = self.root.attr("preCustomStep").get()
+        listWidget.loadFromJson(steps_string)
+
+        # Restore enable state
+        enableCheckbox.blockSignals(True)
+        enableCheckbox.setChecked(self.root.attr("doPreCustomStep").get())
+        enableCheckbox.blockSignals(False)
+
+        # Update styling based on override state
+        use_blueprint = self.root.attr("use_blueprint").get()
+        if use_blueprint:
+            self.update_custom_step_section_state(
+                self.customStepTab.preCollapsible,
+                self.customStepTab.override_preCustomSteps_checkBox
+            )
+        else:
+            self.customStepTab.preCollapsible.setStyleSheet("")
+
+    def _refresh_post_custom_steps_list(self):
+        """Refresh the post custom steps list with local values."""
+        listWidget = self.customStepTab.postCustomStep_listWidget
+        enableCheckbox = self.customStepTab.postCustomStep_checkBox
+
+        # Re-enable widgets
+        listWidget.setEnabled(True)
+        enableCheckbox.setEnabled(True)
+
+        # Restore title
+        self.customStepTab.postCollapsible.header_wgt.set_text("Post Custom Step")
+
+        # Reload from Maya attribute
+        steps_string = self.root.attr("postCustomStep").get()
+        listWidget.loadFromJson(steps_string)
+
+        # Restore enable state
+        enableCheckbox.blockSignals(True)
+        enableCheckbox.setChecked(self.root.attr("doPostCustomStep").get())
+        enableCheckbox.blockSignals(False)
+
+        # Update styling based on override state
+        use_blueprint = self.root.attr("use_blueprint").get()
+        if use_blueprint:
+            self.update_custom_step_section_state(
+                self.customStepTab.postCollapsible,
+                self.customStepTab.override_postCustomSteps_checkBox
+            )
+        else:
+            self.customStepTab.postCollapsible.setStyleSheet("")
+
+    def on_make_pre_custom_steps_local(self):
+        """Copy blueprint pre custom steps to local configuration."""
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            return
+
+        pre_steps, _, do_pre, _ = self._get_blueprint_custom_steps()
+        if pre_steps is None:
+            mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+            return
+
+        # Confirm with user
+        result = QtWidgets.QMessageBox.question(
+            self,
+            "Make Pre Custom Steps Local",
+            "This will replace your local pre custom steps configuration "
+            "with the blueprint's configuration.\n\n"
+            "Do you want to continue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if result != QtWidgets.QMessageBox.Yes:
+            return
+
+        # Copy to local Maya attributes
+        self.root.attr("preCustomStep").set(pre_steps)
+        self.root.attr("doPreCustomStep").set(do_pre)
+
+        # Check the override checkbox (now using local values)
+        self.customStepTab.override_preCustomSteps_checkBox.setChecked(True)
+
+        # Turn off blueprint view if active
+        try:
+            if self.customStepTab.showBlueprintPre_action.isChecked():
+                self.customStepTab.showBlueprintPre_action.setChecked(False)
+        except RuntimeError:
+            pass
+        self._showing_blueprint_pre = False
+
+        # Refresh the display
+        self._refresh_pre_custom_steps_list()
+
+        mgear.log("Pre custom steps copied from blueprint to local")
+
+    def on_make_post_custom_steps_local(self):
+        """Copy blueprint post custom steps to local configuration."""
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            return
+
+        _, post_steps, _, do_post = self._get_blueprint_custom_steps()
+        if post_steps is None:
+            mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+            return
+
+        # Confirm with user
+        result = QtWidgets.QMessageBox.question(
+            self,
+            "Make Post Custom Steps Local",
+            "This will replace your local post custom steps configuration "
+            "with the blueprint's configuration.\n\n"
+            "Do you want to continue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if result != QtWidgets.QMessageBox.Yes:
+            return
+
+        # Copy to local Maya attributes
+        self.root.attr("postCustomStep").set(post_steps)
+        self.root.attr("doPostCustomStep").set(do_post)
+
+        # Check the override checkbox (now using local values)
+        self.customStepTab.override_postCustomSteps_checkBox.setChecked(True)
+
+        # Turn off blueprint view if active
+        try:
+            if self.customStepTab.showBlueprintPost_action.isChecked():
+                self.customStepTab.showBlueprintPost_action.setChecked(False)
+        except RuntimeError:
+            pass
+        self._showing_blueprint_post = False
+
+        # Refresh the display
+        self._refresh_post_custom_steps_list()
+
+        mgear.log("Post custom steps copied from blueprint to local")
 
     def browse_blueprint_path(self):
         """Open file browser to select blueprint guide file."""
@@ -2016,14 +2417,8 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         )
 
         if file_path:
-            # Try to make it relative to MGEAR_SHIFTER_CUSTOMSTEP_PATH
-            custom_step_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY)
-            if custom_step_path:
-                for base_path in custom_step_path.split(os.pathsep):
-                    if file_path.startswith(base_path):
-                        rel_path = os.path.relpath(file_path, base_path)
-                        file_path = rel_path
-                        break
+            # Convert to relative path if within MGEAR_SHIFTER_CUSTOMSTEP_PATH
+            file_path = make_blueprint_path_relative(file_path)
 
             self.blueprintTab.blueprint_lineEdit.setText(file_path)
             self.root.attr("blueprint_path").set(file_path)
@@ -2500,6 +2895,27 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             )
         )
 
+        # Blueprint menu connections for Custom Steps
+        try:
+            self.customStepTab.showBlueprintPre_action.triggered.connect(
+                self.on_show_blueprint_pre_custom_steps
+            )
+            self.customStepTab.showBlueprintPost_action.triggered.connect(
+                self.on_show_blueprint_post_custom_steps
+            )
+            self.customStepTab.makePreLocal_action.triggered.connect(
+                self.on_make_pre_custom_steps_local
+            )
+            self.customStepTab.makePostLocal_action.triggered.connect(
+                self.on_make_post_custom_steps_local
+            )
+            # Sync menu state when menu is about to show
+            self.customStepTab.blueprintMenu.aboutToShow.connect(
+                self._sync_blueprint_menu_state
+            )
+        except RuntimeError:
+            mgear.log("Blueprint menu actions not available", mgear.sev_warning)
+
     def on_tab_override_changed(self, overrideCheckBox, tab, attrName, *args):
         """Handle tab override checkbox state change.
 
@@ -2521,6 +2937,61 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         """
         self.updateCheck(overrideCheckBox, attrName)
         self.update_custom_step_section_state(collapsible, overrideCheckBox)
+
+        # When local override is enabled, uncheck "Show Blueprint" and show local steps
+        is_checked = overrideCheckBox.isChecked()
+        if is_checked:
+            if attrName == "override_pre_custom_steps":
+                # Uncheck the show blueprint action
+                self._uncheck_show_blueprint_action("pre")
+                # Always update state and refresh
+                self._showing_blueprint_pre = False
+                self._refresh_pre_custom_steps_list()
+            elif attrName == "override_post_custom_steps":
+                # Uncheck the show blueprint action
+                self._uncheck_show_blueprint_action("post")
+                # Always update state and refresh
+                self._showing_blueprint_post = False
+                self._refresh_post_custom_steps_list()
+
+    def _uncheck_show_blueprint_action(self, which):
+        """Uncheck a Show Blueprint menu action by updating internal state.
+
+        The actual menu action state will be synced when the menu is shown
+        via _sync_blueprint_menu_state().
+
+        Args:
+            which: "pre" or "post" to indicate which action to uncheck
+        """
+        # Update internal state - menu will sync when shown
+        if which == "pre":
+            self._showing_blueprint_pre = False
+        else:
+            self._showing_blueprint_post = False
+
+    def _sync_blueprint_menu_state(self):
+        """Sync the Blueprint menu action states with internal tracking.
+
+        Called when the Blueprint menu is about to show, to ensure the
+        checkable actions reflect the current state.
+        """
+        try:
+            # Sync pre action state
+            pre_action = self.customStepTab.showBlueprintPre_action
+            if pre_action is not None:
+                pre_action.blockSignals(True)
+                pre_action.setChecked(self._showing_blueprint_pre)
+                pre_action.blockSignals(False)
+
+            # Sync post action state
+            post_action = self.customStepTab.showBlueprintPost_action
+            if post_action is not None:
+                post_action.blockSignals(True)
+                post_action.setChecked(self._showing_blueprint_post)
+                post_action.blockSignals(False)
+        except (RuntimeError, AttributeError):
+            # Actions may have been garbage collected
+            pass
 
     def eventFilter(self, sender, event):
         if self.custom_step_event_filter(sender, event):
