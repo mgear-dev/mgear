@@ -5,6 +5,7 @@ Release Log
 5.2.0
 ------
 **New Features**
+	* Shifter: Blueprint Guide: New feature for defining standardized rig settings shared across multiple characters with per-section and per-component local override support. Includes Guide Explorer color coding for blueprint status visualization.
 	* Shifter: Custom Steps UI 2.0: Complete overhaul with drag and drop support, collapsible sections, custom step groups, config IO to JSON, multi-selection support, and improved visual styling #113
 	* Shifter: Guide Explorer: New interface for exploring guides #592
 	* Shifter: Guide Tools: Initial implementation #588

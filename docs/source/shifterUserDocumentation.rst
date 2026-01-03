@@ -649,6 +649,142 @@ All steps share a common dictionary (``customStepDic``) that enables inter-step 
 - Steps can access data set by previous steps
 - Use this for passing complex data between steps
 
+.. _blueprint-guide:
+
+Blueprint Guide
+--------------
+
+The Blueprint Guide feature enables studios to define standardized rig settings that can be shared across multiple characters. This powerful data-centric workflow allows you to create a master template from which individual rigs inherit their settings, while still allowing per-section and per-component local overrides.
+
+.. image:: images/shifter/blueprint_guide/blueprint_main_settings_tab.png
+    :align: center
+
+Overview
+++++++++++++++++++
+
+A **Blueprint Guide** is a serialized guide template (``.sgt`` file) that serves as a base configuration for your rig settings. When enabled, your guide inherits settings from the blueprint, and you can selectively override specific sections or components as needed.
+
+**Key Benefits:**
+
+- **Standardization**: Define rig settings once and share them across multiple characters
+- **Efficiency**: Only customize what's different per character
+- **Propagation**: Changes to the blueprint automatically apply to all characters using it
+- **Flexibility**: Full control over which settings to inherit vs. override locally
+
+Enabling Blueprint Guide
++++++++++++++++++++++++++++
+
+1. Open the Guide Settings panel by selecting the guide root
+2. Navigate to the **Blueprint** tab
+3. Check **Enable Blueprint Guide**
+4. Click the browse button (**...**) to select a ``.sgt`` file
+5. The status will show the resolved path if the file is found
+
+**Path Resolution:**
+
+Blueprint paths can be specified as:
+
+- **Absolute paths**: Full system path to the ``.sgt`` file
+- **Relative paths**: Resolved against the ``MGEAR_SHIFTER_CUSTOMSTEP_PATH`` environment variable
+
+Guide Settings Local Override
+++++++++++++++++++++++++++++++
+
+When a blueprint is enabled, each section in the Guide Settings tab becomes controllable via a **Local Override** checkbox in the section title.
+
+.. image:: images/shifter/blueprint_guide/guide_main_settings_local_override.png
+    :align: center
+
+**Override Behavior:**
+
+- **Unchecked (Blue Title)**: Section inherits settings from the blueprint. Widgets are disabled and greyed out.
+- **Checked (Blue Title)**: Section uses local settings. Widgets are enabled and editable.
+
+**Sections with Local Override:**
+
+- Rig Settings
+- Animation Channels Settings
+- Base Rig Control
+- Skinning Settings
+- Joint Settings
+- Post Build Data Collector
+- Color Settings
+- Naming Rules (separate tab)
+- Pre Custom Steps (Custom Steps tab)
+- Post Custom Steps (Custom Steps tab)
+
+Custom Steps Blueprint Integration
++++++++++++++++++++++++++++++++++++
+
+The Custom Steps tab has special blueprint integration features accessible via the **Blueprint** menu.
+
+.. image:: images/shifter/blueprint_guide/blueprint_custom_steps.png
+    :align: center
+
+**Blueprint Menu Options:**
+
+- **Show Blueprint Pre Custom Steps**: Toggle visibility of blueprint's pre-custom steps (read-only view)
+- **Show Blueprint Post Custom Steps**: Toggle visibility of blueprint's post-custom steps (read-only view)
+- **Make Pre Custom Steps Local**: Copy blueprint pre-custom steps to local for editing
+- **Make Post Custom Steps Local**: Copy blueprint post-custom steps to local for editing
+
+When viewing blueprint custom steps, they appear with a **[Blueprint]** prefix and are read-only. Use the "Make Local" commands to copy them to your local guide for modification.
+
+Component Blueprint Settings
+++++++++++++++++++++++++++++++
+
+Individual components can also inherit settings from the blueprint. When a blueprint is active and contains a matching component (same name, side, and index), a blueprint header appears above the component settings tabs.
+
+.. image:: images/shifter/blueprint_guide/blueprint_component_settings.png
+    :align: center
+
+**Component Blueprint Header:**
+
+- **Blue Indicator**: Shows that the component exists in the blueprint
+- **Blueprint Local Override**: Checkbox to use local settings instead of blueprint
+- **View**: Opens a dialog showing the blueprint's settings for this component
+- **Copy**: Copies all blueprint settings to local and enables local override
+
+Guide Explorer Color Coding
+++++++++++++++++++++++++++++++
+
+When a blueprint is active, the Guide Explorer tree uses color coding to indicate each component's blueprint status.
+
+.. image:: images/shifter/blueprint_guide/guide_explorer_color_coding.png
+    :align: center
+
+**Color Legend:**
+
+- **Blue Text**: Component exists in blueprint and is using blueprint settings (no local override)
+- **Yellow/Orange Text**: Component exists in blueprint but has local override enabled
+- **Default Text**: Component does not exist in the blueprint
+
+This visual feedback makes it easy to see at a glance which components are inheriting from the blueprint and which have been customized locally.
+
+Blueprint Workflow Example
+++++++++++++++++++++++++++++++
+
+**Creating a Blueprint:**
+
+1. Build a master guide with your studio's standard settings
+2. Configure all guide settings, naming rules, custom steps, and component settings
+3. Export the guide as a template: **Shifter > Export Guide Template**
+4. Save as your blueprint ``.sgt`` file (e.g., ``studio_biped_blueprint.sgt``)
+
+**Using a Blueprint:**
+
+1. Create or open a character-specific guide
+2. Enable Blueprint Guide and select your blueprint file
+3. All sections default to inheriting from the blueprint
+4. Check **Local Override** only on sections that need character-specific settings
+5. Build your rig - it will use blueprint values for non-overridden sections
+
+**Updating a Blueprint:**
+
+1. Modify the blueprint ``.sgt`` file
+2. All guides using that blueprint will automatically use the new settings on their next build
+3. Local overrides are preserved - only non-overridden sections receive the updates
+
 .. _naming-rules:
 
 Naming Rules
