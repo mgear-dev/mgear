@@ -3259,6 +3259,18 @@ class Ui_Form(object):
         # =============================================
         # Pre Custom Step collapsible section
         # =============================================
+        # Override checkbox for Pre Custom Steps
+        self.override_preCustomSteps_checkBox = QtWidgets.QCheckBox(Form)
+        self.override_preCustomSteps_checkBox.setObjectName("override_preCustomSteps_checkBox")
+        self.override_preCustomSteps_checkBox.setText("Local Override: Pre Custom Steps")
+        self.override_preCustomSteps_checkBox.setChecked(False)  # Default to inherit from blueprint
+        self.override_preCustomSteps_checkBox.setToolTip(
+            "When checked, local settings are used.\n"
+            "When unchecked, settings are inherited from blueprint."
+        )
+        self.override_preCustomSteps_checkBox.setStyleSheet("color: rgb(100, 180, 255);")
+        self.mainLayout.addWidget(self.override_preCustomSteps_checkBox)
+
         self.preCollapsible = CollapsibleWidget("Pre Custom Step", expanded=True)
         self.mainLayout.addWidget(self.preCollapsible, 1)  # stretch factor 1
 
@@ -3275,6 +3287,18 @@ class Ui_Form(object):
         # =============================================
         # Post Custom Step collapsible section
         # =============================================
+        # Override checkbox for Post Custom Steps
+        self.override_postCustomSteps_checkBox = QtWidgets.QCheckBox(Form)
+        self.override_postCustomSteps_checkBox.setObjectName("override_postCustomSteps_checkBox")
+        self.override_postCustomSteps_checkBox.setText("Local Override: Post Custom Steps")
+        self.override_postCustomSteps_checkBox.setChecked(False)  # Default to inherit from blueprint
+        self.override_postCustomSteps_checkBox.setToolTip(
+            "When checked, local settings are used.\n"
+            "When unchecked, settings are inherited from blueprint."
+        )
+        self.override_postCustomSteps_checkBox.setStyleSheet("color: rgb(100, 180, 255);")
+        self.mainLayout.addWidget(self.override_postCustomSteps_checkBox)
+
         self.postCollapsible = CollapsibleWidget(
             "Post Custom Step", expanded=True
         )

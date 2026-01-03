@@ -20,6 +20,7 @@ from mgear.anim_picker.gui import MAYA_OVERRIDE_COLOR
 
 from . import guide_ui as guui
 from . import naming_rules_ui as naui
+from . import blueprint_tab_ui as btui
 from . import naming
 from . import custom_step_widget as csw
 
@@ -41,6 +42,74 @@ if sys.version_info[0] == 2:
     string_types = (basestring,)
 else:
     string_types = (str,)
+
+
+def resolve_blueprint_path(path):
+    """Resolve blueprint guide file path.
+
+    Supports:
+        - Absolute paths (returned as-is if file exists)
+        - Relative paths (resolved using MGEAR_SHIFTER_CUSTOMSTEP_PATH env var)
+
+    Args:
+        path (str): Path to the blueprint guide file (.sgt)
+
+    Returns:
+        str or None: Resolved absolute path if file exists, None otherwise
+    """
+    if not path:
+        return None
+
+    # If absolute path and file exists, return it
+    if os.path.isabs(path):
+        if os.path.isfile(path):
+            return path
+        return None
+
+    # Try to resolve relative path using MGEAR_SHIFTER_CUSTOMSTEP_PATH
+    custom_step_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY)
+    if custom_step_path:
+        # Split on path separator in case there are multiple paths
+        for base_path in custom_step_path.split(os.pathsep):
+            full_path = os.path.join(base_path, path)
+            if os.path.isfile(full_path):
+                return full_path
+
+    # Try current working directory as fallback
+    cwd_path = os.path.join(os.getcwd(), path)
+    if os.path.isfile(cwd_path):
+        return cwd_path
+
+    return None
+
+
+def load_blueprint_guide(path):
+    """Load blueprint guide settings from a serialized guide file.
+
+    Args:
+        path (str): Path to the blueprint guide file (.sgt)
+
+    Returns:
+        dict or None: Guide settings dictionary, or None if loading fails
+    """
+    resolved_path = resolve_blueprint_path(path)
+    if not resolved_path:
+        mgear.log(
+            "Blueprint guide file not found: {}".format(path),
+            mgear.sev_warning
+        )
+        return None
+
+    try:
+        with open(resolved_path, 'r') as f:
+            conf = json.load(f)
+        return conf
+    except (IOError, ValueError) as e:
+        mgear.log(
+            "Error loading blueprint guide: {}".format(str(e)),
+            mgear.sev_error
+        )
+        return None
 
 
 class Main(object):
@@ -488,6 +557,43 @@ class Rig(Main):
             "joint_index_padding", "long", 0, 0, 99
         )
 
+        # --------------------------------------------------
+        # Blueprint Guide Settings
+        self.pUseBlueprint = self.addParam("use_blueprint", "bool", False)
+        self.pBlueprintPath = self.addParam("blueprint_path", "string", "")
+
+        # Section override flags (when True, use local values instead of blueprint)
+        self.pOverrideRigSettings = self.addParam(
+            "override_rig_settings", "bool", False
+        )
+        self.pOverrideAnimChannels = self.addParam(
+            "override_anim_channels", "bool", False
+        )
+        self.pOverrideBaseRigControl = self.addParam(
+            "override_base_rig_control", "bool", False
+        )
+        self.pOverrideSkinning = self.addParam(
+            "override_skinning", "bool", False
+        )
+        self.pOverrideJointSettings = self.addParam(
+            "override_joint_settings", "bool", False
+        )
+        self.pOverrideDataCollector = self.addParam(
+            "override_data_collector", "bool", False
+        )
+        self.pOverrideColorSettings = self.addParam(
+            "override_color_settings", "bool", False
+        )
+        self.pOverrideNamingRules = self.addParam(
+            "override_naming_rules", "bool", False
+        )
+        self.pOverridePreCustomSteps = self.addParam(
+            "override_pre_custom_steps", "bool", False
+        )
+        self.pOverridePostCustomSteps = self.addParam(
+            "override_post_custom_steps", "bool", False
+        )
+
     def setFromSelection(self):
         """Set the guide hierarchy from selection."""
         selection = pm.ls(selection=True)
@@ -507,6 +613,98 @@ class Rig(Main):
             self.setFromHierarchy(node, node.hasAttr("ismodel"))
 
         return True
+
+    def getMergedOptions(self):
+        """Get merged options combining local values with blueprint settings.
+
+        When blueprint is enabled and a section is not overridden,
+        values from the blueprint guide will be used instead of local values.
+
+        Returns:
+            dict: Merged options dictionary
+        """
+        # Start with a copy of local values
+        merged = dict(self.values)
+
+        # Check if blueprint is enabled
+        use_blueprint = self.values.get("use_blueprint", False)
+        blueprint_path = self.values.get("blueprint_path", "")
+
+        if not use_blueprint or not blueprint_path:
+            return merged
+
+        # Load blueprint guide
+        blueprint_conf = load_blueprint_guide(blueprint_path)
+        if not blueprint_conf:
+            mgear.log(
+                "Could not load blueprint guide, using local settings",
+                mgear.sev_warning
+            )
+            return merged
+
+        # Get blueprint guide settings (stored under "guide_root" key)
+        blueprint_values = blueprint_conf.get("guide_root", {})
+        if not blueprint_values:
+            mgear.log(
+                "No guide_root settings found in blueprint",
+                mgear.sev_warning
+            )
+            return merged
+
+        # Define which settings belong to each section
+        section_settings = {
+            "override_rig_settings": [
+                "rig_name", "mode", "step"
+            ],
+            "override_anim_channels": [
+                "proxyChannels", "classicChannelNames", "attrPrefixName"
+            ],
+            "override_base_rig_control": [
+                "worldCtl", "world_ctl_name"
+            ],
+            "override_skinning": [
+                "importSkin", "skin"
+            ],
+            "override_joint_settings": [
+                "joint_rig", "joint_worldOri", "force_uniScale",
+                "connect_joints", "force_SSC"
+            ],
+            "override_data_collector": [
+                "data_collector", "data_collector_path",
+                "data_collector_embedded", "data_collector_embedded_custom_joint"
+            ],
+            "override_color_settings": [
+                "L_color_fk", "L_color_ik", "R_color_fk", "R_color_ik",
+                "C_color_fk", "C_color_ik", "Use_RGB_Color",
+                "L_RGB_fk", "L_RGB_ik", "R_RGB_fk", "R_RGB_ik",
+                "C_RGB_fk", "C_RGB_ik"
+            ],
+            "override_naming_rules": [
+                "ctl_name_rule", "joint_name_rule",
+                "side_left_name", "side_right_name", "side_center_name",
+                "side_joint_left_name", "side_joint_right_name",
+                "side_joint_center_name", "ctl_name_ext", "joint_name_ext",
+                "ctl_description_letter_case", "joint_description_letter_case",
+                "ctl_index_padding", "joint_index_padding"
+            ],
+            "override_pre_custom_steps": [
+                "doPreCustomStep", "preCustomStep"
+            ],
+            "override_post_custom_steps": [
+                "doPostCustomStep", "postCustomStep"
+            ]
+        }
+
+        # For each section, if NOT overridden, use blueprint values
+        for override_attr, settings in section_settings.items():
+            is_overridden = self.values.get(override_attr, False)
+            if not is_overridden:
+                # Use blueprint values for this section
+                for setting in settings:
+                    if setting in blueprint_values:
+                        merged[setting] = blueprint_values[setting]
+
+        return merged
 
     def setFromHierarchy(self, root, branch=True):
         """Set the guide from given hierarchy.
@@ -1388,6 +1586,12 @@ class NamingRulesTab(QtWidgets.QDialog, naui.Ui_Form):
         self.setupUi(self)
 
 
+class BlueprintTab(QtWidgets.QDialog, btui.Ui_BlueprintTab):
+    def __init__(self, parent=None):
+        super(BlueprintTab, self).__init__(parent)
+        self.setupUi(self)
+
+
 class GuideMainSettings(QtWidgets.QDialog, HelperSlots):
     """
     From Maya 2025 there is an issue with tripple ineritance on GuideSettings
@@ -1425,6 +1629,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         self.guideSettingsTab = guideSettingsTab()
         self.customStepTab = customStepTab()
         self.namingRulesTab = NamingRulesTab()
+        self.blueprintTab = BlueprintTab()
 
         self.setup_SettingWindow()
         self.create_controls()
@@ -1459,6 +1664,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         self.tabs.insertTab(0, self.guideSettingsTab, "Guide Settings")
         self.tabs.insertTab(1, self.customStepTab, "Custom Steps")
         self.tabs.insertTab(2, self.namingRulesTab, "Naming Rules")
+        self.tabs.insertTab(3, self.blueprintTab, "Blueprint")
 
         # populate main settings
         self.guideSettingsTab.rigName_lineEdit.setText(
@@ -1572,6 +1778,275 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         self.populate_custom_step_controls()
 
         self.populate_naming_controls()
+
+        self.populate_blueprint_controls()
+
+        self.populate_override_controls()
+
+    def populate_blueprint_controls(self):
+        """Populate the blueprint tab controls."""
+        tap = self.blueprintTab
+        self.populateCheck(tap.useBlueprint_checkBox, "use_blueprint")
+        tap.blueprint_lineEdit.setText(
+            self.root.attr("blueprint_path").get()
+        )
+        self.update_blueprint_status()
+
+    def populate_override_controls(self):
+        """Populate the override checkbox controls.
+
+        For checkable GroupBoxes, we use setChecked() directly since they
+        don't support setCheckState(). Regular QCheckBox uses populateCheck().
+        """
+        tap = self.guideSettingsTab
+
+        # Checkable GroupBoxes - use setChecked directly
+        tap.groupBox.setChecked(
+            self.root.attr("override_rig_settings").get()
+        )
+        tap.groupBox_6.setChecked(
+            self.root.attr("override_anim_channels").get()
+        )
+        tap.groupBox_7.setChecked(
+            self.root.attr("override_base_rig_control").get()
+        )
+        tap.groupBox_2.setChecked(
+            self.root.attr("override_skinning").get()
+        )
+        tap.groupBox_3.setChecked(
+            self.root.attr("override_joint_settings").get()
+        )
+        tap.groupBox_8.setChecked(
+            self.root.attr("override_data_collector").get()
+        )
+        tap.groupBox_5.setChecked(
+            self.root.attr("override_color_settings").get()
+        )
+
+        # Naming Rules and Custom Steps tab overrides (regular checkboxes)
+        self.populateCheck(
+            self.namingRulesTab.override_namingRules_checkBox,
+            "override_naming_rules"
+        )
+        self.populateCheck(
+            self.customStepTab.override_preCustomSteps_checkBox,
+            "override_pre_custom_steps"
+        )
+        self.populateCheck(
+            self.customStepTab.override_postCustomSteps_checkBox,
+            "override_post_custom_steps"
+        )
+        # Update section enabled states based on blueprint and override settings
+        self.update_section_states()
+
+    def update_blueprint_status(self):
+        """Update the blueprint status label based on current path."""
+        tap = self.blueprintTab
+        path = tap.blueprint_lineEdit.text()
+
+        if not path:
+            tap.blueprint_status_label.setText("")
+            tap.blueprint_status_label.setStyleSheet("")
+            return
+
+        resolved_path = resolve_blueprint_path(path)
+        if resolved_path:
+            tap.blueprint_status_label.setText(
+                "Found: {}".format(resolved_path)
+            )
+            tap.blueprint_status_label.setStyleSheet(
+                "color: rgb(100, 200, 100);"
+            )
+        else:
+            tap.blueprint_status_label.setText(
+                "File not found"
+            )
+            tap.blueprint_status_label.setStyleSheet(
+                "color: rgb(200, 100, 100);"
+            )
+
+    def update_section_states(self):
+        """Update the enabled/disabled state of sections based on blueprint settings.
+
+        For checkable GroupBoxes, we use setCheckable(False) to hide the checkbox
+        when Blueprint is disabled, and setCheckable(True) to show it when enabled.
+        The titles are also updated to include "Local Override:" prefix when active.
+        """
+        use_blueprint = self.root.attr("use_blueprint").get()
+        tap = self.guideSettingsTab
+
+        # Guide Settings tab checkable GroupBoxes with their base titles
+        groupbox_titles = [
+            (tap.groupBox, "Rig Settings"),
+            (tap.groupBox_6, "Animation Channels Settings"),
+            (tap.groupBox_7, "Base Rig Control"),
+            (tap.groupBox_2, "Skinning Settings"),
+            (tap.groupBox_3, "Joint Settings"),
+            (tap.groupBox_8, "Post Build Data Collector"),
+            (tap.groupBox_5, "Color Settings"),
+        ]
+
+        # Stylesheet for blue title when blueprint is active
+        blue_title_style = "QGroupBox::title { color: rgb(100, 180, 255); }"
+
+        # If blueprint is not enabled, disable checkable mode and reset styling
+        if not use_blueprint:
+            for groupBox, baseTitle in groupbox_titles:
+                # Disable checkable mode (hides the checkbox in the title)
+                groupBox.setCheckable(False)
+                # Reset to original title
+                groupBox.setTitle(baseTitle)
+                # Clear any styling
+                groupBox.setStyleSheet("")
+
+            # Also reset Naming Rules tab
+            self.namingRulesTab.override_namingRules_checkBox.setVisible(False)
+            self.namingRulesTab.setStyleSheet("")
+            for child in self.namingRulesTab.findChildren(QtWidgets.QWidget):
+                if child != self.namingRulesTab.override_namingRules_checkBox:
+                    child.setEnabled(True)
+
+            # Reset Custom Steps tab (Pre and Post sections)
+            self.customStepTab.override_preCustomSteps_checkBox.setVisible(False)
+            self.customStepTab.override_postCustomSteps_checkBox.setVisible(False)
+            self.customStepTab.preCollapsible.setStyleSheet("")
+            self.customStepTab.postCollapsible.setStyleSheet("")
+            for child in self.customStepTab.preCollapsible.findChildren(QtWidgets.QWidget):
+                child.setEnabled(True)
+            for child in self.customStepTab.postCollapsible.findChildren(QtWidgets.QWidget):
+                child.setEnabled(True)
+        else:
+            # Enable checkable mode with "Local Override:" prefix and blue styling
+            for groupBox, baseTitle in groupbox_titles:
+                groupBox.setCheckable(True)
+                groupBox.setTitle("Local Override: " + baseTitle)
+                groupBox.setStyleSheet(blue_title_style)
+                self.update_section_enabled_state(groupBox, groupBox)
+
+            # Also update Naming Rules tab
+            self.namingRulesTab.override_namingRules_checkBox.setVisible(True)
+            self.update_tab_enabled_state(
+                self.namingRulesTab,
+                self.namingRulesTab.override_namingRules_checkBox
+            )
+
+            # Update Custom Steps Pre and Post sections
+            self.customStepTab.override_preCustomSteps_checkBox.setVisible(True)
+            self.customStepTab.override_postCustomSteps_checkBox.setVisible(True)
+            self.update_custom_step_section_state(
+                self.customStepTab.preCollapsible,
+                self.customStepTab.override_preCustomSteps_checkBox
+            )
+            self.update_custom_step_section_state(
+                self.customStepTab.postCollapsible,
+                self.customStepTab.override_postCustomSteps_checkBox
+            )
+
+    def update_section_enabled_state(self, groupBox, overrideCheckBox):
+        """Enable/disable a section based on its override checkbox.
+
+        For checkable GroupBoxes, Qt automatically enables/disables child widgets
+        when the GroupBox is checked/unchecked. We just need to apply visual styling.
+
+        Args:
+            groupBox: The QGroupBox to enable/disable
+            overrideCheckBox: The override checkbox controlling this section
+                              (for checkable GroupBoxes, this is the same as groupBox)
+        """
+        is_overridden = overrideCheckBox.isChecked()
+        # Apply visual style - keep blue title, add grey background when not overridden
+        if is_overridden:
+            groupBox.setStyleSheet(
+                "QGroupBox::title { color: rgb(100, 180, 255); }"
+            )
+        else:
+            groupBox.setStyleSheet(
+                "QGroupBox::title { color: rgb(100, 180, 255); }"
+                "QGroupBox { background-color: rgba(100, 100, 100, 30); }"
+            )
+
+    def update_tab_enabled_state(self, tab, overrideCheckBox):
+        """Enable/disable a tab's contents based on its override checkbox.
+
+        Args:
+            tab: The tab widget to enable/disable
+            overrideCheckBox: The override checkbox controlling this tab
+        """
+        is_overridden = overrideCheckBox.isChecked()
+        # Enable children widgets (except the override checkbox itself)
+        for child in tab.findChildren(QtWidgets.QWidget):
+            if child != overrideCheckBox:
+                child.setEnabled(is_overridden)
+        # Apply visual style
+        if is_overridden:
+            tab.setStyleSheet("")
+        else:
+            tab.setStyleSheet("background-color: rgba(100, 100, 100, 30);")
+
+    def update_custom_step_section_state(self, collapsible, overrideCheckBox):
+        """Enable/disable a custom step section based on its override checkbox.
+
+        Args:
+            collapsible: The collapsible widget (preCollapsible or postCollapsible)
+            overrideCheckBox: The override checkbox controlling this section
+        """
+        is_overridden = overrideCheckBox.isChecked()
+        # Enable children widgets
+        for child in collapsible.findChildren(QtWidgets.QWidget):
+            child.setEnabled(is_overridden)
+        # Apply visual style
+        if is_overridden:
+            collapsible.setStyleSheet("")
+        else:
+            collapsible.setStyleSheet("background-color: rgba(100, 100, 100, 30);")
+
+    def browse_blueprint_path(self):
+        """Open file browser to select blueprint guide file."""
+        # Get starting directory from environment variable
+        start_dir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+        if start_dir:
+            # Use first path if multiple paths are specified
+            start_dir = start_dir.split(os.pathsep)[0]
+
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select Blueprint Guide",
+            start_dir,
+            "Shifter Guide Template (*.sgt);;All Files (*.*)"
+        )
+
+        if file_path:
+            # Try to make it relative to MGEAR_SHIFTER_CUSTOMSTEP_PATH
+            custom_step_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY)
+            if custom_step_path:
+                for base_path in custom_step_path.split(os.pathsep):
+                    if file_path.startswith(base_path):
+                        rel_path = os.path.relpath(file_path, base_path)
+                        file_path = rel_path
+                        break
+
+            self.blueprintTab.blueprint_lineEdit.setText(file_path)
+            self.root.attr("blueprint_path").set(file_path)
+            self.update_blueprint_status()
+            self.update_section_states()
+
+    def on_blueprint_enabled_changed(self, *args):
+        """Handle blueprint enabled checkbox state change."""
+        self.updateCheck(
+            self.blueprintTab.useBlueprint_checkBox, "use_blueprint"
+        )
+        self.update_section_states()
+
+    def on_override_changed(self, overrideCheckBox, groupBox, attrName, *args):
+        """Handle override checkbox state change.
+
+        Args:
+            overrideCheckBox: The override checkbox that was changed
+            groupBox: The QGroupBox to enable/disable
+            attrName: The attribute name to update
+        """
+        self.updateCheck(overrideCheckBox, attrName)
+        self.update_section_enabled_state(groupBox, overrideCheckBox)
 
     def populate_naming_controls(self):
         # populate name settings
@@ -1936,6 +2411,116 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         tap.save_naming_configuration_pushButton.clicked.connect(
             self.export_name_config
         )
+
+        # Blueprint Tab connections
+        self.create_blueprint_connections()
+
+        # Override checkbox connections
+        self.create_override_connections()
+
+    def create_blueprint_connections(self):
+        """Create signal connections for the blueprint tab."""
+        tap = self.blueprintTab
+        tap.useBlueprint_checkBox.stateChanged.connect(
+            self.on_blueprint_enabled_changed
+        )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            partial(
+                self.updateLineEditPath,
+                tap.blueprint_lineEdit,
+                "blueprint_path"
+            )
+        )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            self.update_blueprint_status
+        )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            self.update_section_states
+        )
+        tap.blueprint_pushButton.clicked.connect(
+            self.browse_blueprint_path
+        )
+
+    def create_override_connections(self):
+        """Create signal connections for override checkboxes.
+
+        Note: For Guide Settings sections, the GroupBox itself is checkable,
+        so the checkbox reference points to the GroupBox. We use the 'toggled'
+        signal for checkable GroupBoxes.
+        """
+        tap = self.guideSettingsTab
+
+        # Connect each checkable GroupBox (override checkbox = groupBox)
+        # The override_xxx_checkBox references ARE the GroupBoxes now
+        override_mappings = [
+            (tap.groupBox, "override_rig_settings"),
+            (tap.groupBox_6, "override_anim_channels"),
+            (tap.groupBox_7, "override_base_rig_control"),
+            (tap.groupBox_2, "override_skinning"),
+            (tap.groupBox_3, "override_joint_settings"),
+            (tap.groupBox_8, "override_data_collector"),
+            (tap.groupBox_5, "override_color_settings"),
+        ]
+
+        for groupBox, attrName in override_mappings:
+            groupBox.toggled.connect(
+                partial(
+                    self.on_override_changed,
+                    groupBox,
+                    groupBox,
+                    attrName
+                )
+            )
+
+        # Tab override connections (Naming Rules)
+        self.namingRulesTab.override_namingRules_checkBox.stateChanged.connect(
+            partial(
+                self.on_tab_override_changed,
+                self.namingRulesTab.override_namingRules_checkBox,
+                self.namingRulesTab,
+                "override_naming_rules"
+            )
+        )
+
+        # Custom Steps Pre and Post override connections
+        self.customStepTab.override_preCustomSteps_checkBox.stateChanged.connect(
+            partial(
+                self.on_custom_step_override_changed,
+                self.customStepTab.override_preCustomSteps_checkBox,
+                self.customStepTab.preCollapsible,
+                "override_pre_custom_steps"
+            )
+        )
+        self.customStepTab.override_postCustomSteps_checkBox.stateChanged.connect(
+            partial(
+                self.on_custom_step_override_changed,
+                self.customStepTab.override_postCustomSteps_checkBox,
+                self.customStepTab.postCollapsible,
+                "override_post_custom_steps"
+            )
+        )
+
+    def on_tab_override_changed(self, overrideCheckBox, tab, attrName, *args):
+        """Handle tab override checkbox state change.
+
+        Args:
+            overrideCheckBox: The override checkbox that was changed
+            tab: The tab widget to enable/disable
+            attrName: The attribute name to update
+        """
+        self.updateCheck(overrideCheckBox, attrName)
+        self.update_tab_enabled_state(tab, overrideCheckBox)
+
+    def on_custom_step_override_changed(self, overrideCheckBox, collapsible, attrName, *args):
+        """Handle custom step section override checkbox state change.
+
+        Args:
+            overrideCheckBox: The override checkbox that was changed
+            collapsible: The collapsible widget to enable/disable
+            attrName: The attribute name to update
+        """
+        self.updateCheck(overrideCheckBox, attrName)
+        self.update_custom_step_section_state(collapsible, overrideCheckBox)
 
     def eventFilter(self, sender, event):
         if self.custom_step_event_filter(sender, event):

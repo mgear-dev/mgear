@@ -351,7 +351,8 @@ class Rig(object):
     def build(self):
         """Build the rig."""
 
-        self.options = self.guide.values
+        # Use merged options to apply blueprint settings when enabled
+        self.options = self.guide.getMergedOptions()
         self.guides = self.guide.components
 
         self.customStepDic["mgearRun"] = self
