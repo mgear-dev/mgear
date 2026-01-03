@@ -197,36 +197,282 @@ Mirror notes -
 setups/Controls will succefully mirror if they have had their inverseAttrs
 configured previously.
 
+Space Manager
+=============
+
+Create and manage space switches for rig controls. Space switches allow controls to follow different parent spaces (world, local, custom targets).
+
+.. image:: images/rigbits/spaceManager.png
+    :align: center
+    :scale: 80%
+
+**Constraint Types:**
+
+* **Parent** - Full transform constraint (position, rotation, scale)
+* **Point** - Position only constraint
+* **Orient** - Rotation only constraint
+* **Scale** - Scale only constraint
+
+**Menu Types:**
+
+* **Enumerated** - Dropdown attribute for discrete space selection
+* **Float** - Blend attribute for smooth space interpolation
+
+**Workflow:**
+
+1. Select the control that needs space switching
+2. Add target spaces (objects to follow)
+3. Choose constraint type and menu type
+4. Create the space switch
+
+**Import/Export:**
+
+Space configurations can be saved and loaded as .smd files for reuse across rigs.
+
 Space Jumper
-==============
+============
+
+Create a local reference space from another space in the hierarchy. This creates a non-cyclic space relationship using matrix math.
+
+**Usage:**
+
+1. Select the reference space (parent transform)
+2. Select the jump space (child space to reference)
+3. Run Space Jumper
+
+The tool creates ``_SPACE_`` and ``_JUMP_`` transforms connected via ``gear_mulmatrix_op`` for clean space relationships.
 
 Interpolate Transform
 =====================
 
+Create a transform that blends between two objects using matrix interpolation.
+
+.. image:: images/rigbits/interpolated_transform.png
+    :align: center
+    :scale: 80%
+
+**Usage:**
+
+1. Select the first object (A)
+2. Select the second object (B)
+3. Run Interpolate Transform
+
+Creates a new transform with ``_INTER_`` naming that interpolates 50% between both objects. Uses ``gear_intmatrix_op`` for smooth matrix-based blending.
+
 Connect Local SRT
 =================
 
+Connect Scale, Rotation, and/or Translation attributes between objects.
 
-Spring
-======
+.. image:: images/rigbits/connect_local_SRT_menu.png
+    :align: center
+    :scale: 80%
 
-Rope
-====
+**Options:**
+
+* **Connect SRT** - Connect all three (Scale, Rotation, Translation)
+* **Connect S** - Scale only
+* **Connect R** - Rotation only
+* **Connect T** - Translation only
+
+**Usage:**
+
+1. Select the source object (first)
+2. Select target objects
+3. Choose which attributes to connect
 
 Channel Wrangler
 ================
 
+Move or proxy channels between nodes with a visual table interface.
+
+.. image:: images/rigbits/channel_wrangler.png
+    :align: center
+    :scale: 80%
+
+**Operation Modes:**
+
+* **Move Channel** - Physically move the channel from source to target
+* **Proxy Channel** - Create a proxy attribute that mirrors the source
+
+**Move Policies:**
+
+* **merge** - Merge with existing channels
+* **index** - Match by channel index
+* **fullName** - Match by full attribute name
+
+**Proxy Policies:**
+
+* **index** - Match by channel index
+* **fullName** - Match by full attribute name
+
+**UI Features:**
+
+* Visual table with Index, Channel, Source, Target, Operation columns
+* Channel and Target line edits with picker buttons
+* Set Multi-Channel and Set Multi-Target for batch operations
+* Import/Export configurations as .cwc JSON files
+
 Eye Rigger
 ==========
+
+Automatic eyelid rigging tools. Two versions are available:
+
+Eye Rigger 2.1
+--------------
+
+The updated eye rigger with simplified options and improved workflow.
+
+.. image:: images/rigbits/eyeRigger2.1.png
+    :align: center
+    :scale: 80%
+
+**Key Features:**
+
+* Automatic upper/lower eyelid rigging from edge loops
+* Multiple joint distribution options (every N vertex, fixed count, from center)
+* Simplified mode for lighter rigs
+* Customizable control size
+* Auto-skin with topological propagation
+* Vertical/Horizontal tracking attributes
+* Blink height offset parameter
+
+**Workflow:**
+
+1. Select the eye mesh
+2. Pick the eyelid edge loop
+3. Set corner vertices (automatic or manual)
+4. Configure joint distribution settings
+5. Set naming prefix
+6. Build the rig
+
+**Parameters:**
+
+* **Edge Loop** - The eyelid edge loop to rig
+* **Corner Vertices** - Inner and outer corner vertex selection
+* **Prefix** - Naming prefix for created nodes
+* **Offset** - Surface offset distance (default 0.05)
+* **Rigid/Falloff Loops** - Control density settings
+* **Head Joint** - Reference joint for parenting
+* **Do Skin** - Enable automatic skinning
+* **Simplified** - Create simplified rig version
+
+Eye Rigger (Legacy)
+-------------------
+
+The original eye rigger for backward compatibility.
+
+.. image:: images/rigbits/eye_rigger.png
+    :align: center
+    :scale: 80%
+
+Similar functionality to version 2.1 with the original parameter set including blink height percentage control.
 
 Lips Rigger
 ===========
 
+Automatic lip rigging from edge loops.
+
+.. image:: images/rigbits/lips_rigger.png
+    :align: center
+    :scale: 80%
+
+**Key Features:**
+
+* Lip edge loop setup for upper and lower lips
+* Central vertex selection for proper topology handling
+* Thickness parameter for offset control
+* Rigidity and falloff density settings
+* Head and jaw joint references
+* Automatic shape and control creation
+
+**Workflow:**
+
+1. Select the lip edge loop
+2. Set the upper central vertex
+3. Set the lower central vertex
+4. Configure thickness and density settings
+5. Set head and jaw joint references
+6. Build the rig
+
+**Parameters:**
+
+* **Edge Loop** - The lip edge loop
+* **Up Vertex** - Upper central vertex
+* **Low Vertex** - Lower central vertex
+* **Thickness** - Offset amount (default 0.3)
+* **Rigid Loops** - Rigidity density (default 5)
+* **Falloff Loops** - Falloff density (default 8)
+* **Head Joint** - Head reference joint
+* **Jaw Joint** - Jaw reference joint
+
+Proxy Geo
+=========
+
+Create proxy geometry for joints with multiple creation modes.
+
+.. image:: images/rigbits/ProxyGeo.png
+    :align: center
+    :scale: 80%
+
+**Creation Modes:**
+
+* **Proxy to Next** - Extends geometry toward the next joint in chain
+* **Proxy Centered** - Creates geometry centered at joint position
+* **Proxy to Children** - Aims geometry at child joints
+
+**Shape Types:**
+
+* **Capsule** - Rounded cylinder shape
+* **Box** - Rectangular box shape
+
+**Build Modes:**
+
+* **Add** - Add new proxy geometry
+* **Replace** - Replace existing proxy geometry
+
+**Features:**
+
+* Duplicate and Mirror existing proxies
+* Combine multiple proxies into single mesh
+* Export/Import proxy configurations as .pxy files
+* Automatic axis alignment
+* Build Tip Joint option for end joints
+
+**Proxy Attributes:**
+
+Created proxies have custom attributes for identification and configuration:
+
+* ``isProxy`` - Boolean marker
+* ``proxy_shape`` - "capsule" or "box"
+* ``proxy_axis`` - Axis alignment
+* ``side`` / ``length`` - Dimension attributes
+
 Proxy Slicer
 ============
 
+Create proxy geometry by analyzing skin cluster weights and splitting the mesh per joint influence.
+
+**How it works:**
+
+1. Analyzes the skinCluster influence weights per face
+2. Groups faces by their dominant joint influence
+3. Creates separate proxy meshes per joint
+4. Names proxies as ``JointName_Proxy``
+
+**Usage:**
+
+Select a skinned mesh and run Proxy Slicer. The system automatically creates proxy geometry based on skin weights, with each proxy representing the area most influenced by that joint.
+
 Proxy Slicer Parenting
 ======================
+
+Same as Proxy Slicer but parents the created proxies directly under their influence joints instead of grouping them separately.
+
+**Difference from Proxy Slicer:**
+
+* **Proxy Slicer** - Creates a ProxyGeo group with matrix connections
+* **Proxy Slicer Parenting** - Parents proxies directly under influence joints
 
 SDK Manager
 ===========
