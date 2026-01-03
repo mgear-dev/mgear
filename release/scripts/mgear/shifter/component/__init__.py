@@ -64,7 +64,8 @@ class Main(object):
 
         self.options = self.rig.options
         self.model = self.rig.model
-        self.settings = self.guide.values
+        # Use merged values to apply blueprint settings when enabled
+        self.settings = self.guide.getMergedValues()
         self.setupWS = self.rig.setupWS
 
         self.WIP = self.options["mode"]

@@ -756,5 +756,5 @@ class Ui_Form(object):
         # =====================================================================
         # Signal Connections
         # =====================================================================
-        self.jointRig_checkBox.clicked.connect(self.jointWorldOri_checkBox.setEnabled)
+        self.jointRig_checkBox.toggled.connect(self.jointWorldOri_checkBox.setEnabled)
         QtCore.QMetaObject.connectSlotsByName(Form)
