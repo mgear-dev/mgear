@@ -17,8 +17,17 @@ class Ui_Form(object):
         Form.resize(750, 1104)
         Form.setWindowTitle("Form")
 
-        self.gridLayout_2 = QtWidgets.QGridLayout(Form)
+        # Main vertical layout to allow inserting blueprint header at top
+        self.mainLayout = QtWidgets.QVBoxLayout(Form)
+        self.mainLayout.setObjectName("mainLayout")
+        self.mainLayout.setContentsMargins(0, 0, 0, 0)
+        self.mainLayout.setSpacing(0)
+
+        # Container widget for the grid layout
+        self.gridContainer = QtWidgets.QWidget(Form)
+        self.gridLayout_2 = QtWidgets.QGridLayout(self.gridContainer)
         self.gridLayout_2.setObjectName("gridLayout_2")
+        self.mainLayout.addWidget(self.gridContainer)
 
         # =====================================================================
         # Rig Settings GroupBox (row 0)

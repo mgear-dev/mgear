@@ -44,6 +44,50 @@ else:
     string_types = (str,)
 
 
+# Blueprint section settings mapping - defines which attributes belong to each section
+OVERRIDE_SECTION_ATTRS = {
+    "override_rig_settings": [
+        "rig_name", "mode", "step"
+    ],
+    "override_anim_channels": [
+        "proxyChannels", "classicChannelNames", "attrPrefixName"
+    ],
+    "override_base_rig_control": [
+        "worldCtl", "world_ctl_name"
+    ],
+    "override_skinning": [
+        "importSkin", "skin"
+    ],
+    "override_joint_settings": [
+        "joint_rig", "joint_worldOri", "force_uniScale",
+        "connect_joints", "force_SSC"
+    ],
+    "override_data_collector": [
+        "data_collector", "data_collector_path",
+        "data_collector_embedded", "data_collector_embedded_custom_joint"
+    ],
+    "override_color_settings": [
+        "L_color_fk", "L_color_ik", "R_color_fk", "R_color_ik",
+        "C_color_fk", "C_color_ik", "Use_RGB_Color",
+        "L_RGB_fk", "L_RGB_ik", "R_RGB_fk", "R_RGB_ik",
+        "C_RGB_fk", "C_RGB_ik"
+    ],
+    "override_naming_rules": [
+        "ctl_name_rule", "joint_name_rule",
+        "side_left_name", "side_right_name", "side_center_name",
+        "side_joint_left_name", "side_joint_right_name",
+        "side_joint_center_name", "ctl_name_ext", "joint_name_ext",
+        "ctl_des_letter_case", "joint_des_letter_case"
+    ],
+    "override_pre_custom_steps": [
+        "doPreCustomStep", "preCustomStep"
+    ],
+    "override_post_custom_steps": [
+        "doPostCustomStep", "postCustomStep"
+    ]
+}
+
+
 def resolve_blueprint_path(path):
     """Resolve blueprint guide file path.
 
@@ -1693,6 +1737,10 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         # Close Button
         self.close_button = QtWidgets.QPushButton("Close")
 
+        # Create blueprint headers for Guide Settings and Naming Rules tabs
+        self._create_guide_settings_blueprint_header()
+        self._create_naming_rules_blueprint_header()
+
     def populate_controls(self):
         """Populate the controls values
         from the custom attributes of the component.
@@ -1880,6 +1928,8 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         )
         # Update section enabled states based on blueprint and override settings
         self.update_section_states()
+        # Populate blueprint headers for Guide Settings and Naming Rules
+        self._populate_blueprint_headers()
 
     def update_blueprint_status(self):
         """Update the blueprint status label based on current path."""
@@ -2064,9 +2114,17 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             overrideCheckBox: The override checkbox controlling this tab
         """
         is_overridden = overrideCheckBox.isChecked()
-        # Enable children widgets (except the override checkbox itself)
+
+        # Get list of widgets to exclude from disabling (blueprint header and its children)
+        exclude_widgets = set()
+        if hasattr(self, 'naming_rules_blueprint_header'):
+            exclude_widgets.add(self.naming_rules_blueprint_header)
+            for child in self.naming_rules_blueprint_header.findChildren(QtWidgets.QWidget):
+                exclude_widgets.add(child)
+
+        # Enable children widgets (except the override checkbox and blueprint header)
         for child in tab.findChildren(QtWidgets.QWidget):
-            if child != overrideCheckBox:
+            if child != overrideCheckBox and child not in exclude_widgets:
                 child.setEnabled(is_overridden)
         # Tooltip style for consistency
         tooltip_style = "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
@@ -2100,6 +2158,395 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
                 tooltip_style +
                 "background-color: rgba(100, 100, 100, 30);"
             )
+
+    # =========================================================================
+    # Blueprint Header Methods (Guide Settings & Naming Rules)
+    # =========================================================================
+
+    def _create_guide_settings_blueprint_header(self):
+        """Create the blueprint header widget for Guide Settings tab."""
+        self.guide_settings_blueprint_header = QtWidgets.QFrame()
+        self.guide_settings_blueprint_header.setObjectName(
+            "guide_settings_blueprint_header"
+        )
+        self.guide_settings_blueprint_header.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        header_layout = QtWidgets.QHBoxLayout(self.guide_settings_blueprint_header)
+        header_layout.setContentsMargins(4, 2, 4, 2)
+        header_layout.setSpacing(6)
+
+        # Blueprint indicator icon (small colored square)
+        self.guide_settings_blueprint_indicator = QtWidgets.QLabel()
+        self.guide_settings_blueprint_indicator.setFixedSize(12, 12)
+        self.guide_settings_blueprint_indicator.setStyleSheet(
+            "background-color: #4682B4; border-radius: 2px;"
+        )
+        self.guide_settings_blueprint_indicator.setToolTip(
+            "Blueprint is active for Guide Settings"
+        )
+        header_layout.addWidget(self.guide_settings_blueprint_indicator)
+
+        # Info label
+        self.guide_settings_blueprint_label = QtWidgets.QLabel("Blueprint Active")
+        self.guide_settings_blueprint_label.setStyleSheet(
+            "color: rgb(100, 180, 255); font-weight: bold;"
+        )
+        header_layout.addWidget(self.guide_settings_blueprint_label)
+
+        # View Blueprint Settings button
+        self.guide_settings_view_pushButton = QtWidgets.QPushButton("View")
+        self.guide_settings_view_pushButton.setObjectName(
+            "guide_settings_view_pushButton"
+        )
+        self.guide_settings_view_pushButton.setToolTip(
+            "View blueprint settings for Guide Settings"
+        )
+        self.guide_settings_view_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.guide_settings_view_pushButton)
+
+        # Copy button
+        self.guide_settings_copy_pushButton = QtWidgets.QPushButton("Copy")
+        self.guide_settings_copy_pushButton.setObjectName(
+            "guide_settings_copy_pushButton"
+        )
+        self.guide_settings_copy_pushButton.setToolTip(
+            "Copy blueprint settings to local and enable local override"
+        )
+        self.guide_settings_copy_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.guide_settings_copy_pushButton)
+
+        header_layout.addStretch()
+
+        # Store blueprint data reference
+        self.guide_settings_blueprint_data = None
+        # Hidden by default until blueprint is enabled
+        self.guide_settings_blueprint_header.setVisible(False)
+
+    def _create_naming_rules_blueprint_header(self):
+        """Create the blueprint header widget for Naming Rules tab."""
+        self.naming_rules_blueprint_header = QtWidgets.QFrame()
+        self.naming_rules_blueprint_header.setObjectName(
+            "naming_rules_blueprint_header"
+        )
+        self.naming_rules_blueprint_header.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        header_layout = QtWidgets.QHBoxLayout(self.naming_rules_blueprint_header)
+        header_layout.setContentsMargins(4, 2, 4, 2)
+        header_layout.setSpacing(6)
+
+        # Blueprint indicator icon (small colored square)
+        self.naming_rules_blueprint_indicator = QtWidgets.QLabel()
+        self.naming_rules_blueprint_indicator.setFixedSize(12, 12)
+        self.naming_rules_blueprint_indicator.setStyleSheet(
+            "background-color: #4682B4; border-radius: 2px;"
+        )
+        self.naming_rules_blueprint_indicator.setToolTip(
+            "Blueprint is active for Naming Rules"
+        )
+        header_layout.addWidget(self.naming_rules_blueprint_indicator)
+
+        # Info label
+        self.naming_rules_blueprint_label = QtWidgets.QLabel("Blueprint Active")
+        self.naming_rules_blueprint_label.setStyleSheet(
+            "color: rgb(100, 180, 255); font-weight: bold;"
+        )
+        header_layout.addWidget(self.naming_rules_blueprint_label)
+
+        # View Blueprint Settings button
+        self.naming_rules_view_pushButton = QtWidgets.QPushButton("View")
+        self.naming_rules_view_pushButton.setObjectName(
+            "naming_rules_view_pushButton"
+        )
+        self.naming_rules_view_pushButton.setToolTip(
+            "View blueprint settings for Naming Rules"
+        )
+        self.naming_rules_view_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.naming_rules_view_pushButton)
+
+        # Copy button
+        self.naming_rules_copy_pushButton = QtWidgets.QPushButton("Copy")
+        self.naming_rules_copy_pushButton.setObjectName(
+            "naming_rules_copy_pushButton"
+        )
+        self.naming_rules_copy_pushButton.setToolTip(
+            "Copy blueprint settings to local and enable local override"
+        )
+        self.naming_rules_copy_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.naming_rules_copy_pushButton)
+
+        header_layout.addStretch()
+
+        # Store blueprint data reference
+        self.naming_rules_blueprint_data = None
+        # Hidden by default until blueprint is enabled
+        self.naming_rules_blueprint_header.setVisible(False)
+
+    def _populate_blueprint_headers(self):
+        """Populate blueprint headers based on guide blueprint settings."""
+        use_blueprint = self.root.attr("use_blueprint").get()
+        blueprint_path = self.root.attr("blueprint_path").get()
+
+        # Check if blueprint is enabled and valid
+        if not use_blueprint or not blueprint_path:
+            self._set_guide_settings_header_inactive()
+            self._set_naming_rules_header_inactive()
+            return
+
+        # Load blueprint data
+        blueprint_data = load_blueprint_guide(blueprint_path)
+        if not blueprint_data:
+            self._set_guide_settings_header_inactive()
+            self._set_naming_rules_header_inactive()
+            return
+
+        # Store blueprint data for later use
+        self.guide_settings_blueprint_data = blueprint_data
+        self.naming_rules_blueprint_data = blueprint_data
+
+        # Activate headers
+        self._set_guide_settings_header_active()
+        self._set_naming_rules_header_active()
+
+    def _set_guide_settings_header_inactive(self):
+        """Set the Guide Settings blueprint header to inactive state."""
+        self.guide_settings_blueprint_header.setVisible(False)
+        self.guide_settings_blueprint_data = None
+
+    def _set_guide_settings_header_active(self):
+        """Set the Guide Settings blueprint header to active state."""
+        self.guide_settings_blueprint_header.setVisible(True)
+        self.guide_settings_blueprint_header.setStyleSheet(
+            "QFrame#guide_settings_blueprint_header { "
+            "background-color: rgba(70, 130, 180, 40); border-radius: 2px; }"
+        )
+
+    def _set_naming_rules_header_inactive(self):
+        """Set the Naming Rules blueprint header to inactive state."""
+        self.naming_rules_blueprint_header.setVisible(False)
+        self.naming_rules_blueprint_data = None
+
+    def _set_naming_rules_header_active(self):
+        """Set the Naming Rules blueprint header to active state."""
+        self.naming_rules_blueprint_header.setVisible(True)
+        self.naming_rules_blueprint_header.setStyleSheet(
+            "QFrame#naming_rules_blueprint_header { "
+            "background-color: rgba(70, 130, 180, 40); border-radius: 2px; }"
+        )
+        # Insert header into Naming Rules tab layout at the top
+        layout = self.namingRulesTab.verticalLayout_3
+        if self.naming_rules_blueprint_header.parent() != self.namingRulesTab:
+            layout.insertWidget(0, self.naming_rules_blueprint_header)
+
+    def _on_view_guide_settings_blueprint(self):
+        """Show a dialog with the blueprint settings for Guide Settings."""
+        if not self.guide_settings_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Blueprint Settings",
+                "No blueprint data available."
+            )
+            return
+
+        # Get all Guide Settings section attributes from OVERRIDE_SECTION_ATTRS
+        guide_settings_attrs = []
+        for section in ["override_rig_settings", "override_anim_channels",
+                        "override_base_rig_control", "override_skinning",
+                        "override_joint_settings", "override_data_collector",
+                        "override_color_settings"]:
+            guide_settings_attrs.extend(
+                OVERRIDE_SECTION_ATTRS.get(section, [])
+            )
+
+        self._show_blueprint_values_dialog(
+            "Guide Settings",
+            guide_settings_attrs
+        )
+
+    def _on_view_naming_rules_blueprint(self):
+        """Show a dialog with the blueprint settings for Naming Rules."""
+        if not self.naming_rules_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Blueprint Settings",
+                "No blueprint data available."
+            )
+            return
+
+        naming_rules_attrs = OVERRIDE_SECTION_ATTRS.get("override_naming_rules", [])
+        self._show_blueprint_values_dialog(
+            "Naming Rules",
+            naming_rules_attrs
+        )
+
+    def _show_blueprint_values_dialog(self, title, attr_list):
+        """Show a dialog displaying blueprint values for the specified attributes.
+
+        Args:
+            title: Dialog title
+            attr_list: List of attribute names to display
+        """
+        blueprint_data = self.guide_settings_blueprint_data
+
+        # Get param_values from guide_root in blueprint data
+        param_values = {}
+        if blueprint_data:
+            guide_root = blueprint_data.get("guide_root", {})
+            param_values = guide_root.get("param_values", {})
+
+        # Create dialog
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Blueprint Settings - {}".format(title))
+        dialog.resize(450, 400)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        # Info label
+        info_label = QtWidgets.QLabel(
+            "Settings from the blueprint guide for {}:".format(title)
+        )
+        layout.addWidget(info_label)
+
+        # Settings tree
+        tree = QtWidgets.QTreeWidget()
+        tree.setHeaderLabels(["Parameter", "Value"])
+        tree.setColumnCount(2)
+
+        for attr_name in sorted(attr_list):
+            if attr_name in param_values:
+                value = param_values[attr_name]
+                item = QtWidgets.QTreeWidgetItem([str(attr_name), str(value)])
+                tree.addTopLevelItem(item)
+
+        tree.resizeColumnToContents(0)
+        layout.addWidget(tree)
+
+        # Close button
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        dialog.exec_()
+
+    def _on_copy_guide_settings_from_blueprint(self):
+        """Copy blueprint settings to local Guide Settings and enable overrides."""
+        if not self.guide_settings_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Copy from Blueprint",
+                "No blueprint data available."
+            )
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Copy from Blueprint",
+            "This will copy all Guide Settings from the blueprint to local "
+            "and enable all local overrides.\n\nContinue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        blueprint_data = self.guide_settings_blueprint_data
+
+        # Get param_values from guide_root in blueprint data
+        param_values = {}
+        if blueprint_data:
+            guide_root = blueprint_data.get("guide_root", {})
+            param_values = guide_root.get("param_values", {})
+
+        # Copy settings from blueprint to local for each section
+        sections_to_copy = [
+            "override_rig_settings",
+            "override_anim_channels",
+            "override_base_rig_control",
+            "override_skinning",
+            "override_joint_settings",
+            "override_data_collector",
+            "override_color_settings"
+        ]
+
+        for section in sections_to_copy:
+            attr_list = OVERRIDE_SECTION_ATTRS.get(section, [])
+            for attr_name in attr_list:
+                if attr_name in param_values:
+                    try:
+                        self.root.attr(attr_name).set(param_values[attr_name])
+                    except Exception:
+                        pass  # Skip attributes that can't be set
+
+            # Enable the override for this section
+            try:
+                self.root.attr(section).set(True)
+            except Exception:
+                pass
+
+        # Refresh UI
+        self.populate_controls()
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Copy from Blueprint",
+            "Blueprint settings have been copied to local.\n"
+            "All Guide Settings local overrides are now enabled."
+        )
+
+    def _on_copy_naming_rules_from_blueprint(self):
+        """Copy blueprint settings to local Naming Rules and enable override."""
+        if not self.naming_rules_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Copy from Blueprint",
+                "No blueprint data available."
+            )
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Copy from Blueprint",
+            "This will copy all Naming Rules from the blueprint to local "
+            "and enable local override.\n\nContinue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        blueprint_data = self.naming_rules_blueprint_data
+
+        # Get param_values from guide_root in blueprint data
+        param_values = {}
+        if blueprint_data:
+            guide_root = blueprint_data.get("guide_root", {})
+            param_values = guide_root.get("param_values", {})
+
+        attr_list = OVERRIDE_SECTION_ATTRS.get("override_naming_rules", [])
+
+        for attr_name in attr_list:
+            if attr_name in param_values:
+                try:
+                    self.root.attr(attr_name).set(param_values[attr_name])
+                except Exception:
+                    pass
+
+        # Enable the naming rules override
+        try:
+            self.root.attr("override_naming_rules").set(True)
+        except Exception:
+            pass
+
+        # Refresh UI
+        self.populate_controls()
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Copy from Blueprint",
+            "Blueprint settings have been copied to local.\n"
+            "Naming Rules local override is now enabled."
+        )
 
     # =========================================================================
     # Blueprint Custom Steps Methods
@@ -2451,6 +2898,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             self.root.attr("blueprint_path").set(file_path)
             self.update_blueprint_status()
             self.update_section_states()
+            self._populate_blueprint_headers()
 
     def on_blueprint_enabled_changed(self, *args):
         """Handle blueprint enabled checkbox state change."""
@@ -2458,6 +2906,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             self.blueprintTab.useBlueprint_checkBox, "use_blueprint"
         )
         self.update_section_states()
+        self._populate_blueprint_headers()
 
     def on_override_changed(self, overrideCheckBox, groupBox, attrName, *args):
         """Handle override checkbox state change.
@@ -2535,6 +2984,12 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         self.settings_layout.addWidget(self.close_button)
 
         self.setLayout(self.settings_layout)
+
+        # Add Guide Settings blueprint header inside the Guide Settings tab
+        # Insert at the top of mainLayout (above the grid container)
+        self.guideSettingsTab.mainLayout.insertWidget(
+            0, self.guide_settings_blueprint_header
+        )
 
     def create_connections(self):
         """Create the slots connections to the controls functions"""
@@ -2859,8 +3314,25 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
         tap.blueprint_lineEdit.editingFinished.connect(
             self.update_section_states
         )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            self._populate_blueprint_headers
+        )
         tap.blueprint_pushButton.clicked.connect(
             self.browse_blueprint_path
+        )
+
+        # Blueprint header button connections (Guide Settings and Naming Rules)
+        self.guide_settings_view_pushButton.clicked.connect(
+            self._on_view_guide_settings_blueprint
+        )
+        self.guide_settings_copy_pushButton.clicked.connect(
+            self._on_copy_guide_settings_from_blueprint
+        )
+        self.naming_rules_view_pushButton.clicked.connect(
+            self._on_view_naming_rules_blueprint
+        )
+        self.naming_rules_copy_pushButton.clicked.connect(
+            self._on_copy_naming_rules_from_blueprint
         )
 
     def create_override_connections(self):
