@@ -1,9 +1,5 @@
-import os
-
 # from pprint import pprint
 
-# Pyside -------------
-from mgear.vendor.Qt import QtCompat
 from functools import partial
 
 # Maya ---------------
@@ -25,6 +21,7 @@ from mgear.core import callbackManager
 # mGear rigbits ------
 import mgear.rigbits.sdk_io as sdk_io
 import mgear.rigbits.sdk_manager.core as sdk_m
+from mgear.rigbits.sdk_manager.widgets import SDKManagerWidget
 
 __author__ = "Justin Pedersen"
 __email__ = "Justin@tcgcape.co.za"
@@ -74,11 +71,9 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
     # ========================= Q T _ U I ========================== #
     # ============================================================== #
 
-    def init_ui(self, ui_path=None):
-        if not ui_path:
-            ui_path = "{0}/SDK_manager.ui".format(os.path.dirname(__file__))
-
-        self.ui = QtCompat.loadUi(uifile=ui_path)
+    def init_ui(self, ui_path=None):  # noqa: ui_path kept for backward compat
+        # Use pure Python widget instead of .ui file
+        self.ui = SDKManagerWidget()
 
     def create_menu_bar_actions(self):
         """
@@ -515,6 +510,17 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         )
         self.ui.ShowOnlyDriverAtt.stateChanged.connect(
             self.driver_attr_drop_down
+        )
+
+        # Channel checkboxes =====================
+        self.ui.translate_checkBox.stateChanged.connect(
+            partial(self._toggle_channel_checkboxes, "translate")
+        )
+        self.ui.rotate_checkBox.stateChanged.connect(
+            partial(self._toggle_channel_checkboxes, "rotate")
+        )
+        self.ui.scale_checkBox.stateChanged.connect(
+            partial(self._toggle_channel_checkboxes, "scale")
         )
 
         # Mirror  =====================
@@ -1131,16 +1137,10 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         if len(sel) == 1:
             if pm.nodeType(sel[0]) == "transform":
-                # Checking the selection isnt an animTweak or SDK ctl
-                selInfo = sdk_m.get_info(sel[0])
-                if not selInfo[0] and not selInfo[1]:
-                    self.ui.Driver_pushButton.setText(sel[0].name())
-                    self.driver = sel[0]
-                    # Adding keyable channels to Driver Attribute dropdown
-                    self.driver_attr_drop_down()
-
-                else:
-                    pm.warning("Cannot use SDK Ctls or animTweaks as Drivers")
+                self.ui.Driver_pushButton.setText(sel[0].name())
+                self.driver = sel[0]
+                # Adding keyable channels to Driver Attribute dropdown
+                self.driver_attr_drop_down()
             else:
                 pm.warning("Can only select transforms as driver objects")
 
@@ -1173,6 +1173,61 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         else:
             pm.warning("Please set a driver before adding Driven objects")
 
+    def _toggle_channel_checkboxes(self, channel, state):
+        """
+        Enable/disable XYZ checkboxes based on main channel checkbox state.
+
+        Arguments:
+            channel (str): "translate", "rotate", or "scale"
+            state (int): Qt checkbox state (0=unchecked, 2=checked)
+        """
+        enabled = state == 2  # Qt.Checked = 2
+        x_cb = getattr(self.ui, "{}X_checkBox".format(channel))
+        y_cb = getattr(self.ui, "{}Y_checkBox".format(channel))
+        z_cb = getattr(self.ui, "{}Z_checkBox".format(channel))
+
+        x_cb.setEnabled(enabled)
+        y_cb.setEnabled(enabled)
+        z_cb.setEnabled(enabled)
+
+    def _get_selected_channels(self):
+        """
+        Get list of specific channels to key based on checkbox states.
+
+        Returns:
+            list: List of channel names like ["translateX", "translateY", "rotateZ"]
+        """
+        keyChannels = []
+
+        # Translate channels
+        if self.ui.translate_checkBox.isChecked():
+            if self.ui.translateX_checkBox.isChecked():
+                keyChannels.append("translateX")
+            if self.ui.translateY_checkBox.isChecked():
+                keyChannels.append("translateY")
+            if self.ui.translateZ_checkBox.isChecked():
+                keyChannels.append("translateZ")
+
+        # Rotate channels
+        if self.ui.rotate_checkBox.isChecked():
+            if self.ui.rotateX_checkBox.isChecked():
+                keyChannels.append("rotateX")
+            if self.ui.rotateY_checkBox.isChecked():
+                keyChannels.append("rotateY")
+            if self.ui.rotateZ_checkBox.isChecked():
+                keyChannels.append("rotateZ")
+
+        # Scale channels
+        if self.ui.scale_checkBox.isChecked():
+            if self.ui.scaleX_checkBox.isChecked():
+                keyChannels.append("scaleX")
+            if self.ui.scaleY_checkBox.isChecked():
+                keyChannels.append("scaleY")
+            if self.ui.scaleZ_checkBox.isChecked():
+                keyChannels.append("scaleZ")
+
+        return keyChannels
+
     @utils.one_undo
     def set_driven_key(self, setZeroKey=False):
         """
@@ -1193,14 +1248,8 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             driverAtt = self.ui.DriverAttribute_comboBox.currentText()
             drivenCtls = self.get_QList_widget_items(self.ui.Driven_listWidget)
 
-            # Working out what channels to key
-            keyChannels = []
-            if self.ui.translate_checkBox.isChecked():
-                keyChannels.append("translate")
-            if self.ui.rotate_checkBox.isChecked():
-                keyChannels.append("rotate")
-            if self.ui.scale_checkBox.isChecked():
-                keyChannels.append("scale")
+            # Working out what channels to key (now uses specific channels)
+            keyChannels = self._get_selected_channels()
 
             # Checking at lest one channel to key has been selected
             if not keyChannels:
