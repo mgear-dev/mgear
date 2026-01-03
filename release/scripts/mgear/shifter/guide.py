@@ -1934,6 +1934,13 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
         )
 
+        # Blueprint tooltip text
+        blueprint_tooltip = (
+            '<p style="background-color: black; color: rgb(100, 180, 255);">'
+            "When checked, local settings are used.<br/>"
+            "When unchecked, settings are inherited from blueprint.</p>"
+        )
+
         # If blueprint is not enabled, disable checkable mode and reset styling
         if not use_blueprint:
             for groupBox, baseTitle, attrName in groupbox_data:
@@ -1941,11 +1948,14 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
                 groupBox.setCheckable(False)
                 # Reset to original title
                 groupBox.setTitle(baseTitle)
-                # Clear any styling
+                # Clear any styling and tooltip
                 groupBox.setStyleSheet("")
+                groupBox.setToolTip("")
 
             # Also reset Naming Rules tab
             self.namingRulesTab.override_namingRules_checkBox.setVisible(False)
+            self.namingRulesTab.override_namingRules_checkBox.setToolTip("")
+            self.namingRulesTab.override_namingRules_checkBox.setStyleSheet("")
             self.namingRulesTab.setStyleSheet("")
             for child in self.namingRulesTab.findChildren(QtWidgets.QWidget):
                 if child != self.namingRulesTab.override_namingRules_checkBox:
@@ -1954,6 +1964,10 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             # Reset Custom Steps tab (Pre and Post sections)
             self.customStepTab.override_preCustomSteps_checkBox.setVisible(False)
             self.customStepTab.override_postCustomSteps_checkBox.setVisible(False)
+            self.customStepTab.override_preCustomSteps_checkBox.setToolTip("")
+            self.customStepTab.override_postCustomSteps_checkBox.setToolTip("")
+            self.customStepTab.override_preCustomSteps_checkBox.setStyleSheet("")
+            self.customStepTab.override_postCustomSteps_checkBox.setStyleSheet("")
             self.customStepTab.preCollapsible.setStyleSheet("")
             self.customStepTab.postCollapsible.setStyleSheet("")
             # Reset collapsible titles to original (remove [Blueprint] prefix)
@@ -1980,10 +1994,15 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
                 groupBox.blockSignals(False)
                 groupBox.setTitle("Local Override: " + baseTitle)
                 groupBox.setStyleSheet(blue_title_style)
+                groupBox.setToolTip(blueprint_tooltip)
                 self.update_section_enabled_state(groupBox, groupBox)
 
             # Also update Naming Rules tab
             self.namingRulesTab.override_namingRules_checkBox.setVisible(True)
+            self.namingRulesTab.override_namingRules_checkBox.setToolTip(blueprint_tooltip)
+            self.namingRulesTab.override_namingRules_checkBox.setStyleSheet(
+                "color: rgb(100, 180, 255);"
+            )
             self.update_tab_enabled_state(
                 self.namingRulesTab,
                 self.namingRulesTab.override_namingRules_checkBox
@@ -1992,6 +2011,14 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepM
             # Update Custom Steps Pre and Post sections
             self.customStepTab.override_preCustomSteps_checkBox.setVisible(True)
             self.customStepTab.override_postCustomSteps_checkBox.setVisible(True)
+            self.customStepTab.override_preCustomSteps_checkBox.setToolTip(blueprint_tooltip)
+            self.customStepTab.override_postCustomSteps_checkBox.setToolTip(blueprint_tooltip)
+            self.customStepTab.override_preCustomSteps_checkBox.setStyleSheet(
+                "color: rgb(100, 180, 255);"
+            )
+            self.customStepTab.override_postCustomSteps_checkBox.setStyleSheet(
+                "color: rgb(100, 180, 255);"
+            )
             self.update_custom_step_section_state(
                 self.customStepTab.preCollapsible,
                 self.customStepTab.override_preCustomSteps_checkBox

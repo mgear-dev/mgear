@@ -1592,12 +1592,14 @@ class componentMainSettings(QtWidgets.QDialog, guide.helperSlots):
 
         self._set_blueprint_header_active()
 
-        # Populate local override checkbox
+        # Populate local override checkbox (block signals to avoid writing back)
+        self.blueprint_local_override_checkBox.blockSignals(True)
         if self.root.hasAttr("blueprint_local_override"):
             local_override = self.root.attr("blueprint_local_override").get()
             self.blueprint_local_override_checkBox.setChecked(local_override)
         else:
             self.blueprint_local_override_checkBox.setChecked(False)
+        self.blueprint_local_override_checkBox.blockSignals(False)
 
         # Update the greyed-out state based on override setting
         self._update_settings_enabled_state()
@@ -1639,11 +1641,12 @@ class componentMainSettings(QtWidgets.QDialog, guide.helperSlots):
             self.blueprint_view_pushButton.setEnabled(True)
             self.blueprint_make_local_pushButton.setEnabled(True)
 
-    def _on_blueprint_local_override_changed(self, state):
+    def _on_blueprint_local_override_changed(self, *args):
         """Handle local override checkbox state change."""
-        # Update the attribute on the component root
-        if self.root.hasAttr("blueprint_local_override"):
-            self.root.attr("blueprint_local_override").set(state == QtCore.Qt.Checked)
+        # Update the attribute on the component root using isChecked() for reliability
+        self.root.attr("blueprint_local_override").set(
+            self.blueprint_local_override_checkBox.isChecked()
+        )
 
         # Update the enabled state of settings
         self._update_settings_enabled_state()

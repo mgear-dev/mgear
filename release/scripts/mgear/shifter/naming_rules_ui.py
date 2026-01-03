@@ -13,14 +13,6 @@ class Ui_Form(object):
         self.override_namingRules_checkBox.setObjectName("override_namingRules_checkBox")
         self.override_namingRules_checkBox.setText("Local Override: Naming Rules")
         self.override_namingRules_checkBox.setChecked(False)  # Default to inherit from blueprint
-        self.override_namingRules_checkBox.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
-        self.override_namingRules_checkBox.setStyleSheet(
-            "color: rgb(100, 180, 255);"
-        )
         self.verticalLayout_3.addWidget(self.override_namingRules_checkBox)
 
         self.groupBox_8 = QtWidgets.QGroupBox(Form)

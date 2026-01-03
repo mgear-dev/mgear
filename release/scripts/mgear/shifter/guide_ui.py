@@ -28,11 +28,6 @@ class Ui_Form(object):
         self.groupBox.setTitle("Rig Settings")
         self.groupBox.setCheckable(True)
         self.groupBox.setChecked(False)  # Default to inherit from blueprint
-        self.groupBox.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
         # Create a reference for consistent naming with other override checkboxes
         self.override_rigSettings_checkBox = self.groupBox
 
@@ -92,11 +87,6 @@ class Ui_Form(object):
         self.groupBox_6.setTitle("Animation Channels Settings")
         self.groupBox_6.setCheckable(True)
         self.groupBox_6.setChecked(False)  # Default to inherit from blueprint
-        self.groupBox_6.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
         self.override_animChannels_checkBox = self.groupBox_6
 
         self.gridLayout_8 = QtWidgets.QGridLayout(self.groupBox_6)
@@ -163,11 +153,6 @@ class Ui_Form(object):
         self.groupBox_7.setTitle("Base Rig Control")
         self.groupBox_7.setCheckable(True)
         self.groupBox_7.setChecked(False)  # Default to inherit from blueprint
-        self.groupBox_7.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
         self.override_baseRigControl_checkBox = self.groupBox_7
 
         self.verticalLayout_baseRig = QtWidgets.QVBoxLayout(self.groupBox_7)
@@ -208,11 +193,6 @@ class Ui_Form(object):
         self.groupBox_2.setTitle("Skinning Settings")
         self.groupBox_2.setCheckable(True)
         self.groupBox_2.setChecked(False)  # Default to inherit from blueprint
-        self.groupBox_2.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
         self.override_skinning_checkBox = self.groupBox_2
 
         self.gridLayout_4 = QtWidgets.QGridLayout(self.groupBox_2)
@@ -260,11 +240,6 @@ class Ui_Form(object):
         self.groupBox_3.setTitle("Joint Settings")
         self.groupBox_3.setCheckable(True)
         self.groupBox_3.setChecked(False)  # Default to inherit from blueprint
-        self.groupBox_3.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
         self.override_jointSettings_checkBox = self.groupBox_3
 
         self.gridLayout_5 = QtWidgets.QGridLayout(self.groupBox_3)
@@ -317,11 +292,6 @@ class Ui_Form(object):
         self.groupBox_8.setTitle("Post Build Data Collector")
         self.groupBox_8.setCheckable(True)
         self.groupBox_8.setChecked(False)  # Default to inherit from blueprint
-        self.groupBox_8.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
         self.override_dataCollector_checkBox = self.groupBox_8
 
         self.gridLayout_12 = QtWidgets.QGridLayout(self.groupBox_8)
@@ -407,11 +377,6 @@ class Ui_Form(object):
         self.groupBox_5.setTitle("Color Settings")
         self.groupBox_5.setCheckable(True)
         self.groupBox_5.setChecked(False)  # Default to inherit from blueprint
-        self.groupBox_5.setToolTip(
-            '<p style="background-color: black; color: rgb(100, 180, 255);">'
-            "When checked, local settings are used.<br/>"
-            "When unchecked, settings are inherited from blueprint.</p>"
-        )
         self.override_colorSettings_checkBox = self.groupBox_5
 
         self.gridLayout_7 = QtWidgets.QGridLayout(self.groupBox_5)

@@ -11,6 +11,7 @@ from mgear import shifter
 from mgear.core import callbackManager as cb
 
 from mgear.shifter import guide_manager
+from mgear.shifter import guide as shifter_guide
 from mgear.shifter import utils as shifter_utils
 from mgear.shifter.guide_explorer import guide_tree_widget_items
 from mgear.shifter.guide_explorer import guide_visibility_delegate
@@ -18,6 +19,11 @@ from mgear.shifter.guide_explorer.models import ShifterComponent
 from mgear.shifter.guide_explorer import utils as guide_explorer_utils
 
 from mgear.compatible import compatible_comp_dagmenu
+
+# Blueprint status colors
+BLUEPRINT_COLOR_ACTIVE = QtGui.QColor(100, 180, 255)  # Blue - using blueprint
+BLUEPRINT_COLOR_OVERRIDE = QtGui.QColor(255, 200, 100)  # Yellow - local override
+BLUEPRINT_COLOR_NOT_IN = None  # Default color - not in blueprint
 
 logger = logging.getLogger("Guide Explorer - Tree Widget")
 
@@ -501,6 +507,21 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         rig_name = shifter_utils.get_rig_name(guide_name)
         components = shifter_utils.get_components(guide_name)
 
+        # Load blueprint data if blueprint is enabled
+        blueprint_components = {}
+        use_blueprint = False
+        try:
+            if guide_name.hasAttr("use_blueprint"):
+                use_blueprint = guide_name.attr("use_blueprint").get()
+                if use_blueprint and guide_name.hasAttr("blueprint_path"):
+                    blueprint_path = guide_name.attr("blueprint_path").get()
+                    if blueprint_path:
+                        blueprint_conf = shifter_guide.load_blueprint_guide(blueprint_path)
+                        if blueprint_conf:
+                            blueprint_components = blueprint_conf.get("components_dict", {})
+        except Exception as e:
+            logger.debug(f"Could not load blueprint data: {e}")
+
         root_item = guide_tree_widget_items.GuideTreeWidgetItem(parent=self,
                                                                 rig_name=rig_name)
 
@@ -541,10 +562,54 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
 
             self.create_visibility_widget(comp_item)
 
+            # Apply blueprint status color
+            if use_blueprint:
+                self._apply_blueprint_color(comp_item, comp, full_name, blueprint_components)
+
         # -- Select root so settings show on first open
         if root_item is not None:
             root_item.setSelected(True)
             self.setCurrentItem(root_item)
+
+    def _apply_blueprint_color(self, item: QtWidgets.QTreeWidgetItem,
+                                comp, full_name: str,
+                                blueprint_components: dict) -> None:
+        """
+        Apply text color to component item based on blueprint status.
+
+        Colors:
+        - Blue: Component in blueprint, using blueprint settings (no local override)
+        - Yellow: Component in blueprint, but local override is enabled
+        - Default: Component not in blueprint
+
+        :param item: Tree widget item to color
+        :param comp: Maya component node
+        :param full_name: Component full name (e.g., "arm_L0")
+        :param blueprint_components: Dict of components from blueprint
+        :return: None
+        """
+        if full_name in blueprint_components:
+            # Check if local override is enabled
+            has_local_override = False
+            try:
+                if comp.hasAttr("blueprint_local_override"):
+                    has_local_override = comp.attr("blueprint_local_override").get()
+            except Exception:
+                pass
+
+            if has_local_override:
+                # Yellow - has local override
+                color = BLUEPRINT_COLOR_OVERRIDE
+                tooltip_suffix = " (Blueprint: Local Override)"
+            else:
+                # Blue - using blueprint settings
+                color = BLUEPRINT_COLOR_ACTIVE
+                tooltip_suffix = " (Blueprint: Active)"
+
+            item.setForeground(0, QtGui.QBrush(color))
+            item.setForeground(1, QtGui.QBrush(color))
+            item.setToolTip(0, full_name + tooltip_suffix)
+        # else: keep default color - not in blueprint
 
     def _create_attr_callbacks(self, node_name: str, short_attrs: list[str]) -> None:
         """
