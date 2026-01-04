@@ -46,4 +46,17 @@ class Ui_Form(object):
         self.verticalLayout.addItem(spacerItem)
         self.gridLayout_2.addLayout(self.verticalLayout, 0, 0, 1, 1)
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
+
+        self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
+
+    def retranslateUi(self, Form):
+        Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
+        self.descriptionName_checkBox.setToolTip(
+            gqt.fakeTranslate(
+                "Form",
+                "<html><head/><body><p>If checked will use the component name as description name for joints. This is ideal for the default EPIC naming system.<br/>If we are using default mGear's naming system, is recommended to uncheck this option to avoid repetition in the names.</p></body></html>",
+                None,
+                -1,
+            )
+        )

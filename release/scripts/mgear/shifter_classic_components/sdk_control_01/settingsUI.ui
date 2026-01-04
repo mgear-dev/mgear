@@ -1,0 +1,624 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>352</width>
+    <height>505</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="0" column="0">
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <item>
+         <widget class="QCheckBox" name="joint_checkBox">
+          <property name="text">
+           <string>Joint</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="uniScale_checkBox">
+          <property name="text">
+           <string>Uniform Scale</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="neutralRotation_checkBox">
+          <property name="toolTip">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;If is active, it will align the control with world space&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string>World Space Orientation Align</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="mirrorBehaviour_checkBox">
+          <property name="toolTip">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;If is active, the control will have symmetrical behaviour on Left and Right side.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;WARNING: There is a bug in Maya 2018 and 2018.1 that will result in an incorrect behaviour, because this option will negate one of the axis. Other Maya version should be ok.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string>Mirror Behaviour L and R</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="customPivot_checkBox">
+          <property name="text">
+           <string>Custom Pivot</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <item>
+           <widget class="QLabel" name="ctlSize_label">
+            <property name="text">
+             <string>Ctl Size</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QDoubleSpinBox" name="ctlSize_doubleSpinBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="wrapping">
+             <bool>false</bool>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+            <property name="buttonSymbols">
+             <enum>QAbstractSpinBox::PlusMinus</enum>
+            </property>
+            <property name="minimum">
+             <double>0.010000000000000</double>
+            </property>
+            <property name="maximum">
+             <double>20000.000000000000000</double>
+            </property>
+            <property name="value">
+             <double>1.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <item>
+           <widget class="QLabel" name="controlShape_label">
+            <property name="text">
+             <string notr="true">Control Shape</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="controlShape_comboBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <item>
+             <property name="text">
+              <string>Arrow</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Circle</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Compas</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Cross</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Crossarrow</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Cube</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Cubewithpeak</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Cylinder</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Diamond</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Flower</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Null</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Pyramid</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Sphere</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Square</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="keyable_groupBox">
+     <property name="title">
+      <string>Keyable</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_4">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <property name="sizeConstraint">
+           <enum>QLayout::SetMinimumSize</enum>
+          </property>
+          <item>
+           <widget class="QPushButton" name="translate_pushButton">
+            <property name="text">
+             <string>Translate</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="tx_checkBox">
+            <property name="text">
+             <string>tx</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="ty_checkBox">
+            <property name="text">
+             <string>ty</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="tz_checkBox">
+            <property name="text">
+             <string>tz</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Minimum</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <property name="sizeConstraint">
+           <enum>QLayout::SetMinimumSize</enum>
+          </property>
+          <item>
+           <widget class="QPushButton" name="rotate_pushButton">
+            <property name="text">
+             <string>Rotate</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="rx_checkBox">
+            <property name="text">
+             <string>rx</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="ry_checkBox">
+            <property name="text">
+             <string>ry</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="rz_checkBox">
+            <property name="text">
+             <string>rz</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="ro_checkBox">
+            <property name="text">
+             <string>ro</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="ro_comboBox">
+            <item>
+             <property name="text">
+              <string>XYZ</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>YZX</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>ZXY</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>XZY</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>YXZ</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>ZYX</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <widget class="QPushButton" name="scale_pushButton">
+            <property name="text">
+             <string>Scale</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="sx_checkBox">
+            <property name="text">
+             <string>sx</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="sy_checkBox">
+            <property name="text">
+             <string>sy</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="sz_checkBox">
+            <property name="text">
+             <string>sz</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Minimum</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QGroupBox" name="ikRefArray_groupBox">
+     <property name="title">
+      <string>IK Reference Array</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="ikRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="ikRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="ikRefArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="ikRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="ikRefArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ikRefArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="ikRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>translate_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>tx_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>120</x>
+     <y>210</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>31</x>
+     <y>232</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>translate_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>ty_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>139</x>
+     <y>212</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>68</x>
+     <y>258</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>translate_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>tz_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>176</x>
+     <y>212</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>168</x>
+     <y>278</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>rotate_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>rx_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>338</x>
+     <y>208</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>338</x>
+     <y>234</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>rotate_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>ry_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>367</x>
+     <y>212</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>367</x>
+     <y>261</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>rotate_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>rz_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>401</x>
+     <y>207</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>397</x>
+     <y>275</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>rotate_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>ro_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>430</x>
+     <y>213</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>419</x>
+     <y>302</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>scale_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>sx_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>533</x>
+     <y>209</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>532</x>
+     <y>234</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>scale_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>sy_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>563</x>
+     <y>211</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>558</x>
+     <y>261</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>scale_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>sz_checkBox</receiver>
+   <slot>toggle()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>593</x>
+     <y>218</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>587</x>
+     <y>277</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>238</width>
+    <height>538</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5">
+      <item row="0" column="0">
+       <layout class="QVBoxLayout" name="verticalLayout">
+        <item>
+         <widget class="QCheckBox" name="keepLength_checkBox">
+          <property name="text">
+           <string notr="true">Keep Length</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="groupBox_3">
+     <property name="title">
+      <string>Joint Options</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_6">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QLabel" name="jntNb_label">
+          <property name="text">
+           <string>Joints Number</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="jntNb_spinBox">
+          <property name="minimum">
+           <number>3</number>
+          </property>
+          <property name="maximum">
+           <number>999</number>
+          </property>
+          <property name="value">
+           <number>3</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QGroupBox" name="tipRefArray_groupBox">
+     <property name="title">
+      <string>Tip Reference Array</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_4">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="tipRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="tipRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="tipRefArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="tipRefArray_copyRef_pushButton">
+            <property name="text">
+             <string>Copy from Root Ref</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="tipRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="tipRefArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="tipRefArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="tipRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QGroupBox" name="rootRefArray_groupBox">
+     <property name="title">
+      <string>Root Reference Array</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="rootRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="rootRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="rootRefArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="rootRefArray_copyRef_pushButton">
+            <property name="text">
+             <string>Copy from Tip Ref</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="rootRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="rootRefArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="rootRefArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="rootRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

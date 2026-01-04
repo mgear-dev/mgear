@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>412</width>
+    <height>345</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="2" column="0">
+    <spacer name="verticalSpacer_3">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item row="0" column="0">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QFormLayout" name="formLayout_2">
+      <item row="1" column="0">
+       <widget class="QLabel" name="control_size_label">
+        <property name="text">
+         <string>Control Size</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QDoubleSpinBox" name="control_size_spinbox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+        <property name="buttonSymbols">
+         <enum>QAbstractSpinBox::PlusMinus</enum>
+        </property>
+        <property name="minimum">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>10.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="value">
+         <double>1.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="control_label">
+        <property name="text">
+         <string>Create Controller</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QCheckBox" name="control_checkbox">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>UI Settings</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="margin_label">
+        <property name="text">
+         <string>Border Margin</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QDoubleSpinBox" name="margin_spinbox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="wrapping">
+         <bool>false</bool>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+        <property name="buttonSymbols">
+         <enum>QAbstractSpinBox::PlusMinus</enum>
+        </property>
+        <property name="minimum">
+         <double>0.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>10.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="value">
+         <double>0.200000000000000</double>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

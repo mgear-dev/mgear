@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>238</width>
+    <height>538</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="0" column="0">
+       <layout class="QVBoxLayout" name="verticalLayout">
+        <item>
+         <layout class="QFormLayout" name="formLayout">
+          <property name="labelAlignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="softness_label">
+            <property name="text">
+             <string>Softness</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
+            <item>
+             <widget class="QSlider" name="softness_slider">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>15</height>
+               </size>
+              </property>
+              <property name="maximum">
+               <number>100</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="softness_spinBox">
+              <property name="maximum">
+               <number>100</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="maxStretch_label">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Max Stretch</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QDoubleSpinBox" name="maxStretch_spinBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimum">
+             <double>1.000000000000000</double>
+            </property>
+            <property name="singleStep">
+             <double>0.100000000000000</double>
+            </property>
+            <property name="value">
+             <double>1.500000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="maxSquash_label">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Max Squash</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="maxSquash_spinBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimum">
+             <double>0.100000000000000</double>
+            </property>
+            <property name="maximum">
+             <double>1.000000000000000</double>
+            </property>
+            <property name="singleStep">
+             <double>0.100000000000000</double>
+            </property>
+            <property name="value">
+             <double>0.500000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="divisions_label">
+            <property name="text">
+             <string>Divisions</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QSpinBox" name="division_spinBox">
+            <property name="minimum">
+             <number>3</number>
+            </property>
+            <property name="value">
+             <number>3</number>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QCheckBox" name="tangentControls_checkBox">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="tangentControls_label">
+            <property name="text">
+             <string>Tangent Controls</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1">
+           <widget class="QCheckBox" name="IKWorldOri_checkBox">
+            <property name="toolTip">
+             <string>If checked, the IK control will be aligned to the world space</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
+           <widget class="QLabel" name="IKWorldOri_label">
+            <property name="text">
+             <string>IK Ctl World Ori</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="squashStretchProfile_pushButton">
+          <property name="text">
+           <string>Squash and Stretch Profile</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="ikRefArray_groupBox">
+     <property name="title">
+      <string>IK Reference Array</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <layout class="QFormLayout" name="formLayout_2">
+        <item row="0" column="0">
+         <widget class="QLabel" name="chickenStyle_label">
+          <property name="text">
+           <string>Chicken style IK</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QCheckBox" name="chickenStyleIK_checkBox">
+          <property name="toolTip">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;If this option is &lt;span style=&quot; font-weight:600;&quot;&gt;checked&lt;/span&gt;. The IK reference will connect rotation and translation. This is very useful for &lt;span style=&quot; font-weight:600;&quot;&gt;chicken&lt;/span&gt;/birds style neck pinning.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Unchecked&lt;/span&gt; will only connect the rotation. This is much more useful&lt;span style=&quot; font-weight:600;&quot;&gt; for human neck &lt;/span&gt;style and other regular necks.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="1" column="0">
+       <layout class="QHBoxLayout" name="ikRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="ikRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="ikRefArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ikRefArray_copyRef_pushButton">
+            <property name="text">
+             <string>Copy from Head Ref</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="ikRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="ikRefArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ikRefArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="ikRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QGroupBox" name="upvRefArray_groupBox">
+     <property name="title">
+      <string>Head Reference Array</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_4">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="upvRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="upvRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="headRefArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="headRefArray_copyRef_pushButton">
+            <property name="text">
+             <string>Copy from IK Ref</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="upvRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="headRefArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="headRefArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="upvRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>softness_slider</sender>
+   <signal>sliderMoved(int)</signal>
+   <receiver>softness_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>144</x>
+     <y>47</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>220</x>
+     <y>45</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>softness_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>softness_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>222</x>
+     <y>37</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>182</x>
+     <y>37</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

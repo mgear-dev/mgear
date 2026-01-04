@@ -73,4 +73,14 @@ class Ui_Form(object):
         self.margin_spinbox.setObjectName("margin_spinbox")
         self.formLayout.setWidget(0, QtWidgets.QFormLayout.FieldRole, self.margin_spinbox)
         self.gridLayout.addWidget(self.groupBox_2, 1, 0, 1, 1)
+
+        self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
+
+    def retranslateUi(self, Form):
+        Form.setWindowTitle(QtWidgets.QApplication.translate("Form", "Form", None, -1))
+        self.control_size_label.setText(QtWidgets.QApplication.translate("Form", "Control Size", None, -1))
+        self.control_label.setText(QtWidgets.QApplication.translate("Form", "Create Controller", None, -1))
+        self.groupBox_2.setTitle(QtWidgets.QApplication.translate("Form", "UI Settings", None, -1))
+        self.margin_label.setText(QtWidgets.QApplication.translate("Form", "Border Margin", None, -1))
+

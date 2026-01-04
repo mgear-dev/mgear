@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>232</width>
+    <height>418</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QLabel" name="divisions_label">
+       <property name="text">
+        <string>Divisions</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="div_spinBox">
+       <property name="minimum">
+        <number>2</number>
+       </property>
+       <property name="value">
+        <number>2</number>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="upvRefArray_groupBox">
+     <property name="title">
+      <string>Tip Reference Array</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="upvRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="upvRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="refArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="upvRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="refArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="refArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="upvRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

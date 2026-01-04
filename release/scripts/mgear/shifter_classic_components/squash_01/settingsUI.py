@@ -151,6 +151,8 @@ class Ui_Form(object):
         self.verticalLayout_2.addWidget(self.upvRefArray_groupBox)
         spacerItem1 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_2.addItem(spacerItem1)
+
+        self.retranslateUi(Form)
         QtCore.QObject.connect(self.squashX_slider, QtCore.SIGNAL("valueChanged(int)"), self.squashX_spinBox.setValue)
         QtCore.QObject.connect(self.squashX_spinBox, QtCore.SIGNAL("valueChanged(int)"), self.squashX_slider.setValue)
         QtCore.QObject.connect(self.squashY_slider, QtCore.SIGNAL("valueChanged(int)"), self.squashY_spinBox.setValue)
@@ -170,3 +172,17 @@ class Ui_Form(object):
         QtCore.QObject.connect(self.stretchY_slider, QtCore.SIGNAL("sliderMoved(int)"), self.stretchY_spinBox.setValue)
         QtCore.QObject.connect(self.stretchZ_slider, QtCore.SIGNAL("sliderMoved(int)"), self.stretchZ_spinBox.setValue)
         QtCore.QMetaObject.connectSlotsByName(Form)
+
+    def retranslateUi(self, Form):
+        Form.setWindowTitle(QtWidgets.QApplication.translate("Form", "Form", None, -1))
+        self.groupBox.setTitle(QtWidgets.QApplication.translate("Form", "Squash/Stretch Multipliers", None, -1))
+        self.squashX_label.setText(QtWidgets.QApplication.translate("Form", "Squash X", None, -1))
+        self.squashY_label.setText(QtWidgets.QApplication.translate("Form", "Squash Y", None, -1))
+        self.squashZ_label.setText(QtWidgets.QApplication.translate("Form", "Squash Z", None, -1))
+        self.stretchX_label.setText(QtWidgets.QApplication.translate("Form", "Stretch X", None, -1))
+        self.stretchY_label.setText(QtWidgets.QApplication.translate("Form", "Stretch Y", None, -1))
+        self.stretchZ_label.setText(QtWidgets.QApplication.translate("Form", "Stretch Z", None, -1))
+        self.upvRefArray_groupBox.setTitle(QtWidgets.QApplication.translate("Form", "Tip Reference Array", None, -1))
+        self.refArrayAdd_pushButton.setText(QtWidgets.QApplication.translate("Form", "<<", None, -1))
+        self.refArrayRemove_pushButton.setText(QtWidgets.QApplication.translate("Form", ">>", None, -1))
+

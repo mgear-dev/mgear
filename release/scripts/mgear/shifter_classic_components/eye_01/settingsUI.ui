@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>245</width>
+    <height>267</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QLabel" name="upvDirection_label">
+          <property name="text">
+           <string>Up Vector Direction</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="upVectorDirection_comboBox">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <item>
+           <property name="text">
+            <string>X</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Y</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Z</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="ikRefArray_groupBox">
+     <property name="title">
+      <string>IK Reference Array</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="ikRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="ikRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="ikRefArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="ikRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="ikRefArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ikRefArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="ikRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

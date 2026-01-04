@@ -1,0 +1,606 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>494</width>
+    <height>748</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_2">
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Squash/Stretch Multipliers</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QLabel" name="squashX_label">
+          <property name="text">
+           <string>Squash X</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="squashX_slider">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>15</height>
+           </size>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="squashX_spinBox">
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QLabel" name="squashY_label">
+          <property name="text">
+           <string>Squash Y</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="squashY_slider">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>15</height>
+           </size>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="squashY_spinBox">
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <item>
+         <widget class="QLabel" name="squashZ_label">
+          <property name="text">
+           <string>Squash Z</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="squashZ_slider">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>15</height>
+           </size>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="squashZ_spinBox">
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="stretchX_label">
+          <property name="text">
+           <string>Stretch X</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="stretchX_slider">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>15</height>
+           </size>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="stretchX_spinBox">
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_5">
+        <item>
+         <widget class="QLabel" name="stretchY_label">
+          <property name="text">
+           <string>Stretch Y</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="stretchY_slider">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>15</height>
+           </size>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="stretchY_spinBox">
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_6">
+        <item>
+         <widget class="QLabel" name="stretchZ_label">
+          <property name="text">
+           <string>Stretch Z</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="stretchZ_slider">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>15</height>
+           </size>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="stretchZ_spinBox">
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="upvRefArray_groupBox">
+     <property name="title">
+      <string>Tip Reference Array</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <item>
+       <layout class="QHBoxLayout" name="upvRefArray_horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="upvRefArray_verticalLayout_1">
+          <item>
+           <widget class="QListWidget" name="refArray_listWidget">
+            <property name="dragDropOverwriteMode">
+             <bool>true</bool>
+            </property>
+            <property name="dragDropMode">
+             <enum>QAbstractItemView::InternalMove</enum>
+            </property>
+            <property name="defaultDropAction">
+             <enum>Qt::MoveAction</enum>
+            </property>
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::ExtendedSelection</enum>
+            </property>
+            <property name="selectionRectVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="upvRefArray_verticalLayout_2">
+          <item>
+           <widget class="QPushButton" name="refArrayAdd_pushButton">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="refArrayRemove_pushButton">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="upvRefArray_verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>squashX_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>squashX_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>297</x>
+     <y>69</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>425</x>
+     <y>64</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashX_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>squashX_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>426</x>
+     <y>77</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>240</x>
+     <y>73</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashY_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>squashY_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>343</x>
+     <y>110</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>436</x>
+     <y>117</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashY_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>squashY_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>420</x>
+     <y>98</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>337</x>
+     <y>101</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashZ_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>squashZ_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>373</x>
+     <y>146</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>427</x>
+     <y>151</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashZ_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>squashZ_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>427</x>
+     <y>166</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>350</x>
+     <y>145</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchX_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>stretchX_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>368</x>
+     <y>194</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>409</x>
+     <y>196</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchX_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>stretchX_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>424</x>
+     <y>184</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>357</x>
+     <y>197</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchY_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>stretchY_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>368</x>
+     <y>227</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>464</x>
+     <y>247</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchY_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>stretchY_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>425</x>
+     <y>229</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>372</x>
+     <y>229</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchZ_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>stretchZ_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>351</x>
+     <y>270</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>410</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchZ_spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>stretchZ_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>420</x>
+     <y>284</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>359</x>
+     <y>287</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashX_slider</sender>
+   <signal>sliderMoved(int)</signal>
+   <receiver>squashX_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>191</x>
+     <y>68</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>412</x>
+     <y>55</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashY_slider</sender>
+   <signal>sliderMoved(int)</signal>
+   <receiver>squashY_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>157</x>
+     <y>108</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>444</x>
+     <y>112</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>squashZ_slider</sender>
+   <signal>sliderMoved(int)</signal>
+   <receiver>squashZ_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>153</x>
+     <y>151</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>427</x>
+     <y>149</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchX_slider</sender>
+   <signal>sliderMoved(int)</signal>
+   <receiver>stretchX_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>170</x>
+     <y>197</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>426</x>
+     <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchY_slider</sender>
+   <signal>sliderMoved(int)</signal>
+   <receiver>stretchY_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>220</x>
+     <y>235</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>438</x>
+     <y>226</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>stretchZ_slider</sender>
+   <signal>sliderMoved(int)</signal>
+   <receiver>stretchZ_spinBox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>184</x>
+     <y>280</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>418</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
