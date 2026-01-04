@@ -256,6 +256,62 @@ def controllerWalkRight(node, add=False, multi=False):
 # transform walkers
 
 
+def _getFilterAttr(node):
+    """Get the filter attribute from node if it has one
+
+    Checks for known metadata attributes that indicate filtering behavior.
+    Currently supports: isGearGuide
+
+    Arguments:
+        node (dagNode): Node to check
+
+    Returns:
+        str or None: The filter attribute name if found, None otherwise
+    """
+    filterAttrs = ["isGearGuide"]
+    for attr in filterAttrs:
+        if node.hasAttr(attr):
+            return attr
+    return None
+
+
+def _filterByAttr(nodes, attr):
+    """Filter nodes to only those with the specified attribute
+
+    Arguments:
+        nodes (list): List of dagNodes to filter
+        attr (str): Attribute name to filter by
+
+    Returns:
+        list: Nodes that have the specified attribute
+    """
+    return [n for n in nodes if n.hasAttr(attr)]
+
+
+# Name patterns to skip during transform walk (selected only as last resort)
+SKIP_NAME_PATTERNS = ["_sizeRef"]
+
+
+def _filterBySkipPattern(nodes):
+    """Filter out nodes matching skip patterns, keeping them as fallback
+
+    Arguments:
+        nodes (list): List of dagNodes to filter
+
+    Returns:
+        tuple: (preferred nodes, skipped nodes)
+    """
+    preferred = []
+    skipped = []
+    for n in nodes:
+        name = n.name()
+        if any(name.endswith(pattern) for pattern in SKIP_NAME_PATTERNS):
+            skipped.append(n)
+        else:
+            preferred.append(n)
+    return preferred, skipped
+
+
 def transformWalkUp(node, add=False):
     """Walks to the parent transform dagNode on the hierarcy
 
@@ -281,6 +337,13 @@ def transformWalkUp(node, add=False):
 def transformWalkDown(node, add=False, multi=False):
     """Walks to the child transform dagNode on the hierarcy
 
+    If the node has a filter attribute (e.g. isGearGuide), only children
+    with the same attribute will be selected. Falls back to regular
+    transform children if no filtered matches found.
+
+    Nodes matching skip patterns (e.g. _sizeRef) are selected only as
+    a last resort.
+
     Arguments:
         node (dagNode or list of dagNode): dagNode to walk
         add (bool, optional): if True, will add to the selection
@@ -289,13 +352,29 @@ def transformWalkDown(node, add=False, multi=False):
     oChild = []
     if not isinstance(node, list):
         node = [node]
+
+    filterAttr = _getFilterAttr(node[0]) if node else None
+
     for n in node:
         relatives = n.listRelatives(c=True, typ='transform')
         if relatives:
-            if multi:
-                oChild = oChild + relatives
-            else:
-                oChild.append(relatives[0])
+            # Apply skip pattern filter first
+            preferred, skipped = _filterBySkipPattern(relatives)
+
+            # Try to find nodes with filter attr in preferred nodes
+            if filterAttr and preferred:
+                filtered = _filterByAttr(preferred, filterAttr)
+                if filtered:
+                    preferred = filtered
+
+            # Use preferred nodes if available, otherwise fall back to skipped
+            candidates = preferred if preferred else skipped
+
+            if candidates:
+                if multi:
+                    oChild = oChild + candidates
+                else:
+                    oChild.append(candidates[0])
     if oChild:
         pm.select(oChild, add=add)
     else:
@@ -304,6 +383,12 @@ def transformWalkDown(node, add=False, multi=False):
 
 def _getTransformWalkSiblings(node, direction="right", multi=False):
     """ Get the sibling transforms on the hierarchy
+
+    If the node has a filter attribute (e.g. isGearGuide), only siblings
+    with the same attribute will be considered.
+
+    Nodes matching skip patterns (e.g. _sizeRef) are selected only as
+    a last resort.
 
     Arguments:
         node (dagNode or list of dagNode): dagNode to walk the siblings
@@ -322,19 +407,38 @@ def _getTransformWalkSiblings(node, direction="right", multi=False):
 
     if not isinstance(node, list):
         node = [node]
+
+    filterAttr = _getFilterAttr(node[0]) if node else None
+
     siblings = []
     for n in node:
         p = n.getParent()
-        sib = p.getChildren()
-        tSib = [t for t in sib]
+        allSib = p.getChildren(type='transform')
+
+        # Apply skip pattern filter
+        preferred, skipped = _filterBySkipPattern(allSib)
+
+        # Apply attr filter to preferred nodes
+        if filterAttr and preferred:
+            filtered = _filterByAttr(preferred, filterAttr)
+            if filtered:
+                preferred = filtered
+
+        # Use preferred if available, otherwise fall back to skipped
+        sib = preferred if preferred else skipped
+
         if multi:
-            siblings = siblings + tSib
+            siblings = siblings + sib
         else:
-            i = tSib.index(n)
-            if i <= len(tSib) - 2:
-                siblings.append(tSib[i + d])
-            else:
-                siblings.append(tSib[0])
+            if n in sib:
+                i = sib.index(n)
+                if i + d < len(sib) and i + d >= 0:
+                    siblings.append(sib[i + d])
+                elif sib:
+                    # Wrap around
+                    siblings.append(sib[0] if d == 1 else sib[-1])
+            elif sib:
+                siblings.append(sib[0])
 
     return siblings
 
