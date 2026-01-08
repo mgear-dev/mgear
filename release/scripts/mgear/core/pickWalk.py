@@ -292,6 +292,18 @@ def _filterByAttr(nodes, attr):
 SKIP_NAME_PATTERNS = ["_sizeRef"]
 
 
+def _getNodeType(node):
+    """Get the node type for walking purposes
+
+    Arguments:
+        node (dagNode): Node to check
+
+    Returns:
+        str: The node type (e.g. 'joint', 'transform')
+    """
+    return node.nodeType()
+
+
 def _filterBySkipPattern(nodes):
     """Filter out nodes matching skip patterns, keeping them as fallback
 
@@ -323,8 +335,11 @@ def transformWalkUp(node, add=False):
     oParent = []
     if not isinstance(node, list):
         node = [node]
+
+    nodeType = _getNodeType(node[0]) if node else 'transform'
+
     for n in node:
-        p = n.listRelatives(p=True, typ='transform')
+        p = n.listRelatives(p=True, typ=nodeType)
         if p:
             oParent.append(p)
 
@@ -354,9 +369,10 @@ def transformWalkDown(node, add=False, multi=False):
         node = [node]
 
     filterAttr = _getFilterAttr(node[0]) if node else None
+    nodeType = _getNodeType(node[0]) if node else 'transform'
 
     for n in node:
-        relatives = n.listRelatives(c=True, typ='transform')
+        relatives = n.listRelatives(c=True, typ=nodeType) or []
         if relatives:
             # Apply skip pattern filter first
             preferred, skipped = _filterBySkipPattern(relatives)
@@ -409,11 +425,12 @@ def _getTransformWalkSiblings(node, direction="right", multi=False):
         node = [node]
 
     filterAttr = _getFilterAttr(node[0]) if node else None
+    nodeType = _getNodeType(node[0]) if node else 'transform'
 
     siblings = []
     for n in node:
         p = n.getParent()
-        allSib = p.getChildren(type='transform')
+        allSib = p.getChildren(type=nodeType) or []
 
         # Apply skip pattern filter
         preferred, skipped = _filterBySkipPattern(allSib)
