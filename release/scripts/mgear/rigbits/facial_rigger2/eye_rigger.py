@@ -1210,9 +1210,18 @@ def rig(
                            False
                            )
 
+        # add vertical offset for mid sides
+        upperVerticalOffset_att = attribute.addAttribute(
+            up_ctl, "verticalOffset", "float", 0, minValue=0.2, maxValue=.2, keyable=True, channelBox=True
+        )
+        lowerVerticalOffset_att = attribute.addAttribute(
+            low_ctl, "verticalOffset", "float", 0, minValue=0.2, maxValue=.2, keyable=True, channelBox=True
+        )
+        upperVerticalOffset_att >> upMidControls[1].ty
+        lowerVerticalOffset_att >> lowMidControls[1].ty
+
         # lock and hide mid centers
         rigbits.lock_hide_ctl([upMidControls[1], lowMidControls[1]])
-
 
     ###########################################
     # Auto Skinning
