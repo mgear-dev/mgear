@@ -1688,7 +1688,7 @@ class GuideMainSettings(QtWidgets.QDialog, HelperSlots):
 
 
 # class GuideSettings(MayaQWidgetDockableMixin, QtWidgets.QDialog, HelperSlots):
-class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings, csw.CustomStepMixin):
+class GuideSettings(MayaQWidgetDockableMixin, csw.CustomStepMixin, GuideMainSettings):
     greenBrush = QtGui.QColor(0, 160, 0)
     redBrush = QtGui.QColor(180, 0, 0)
     whiteBrush = QtGui.QColor(255, 255, 255)
