@@ -114,6 +114,8 @@ class Component(component.Main):
         """Add more connection definition to the set"""
         self.connections["standard"] = self.connect_standard
         self.connections["orientation"] = self.connect_orientation
+        self.connections["position"] = self.connect_position
+        self.connections["point"] = self.connect_point
 
     def connect_standard(self):
         """standard connection definition for the component"""
@@ -122,3 +124,11 @@ class Component(component.Main):
     def connect_orientation(self):
         """Orient connection definition for the component"""
         self.connect_orientCns()
+
+    def connect_position(self):
+        """position connection definition for the component"""
+        self.connect_positionCns()
+
+    def connect_point(self):
+        """point connection definition for the component"""
+        self.connect_pointCns()

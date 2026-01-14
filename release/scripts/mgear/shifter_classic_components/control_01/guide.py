@@ -43,7 +43,7 @@ class Guide(guide.ComponentGuide):
     email = EMAIL
     version = VERSION
 
-    connectors = ["orientation"]
+    connectors = ["orientation", "position", "point"]
     ctl_names_description = ["ctl"]
 
     # =====================================================

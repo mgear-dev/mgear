@@ -1752,12 +1752,27 @@ class Main(object):
         self.connectRef(self.settings["ikrefarray"], self.ik_cns)
         self.connectRef(self.settings["upvrefarray"], self.upv_cns, True)
 
-    def connect_orientCns(self):
-        """Connection with ori cns
+    def _connect_constraint(self, cns_type="orient"):
+        """Connection with constraint
 
-        Connection definition using orientation constraint.
+        Shared connection definition using orientation or parent constraint
+        (translation only).
+
+        Args:
+            cns_type (str): Type of constraint, "orient", "point" or "parent".
 
         """
+        if cns_type == "orient":
+            cns_func = pm.orientConstraint
+        elif cns_type == "point":
+            cns_func = pm.pointConstraint
+        elif cns_type in ["parent", "parent_translation"]:
+            cns_func = pm.parentConstraint
+        else:
+            raise ValueError(
+                "Invalid constraint type: {}. Use 'orient' 'point' or "
+                "'parent'.".format(cns_type)
+            )
 
         self.parent.addChild(self.root)
 
@@ -1774,8 +1789,11 @@ class Main(object):
                     ref.append(self.rig.findRelative(ref_name))
 
                 ref.append(self.ik_cns)
-                cns_node = pm.orientConstraint(*ref, maintainOffset=True)
-                cns_attr_names = pm.orientConstraint(
+                cns_kwargs = {"maintainOffset": True}
+                if cns_type == "parent_translation":
+                    cns_kwargs["skipRotate"] = ["x", "y", "z"]
+                cns_node = cns_func(*ref, **cns_kwargs)
+                cns_attr_names = cns_func(
                     cns_node, query=True, weightAliasList=True
                 )
                 cns_attr = []
@@ -1791,6 +1809,17 @@ class Main(object):
                     pm.setAttr(node_name + ".colorIfTrueR", 1)
                     pm.setAttr(node_name + ".colorIfFalseR", 0)
                     pm.connectAttr(node_name + ".outColorR", attr)
+
+    def connect_orientCns(self):
+        """Connection with orientation constraint."""
+        self._connect_constraint("orient")
+
+    def connect_positionCns(self):
+        """Connection with parent constraint. But only using translation"""
+        self._connect_constraint("parent_translation")
+
+    def connect_pointCns(self):
+        self._connect_constraint("point")
 
     def connect_orientCns2(self):
         """Connection with ori cns
