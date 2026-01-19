@@ -1,5 +1,6 @@
-"""Nvigate the DAG hierarchy"""
+"""Navigate the DAG hierarchy"""
 
+from typing import List
 
 import maya.cmds as cmds
 import mgear.pymaya as pm
@@ -257,7 +258,7 @@ def findComponentChildren3(node, name, sideIndex):
     return [pm.PyNode(x) for x in children]
 
 
-def findComponentChildren4(node: pm.PyNode, name: str, sideIndex: str) -> list[pm.PyNode]:
+def findComponentChildren4(node: pm.PyNode, name: str, sideIndex: str) -> List[pm.PyNode]:
     """
     Return all transform DAG nodes that belong to a given component.
 
