@@ -48,33 +48,36 @@ class Component(component.Main):
                 j.drawStyle.set(2)
 
         # Ik Controlers ------------------------------------
+        t = transform.getTransformLookingAt(
+            self.guide.apos[1],
+            self.guide.apos[-2],
+            self.guide.blades["blade"].z * -1,
+            "yx",
+            self.negate,
+        )
         if self.settings["IKWorldOri"]:
-            t = datatypes.TransformationMatrix()
-            t = transform.setMatrixPosition(t, self.guide.apos[1])
+            print("World")
+            ik_t = datatypes.TransformationMatrix()
+            ik_t = transform.setMatrixPosition(ik_t, self.guide.apos[1])
         else:
-            t = transform.getTransformLookingAt(
-                self.guide.apos[1],
-                self.guide.apos[-2],
-                self.guide.blades["blade"].z * -1,
-                "yx",
-                self.negate,
-            )
+            ik_t = t
+
         self.ik_off = primitive.addTransform(
-            self.root, self.getName("ik_off"), t
+            self.root, self.getName("ik_off"), ik_t
         )
         # handle Z up orientation offset
         if self.up_axis == "z" and self.settings["IKWorldOri"]:
             self.ik_off.rx.set(90)
-            t = transform.getTransform(self.ik_off)
+            ik_t = transform.getTransform(self.ik_off)
 
         self.ik0_npo = primitive.addTransform(
-            self.ik_off, self.getName("ik0_npo"), t
+            self.ik_off, self.getName("ik0_npo"), ik_t
         )
 
         self.ik0_ctl = self.addCtl(
             self.ik0_npo,
             "ik0_ctl",
-            t,
+            ik_t,
             self.color_ik,
             "compas",
             w=self.size,
@@ -84,6 +87,10 @@ class Component(component.Main):
         attribute.setKeyableAttributes(self.ik0_ctl, self.tr_params)
         attribute.setRotOrder(self.ik0_ctl, "ZXY")
         attribute.setInvertMirror(self.ik0_ctl, ["tx", "ry", "rz"])
+
+        self.ik0_out = primitive.addTransform(
+            self.ik0_ctl, self.getName("ik0_out"), t
+        )
 
         # pelvis
         self.length0 = vector.getDistance(
@@ -142,18 +149,22 @@ class Component(component.Main):
 
             attribute.setInvertMirror(self.autoBend_ctl, ["tx", "ry"])
 
-            self.ik1_npo = primitive.addTransform(
+            self.ik1auto_npo = primitive.addTransform(
                 self.autoBendChain[0], self.getName("ik1_npo"), t
             )
 
             self.ik1autoRot_lvl = primitive.addTransform(
-                self.ik1_npo, self.getName("ik1autoRot_lvl"), t
+                self.ik1auto_npo, self.getName("ik1autoRot_lvl"), t
             )
 
+            ik_t = transform.setMatrixPosition(ik_t, self.guide.apos[-2])
+            self.ik1_npo = primitive.addTransform(
+                self.ik1autoRot_lvl, self.getName("ik1_npo"), ik_t
+            )
             self.ik1_ctl = self.addCtl(
-                self.ik1autoRot_lvl,
+                self.ik1_npo,
                 "ik1_ctl",
-                t,
+                ik_t,
                 self.color_ik,
                 "compas",
                 w=self.size,
@@ -161,20 +172,24 @@ class Component(component.Main):
             )
         else:
             t = transform.setMatrixPosition(t, self.guide.apos[-2])
+            ik_t = transform.setMatrixPosition(ik_t, self.guide.apos[-2])
             self.ik1_npo = primitive.addTransform(
-                self.root, self.getName("ik1_npo"), t
+                self.root, self.getName("ik1_npo"), ik_t
             )
 
             self.ik1_ctl = self.addCtl(
                 self.ik1_npo,
                 "ik1_ctl",
-                t,
+                ik_t,
                 self.color_ik,
                 "compas",
                 w=self.size,
                 tp=self.ik0_ctl,
             )
 
+        self.ik1_out = primitive.addTransform(
+            self.ik1_ctl, self.getName("ik1_out"), t
+        )
         attribute.setKeyableAttributes(self.ik1_ctl, self.tr_params)
         attribute.setRotOrder(self.ik1_ctl, "ZXY")
         attribute.setInvertMirror(self.ik1_ctl, ["tx", "ry", "rz"])
@@ -185,7 +200,7 @@ class Component(component.Main):
             t = transform.setMatrixPosition(t, vec_pos)
 
             self.tan0_npo = primitive.addTransform(
-                self.ik0_ctl, self.getName("tan0_npo"), t
+                self.ik0_out, self.getName("tan0_npo"), t
             )
 
             self.tan0_off = primitive.addTransform(
@@ -207,7 +222,7 @@ class Component(component.Main):
             t = transform.setMatrixPosition(t, vec_pos)
 
             self.tan1_npo = primitive.addTransform(
-                self.ik1_ctl, self.getName("tan1_npo"), t
+                self.ik1_out, self.getName("tan1_npo"), t
             )
 
             self.tan1_off = primitive.addTransform(
@@ -254,7 +269,7 @@ class Component(component.Main):
             t = transform.setMatrixPosition(t, vec_pos)
 
             self.tan0_npo = primitive.addTransform(
-                self.ik0_ctl, self.getName("tan0_npo"), t
+                self.ik0_out, self.getName("tan0_npo"), t
             )
 
             self.tan0_ctl = self.addCtl(
@@ -273,7 +288,7 @@ class Component(component.Main):
             t = transform.setMatrixPosition(t, vec_pos)
 
             self.tan1_npo = primitive.addTransform(
-                self.ik1_ctl, self.getName("tan1_npo"), t
+                self.ik1_out, self.getName("tan1_npo"), t
             )
 
             self.tan1_ctl = self.addCtl(
@@ -295,7 +310,7 @@ class Component(component.Main):
         self.mst_crv = curve.addCnsCurve(
             self.root,
             self.getName("mst_crv"),
-            [self.ik0_ctl, self.tan0_ctl, self.tan1_ctl, self.ik1_ctl],
+            [self.ik0_out, self.tan0_ctl, self.tan1_ctl, self.ik1_out],
             3,
         )
         # reference slv curve
@@ -468,7 +483,7 @@ class Component(component.Main):
                 attribute.setInvertMirror(x, ["tx", "rz", "ry"])
 
         self.chest_woldTwistRef = primitive.addTransform(
-            self.ik1_ctl,
+            self.ik1_out,
             self.getName("chest_ref"),
             transform.getTransform(self.auxTwistChain[0]),
         )
@@ -643,7 +658,7 @@ class Component(component.Main):
         # Tangent position ---------------------------------
         # common part
         d = vector.getDistance(self.guide.apos[1], self.guide.apos[-2])
-        dist_node = node.createDistNode(self.ik0_ctl, self.ik1_ctl)
+        dist_node = node.createDistNode(self.ik0_out, self.ik1_out)
         rootWorld_node = node.createDecomposeMatrixNode(
             self.root.attr("worldMatrix")
         )
@@ -719,14 +734,14 @@ class Component(component.Main):
             self.getName("rollRef"),
             self.spineRollRef,
             parent=self.root,
-            cParent=self.ik1_ctl,
+            cParent=self.ik1_out,
         )
 
         self.ikhAuxTwist, self.tmpCrv = applyop.splineIK(
             self.getName("auxTwist"),
             self.auxTwistChain,
             parent=self.root,
-            cParent=self.ik1_ctl,
+            cParent=self.ik1_out,
         )
 
         # setting connexions for ikhAuxTwist
@@ -749,7 +764,7 @@ class Component(component.Main):
             self.ikhAuxTwist.attr("dWorldUpMatrixEnd"),
         )
         self.auxTwistChain[1].rotateOrder.set(1)
-        pm.connectAttr(self.ik0_ctl.ry, self.baseRoll_ref.ry)
+        pm.connectAttr(self.ik0_out.ry, self.baseRoll_ref.ry)
         mult_node = node.createMulNode(self.baseRoll_ref.ry, -1)
 
         node.createPlusMinusAverage1D(
@@ -873,7 +888,7 @@ class Component(component.Main):
             # Orientation Lock
             if i == 0:
                 dm_node = node.createDecomposeMatrixNode(
-                    self.ik0_ctl + ".worldMatrix"
+                    self.ik0_out + ".worldMatrix"
                 )
 
                 blend_node = node.createBlendNode(
@@ -891,7 +906,7 @@ class Component(component.Main):
 
             elif i == self.settings["division"] - 1:
                 dm_node = node.createDecomposeMatrixNode(
-                    self.ik1_ctl + ".worldMatrix"
+                    self.ik1_out + ".worldMatrix"
                 )
 
                 mulmat_node2 = applyop.gear_mulmatrix_op(
