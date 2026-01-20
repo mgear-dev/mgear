@@ -460,13 +460,8 @@ class Component(component.Main):
         for x in self.rollRef:
             x.setAttr("visibility", False)
 
-        if self.settings["div0"]:
-            twst0_parent = self.rollRef[0]
-        else:
-            twst0_parent = self.root
-
         self.tws0_loc = primitive.addTransform(
-            twst0_parent,
+            self.root,
             self.getName("tws0_loc"),
             transform.getTransform(self.fk_ctl[0]),
         )
@@ -1000,6 +995,13 @@ class Component(component.Main):
         pm.connectAttr(o_node + ".output", dm_node + ".inputMatrix")
         attribute.setRotOrder(self.tws2_rot, "XYZ")
         pm.connectAttr(dm_node + ".outputRotate", self.tws2_rot + ".rotate")
+
+        if self.settings["div0"]:
+            ori_ref = self.rollRef[0]
+        else:
+            ori_ref = self.bone0
+
+        applyop.oriCns(ori_ref, self.tws0_loc, maintainOffset=True)
 
         self.tws0_rot.setAttr("sx", 0.000001)
         self.tws2_rot.setAttr("sx", 0.000001)
