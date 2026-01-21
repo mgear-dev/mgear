@@ -157,9 +157,17 @@ class Main(object):
         relation.
         """
         self.preScript()
+        if self.rig._checkBuildCancelled():
+            return
         self.initialHierarchy()
+        if self.rig._checkBuildCancelled():
+            return
         self.initControlTag()
+        if self.rig._checkBuildCancelled():
+            return
         self.addObjects()
+        if self.rig._checkBuildCancelled():
+            return
         self.setRelation()
         return
 
@@ -169,10 +177,20 @@ class Main(object):
         Get the properties host, create parameters and set layout and logic.
         """
         self.getHost()
+        if self.rig._checkBuildCancelled():
+            return
         self.config_bind_planes()
+        if self.rig._checkBuildCancelled():
+            return
         self.validateProxyChannels()
+        if self.rig._checkBuildCancelled():
+            return
         self.addFullNameParam()
+        if self.rig._checkBuildCancelled():
+            return
         self.addAttributes()
+        if self.rig._checkBuildCancelled():
+            return
         self.set_ui_host_components_controls()
         return
 
@@ -188,8 +206,14 @@ class Main(object):
         Step 03. Connect the component to the rest of the rig.
         """
         self.initConnector()
+        if self.rig._checkBuildCancelled():
+            return
         self.addConnection()
+        if self.rig._checkBuildCancelled():
+            return
         self.connect()
+        if self.rig._checkBuildCancelled():
+            return
         self.postConnect()
         return
 
@@ -205,7 +229,11 @@ class Main(object):
         Step 05. Finalize the component and post Script.
         """
         self.finalize()
+        if self.rig._checkBuildCancelled():
+            return
         self.postScript()
+        if self.rig._checkBuildCancelled():
+            return
         self.collect_build_data()
         return
 

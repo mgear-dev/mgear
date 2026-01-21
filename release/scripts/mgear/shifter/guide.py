@@ -6,6 +6,9 @@ import os
 import sys
 from functools import partial
 
+# Maya
+from maya import cmds, mel
+
 # pymel
 import mgear.pymaya as pm
 from mgear.pymaya import datatypes
@@ -42,6 +45,71 @@ if sys.version_info[0] == 2:
     string_types = (basestring,)
 else:
     string_types = (str,)
+
+
+# =============================================================================
+# Build Cancellation Support
+# =============================================================================
+# Module-level state for cancellation during guide validation
+_cancel_enabled = False
+_cancel_requested = False
+_gMainProgressBar = None
+
+
+def init_guide_cancel():
+    """Initialize the guide cancellation mechanism.
+
+    Enables ESC key cancellation during guide validation in interactive mode.
+    In batch mode, cancellation is disabled since there's no UI.
+    """
+    global _cancel_enabled, _cancel_requested, _gMainProgressBar
+    _cancel_requested = False
+    _cancel_enabled = not cmds.about(batch=True)
+    _gMainProgressBar = None
+
+    if _cancel_enabled:
+        try:
+            _gMainProgressBar = mel.eval("$tmp = $gMainProgressBar")
+            cmds.progressBar(
+                _gMainProgressBar,
+                edit=True,
+                beginProgress=True,
+                isInterruptable=True,
+                status="Validating Guide...",
+                maxValue=100,
+            )
+        except Exception:
+            _cancel_enabled = False
+
+
+def end_guide_cancel():
+    """End the guide cancellation mechanism."""
+    global _cancel_enabled, _gMainProgressBar
+    if _cancel_enabled and _gMainProgressBar:
+        try:
+            cmds.progressBar(_gMainProgressBar, edit=True, endProgress=True)
+        except Exception:
+            pass
+
+
+def check_guide_cancelled():
+    """Check if guide validation was cancelled by user pressing ESC.
+
+    Returns:
+        bool: True if cancelled, False otherwise.
+    """
+    global _cancel_enabled, _cancel_requested, _gMainProgressBar
+    if _cancel_requested:
+        return True
+    if _cancel_enabled and _gMainProgressBar:
+        try:
+            if cmds.progressBar(_gMainProgressBar, query=True, isCancelled=True):
+                _cancel_requested = True
+                pm.displayWarning("Guide validation cancelled by user")
+                return True
+        except Exception:
+            pass
+    return False
 
 
 # Blueprint section settings mapping - defines which attributes belong to each section
@@ -791,87 +859,113 @@ class Rig(Main):
             root (dagNode): The root of the hierarchy to parse.
             branch (bool): True to parse children components.
 
+        Can be cancelled by pressing ESC during execution.
         """
-        startTime = datetime.datetime.now()
-        # Start
-        mgear.log("Checking guide")
+        init_guide_cancel()
+        try:
+            startTime = datetime.datetime.now()
+            # Start
+            mgear.log("Checking guide")
 
-        # Get the model and the root
-        self.model = root.getParent(generations=-1)
-        while True:
-            if root.hasAttr("comp_type") or self.model == root:
-                break
-            root = root.getParent()
-            mgear.log(root)
+            # Get the model and the root
+            self.model = root.getParent(generations=-1)
+            while True:
+                if root.hasAttr("comp_type") or self.model == root:
+                    break
+                root = root.getParent()
+                mgear.log(root)
 
-        # ---------------------------------------------------
-        # First check and set the options
-        mgear.log("Get options")
-        self.setParamDefValuesFromProperty(self.model)
+            if check_guide_cancelled():
+                self.valid = False
+                return
 
-        # ---------------------------------------------------
-        # Get the controllers
-        mgear.log("Get controllers")
-        self.controllers_org = dag.findChild(self.model, "controllers_org")
-        if self.controllers_org:
-            for child in self.controllers_org.getChildren():
-                self.controllers[child.name().split("|")[-1]] = child
+            # ---------------------------------------------------
+            # First check and set the options
+            mgear.log("Get options")
+            self.setParamDefValuesFromProperty(self.model)
 
-        # ---------------------------------------------------
-        # Components
-        mgear.log("Get components")
-        self.findComponentRecursive(root, branch)
-        endTime = datetime.datetime.now()
-        finalTime = endTime - startTime
-        mgear.log("Find recursive in  [ " + str(finalTime) + " ]")
-        # Parenting
-        if self.valid:
-            for name in self.componentsIndex:
-                mgear.log("Get parenting for: " + name)
-                # TODO: In the future should use connections to retrive this
-                # data
-                # We try the fastes aproach, will fail if is not the top node
-                try:
-                    # search for his parent
-                    compParent = self.components[name].root.getParent()
-                    if compParent and compParent.hasAttr("isGearGuide"):
+            if check_guide_cancelled():
+                self.valid = False
+                return
 
-                        names = naming.get_component_and_relative_name(
-                            compParent.name(long=None)
-                        )
+            # ---------------------------------------------------
+            # Get the controllers
+            mgear.log("Get controllers")
+            self.controllers_org = dag.findChild(self.model, "controllers_org")
+            if self.controllers_org:
+                for child in self.controllers_org.getChildren():
+                    self.controllers[child.name().split("|")[-1]] = child
 
-                        pName = names[0]
-                        pLocal = names[1]
-                        # Handle name clashing when parsing the guide
-                        # to determine the parent component
-                        if "|" in pName:
-                            pName = pName.rsplit("|", 1)[-1]
-                        pComp = self.components[pName]
-                        self.components[name].parentComponent = pComp
-                        self.components[name].parentLocalName = pLocal
-                # This will scan the hierachy in reverse. It is much slower
-                except KeyError:
-                    # search children and set him as parent
-                    compParent = self.components[name]
-                    # for localName, element in compParent.getObjects(
-                    #         self.model, False).items():
-                    # NOTE: getObjects3 is an experimental function
-                    # Build parent lookup dict once to avoid O(n²) nested loop
-                    parent_lookup = {}
-                    for comp_name in self.componentsIndex:
-                        comp = self.components[comp_name]
-                        parent_lookup[comp.root.getParent()] = comp
-                    # Now lookup is O(1) instead of O(n)
-                    for localName, element in compParent.getObjects3(
-                        self.model
-                    ).items():
-                        if element is not None and element in parent_lookup:
-                            compChild = parent_lookup[element]
-                            compChild.parentComponent = compParent
-                            compChild.parentLocalName = localName
+            if check_guide_cancelled():
+                self.valid = False
+                return
 
-            # More option values
-            self.addOptionsValues()
+            # ---------------------------------------------------
+            # Components
+            mgear.log("Get components")
+            self.findComponentRecursive(root, branch)
+
+            if check_guide_cancelled():
+                self.valid = False
+                return
+
+            endTime = datetime.datetime.now()
+            finalTime = endTime - startTime
+            mgear.log("Find recursive in  [ " + str(finalTime) + " ]")
+            # Parenting
+            if self.valid:
+                for name in self.componentsIndex:
+                    if check_guide_cancelled():
+                        self.valid = False
+                        return
+
+                    mgear.log("Get parenting for: " + name)
+                    # TODO: In the future should use connections to retrive this
+                    # data
+                    # We try the fastes aproach, will fail if is not the top node
+                    try:
+                        # search for his parent
+                        compParent = self.components[name].root.getParent()
+                        if compParent and compParent.hasAttr("isGearGuide"):
+
+                            names = naming.get_component_and_relative_name(
+                                compParent.name(long=None)
+                            )
+
+                            pName = names[0]
+                            pLocal = names[1]
+                            # Handle name clashing when parsing the guide
+                            # to determine the parent component
+                            if "|" in pName:
+                                pName = pName.rsplit("|", 1)[-1]
+                            pComp = self.components[pName]
+                            self.components[name].parentComponent = pComp
+                            self.components[name].parentLocalName = pLocal
+                    # This will scan the hierachy in reverse. It is much slower
+                    except KeyError:
+                        # search children and set him as parent
+                        compParent = self.components[name]
+                        # for localName, element in compParent.getObjects(
+                        #         self.model, False).items():
+                        # NOTE: getObjects3 is an experimental function
+                        # Build parent lookup dict once to avoid O(n²) nested loop
+                        parent_lookup = {}
+                        for comp_name in self.componentsIndex:
+                            comp = self.components[comp_name]
+                            parent_lookup[comp.root.getParent()] = comp
+                        # Now lookup is O(1) instead of O(n)
+                        for localName, element in compParent.getObjects3(
+                            self.model
+                        ).items():
+                            if element is not None and element in parent_lookup:
+                                compChild = parent_lookup[element]
+                                compChild.parentComponent = compParent
+                                compChild.parentLocalName = localName
+
+                # More option values
+                self.addOptionsValues()
+        finally:
+            end_guide_cancel()
 
         # End
         if not self.valid:
@@ -1003,7 +1097,13 @@ class Rig(Main):
         Arguments:
             node (dagNode): Object frome where start the search.
             branch (bool): If True search recursive all the children.
+
+        Can be cancelled by pressing ESC during execution.
         """
+        if check_guide_cancelled():
+            self.valid = False
+            return
+
         # TODO: why mouth component is passing str node??
         if not isinstance(node, str):
             if node.hasAttr("comp_type"):
@@ -1021,6 +1121,9 @@ class Rig(Main):
 
             if branch:
                 for child in node.getChildren(type="transform"):
+                    if check_guide_cancelled():
+                        self.valid = False
+                        return
                     self.findComponentRecursive(child)
 
     def getComponentGuide(self, comp_type):
