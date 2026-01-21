@@ -156,12 +156,14 @@ def getModuleBasePath(directories, moduleName):
             moduleBasePath = basepath
             break
     else:
-        moduleBasePath = ""
-        message = "= GEAR RIG SYSTEM ======"
-        message += "component base directory not found " " for {}".format(
-            moduleName
-        )
-        mgear.log(message, mgear.sev_error)
+        message = (
+            "Component '{}' not found in any registered component directory.\n"
+            "Please check:\n"
+            "  1. The component is installed correctly\n"
+            "  2. The MGEAR_COMPONENTS_PATH environment variable includes the component's parent directory\n"
+            "  3. The component name is spelled correctly in the guide"
+        ).format(moduleName)
+        raise ImportError(message)
 
     return moduleBasePath
 
