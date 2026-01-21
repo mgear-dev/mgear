@@ -7,7 +7,7 @@ import json
 
 # Maya
 import mgear.pymaya as pm
-from maya import cmds
+from maya import cmds, mel
 from mgear.pymaya import datatypes
 from mgear.pymaya import versions
 
@@ -214,6 +214,10 @@ class Rig(object):
         # Joint name cache for faster lookups during build
         self._joint_cache = None
 
+        # Build cancellation state
+        self.stopBuild = False
+        self._cancelEnabled = False
+
     def buildJointCache(self):
         """Build a cache of all joint names in the scene for fast lookups.
 
@@ -237,6 +241,60 @@ class Rig(object):
         if name in self._joint_cache:
             return pm.PyNode(name)
         return None
+
+    def _initBuildCancel(self):
+        """Initialize the build cancellation mechanism.
+
+        Enables ESC key cancellation during rig build in interactive mode.
+        In batch mode, cancellation is disabled since there's no UI.
+        """
+        self.stopBuild = False
+        self._cancelEnabled = not cmds.about(batch=True)
+        self._gMainProgressBar = None
+
+        if self._cancelEnabled:
+            try:
+                self._gMainProgressBar = mel.eval("$tmp = $gMainProgressBar")
+                cmds.progressBar(
+                    self._gMainProgressBar,
+                    edit=True,
+                    beginProgress=True,
+                    isInterruptable=True,
+                    status="Building Rig...",
+                    maxValue=100,
+                )
+            except Exception:
+                self._cancelEnabled = False
+
+    def _endBuildCancel(self):
+        """End the build cancellation mechanism."""
+        if self._cancelEnabled and self._gMainProgressBar:
+            try:
+                cmds.progressBar(
+                    self._gMainProgressBar, edit=True, endProgress=True
+                )
+            except Exception:
+                pass
+
+    def _checkBuildCancelled(self):
+        """Check if build was cancelled by user pressing ESC.
+
+        Returns:
+            bool: True if cancelled, False otherwise.
+        """
+        if self.stopBuild:
+            return True
+        if self._cancelEnabled and self._gMainProgressBar:
+            try:
+                if cmds.progressBar(
+                    self._gMainProgressBar, query=True, isCancelled=True
+                ):
+                    self.stopBuild = True
+                    pm.displayWarning("Build cancelled by user")
+                    return True
+            except Exception:
+                pass
+        return False
 
     @core_utils.one_undo
     def buildFromDict(self, conf_dict):
@@ -262,6 +320,12 @@ class Rig(object):
         merged_options = self.guide.getMergedOptions()
         self.from_dict_custom_step(merged_options, pre=True)
         self.build()
+
+        # Check if build was cancelled
+        if self.stopBuild:
+            mgear.log("\n" + "= SHIFTER BUILD CANCELLED " + "=" * 40)
+            return None
+
         self.from_dict_custom_step(merged_options, pre=False)
         # Collect post-build data
         if self.options["data_collector_embedded"] or self.options["data_collector"]:
@@ -271,13 +335,6 @@ class Rig(object):
 
         endTime = datetime.datetime.now()
         finalTime = endTime - startTime
-        # pm.flushUndo()
-        # pm.displayInfo(
-        #     "Undo history have been flushed to avoid "
-        #     "possible crash after rig is build. \n"
-        #     "More info: "
-        #     "https://github.com/miquelcampos/mgear/issues/72"
-        # )
         mgear.log(
             "\n"
             + "= SHIFTER BUILD RIG DONE {} [ {} ] {}".format(
@@ -323,6 +380,12 @@ class Rig(object):
             # Build
             mgear.log("\n" + "= BUILDING RIG " + "=" * 46)
             self.build()
+
+            # Check if build was cancelled
+            if self.stopBuild:
+                mgear.log("\n" + "= SHIFTER BUILD CANCELLED " + "=" * 40)
+                return None
+
             if ismodel:
                 self.postCustomStep()
 
@@ -332,13 +395,6 @@ class Rig(object):
 
             endTime = datetime.datetime.now()
             finalTime = endTime - startTime
-            # pm.flushUndo()
-            # pm.displayInfo(
-            #     "Undo history have been flushed to avoid "
-            #     "possible crash after rig is build. \n"
-            #     "More info: "
-            #     "https://github.com/miquelcampos/mgear/issues/72"
-            # )
             mgear.log(
                 "\n"
                 + "= SHIFTER BUILD RIG DONE {} [ {} ] {}".format(
@@ -351,23 +407,33 @@ class Rig(object):
     @core_utils.viewport_off
     @core_utils.undo_off
     def build(self):
-        """Build the rig."""
+        """Build the rig.
 
-        # Use merged options to apply blueprint settings when enabled
-        self.options = self.guide.getMergedOptions()
-        self.guides = self.guide.components
+        The build can be cancelled by pressing ESC during execution.
+        """
+        self._initBuildCancel()
+        try:
+            # Use merged options to apply blueprint settings when enabled
+            self.options = self.guide.getMergedOptions()
+            self.guides = self.guide.components
 
-        self.customStepDic["mgearRun"] = self
+            self.customStepDic["mgearRun"] = self
 
-        # Build joint cache if connecting to existing joints
-        if self.options.get("connect_joints"):
-            self.buildJointCache()
+            # Build joint cache if connecting to existing joints
+            if self.options.get("connect_joints"):
+                self.buildJointCache()
 
-        self.initialHierarchy()
-        self.processComponents()
-        self.finalize()
+            self.initialHierarchy()
+            if self._checkBuildCancelled():
+                return None
+            self.processComponents()
+            if self._checkBuildCancelled():
+                return None
+            self.finalize()
 
-        return self.model
+            return self.model
+        finally:
+            self._endBuildCancel()
 
     def stepsList(self, checker, attr):
         if self.options[checker] and self.options[attr]:
@@ -738,12 +804,17 @@ class Rig(object):
     def processComponents(self):
         """
         Process the components of the rig, following the creation steps.
+
+        Can be cancelled by pressing ESC during execution.
         """
 
         # Init
         self.components_infos = {}
 
         for comp in self.guide.componentsIndex:
+            if self._checkBuildCancelled():
+                return
+
             guide_ = self.guides[comp]
             mgear.log("Init : " + guide_.fullName + " (" + guide_.type + ")")
 
@@ -764,8 +835,10 @@ class Rig(object):
         # Creation steps
         self.steps = component.Main.steps
         for i, name in enumerate(self.steps):
-            # for count, compName in enumerate(self.componentsIndex):
             for compName in self.componentsIndex:
+                if self._checkBuildCancelled():
+                    return
+
                 comp = self.components[compName]
                 mgear.log(
                     name + " : " + comp.fullName + " (" + comp.type + ")"
@@ -776,7 +849,13 @@ class Rig(object):
                 break
 
     def finalize(self):
-        """Finalize the rig."""
+        """Finalize the rig.
+
+        Can be cancelled by pressing ESC during execution.
+        """
+        if self._checkBuildCancelled():
+            return
+
         groupIdx = 0
 
         # Properties --------------------------------------
@@ -795,6 +874,9 @@ class Rig(object):
                 if to_delete:
                     pm.delete(to_delete)
 
+        if self._checkBuildCancelled():
+            return
+
         # Groups ------------------------------------------
         mgear.log("Creating groups")
         # Retrieve group content from components
@@ -804,6 +886,9 @@ class Rig(object):
                 self.addToGroup(objects, name)
             for name, objects in component_.subGroups.items():
                 self.addToSubGroup(objects, name)
+
+        if self._checkBuildCancelled():
+            return
 
         # Create master set to group all the groups
         masterSet = pm.sets(n=self.model.name() + "_sets_grp", em=True)
@@ -833,6 +918,9 @@ class Rig(object):
         masterSet.add(geoSet)
         groupIdx += 1
 
+        if self._checkBuildCancelled():
+            return
+
         # Bind pose ---------------------------------------
         # controls_grp = self.groups["controllers"]
         # pprint(controls_grp, stream=None, indent=1, width=100)
@@ -850,6 +938,8 @@ class Rig(object):
                 self.model.name(), ac=True, f=True
             ) or []
             for node_name in history_nodes:
+                if self._checkBuildCancelled():
+                    return
                 if cmds.nodeType(node_name) != "transform":
                     try:
                         cmds.setAttr(f"{node_name}.isHistoricallyInteresting", False)
