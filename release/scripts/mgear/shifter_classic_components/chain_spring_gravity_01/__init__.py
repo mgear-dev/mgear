@@ -24,6 +24,9 @@ class Component(component.Main):
         self.normal = self.guide.blades["blade"].z
         self.binormal = self.guide.blades["blade"].x
 
+        # Mirror behavior for controls
+        self.mirrorBehaviour = self.settings["mirrorBehaviour"] and self.negate
+
         self.fk_npo = []
         self.fk_ctl = []
         self.spring_cns = []
@@ -43,28 +46,36 @@ class Component(component.Main):
                 self.guide.apos[i], self.guide.apos[i + 1]
             )
 
+            # Apply mirror behavior
+            if self.mirrorBehaviour:
+                tnpo = transform.setMatrixScale(t, [-1, -1, -1])
+                ctl_dist = dist * -1
+            else:
+                tnpo = t
+                ctl_dist = dist
+
             fk_npo = primitive.addTransform(
-                parent, self.getName("fk%s_npo" % i), t
+                parent, self.getName("fk%s_npo" % i), tnpo
             )
 
             spring_aim = primitive.addTransform(
-                fk_npo, self.getName("spring%s_aim" % i), t
+                fk_npo, self.getName("spring%s_aim" % i), tnpo
             )
 
             spring_cns = primitive.addTransform(
-                fk_npo, self.getName("spring%s_cns" % i), t
+                fk_npo, self.getName("spring%s_cns" % i), tnpo
             )
 
             fk_ctl = self.addCtl(
                 spring_cns,
                 "fk%s_ctl" % i,
-                t,
+                tnpo,
                 self.color_fk,
                 "cube",
-                w=dist,
+                w=ctl_dist,
                 h=self.size * 0.1,
                 d=self.size * 0.1,
-                po=datatypes.Vector(dist * 0.5 * self.n_factor, 0, 0),
+                po=datatypes.Vector(ctl_dist * 0.5 * self.n_factor, 0, 0),
                 tp=self.previousTag,
                 lp=False,
             )
@@ -192,10 +203,15 @@ class Component(component.Main):
         # spring operators
         # settings aim contraints
         for i, tranCns in enumerate(self.spring_aim):
-            if self.negate:
+            # Determine aim axis based on negate and mirror behavior
+            if self.mirrorBehaviour:
+                # Mirror behavior: use same axis as L side (scale handles the flip)
+                aimAxis = "xy"
+            elif self.negate:
                 aimAxis = "-xy"
             else:
                 aimAxis = "xy"
+
             applyop.aimCns(
                 tranCns,
                 self.spring_target[i],
