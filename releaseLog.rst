@@ -2,6 +2,31 @@ Release Log
 ===========
 
 
+5.2.1
+------
+**Enhancements**
+	* Shifter: Spring_Gravity_01: General improvements and mirror behavior #581
+	* Shifter: chain_spring_01: Add mirror behavior #607
+	* Shifter: EPIC leg and arm 02: Add option to configure swing and twist of the first joint (arm/Thigh) #570
+	* Shifter: UPV Visualization for Arm/Leg Guides polish implementation #567
+	* Shifter: Initial refactor to change the settingsUI from QtDesigner to human editable, also now it can be subclassed for component variants
+	* Shifter: Add cancel build mechanism pressing ESC #606
+	* Shifter: Update message when component is not found and raise import error
+	* Shifter: Adding position and point connector to shifter components. Implemented on control_01
+	* Shifter: Guide settings UPDATE MRO #603
+	* Rigbits: Eye Rigger: Add option driven offset layers for automation #579
+	* Rigbits: Eye Rigger: Add option to control vertical offset when simplified #579
+	* Rigbits: CreateGhostCtl: Ensure visibility attr is also connected on shapes
+	* Core: Update pickwalk to work on Shifter Guides
+	* Core: Fix pickwalk to support joints and other type of objects
+
+**Bug Fix**
+	* Shifter: control_01 "orientation" connector broken. Fixed by using parentConstraint with skipTranslate #578
+	* Shifter: 3jnt leg flip on mGear 5.1 #577
+	* Shifter: EPIC_arm_01: Fix arm joint position offset when moving FK0_ctl control
+	* Shifter: EPIC_spine_02: Wrong joint orientation when spine is placed horizontal with IK World align setting activated #605
+	* Compatibility fixes for Python and PySide versions
+
 5.2.0
 ------
 **New Features**
