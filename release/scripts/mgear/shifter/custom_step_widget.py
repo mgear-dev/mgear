@@ -3542,6 +3542,159 @@ class TemplateSelectionDialog(QtWidgets.QDialog):
 
 
 # ============================================================================
+# Custom Step Error Dialog
+# ============================================================================
+
+
+class CustomStepErrorDialog(QtWidgets.QDialog):
+    """Dialog for displaying custom step execution errors.
+
+    Shows the step name, error type, and traceback in a well-formatted layout.
+    """
+
+    CONTINUE = "Continue"
+    STOP_BUILD = "Stop Build"
+    EDIT = "Edit"
+
+    def __init__(
+        self, step_path, error_type, error_args, traceback_text, parent=None
+    ):
+        """Initialize the error dialog.
+
+        Args:
+            step_path: Path to the failing custom step
+            error_type: The exception type name
+            error_args: The exception arguments
+            traceback_text: Full traceback text
+            parent: Parent widget
+        """
+        super(CustomStepErrorDialog, self).__init__(parent)
+        self.setWindowTitle("Custom Step Error")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(400)
+
+        self._result = self.CONTINUE
+        self._setup_ui(step_path, error_type, error_args, traceback_text)
+
+    def _setup_ui(self, step_path, error_type, error_args, traceback_text):
+        """Setup the dialog UI."""
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        # Header with error icon and title
+        header_layout = QtWidgets.QHBoxLayout()
+        icon_label = QtWidgets.QLabel()
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_MessageBoxCritical)
+        icon_label.setPixmap(icon.pixmap(32, 32))
+        header_layout.addWidget(icon_label)
+
+        title_label = QtWidgets.QLabel("Custom Step Failed")
+        title_font = title_label.font()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+
+        # Step path section
+        step_group = QtWidgets.QGroupBox("Failed Step")
+        step_layout = QtWidgets.QVBoxLayout(step_group)
+        step_label = QtWidgets.QLabel(step_path)
+        step_label.setWordWrap(True)
+        step_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        step_font = step_label.font()
+        step_font.setFamily("Consolas, Monaco, monospace")
+        step_label.setFont(step_font)
+        step_label.setStyleSheet(
+            "QLabel { background-color: #2d2d30; padding: 8px; "
+            "border-radius: 4px; color: #ff6b6b; }"
+        )
+        step_layout.addWidget(step_label)
+        layout.addWidget(step_group)
+
+        # Error type section
+        error_group = QtWidgets.QGroupBox("Error")
+        error_layout = QtWidgets.QVBoxLayout(error_group)
+        error_text = "{}: {}".format(error_type, error_args)
+        error_label = QtWidgets.QLabel(error_text)
+        error_label.setWordWrap(True)
+        error_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        error_label.setStyleSheet(
+            "QLabel { background-color: #2d2d30; padding: 8px; "
+            "border-radius: 4px; }"
+        )
+        error_layout.addWidget(error_label)
+        layout.addWidget(error_group)
+
+        # Traceback section
+        tb_group = QtWidgets.QGroupBox("Traceback")
+        tb_layout = QtWidgets.QVBoxLayout(tb_group)
+        tb_text = QtWidgets.QPlainTextEdit()
+        tb_text.setPlainText(traceback_text)
+        tb_text.setReadOnly(True)
+        tb_text.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+        tb_font = tb_text.font()
+        tb_font.setFamily("Consolas, Monaco, monospace")
+        tb_font.setPointSize(9)
+        tb_text.setFont(tb_font)
+        tb_text.setMinimumHeight(150)
+        tb_layout.addWidget(tb_text)
+        layout.addWidget(tb_group)
+
+        # Question label
+        question_label = QtWidgets.QLabel("Continue with next step?")
+        question_label.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(question_label)
+
+        # Buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+
+        continue_btn = QtWidgets.QPushButton("Continue")
+        continue_btn.setMinimumWidth(100)
+        continue_btn.clicked.connect(self._on_continue)
+        button_layout.addWidget(continue_btn)
+
+        stop_btn = QtWidgets.QPushButton("Stop Build")
+        stop_btn.setMinimumWidth(100)
+        stop_btn.clicked.connect(self._on_stop_build)
+        button_layout.addWidget(stop_btn)
+
+        edit_btn = QtWidgets.QPushButton("Edit")
+        edit_btn.setMinimumWidth(100)
+        edit_btn.clicked.connect(self._on_edit)
+        button_layout.addWidget(edit_btn)
+
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+
+    def _on_continue(self):
+        """Handle Continue button click."""
+        self._result = self.CONTINUE
+        self.accept()
+
+    def _on_stop_build(self):
+        """Handle Stop Build button click."""
+        self._result = self.STOP_BUILD
+        self.accept()
+
+    def _on_edit(self):
+        """Handle Edit button click."""
+        self._result = self.EDIT
+        self.accept()
+
+    def get_result(self):
+        """Get the dialog result.
+
+        Returns:
+            str: One of CONTINUE, STOP_BUILD, or EDIT
+        """
+        return self._result
+
+
+# ============================================================================
 # Group Selection Dialog
 # ============================================================================
 
@@ -4281,21 +4434,23 @@ class CustomStepMixin(object):
         Returns:
             True if build should stop, False otherwise
         """
+        # Resolve the full path before try block so it's available for Edit
+        if sys.platform.startswith("darwin"):
+            stepPath = stepPath.replace("\\", "/")
+
+        fileName = os.path.split(stepPath)[1].split(".")[0]
+
+        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
+            runPath = os.path.join(
+                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""),
+                stepPath,
+            )
+        else:
+            runPath = stepPath
+
         try:
             with pm.UndoChunk():
                 pm.displayInfo("EXEC: Executing custom step: %s" % stepPath)
-                if sys.platform.startswith("darwin"):
-                    stepPath = stepPath.replace("\\", "/")
-
-                fileName = os.path.split(stepPath)[1].split(".")[0]
-
-                if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                    runPath = os.path.join(
-                        os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""),
-                        stepPath,
-                    )
-                else:
-                    runPath = stepPath
 
                 customStep = imp.load_source(fileName, runPath)
                 if hasattr(customStep, "CustomShifterStep"):
@@ -4321,36 +4476,31 @@ class CustomStepMixin(object):
                     )
 
         except Exception as ex:
-            template = "An exception of type {0} occurred. "
-            "Arguments:\n{1!r}"
-            message = template.format(type(ex).__name__, ex.args)
-            pm.displayError(message)
-            pm.displayError(traceback.format_exc())
-            cont = pm.confirmBox(
-                "FAIL: Custom Step Fail",
-                "The step:%s has failed. Continue with next step?" % stepPath
-                + "\n\n"
-                + message
-                + "\n\n"
-                + traceback.format_exc(),
-                "Continue",
-                "Stop Build",
-                "Edit",
-                "Try Again!",
+            error_type = type(ex).__name__
+            error_args = str(ex.args)
+            traceback_text = traceback.format_exc()
+            pm.displayError(
+                "An exception of type {} occurred. Arguments: {}".format(
+                    error_type, error_args
+                )
             )
-            if cont == "Stop Build":
+            pm.displayError(traceback_text)
+
+            dialog = CustomStepErrorDialog(
+                step_path=stepPath,
+                error_type=error_type,
+                error_args=error_args,
+                traceback_text=traceback_text,
+                parent=pyqt.maya_main_window(),
+            )
+            dialog.exec_()
+            result = dialog.get_result()
+
+            if result == CustomStepErrorDialog.STOP_BUILD:
                 return True
-            elif cont == "Edit":
-                cls._editFile(stepPath)
-            elif cont == "Try Again!":
-                try:
-                    pm.undo()
-                except Exception:
-                    pass
-                pm.displayInfo("Trying again! : {}".format(stepPath))
-                inception = cls.runStep(stepPath, customStepDic)
-                if inception:
-                    return True
+            elif result == CustomStepErrorDialog.EDIT:
+                cls._editFile(runPath)
+                return False
             else:
                 return False
 
