@@ -405,7 +405,6 @@ class Rig(object):
         return build_data
 
     @core_utils.viewport_off
-    @core_utils.undo_off
     def build(self):
         """Build the rig.
 
