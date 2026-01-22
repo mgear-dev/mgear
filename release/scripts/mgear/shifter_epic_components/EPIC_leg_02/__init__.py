@@ -572,6 +572,7 @@ class Component(component.Main):
         )
 
         tagP = self.parentCtlTag
+        self.tweak_npo = []
         self.tweak_ctl = []
         self.div_cns = []
         self.roll_offset = []
@@ -593,8 +594,12 @@ class Component(component.Main):
             self.div_cns.append(div_cns)
 
             t = transform.getTransform(div_cns)
+            tweak_npo = primitive.addTransform(
+                div_cns, self.getName("tweak%s_npo" % i)
+            )
+            self.tweak_npo.append(tweak_npo)
             tweak_ctl = self.addCtl(
-                div_cns,
+                tweak_npo,
                 "tweak%s_ctl" % i,
                 t,
                 self.color_fk,
@@ -623,20 +628,45 @@ class Component(component.Main):
                 self.settings["joint_rot_offset_z"] + 180,
             ]
             if i == 0:
+                root_leaf = False
+                if self.settings["div0"]:
+                    self.leg_root_base = primitive.addTransform(self.root, self.getName("divRoot_loc"))
+                else:
+                    if self.settings["leafJoints"]:
+                        root_leaf = True
+                    self.leg_root_base = roll_off
+
+                if self.negate:
+                    rot_off_root = None
+                else:
+                    rot_off_root = rot_off
+
                 self.jnt_pos.append(
                     {
-                        "obj": roll_off,
+                        "obj": self.leg_root_base,
                         "name": jdn_thigh,
                         "guide_relative": "root",
                         "data_contracts": "Ik",
-                        "leaf_joint": self.settings["leafJoints"],
-                        "rot_off": rot_off,
+                        "leaf_joint": root_leaf,
+                        "rot_off": rot_off_root,
                     }
                 )
                 current_parent = "root"
                 twist_name = jdn_thigh_twist
                 twist_idx = 1
                 increment = 1
+                # extra joint twist/swing
+                if self.settings["div0"]:
+                    self.jnt_pos.append(
+                        {
+                            "obj": roll_off,
+                            "name": jdn_thigh + "_swing",
+                            "leaf_joint": self.settings["leafJoints"],
+                            "data_contracts": "Twist,Squash",
+                            "newActiveJnt": current_parent,
+                            "rot_off": rot_off_root,
+                        }
+                    )
             elif i == self.settings["div0"] + 1:
                 self.jnt_pos.append(
                     {
@@ -1520,11 +1550,21 @@ class Component(component.Main):
         # controler.. and we wont have this nice bendy + roll
         div_offset = int(self.extra_div / 2)
         for i, div_cns in enumerate(self.div_cns):
-            if i == 0 and not self.settings["div0"]:
-                mulmat_node = applyop.gear_mulmatrix_op(
-                    self.uplegRollRef[0] + ".worldMatrix",
-                    div_cns + ".parentInverseMatrix",
-                )
+            if i == 0:
+                if self.settings["div0"]:
+                    mulmat_node = applyop.gear_mulmatrix_op(
+                        self.uplegTwistChain[i] + ".worldMatrix",
+                        div_cns + ".parentInverseMatrix",
+                    )
+                    mulmat_node = applyop.gear_mulmatrix_op(
+                        self.uplegRollRef[0] + ".worldMatrix",
+                        self.leg_root_base + ".parentInverseMatrix",
+                    )
+                else:
+                    mulmat_node = applyop.gear_mulmatrix_op(
+                        self.uplegRollRef[0] + ".worldMatrix",
+                        div_cns + ".parentInverseMatrix",
+                    )
                 lastUpLegDiv = div_cns
             elif i < (self.settings["div0"] + div_offset):
                 mulmat_node = applyop.gear_mulmatrix_op(
@@ -1551,10 +1591,7 @@ class Component(component.Main):
             dm_node = node.createDecomposeMatrixNode(mulmat_node + ".output")
             pm.connectAttr(dm_node + ".outputTranslate", div_cns + ".t")
 
-            if i == 0 and not self.settings["div0"]:
-                applyop.oriCns(self.bone0, div_cns, maintainOffset=True)
-            else:
-                pm.connectAttr(dm_node + ".outputRotate", div_cns + ".r")
+            pm.connectAttr(dm_node + ".outputRotate", div_cns + ".r")
 
             # Squash n Stretch
             o_node = applyop.gear_squashstretch2_op(
@@ -1576,6 +1613,14 @@ class Component(component.Main):
         pm.parentConstraint(self.bone0, self.match_fk0_off, mo=True)
         pm.parentConstraint(self.bone1, self.match_fk1_off, mo=True)
 
+        # base leg joint final connection.
+        # we doing it at the end to ensure the div_cns is in the final position
+        transform.matchWorldTransform(self.div_cns[0], self.leg_root_base)
+        if self.settings["div0"]:
+            applyop.oriCns(self.bone0, self.leg_root_base, maintainOffset=True)
+        else:
+            applyop.oriCns(self.bone0, self.tweak_npo[0], maintainOffset=True)
+
     # =====================================================
     # CONNECTOR
     # =====================================================
@@ -1592,10 +1637,14 @@ class Component(component.Main):
         self.controlRelatives["ankle"] = self.ik_ctl
         self.controlRelatives["eff"] = self.fk2_ctl
 
+        # we need to account with the extra joint for swing
+        if self.settings["div0"]:
+            offset = offset + 1
+
         self.jointRelatives["root"] = 0
         self.jointRelatives["knee"] = self.settings["div0"] + offset
-        self.jointRelatives["ankle"] = len(self.div_cns)
-        self.jointRelatives["eff"] = len(self.div_cns)
+        self.jointRelatives["ankle"] = -1
+        self.jointRelatives["eff"] = -1
 
         self.aliasRelatives["eff"] = "foot"
 
