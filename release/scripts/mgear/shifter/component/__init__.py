@@ -1791,7 +1791,8 @@ class Main(object):
 
         """
         if cns_type == "orient":
-            cns_func = pm.orientConstraint
+            # cns_func = pm.orientConstraint
+            cns_func = pm.parentConstraint
         elif cns_type == "point":
             cns_func = pm.pointConstraint
         elif cns_type in ["parent", "parent_translation"]:
@@ -1820,6 +1821,8 @@ class Main(object):
                 cns_kwargs = {"maintainOffset": True}
                 if cns_type == "parent_translation":
                     cns_kwargs["skipRotate"] = ["x", "y", "z"]
+                elif cns_type == "orient":
+                    cns_kwargs["skipTranslate"] = ["x", "y", "z"]
                 cns_node = cns_func(*ref, **cns_kwargs)
                 cns_attr_names = cns_func(
                     cns_node, query=True, weightAliasList=True
