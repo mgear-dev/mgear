@@ -1,16 +1,8 @@
 Shifter User Documentation
 ##########################
 
-WIP section: Please visit:
+Please visit:
 `mGear Youtube channel <https://www.youtube.com/c/mgearriggingframework/>`_
-
-* components
-* creating new components
-* guides templates and basic rig building
-* stepped rig building
-* scalability and reusability
-* gotchas
-* tips
 
 .. _shifter-guide-manager:
 
@@ -631,22 +623,252 @@ Custom steps are Python classes that inherit from ``customShifterMainStep``:
             # Create organization group for custom objects
             setup_root = self.get_or_create_setup_root()
 
-**Available Methods in Custom Steps:**
+Available Properties
+^^^^^^^^^^^^^^^^^^^^
 
-- ``self.rig``: Access to the Shifter rig object
-- ``self.guide``: Access to guide data
-- ``self.component(name)``: Get a component by name (e.g., "arm_L0")
-- ``self.components_by_type(type)``: Get all components of a specific type
-- ``self.custom_step(name)``: Access previously executed custom steps
-- ``self.run_sub_step(module_name, step_path)``: Execute nested steps
-- ``self.get_or_create_setup_root()``: Create an organization group for step objects
+**self.rig**
 
-**Step Dictionary:**
+Alias for ``self.mgear_run`` providing intuitive access to the Shifter rig object. Use this to access rig-wide data and controls.
+
+.. code-block:: python
+
+    def run(self):
+        # Access the global control
+        global_ctl = self.rig.global_ctl
+
+        # Access the rig's setup group
+        setup_grp = self.rig.setupWS
+
+        # Get all components
+        all_components = self.rig.components
+
+**self.guide**
+
+Access to the guide object from the rig build (if available).
+
+.. code-block:: python
+
+    def run(self):
+        if self.guide:
+            # Access guide data
+            guide_model = self.guide.model
+
+Available Methods
+^^^^^^^^^^^^^^^^^
+
+**self.component(name)**
+
+Get a component by its full name (e.g., "arm_L0"). Raises ``KeyError`` if the component is not found.
+
+.. code-block:: python
+
+    def run(self):
+        # Get a specific component
+        arm = self.component("arm_L0")
+
+        # Access component controls
+        fk_ctl = arm.fk_ctl
+        ik_ctl = arm.ik_ctl
+
+**self.has_component(name)**
+
+Check if a component exists without raising an error. Returns ``True`` if the component exists, ``False`` otherwise.
+
+.. code-block:: python
+
+    def run(self):
+        # Safely check for optional components
+        if self.has_component("tail_C0"):
+            tail = self.component("tail_C0")
+            self.log("Found tail component")
+        else:
+            self.log("No tail component in this rig", level="warning")
+
+**self.components_by_type(comp_type)**
+
+Get all components of a specific type. Returns a list of matching components.
+
+.. code-block:: python
+
+    def run(self):
+        # Get all control_01 components
+        all_controls = self.components_by_type("control_01")
+        for ctrl in all_controls:
+            self.log("Found control: {}".format(ctrl.fullName))
+
+        # Process all arm components
+        arms = self.components_by_type("EPIC_arm_01")
+        for arm in arms:
+            # Apply custom setup to each arm
+            self.setup_arm_spaces(arm)
+
+**self.custom_step(name)**
+
+Access a custom step that has already been executed. Raises ``KeyError`` if the step hasn't run yet.
+
+.. code-block:: python
+
+    def run(self):
+        # Access data from a previous step
+        color_step = self.custom_step("apply_colors")
+        colors_used = color_step.color_palette
+
+**self.has_custom_step(name)**
+
+Check if a custom step has been executed without raising an error.
+
+.. code-block:: python
+
+    def run(self):
+        # Check for optional dependency
+        if self.has_custom_step("proxy_setup"):
+            proxy = self.custom_step("proxy_setup")
+            # Use proxy data
+        else:
+            self.log("Proxy setup not available", level="warning")
+
+**self.get_or_create_setup_root(name)**
+
+Get or create a setup root group for organizing custom step objects. The group is automatically parented under the rig's setup group.
+
+.. code-block:: python
+
+    def run(self):
+        # Create a setup group for this step's objects
+        setup_grp = self.get_or_create_setup_root()
+
+        # Create custom objects and parent them
+        my_locator = pm.spaceLocator(name="custom_loc")
+        pm.parent(my_locator, setup_grp)
+
+        # Use a custom name for the setup root
+        custom_grp = self.get_or_create_setup_root("my_custom_setup")
+
+**self.log(message, level)**
+
+Log a message with the step name as a prefix. The ``level`` parameter can be "info" (default), "warning", or "error".
+
+.. code-block:: python
+
+    def run(self):
+        self.log("Starting custom step processing")
+        # Output: [my_custom_step] Starting custom step processing
+
+        self.log("Missing optional attribute", level="warning")
+        # Displays as Maya warning
+
+        self.log("Critical error occurred", level="error")
+        # Displays as Maya error
+
+Running Sub-Steps
+^^^^^^^^^^^^^^^^^
+
+**self.run_sub_step(module_name, step_path)**
+
+Load and run another custom step from an external module. This powerful method enables modular step design by allowing you to break complex operations into smaller, reusable steps.
+
+The sub-step will have access to the same step dictionary, components, and rig context as the parent step.
+
+**Parameters:**
+
+- ``module_name``: The name of the Python module/file without the ``.py`` extension
+- ``step_path`` (optional): The directory path where the module is located. If not provided, checks the ``MGEAR_SHIFTER_CUSTOMSTEP_PATH`` environment variable
+
+**Basic Usage:**
+
+.. code-block:: python
+
+    def run(self):
+        # Run a sub-step from a specific path
+        self.run_sub_step("apply_colors", "W:/my_steps")
+
+        # Run a sub-step using MGEAR_SHIFTER_CUSTOMSTEP_PATH env var
+        self.run_sub_step("setup_spaces")
+
+        # Run a sub-step that's already in Python's path
+        self.run_sub_step("mirror_controls")
+
+**Accessing Sub-Step Data:**
+
+.. code-block:: python
+
+    def run(self):
+        # Run the sub-step and get immediate access
+        color_step = self.run_sub_step("apply_colors", "W:/my_steps")
+        self.log("Colors applied: {}".format(color_step.colors_applied))
+
+        # Or access it later via custom_step()
+        self.run_sub_step("setup_proxies", "W:/my_steps")
+        # ... other code ...
+        proxy_step = self.custom_step("setup_proxies")
+
+**Modular Step Architecture Example:**
+
+Main step file (``main_setup.py``):
+
+.. code-block:: python
+
+    from mgear.shifter.custom_step import customShifterMainStep
+
+    class CustomShifterStep(customShifterMainStep):
+
+        def setup(self):
+            self.name = "main_setup"
+
+        def run(self):
+            self.log("Running main setup...")
+
+            # Run color application
+            self.run_sub_step("apply_colors", "W:/steps")
+
+            # Run space switching setup
+            self.run_sub_step("setup_spaces", "W:/steps")
+
+            # Run selection sets creation
+            self.run_sub_step("create_sets", "W:/steps")
+
+            self.log("Main setup complete!")
+
+Sub-step file (``apply_colors.py``):
+
+.. code-block:: python
+
+    from mgear.shifter.custom_step import customShifterMainStep
+
+    class CustomShifterStep(customShifterMainStep):
+
+        def setup(self):
+            self.name = "apply_colors"
+            self.colors_applied = []
+
+        def run(self):
+            self.log("Applying control colors...")
+
+            # Get all arm components and apply colors
+            arms = self.components_by_type("EPIC_arm_01")
+            for arm in arms:
+                # Apply color logic
+                self.colors_applied.append(arm.fullName)
+
+            self.log("Applied colors to {} components".format(
+                len(self.colors_applied)))
+
+**Benefits of Sub-Steps:**
+
+- **Modularity**: Break complex setups into focused, single-purpose steps
+- **Reusability**: Share common operations across multiple rigs
+- **Maintainability**: Update individual sub-steps without modifying the main step
+- **Testing**: Test sub-steps independently before integrating
+- **Team Collaboration**: Different team members can work on different sub-steps
+
+Step Dictionary
+^^^^^^^^^^^^^^^
 
 All steps share a common dictionary (``customStepDic``) that enables inter-step communication:
 
-- Each executed step is stored in this dictionary
-- Steps can access data set by previous steps
+- Each executed step is stored in this dictionary using its name as the key
+- Steps can access data set by previous steps via ``self.custom_step(name)``
+- Sub-steps are automatically registered in this dictionary
 - Use this for passing complex data between steps
 
 .. _custom-step-templates:
