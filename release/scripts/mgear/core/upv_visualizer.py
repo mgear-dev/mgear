@@ -14,14 +14,15 @@ def upv_vis_decompose_nodes(root, elbow, wrist, eff):
 
     Creates a decomposeMatrix node for each guide node to extract world space transformation information.
 
-    Args:
-        root (PyNode): Root guide node
-        elbow (PyNode): Elbow guide node
-        wrist (PyNode): Wrist guide node
-        eff (PyNode): End effector guide node
+    Arguments:
+        root (PyNode): Root guide node.
+        elbow (PyNode): Elbow guide node.
+        wrist (PyNode): Wrist guide node.
+        eff (PyNode): End effector guide node.
 
     Returns:
-        list: A list containing four decomposeMatrix nodes, in the order [root, elbow, wrist, eff]
+        list: A list containing four decomposeMatrix nodes, in the order
+            [root, elbow, wrist, eff].
     """
     guide_nodes = [root, elbow, wrist, eff]
     decompose_nodes = [
@@ -40,15 +41,17 @@ def create_vector_nodes(name, node_type="subtract"):
 
     Creates a set of three nodes of the same type for processing the X, Y, Z components of a vector.
 
-    Args:
-        name (str): Node name prefix
-        node_type (str, optional): Node type, supports 'subtract', 'sum', 'multiply'
+    Arguments:
+        name (str): Node name prefix.
+        node_type (str, optional): Node type, supports 'subtract', 'sum',
+            'multiply'.
 
     Returns:
-        list: A list containing three specified type nodes, corresponding to the X, Y, Z axes respectively
+        list: A list containing three specified type nodes, corresponding to
+            the X, Y, Z axes respectively.
 
     Raises:
-        ValueError: When the node_type is not supported
+        ValueError: When the node_type is not supported.
     """
     node_creators = {
         "subtract": ("subtract", "subtract"),
@@ -74,11 +77,12 @@ def connect_vector_components(
 
     Connects the output components of the source node to the specified attributes of the target nodes.
 
-    Args:
-        source_node (PyNode): Source node, containing outputTranslateX/Y/Z attributes
-        target_nodes (list): Target node list
-        target_attribute (str, optional): Target attribute name
-        axes (list, optional): List of axes to connect
+    Arguments:
+        source_node (PyNode): Source node, containing outputTranslateX/Y/Z
+            attributes.
+        target_nodes (list): Target node list.
+        target_attribute (str, optional): Target attribute name.
+        axes (list, optional): List of axes to connect.
 
     """
     for i, component in enumerate(axes):
@@ -101,20 +105,16 @@ def create_vector_subtraction_nodes(elbow, wrist, root, eff):
 
     Creates all necessary vector subtraction nodes for pole vector calculation.
 
-    Args:
-        elbow (PyNode): Elbow guide node
-        wrist (PyNode): Wrist guide node
-        root (PyNode): Root guide node
-        eff (PyNode): End effector guide node
+    Arguments:
+        elbow (PyNode): Elbow guide node.
+        wrist (PyNode): Wrist guide node.
+        root (PyNode): Root guide node.
+        eff (PyNode): End effector guide node.
 
     Returns:
-        dict: A dictionary containing various vector subtraction nodes, keys include:
-            - 'crossProduct_elbow': Nodes related to elbow cross product
-            - 'crossProduct_wrist': Nodes related to wrist cross product
-            - 'crossProduct_root': Nodes related to root cross product
-            - 'sub_elbow': Elbow subtraction nodes
-            - 'sub_wrist': Wrist subtraction nodes
-            - 'sub_eff': End effector subtraction nodes
+        dict: A dictionary containing various vector subtraction nodes, keys
+            include: 'crossProduct_elbow', 'crossProduct_wrist',
+            'crossProduct_root', 'sub_elbow', 'sub_wrist', 'sub_eff'.
     """
     vector_nodes = {}
     node_type = "subtract"
@@ -141,12 +141,12 @@ def connect_decompose_to_vector_nodes(decompose_nodes, vector_nodes):
 
     Connects the outputs of decomposeMatrix nodes to the inputs of vector subtraction nodes.
 
-    Args:
-        decompose_nodes (list): decomposeMatrix node list
-        vector_nodes (dict): Vector subtraction node dictionary
+    Arguments:
+        decompose_nodes (list): decomposeMatrix node list.
+        vector_nodes (dict): Vector subtraction node dictionary.
 
     Note:
-        Node order convention: decompose_nodes = [root, elbow, wrist, eff]
+        Node order convention: decompose_nodes = [root, elbow, wrist, eff].
     """
     decm = decompose_nodes
     # Connect crossProduct_root (wrist - root)
@@ -175,11 +175,12 @@ def calculate_vector_lengths(vector_nodes):
 
     Creates length nodes for eff, elbow, wrist vectors to calculate their lengths.
 
-    Args:
-        vector_nodes (dict): Dictionary containing vector subtraction nodes
+    Arguments:
+        vector_nodes (dict): Dictionary containing vector subtraction nodes.
 
     Returns:
-        dict: Dictionary containing length nodes, keys are 'eff', 'elbow', 'wrist'
+        dict: Dictionary containing length nodes, keys are 'eff', 'elbow',
+            'wrist'.
     """
     length_nodes = {}
     for joint_name in ["eff", "elbow", "wrist"]:
@@ -192,6 +193,7 @@ def calculate_vector_lengths(vector_nodes):
 
     return length_nodes
 
+
 def setup_math_operations(root, length_nodes, float_value=0.5):
     """
     Set up mathematical operation nodes.
@@ -199,22 +201,19 @@ def setup_math_operations(root, length_nodes, float_value=0.5):
     Creates a chain of mathematical operation nodes for pole vector
     calculation.
 
-    Args:
-        root (PyNode): Root guide node
-        length_nodes (dict): Dictionary containing length nodes
+    Arguments:
+        root (PyNode): Root guide node.
+        length_nodes (dict): Dictionary containing length nodes.
         float_value (float, optional): Multiplication coefficient,
-            defaults to 0.5
+            defaults to 0.5.
 
     Returns:
-        tuple: A tuple containing two elements:
-            - half_one_float_node: Final multiplication node
-            - math_nodes: Mathematical node dictionary,
-              containing 'max' and 'half_multiply' nodes
+        tuple: A tuple containing two elements: half_one_float_node (final
+            multiplication node) and math_nodes (dict containing 'max' and
+            'half_multiply' nodes).
     """
     # Equivalent of floatMath (multiply)
-    max_float_node = pm.createNode(
-        "multiplyDivide", name=f"{root}_max_md"
-    )
+    max_float_node = pm.createNode("multiplyDivide", name=f"{root}_max_md")
     max_float_node.input1X.set(0.010)
     max_float_node.operation.set(1)  # 1 = multiply
 
@@ -226,20 +225,14 @@ def setup_math_operations(root, length_nodes, float_value=0.5):
     length_nodes["wrist"].output >> max_node.input[3]
 
     # Equivalent of floatMath (multiply)
-    half_one_float_node = pm.createNode(
-        "multiplyDivide", name=f"{root}_half_one_md"
-    )
+    half_one_float_node = pm.createNode("multiplyDivide", name=f"{root}_half_one_md")
     half_one_float_node.input2X.set(float_value)
     half_one_float_node.operation.set(1)  # 1 = multiply
     max_node.output >> half_one_float_node.input1X
 
-    math_nodes = {
-        "max": max_node,
-        "half_multiply": half_one_float_node
-    }
+    math_nodes = {"max": max_node, "half_multiply": half_one_float_node}
 
     return half_one_float_node, math_nodes
-
 
 
 def setup_cross_product_chain(root, elbow, wrist, vector_nodes, float_value):
@@ -248,18 +241,16 @@ def setup_cross_product_chain(root, elbow, wrist, vector_nodes, float_value):
 
     Creates a complete cross product calculation node network to determine the pole vector direction.
 
-    Args:
-        root (PyNode): Root guide node
-        elbow (PyNode): Elbow guide node
-        wrist (PyNode): Wrist guide node
-        vector_nodes (dict): Vector node dictionary
-        float_value (float): Coefficient used for length calculation
+    Arguments:
+        root (PyNode): Root guide node.
+        elbow (PyNode): Elbow guide node.
+        wrist (PyNode): Wrist guide node.
+        vector_nodes (dict): Vector node dictionary.
+        float_value (float): Coefficient used for length calculation.
 
     Returns:
         tuple: A tuple containing three elements:
-            - crossProduct_root_normalize_node: Normalized final cross product result
-            - half_multiply_node: Length multiplication node
-            - math_nodes: Mathematical operation node dictionary
+            crossProduct_root_normalize_node, half_multiply_node, math_nodes.
     """
     length_nodes = calculate_vector_lengths(vector_nodes)
     half_multiply_node, math_nodes = setup_math_operations(
@@ -333,12 +324,12 @@ def setup_upv_position_calculation(
 
     Determines the final position of the pole vector guide node based on cross product direction and length calculation.
 
-    Args:
-        elbow (PyNode): Elbow guide node
-        upv (PyNode): Pole vector guide node
-        normalize_node (PyNode): Normalized cross product direction node
-        half_multiply_node (PyNode): Length multiplication node
-        decompose_nodes (list): decomposeMatrix node list
+    Arguments:
+        elbow (PyNode): Elbow guide node.
+        upv (PyNode): Pole vector guide node.
+        normalize_node (PyNode): Normalized cross product direction node.
+        half_multiply_node (PyNode): Length multiplication node.
+        decompose_nodes (list): decomposeMatrix node list.
     """
     upv_pos_mul = create_vector_nodes(f"{elbow}_upv_pos", "multiply")
     upv_pos_sum = create_vector_nodes(f"{elbow}_upv_pos", "sum")
@@ -362,11 +353,11 @@ def setup_visibility_and_matrix(root, root_decompose, upv, upvcrv):
 
     Ensures the UPV node and curve correctly inherit the root node's transformation.
 
-    Args:
-        root (PyNode): Root guide node
-        root_decompose (PyNode): Decompose matris node from root
-        upv (PyNode): Pole vector guide node
-        upvcrv (PyNode): Pole vector display curve
+    Arguments:
+        root (PyNode): Root guide node.
+        root_decompose (PyNode): Decompose matrix node from root.
+        upv (PyNode): Pole vector guide node.
+        upvcrv (PyNode): Pole vector display curve.
     """
     root_decompose.outputScale >> upv.scale
     root.worldInverseMatrix[0] >> upv.offsetParentMatrix
@@ -379,14 +370,15 @@ def create_upv_system(root, elbow, wrist, eff, upvcrv, upv, float_value=0.5):
 
     Main function that coordinates all sub-functions to create a complete pole vector visualization system.
 
-    Args:
-        root (PyNode): Root guide node
-        elbow (PyNode): Elbow guide node
-        wrist (PyNode): Wrist guide node
-        eff (PyNode): End effector guide node
-        upvcrv (PyNode): Pole vector display curve node
-        upv (PyNode): Pole vector guide node
-        float_value (float, optional): Pole vector length coefficient, defaults to 0.5
+    Arguments:
+        root (PyNode): Root guide node.
+        elbow (PyNode): Elbow guide node.
+        wrist (PyNode): Wrist guide node.
+        eff (PyNode): End effector guide node.
+        upvcrv (PyNode): Pole vector display curve node.
+        upv (PyNode): Pole vector guide node.
+        float_value (float, optional): Pole vector length coefficient,
+            defaults to 0.5.
 
     Example:
         >>> create_upv_system('root_guide', 'elbow_guide', 'wrist_guide',

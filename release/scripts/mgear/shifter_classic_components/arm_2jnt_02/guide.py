@@ -61,18 +61,8 @@ class Guide(guide.ComponentGuide):
         self.dispcrv = self.addDispCurve(
             "crv",
             [self.root, self.elbow, self.wrist, self.eff])
-        
-        self.upv = self.addLoc("upv", self.root, vTemp)
-        self.upvcrv = self.addDispCurve("upvcrv", [self.elbow, self.upv])
-        upv_visualizer.create_upv_system(
-            self.root,
-            self.elbow,
-            self.wrist,
-            self.eff,
-            self.upvcrv,
-            self.upv,
-            float_value=0.5,
-        )
+
+        self.addUpvLocator(self.elbow, self.wrist, self.eff)
 
     def addParameters(self):
         """Add the configurations settings"""

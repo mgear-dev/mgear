@@ -92,6 +92,8 @@ class Guide(guide.ComponentGuide):
 
         self.blade = self.addBlade("blade", self.wrist, self.eff)
 
+        self.addUpvLocator(self.elbow, self.wrist, self.eff, float_value=0.8)
+
     def addParameters(self):
         """Add the configurations settings"""
 

@@ -18,6 +18,7 @@ from mgear.core import node
 from mgear.pymaya import versions
 
 from mgear.core import dag, vector, transform, applyop, attribute, icon, pyqt, utils
+from mgear.core import upv_visualizer
 
 from mgear.shifter import guide, guide_manager
 from . import chain_guide_initializer
@@ -973,6 +974,67 @@ class ComponentGuide(guide.Main):
         self.connect_x_ray(disp_crv)
         return disp_crv
 
+    def addUpvLocator(
+        self,
+        mid_loc,
+        end_loc,
+        eff_loc,
+        position=None,
+        float_value=0.5,
+        color=18,
+        width=0.3,
+    ):
+        """Add an up-vector (pole vector) locator visualization system.
+
+        Creates a pole vector locator that automatically positions itself based
+        on the limb chain poositions. This is commonly used for IK setups on arms
+        and legs.
+
+        Args:
+            mid_loc (dagNode): The middle joint locator (e.g., elbow or knee).
+            end_loc (dagNode): The end joint locator (e.g., wrist or ankle).
+            eff_loc (dagNode): The end effector locator.
+            position (vector, optional): Initial position for the upv locator.
+                If None, uses the eff_loc position.
+            float_value (float, optional): Pole vector distance coefficient.
+                Defaults to 0.5.
+            color (int, optional): Maya color index for the locator.
+                Defaults to 17.
+            width (float, optional): Display width of the locator.
+                Defaults to 0.5.
+
+        Returns:
+            tuple: A tuple containing (upv, upvcrv) where:
+                - upv (dagNode): The pole vector locator.
+                - upvcrv (dagNode): The display curve connecting mid_loc to upv.
+
+        Example:
+            # For an arm component:
+            self.upv, self.upvcrv = self.addUpvLocator(
+                self.elbow, self.wrist, self.eff, color=18, width=0.3
+            )
+
+            # For a leg component:
+            self.upv, self.upvcrv = self.addUpvLocator(
+                self.knee, self.ankle, self.eff
+            )
+
+        """
+        if position is None:
+            position = eff_loc.getTranslation(space="world")
+
+        upv = self.addLoc("upv", self.root, position, color=color, width=width)
+        upvcrv = self.addDispCurve("upvcrv", [mid_loc, upv])
+        upv_visualizer.create_upv_system(
+            self.root,
+            mid_loc,
+            end_loc,
+            eff_loc,
+            upvcrv,
+            upv,
+            float_value=float_value,
+        )
+        return upv, upvcrv
 
     # ====================================================
     # MISC

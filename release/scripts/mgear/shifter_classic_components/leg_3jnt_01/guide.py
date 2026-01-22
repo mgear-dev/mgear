@@ -60,17 +60,7 @@ class Guide(guide.ComponentGuide):
         centers = [self.root, self.knee, self.ankle, self.foot, self.eff]
         self.dispcrv = self.addDispCurve("crv1", centers)
 
-        self.upv = self.addLoc("upv", self.root, vTemp)
-        self.upvcrv = self.addDispCurve("upvcrv", [self.knee, self.upv])
-        upv_visualizer.create_upv_system(
-            self.root,
-            self.knee,
-            self.ankle,
-            self.eff,
-            self.upvcrv,
-            self.upv,
-            float_value=0.5,
-        )
+        self.addUpvLocator(self.knee, self.ankle, self.eff)
 
     def addParameters(self):
         """Add the configurations settings"""
