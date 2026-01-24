@@ -2630,6 +2630,19 @@ def match_fk_to_ik_scale_slide(arm_ctl, forearm_ctl, hand_ctl,
     Raises:
         RuntimeError: On missing nodes or zero‐length setup.
     """
+    # get default max values and rest values
+    s_path = "{}.{}".format(ui_host, scale_attr)
+    sl_path = "{}.{}".format(ui_host, slide_attr)
+    s_path_info = attribute.get_attr_info(ui_host, scale_attr)
+    sl_path_info = attribute.get_attr_info(ui_host, slide_attr)
+    s_default_val = s_path_info["default"]
+    s_min_val = s_path_info["min"]
+    s_max_val = s_path_info["max"]
+
+    sl_default_val = sl_path_info["default"]
+    sl_min_val = sl_path_info["min"]
+    sl_max_val = sl_path_info["max"]
+
     # verify controls & parents
     def parent_of(obj):
         p = cmds.listRelatives(obj, parent=True, f=True)
@@ -2685,15 +2698,22 @@ def match_fk_to_ik_scale_slide(arm_ctl, forearm_ctl, hand_ctl,
     slide_val = max(0.0, min(1.0, slide_val))
     # print("Slide value: {:.3f}".format(slide_val))
 
+    # map normalized values to attribute ranges
+    if s_default_val is not None:
+        scale_val = scale_val * s_default_val
+
+    if sl_min_val is not None and sl_max_val is not None:
+        slide_val = (sl_max_val - sl_min_val) * slide_val + sl_min_val
+
     # set attrs
-    s_path = "{}.{}".format(ui_host, scale_attr)
-    sl_path = "{}.{}".format(ui_host, slide_attr)
+
     for p in (s_path, sl_path):
         if not cmds.objExists(p):
             raise RuntimeError("Missing attribute: {}".format(p))
 
     cmds.setAttr(s_path, scale_val)
     cmds.setAttr(sl_path, slide_val)
+
 
 
 def place_upv_from_fk(arm_ctl, forearm_ctl, hand_ctl,

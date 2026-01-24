@@ -661,59 +661,108 @@ class ChannelTable(QtWidgets.QTableWidget):
         return attrs
 
     def updateHighlightedSliders(self, value):
+        """
+        Update multiple sliders simultaneously, only if the sender's row is
+        currently selected.
+
+        Behaviour:
+            - If multiple rows are selected, and you drag one slider:
+                  all selected rows update together.
+            - If you drag a slider on a row that is NOT selected:
+                  only that one updates (solo edit), even if others are selected.
+
+        This avoids destroying the multi-edit workflow, while allowing quick
+        single-channel adjustments.
+        """
+        # -- If ChannelMaster has disabled slider updates globally, stop here
         if self.parent().parent().parent().doUpdateHighlightedSliders:
+
             selected_rows = self.get_selected_rows()
-            # for slider we need to connect the undo when mouse press event
-            # for combobox and check box we do it here befor the loop
-            # with this solution we need to undo 2 times to restore the previous
-            # values
-            if isinstance(
-                self.sender(), (QtWidgets.QComboBox, QtWidgets.QCheckBox)
-            ):
+            sender = self.sender()
+
+            # -- Find which row the sender widget belongs to
+            sender_row = 0
+            for row in range(self.rowCount()):
+                widget = self.cellWidget(row, 2)
+                if not widget:
+                    continue
+
+                # -- Direct match: the sender is the widget in this row
+                if widget is sender:
+                    sender_row = row
+                    break
+
+                # -- Checkbox widgets contain an inner QCheckBox, so check that as well
+                checkbox = widget.findChild(QtWidgets.QCheckBox)
+                if checkbox is sender:
+                    sender_row = row
+                    break
+
+            # -- If the sender is not part of the selected rows, treat as solo edit
+            # -- So only update this one row and do not propagate to others
+            if sender_row is not None and sender_row not in selected_rows:
+                return
+
+            # -- For slider we need to connect the undo when mouse press event
+            # -- For combobox and check box we do it here before the loop
+            # -- This solution we need to undo 2 times to restore the previous values
+            if isinstance(sender, (QtWidgets.QComboBox, QtWidgets.QCheckBox)):
                 cmds.undoInfo(openChunk=True)
 
+            # -- Update all selected rows
             for row in selected_rows:
                 slider = self.cellWidget(row, 2)
-                sender_type = type(self.sender())
+                sender_type = type(sender)
+
+                # -- For CheckBoxWidget, the real widget is inside
                 if isinstance(slider, CheckBoxWidget):
                     slider_type = slider.findChild(QtWidgets.QCheckBox)
                 else:
                     slider_type = slider
-                if slider != self.sender() and isinstance(
-                    slider_type, sender_type
-                ):
+
+                # -- Only update widgets of the same type as the sender
+                if slider != sender and isinstance(slider_type, sender_type):
+                    # -- Handle combobox editing
                     if isinstance(slider, QtWidgets.QComboBox):
                         signal = slider.currentIndexChanged
                         set_value = slider.setCurrentIndex
+
+                    # -- Handle checkbox editing
                     elif isinstance(slider, CheckBoxWidget):
-                        signal = slider.findChild(
-                            QtWidgets.QCheckBox
-                        ).stateChanged
-                        set_value = slider.findChild(
-                            QtWidgets.QCheckBox
-                        ).setChecked
+                        checkbox = slider.findChild(QtWidgets.QCheckBox)
+                        signal = checkbox.stateChanged
+                        set_value = checkbox.setChecked
+
+                        # -- Checkboxes emit 0/1/2, clamp to valid state
                         if value > 1:
                             value = 1
+
+                    # -- Handle float/int slider widgets
                     elif isinstance(slider, pyflow_widgets.pyf_Slider):
                         signal = slider.valueChanged
                         set_value = slider.setValue
+
                     else:
                         signal = None
 
+                    # -- If no compatible signal exists, skip...
                     if signal:
+                        # -- Temporarily disconnect to avoid recursion
                         signal.disconnect(self.updateHighlightedSliders)
+                        # -- Apply the UI update
+                        # -- This is a callable variable
                         set_value(value)
 
+                        # -- Update Maya attribute
                         item = self.item(row, 0)
                         attr_config = item.data(QtCore.Qt.UserRole)
-                        cmds.setAttr(
-                            self.namespace_sync(attr_config["fullName"]), value
-                        )
+                        cmds.setAttr(self.namespace_sync(attr_config["fullName"]), value)
+
+                        # -- Reconnect after update
                         signal.connect(self.updateHighlightedSliders)
-            # close the undo chunk after the loop is finished
-            if isinstance(
-                self.sender(), (QtWidgets.QComboBox, QtWidgets.QCheckBox)
-            ):
+
+            # -- Close the undo chunk after the loop is finished
+            if isinstance(sender, (QtWidgets.QComboBox, QtWidgets.QCheckBox)):
                 cmds.undoInfo(closeChunk=True)
 
 

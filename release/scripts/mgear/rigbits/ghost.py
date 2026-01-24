@@ -70,6 +70,16 @@ def createGhostCtl(ctl, parent=None, connect=True):
         pm.parent(shape, newCtl, r=True, s=True)
         pm.rename(shape, newCtl.name() + "Shape")
     pm.delete(source2)
+
+    # Reconnect visibility input connections from ghost shapes to new shapes
+    ghostShapes = ctl.getShapes()
+    newShapes = newCtl.getShapes()
+    for ghostShape, newShape in zip(ghostShapes, newShapes):
+        visInputs = pm.listConnections(
+            ghostShape.visibility, s=True, d=False, p=True
+        )
+        if visInputs:
+            pm.connectAttr(visInputs[0], newShape.visibility, force=True)
     if parent:
         pm.parent(newCtl, parent)
         oTra = pm.createNode(

@@ -269,6 +269,17 @@ def ctl_from_list(in_list, SDK=False, animTweak=False):
 # ================================================= #
 # SDK
 # ================================================= #
+def _filter_out_unitConversion_nodes(nodes_list):
+    filtered_nodes = []
+    for nod in nodes_list:
+        if isinstance(nod, pm.nt.UnitConversion) or \
+                nod.type() == "unitConversion":
+            out_nodes = pm.listConnections(nod.output, d=True) or []
+            if out_nodes:
+                nod = out_nodes[0]
+        filtered_nodes.append(nod)
+
+    return filtered_nodes
 
 
 def set_driven_key(
@@ -321,6 +332,8 @@ def set_driven_key(
 
     # Compairing the connections to DriverAtt to find new Anim UU node.
     DriverConB = pm.listConnections(driverAttr)
+    DriverConB = _filter_out_unitConversion_nodes(DriverConB)
+
     for conB in DriverConB:
         if conB not in driver_con_A:
             animUU = conB
@@ -353,8 +366,9 @@ def get_driven_from_attr(driverAttr, is_SDK=False):
         list [List of unicode names]
     """
     driven_ctls = []
+    connected_nodes = _filter_out_unitConversion_nodes(pm.listConnections(driverAttr))
 
-    for connected_node in pm.listConnections(driverAttr):
+    for connected_node in connected_nodes:
         if pm.nodeType(connected_node) in SDK_ANIMCURVES_TYPE:
             drvn_ctl = sdk_io.getSDKDestination(connected_node)[0]
             if is_SDK:
@@ -529,7 +543,9 @@ def set_zero_key(
 
     Arguments:
         drivenCtls (list): List of String names of the Driven Ctls.
-        keyChannels (list): List of Channels to Key
+        keyChannels (list): List of Channels to Key. Can be either:
+            - Transform types: ["translate", "rotate", "scale"] (legacy)
+            - Specific channels: ["translateX", "rotateY", "scaleZ"] (new)
         driver (PyNode): Driver Node
         driverAtt (str): Driver Attr given as a string
         inTanType (str / optional): Tangent type, by default is linear.
@@ -542,14 +558,24 @@ def set_zero_key(
     for dvn_ctl in drivenCtls:
         dvn_ctl = pm.PyNode(dvn_ctl)
         for channel in keyChannels:
-            for Ax in ["X", "Y", "Z"]:
+            # Check if this is a specific channel (e.g., "translateX") or
+            # a transform type (e.g., "translate")
+            if channel[-1] in ["X", "Y", "Z"] and len(channel) > 1:
+                # Specific channel format (new)
+                channels_to_key = [channel]
+            else:
+                # Transform type format (legacy) - expand to XYZ
+                channels_to_key = [channel + ax for ax in ["X", "Y", "Z"]]
+
+            for ch in channels_to_key:
                 # Getting the Channel value, if it is default, set a Zero Key.
-                dvn_val = dvn_ctl.attr(channel + Ax).get()
-                default_val = 1.0 if channel == "scale" else 0.0
+                dvn_val = dvn_ctl.attr(ch).get()
+                # Determine default value based on transform type
+                default_val = 1.0 if ch.startswith("scale") else 0.0
                 # Setting ZERO KEY
                 set_driven_key(
                     driverAttr=driver.attr(driverAtt),
-                    drivenAttr=dvn_ctl.attr(channel + Ax),
+                    drivenAttr=dvn_ctl.attr(ch),
                     driverVal=0,
                     drivenVal=default_val,
                     preInfinity=0,
@@ -558,7 +584,7 @@ def set_zero_key(
                     outTanType=outTanType,
                 )
                 # Setting the Driven Ctl back to its previous value
-                dvn_ctl.attr(channel + Ax).set(dvn_val)
+                dvn_ctl.attr(ch).set(dvn_val)
 
 
 def key_at_current_values(
@@ -574,7 +600,9 @@ def key_at_current_values(
     Helper function to set SDK's at Driven nodes current values
     Arguments:
         drivenCtls (list): List of String names of the Driven Ctls.
-        keyChannels (list): List of Channels to Key
+        keyChannels (list): List of Channels to Key. Can be either:
+            - Transform types: ["translate", "rotate", "scale"] (legacy)
+            - Specific channels: ["translateX", "rotateY", "scaleZ"] (new)
         driver (PyNode): Driver Node
         driverAtt (str): Driver Attr given as a string
         inTanType (str / optional): Tangent type, by default is linear.
@@ -589,16 +617,24 @@ def key_at_current_values(
     for dvn_ctl in drivenCtls:
         dvn_ctl = pm.PyNode(dvn_ctl)
         for channel in keyChannels:
-            for Ax in ["X", "Y", "Z"]:
+            # Check if this is a specific channel (e.g., "translateX") or
+            # a transform type (e.g., "translate")
+            if channel[-1] in ["X", "Y", "Z"] and len(channel) > 1:
+                # Specific channel format (new)
+                channels_to_key = [channel]
+            else:
+                # Transform type format (legacy) - expand to XYZ
+                channels_to_key = [channel + ax for ax in ["X", "Y", "Z"]]
+
+            for ch in channels_to_key:
                 if zeroKey:
                     # Getting the Channel values default, and setting a
                     # Zero Key.
-                    dvn_val = dvn_ctl.attr(channel + Ax).get()
-                    # default_val = 1.0 if channel == "scale" else 0.0
+                    dvn_val = dvn_ctl.attr(ch).get()
                     # Setting ZERO KEY
                     set_driven_key(
                         driverAttr=driver.attr(driverAtt),
-                        drivenAttr=dvn_ctl.attr(channel + Ax),
+                        drivenAttr=dvn_ctl.attr(ch),
                         driverVal=0,
                         drivenVal=0,
                         preInfinity=0,
@@ -607,13 +643,13 @@ def key_at_current_values(
                         outTanType=outTanType,
                     )
                     # Setting the Driven Ctl back to its previous value
-                    dvn_ctl.attr(channel + Ax).set(dvn_val)
+                    dvn_ctl.attr(ch).set(dvn_val)
 
                 set_driven_key(
                     driverAttr=driver.attr(driverAtt),
-                    drivenAttr=dvn_ctl.attr(channel + Ax),
+                    drivenAttr=dvn_ctl.attr(ch),
                     driverVal=driver.attr(driverAtt).get(),
-                    drivenVal=dvn_ctl.attr(channel + Ax).get(),
+                    drivenVal=dvn_ctl.attr(ch).get(),
                     preInfinity=0,
                     postInfinity=0,
                     inTanType=inTanType,

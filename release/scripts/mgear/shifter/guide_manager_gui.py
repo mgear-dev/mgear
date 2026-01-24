@@ -1,9 +1,13 @@
-from mgear.shifter import guide_manager_component, guide_template_explorer
 from mgear.vendor.Qt import QtCore, QtWidgets
+
+from mgear.shifter import guide_manager_component, guide_template_explorer
+from mgear.shifter.guide_explorer import guide_explorer_widget
+
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear.core import pyqt
 
-
+import importlib
+importlib.reload(guide_explorer_widget)
 # guides manager UI
 
 class GuideManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
@@ -14,6 +18,7 @@ class GuideManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.gmc = guide_manager_component.GuideManagerComponent()
         self.gexp = guide_template_explorer.GuideTemplateExplorer()
+        self.guide_explorer = guide_explorer_widget.GuideExplorerWidget(self)
         self.installEventFilter(self)
         self.create_window()
         self.create_layout()
@@ -36,11 +41,24 @@ class GuideManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.setObjectName("manager_tab")
         self.tabs.insertTab(0, self.gmc, "Components")
-        self.tabs.insertTab(1, self.gexp, "Templates")
+        self.tabs.insertTab(1, self.guide_explorer, "Guide Explorer")
+        self.tabs.insertTab(2, self.gexp, "Templates")
 
         self.gm_layout.addWidget(self.tabs)
 
         self.setLayout(self.gm_layout)
+
+    def dockCloseEventTriggered(self):
+
+        try:
+            self.guide_explorer.teardown()
+        except Exception:
+            pass
+        # -- Let Maya finish destroying the dock
+        try:
+            super(GuideManager, self).dockCloseEventTriggered()
+        except Exception:
+            pass
 
 
 def show_guide_manager(*args):

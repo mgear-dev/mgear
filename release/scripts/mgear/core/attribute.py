@@ -245,7 +245,7 @@ def addEnumAttribute(
         writable (bool): Set if the attribute is writable or not. (optional)
 
     Returns:
-        pm.Attribute: The long name of the new attribute
+        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
     """
 
     if node.hasAttr(longName):
@@ -303,17 +303,19 @@ def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
         sourceAttrs = [sourceAttrs]
     for sourceAttr in sourceAttrs:
         for target in targets:
-            attrName = sourceAttr.longName()
-            if target.hasAttr(sourceAttr.longName()):
+            base_name = sourceAttr.longName()
+            attrName = base_name
+            if target.hasAttr(base_name):
                 if duplicatedPolicy == "index":
+                    # Cache existing attrs for faster lookup
+                    target_name = target.name() if hasattr(target, 'name') else str(target)
+                    existing_attrs = set(cmds.listAttr(target_name) or [])
                     i = 0
-                    while target.hasAttr(sourceAttr.longName() + str(i)):
+                    while f"{base_name}{i}" in existing_attrs:
                         i += 1
-                    attrName = sourceAttr.longName() + str(i)
+                    attrName = f"{base_name}{i}"
                 elif duplicatedPolicy == "fullName":
-                    attrName = "{}_{}".format(
-                        sourceAttr.nodeName(), sourceAttr.longName()
-                    )
+                    attrName = f"{sourceAttr.nodeName()}_{base_name}"
 
             if not target.hasAttr(attrName):
                 target.addAttr(attrName, pxy=sourceAttr)
@@ -381,12 +383,15 @@ def moveChannel(
             # this policy doesn't apply for rearrange channels
             if pm.attributeQuery(attr, node=targetNode, exists=True):
                 if duplicatedPolicy == "index":
+                    # Cache existing attrs for faster lookup
+                    target_name = targetNode.name() if hasattr(targetNode, 'name') else str(targetNode)
+                    existing_attrs = set(cmds.listAttr(target_name) or [])
                     i = 0
-                    while targetNode.hasAttr(attr + str(i)):
+                    while f"{attr}{i}" in existing_attrs:
                         i += 1
-                    attrName = attr + str(i)
+                    attrName = f"{attr}{i}"
                 elif duplicatedPolicy == "fullName":
-                    attrName = "{}_{}".format(sourceNode.name(), attr)
+                    attrName = f"{sourceNode.name()}_{attr}"
 
                 elif duplicatedPolicy == "merge":
                     newAtt = pm.PyNode(".".join([targetNode.name(), attr]))
@@ -549,31 +554,23 @@ def setKeyableAttributes(
 
     """
 
-    localParams = [
-        "tx",
-        "ty",
-        "tz",
-        "ro",
-        "rx",
-        "ry",
-        "rz",
-        "sx",
-        "sy",
-        "sz",
-        "v",
-    ]
+    localParams = {"tx", "ty", "tz", "ro", "rx", "ry", "rz", "sx", "sy", "sz", "v"}
 
     if not isinstance(nodes, list):
         nodes = [nodes]
 
-    for attr_name in params:
-        for node in nodes:
-            node.setAttr(attr_name, lock=False, keyable=True)
+    # Convert params to set for O(1) lookup
+    params_set = set(params)
+    # Pre-compute which attrs to lock (those in localParams but not in params)
+    attrs_to_lock = localParams - params_set
 
-    for attr_name in localParams:
-        if attr_name not in params:
-            for node in nodes:
-                node.setAttr(attr_name, lock=True, keyable=False)
+    # Use cmds for faster attribute setting
+    for node in nodes:
+        node_name = node.name() if hasattr(node, "name") else str(node)
+        for attr_name in params:
+            cmds.setAttr(f"{node_name}.{attr_name}", lock=False, keyable=True)
+        for attr_name in attrs_to_lock:
+            cmds.setAttr(f"{node_name}.{attr_name}", lock=True, keyable=False)
 
 
 def setNotKeyableAttributes(
@@ -604,24 +601,26 @@ def setNotKeyableAttributes(
     if not isinstance(nodes, list):
         nodes = [nodes]
 
-    for attr_name in attributes:
-        for node in nodes:
-            node.setAttr(attr_name, lock=False, keyable=False, cb=True)
+    # Use cmds for faster attribute setting
+    for node in nodes:
+        node_name = node.name() if hasattr(node, 'name') else str(node)
+        for attr_name in attributes:
+            cmds.setAttr(f"{node_name}.{attr_name}", lock=False, keyable=False, cb=True)
+
+
+# Rotation order lookup dictionary for O(1) access
+_ROT_ORDER_MAP = {
+    "XYZ": OpenMaya.MEulerRotation.kXYZ,
+    "YZX": OpenMaya.MEulerRotation.kYZX,
+    "ZXY": OpenMaya.MEulerRotation.kZXY,
+    "XZY": OpenMaya.MEulerRotation.kXZY,
+    "YXZ": OpenMaya.MEulerRotation.kYXZ,
+    "ZYX": OpenMaya.MEulerRotation.kZYX,
+}
 
 
 def _to_rot_od(ordstr):
-    if ordstr == "XYZ":
-        return OpenMaya.MEulerRotation.kXYZ
-    if ordstr == "YZX":
-        return OpenMaya.MEulerRotation.kYZX
-    elif ordstr == "ZXY":
-        return OpenMaya.MEulerRotation.kZXY
-    elif ordstr == "XZY":
-        return OpenMaya.MEulerRotation.kXZY
-    elif ordstr == "YXZ":
-        return OpenMaya.MEulerRotation.kYXZ
-    elif ordstr == "ZYX":
-        return OpenMaya.MEulerRotation.kZYX
+    return _ROT_ORDER_MAP.get(ordstr, OpenMaya.MEulerRotation.kXYZ)
 
 
 def setRotOrder(node, s="XYZ"):
@@ -822,6 +821,39 @@ def move_output_connections(source, target, type_filter=None):
         at_name = i[0].shortName()
         pm.disconnectAttr(i[0])
         pm.connectAttr(target.attr(at_name), i[1])
+
+
+def get_attr_info(node, attr):
+    """
+    Returns default, min, and max values of an attribute.
+
+    Args:
+        node (str): Node name, e.g. "control_C1_ctl"
+        attr (str): Attribute name, e.g. "arm_slide"
+
+    Returns:
+        dict: { "default": value or None,
+                "min": value or None,
+                "max": value or None }
+    """
+    info = {"default": None, "min": None, "max": None}
+
+    # Default
+    default = cmds.attributeQuery(attr, node=node, listDefault=True)
+    if default:
+        info["default"] = default[0]
+
+    # Min
+    minimum = cmds.attributeQuery(attr, node=node, minimum=True)
+    if minimum:
+        info["min"] = minimum[0]
+
+    # Max
+    maximum = cmds.attributeQuery(attr, node=node, maximum=True)
+    if maximum:
+        info["max"] = maximum[0]
+
+    return info
 
 
 ##########################################################

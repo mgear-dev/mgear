@@ -8,7 +8,7 @@ def install():
     """
     pm.setParent(mgear.menu_id, menu=True)
     commands = (
-        ("Xgen IGS Boost", str_openXgenBoost),
+        ("Xgen IGS Boost", str_openXgenBoost, "mgear_xgen_boost.svg"),
         ("-----", None)
     )
 

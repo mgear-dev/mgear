@@ -1210,9 +1210,41 @@ def rig(
                            False
                            )
 
+        # add vertical offset for mid sides
+        upperVerticalOffset_att = attribute.addAttribute(
+            up_ctl, "verticalOffset", "float", 0, minValue=-0.2, maxValue=.2, keyable=True, channelBox=True
+        )
+        lowerVerticalOffset_att = attribute.addAttribute(
+            low_ctl, "verticalOffset", "float", 0, minValue=-0.2, maxValue=.2, keyable=True, channelBox=True
+        )
+
+        # add driven attributes for external connections
+        upperDriven_atts = []
+        lowerDriven_atts = []
+        for i in range(3):
+            upperDriven_atts.append(attribute.addAttribute(
+                up_ctl, "upperDriven{}".format(i), "float", 0, keyable=False, channelBox=False
+            ))
+            lowerDriven_atts.append(attribute.addAttribute(
+                low_ctl, "lowerDriven{}".format(i), "float", 0, keyable=False, channelBox=False
+            ))
+
+        # sum driven values + offset for upper mid control
+        upperSum_node = pm.createNode("plusMinusAverage", n="{}_upperMidSum_pma".format(namePrefix))
+        upperVerticalOffset_att >> upperSum_node.input1D[0]
+        for i, att in enumerate(upperDriven_atts):
+            att >> upperSum_node.input1D[i + 1]
+        upperSum_node.output1D >> upMidControls[1].ty
+
+        # sum driven values + offset for lower mid control
+        lowerSum_node = pm.createNode("plusMinusAverage", n="{}_lowerMidSum_pma".format(namePrefix))
+        lowerVerticalOffset_att >> lowerSum_node.input1D[0]
+        for i, att in enumerate(lowerDriven_atts):
+            att >> lowerSum_node.input1D[i + 1]
+        lowerSum_node.output1D >> lowMidControls[1].ty
+
         # lock and hide mid centers
         rigbits.lock_hide_ctl([upMidControls[1], lowMidControls[1]])
-
 
     ###########################################
     # Auto Skinning

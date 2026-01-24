@@ -662,9 +662,14 @@ class Component(component.Main):
 
             # setting the joints
             if i == 0:
+                if self.settings["div0"]:
+                    self.arm_root_base = primitive.addTransform(self.root, self.getName("divRoot_loc"))
+                else:
+                    self.arm_root_base = roll_off
+
                 self.jnt_pos.append(
                     {
-                        "obj": roll_off,
+                        "obj": self.arm_root_base,
                         "name": jdn_upperarm,
                         "guide_relative": "root",
                         "data_contracts": "Ik",
@@ -675,6 +680,17 @@ class Component(component.Main):
                 twist_name = jdn_upperarm_twist
                 twist_idx = 1
                 increment = 1
+
+                # extra joint twist/swing
+                if self.settings["div0"]:
+                    self.jnt_pos.append(
+                        {
+                            "obj": roll_off,
+                            "name": jdn_upperarm + "_swing",
+                            "data_contracts": "Twist,Squash",
+                            "newActiveJnt": current_parent,
+                        }
+                    )
             elif i == self.settings["div0"] + 1:
                 self.jnt_pos.append(
                     {
@@ -712,7 +728,6 @@ class Component(component.Main):
         )
         if self.negate:
             self.end_ref.attr("rz").set(180.0)
-
 
         if self.settings["use_blade"]:
             # set the offset rotation for the hand
@@ -1548,12 +1563,23 @@ class Component(component.Main):
         # the controler.. and we wont have this nice bendy + roll
         div_offset = int(self.extra_div / 2)
         for i, div_cns in enumerate(self.div_cns):
-            if i == 0 and not self.settings["div0"]:
-                transform.matchWorldTransform(self.fk_ctl[0], div_cns)
-                mulmat_node = applyop.gear_mulmatrix_op(
-                    self.armRollRef[0] + ".worldMatrix",
-                    div_cns + ".parentInverseMatrix",
-                )
+            if i == 0:
+                if self.settings["div0"]:
+                    transform.matchWorldTransform(self.fk_ctl[0], self.arm_root_base)
+                    mulmat_node = applyop.gear_mulmatrix_op(
+                        self.armTwistChain[i] + ".worldMatrix",
+                        div_cns + ".parentInverseMatrix",
+                    )
+                    mulmat_node = applyop.gear_mulmatrix_op(
+                        self.armRollRef[0] + ".worldMatrix",
+                        self.arm_root_base + ".parentInverseMatrix",
+                    )
+                else:
+                    transform.matchWorldTransform(self.fk_ctl[0], div_cns)
+                    mulmat_node = applyop.gear_mulmatrix_op(
+                        self.armRollRef[0] + ".worldMatrix",
+                        div_cns + ".parentInverseMatrix",
+                    )
             elif i < (self.settings["div0"] + div_offset):
                 mulmat_node = applyop.gear_mulmatrix_op(
                     self.armTwistChain[i] + ".worldMatrix",
@@ -1577,10 +1603,10 @@ class Component(component.Main):
 
             dm_node = node.createDecomposeMatrixNode(mulmat_node + ".output")
             pm.connectAttr(dm_node + ".outputTranslate", div_cns + ".t")
-            if i == 0 and not self.settings["div0"]:
-                applyop.oriCns(self.bone0, div_cns, maintainOffset=True)
-            else:
-                pm.connectAttr(dm_node + ".outputRotate", div_cns + ".r")
+            if i == 0:
+                applyop.oriCns(self.bone0, self.arm_root_base, maintainOffset=True)
+
+            pm.connectAttr(dm_node + ".outputRotate", div_cns + ".r")
 
             # Squash n Stretch
             o_node = applyop.gear_squashstretch2_op(
@@ -1637,6 +1663,10 @@ class Component(component.Main):
         self.relatives["eff"] = self.eff_loc
 
         self.jointRelatives["root"] = 0
+        # we need to account with the extra joint for swing
+        if self.settings["div0"]:
+            offset = offset + 1
+
         self.jointRelatives["elbow"] = self.settings["div0"] + offset
         self.jointRelatives["wrist"] = len(self.div_cns) - offset
         self.jointRelatives["eff"] = -1

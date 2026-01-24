@@ -1,15 +1,13 @@
 # Built-in
 import datetime
 import getpass
-import imp
-import inspect
 import json
 import os
-import shutil
-import subprocess
 import sys
-import traceback
 from functools import partial
+
+# Maya
+from maya import cmds, mel
 
 # pymel
 import mgear.pymaya as pm
@@ -24,9 +22,10 @@ from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
 from mgear.anim_picker.gui import MAYA_OVERRIDE_COLOR
 
 from . import guide_ui as guui
-from . import custom_step_ui as csui
 from . import naming_rules_ui as naui
+from . import blueprint_tab_ui as btui
 from . import naming
+from . import custom_step_widget as csw
 
 # pyside
 from maya.app.general.mayaMixin import MayaQDockWidget
@@ -46,6 +45,216 @@ if sys.version_info[0] == 2:
     string_types = (basestring,)
 else:
     string_types = (str,)
+
+
+# =============================================================================
+# Build Cancellation Support
+# =============================================================================
+# Module-level state for cancellation during guide validation
+_cancel_enabled = False
+_cancel_requested = False
+_gMainProgressBar = None
+
+
+def init_guide_cancel():
+    """Initialize the guide cancellation mechanism.
+
+    Enables ESC key cancellation during guide validation in interactive mode.
+    In batch mode, cancellation is disabled since there's no UI.
+    """
+    global _cancel_enabled, _cancel_requested, _gMainProgressBar
+    _cancel_requested = False
+    _cancel_enabled = not cmds.about(batch=True)
+    _gMainProgressBar = None
+
+    if _cancel_enabled:
+        try:
+            _gMainProgressBar = mel.eval("$tmp = $gMainProgressBar")
+            cmds.progressBar(
+                _gMainProgressBar,
+                edit=True,
+                beginProgress=True,
+                isInterruptable=True,
+                status="Validating Guide...",
+                maxValue=100,
+            )
+        except Exception:
+            _cancel_enabled = False
+
+
+def end_guide_cancel():
+    """End the guide cancellation mechanism."""
+    global _cancel_enabled, _gMainProgressBar
+    if _cancel_enabled and _gMainProgressBar:
+        try:
+            cmds.progressBar(_gMainProgressBar, edit=True, endProgress=True)
+        except Exception:
+            pass
+
+
+def check_guide_cancelled():
+    """Check if guide validation was cancelled by user pressing ESC.
+
+    Returns:
+        bool: True if cancelled, False otherwise.
+    """
+    global _cancel_enabled, _cancel_requested, _gMainProgressBar
+    if _cancel_requested:
+        return True
+    if _cancel_enabled and _gMainProgressBar:
+        try:
+            if cmds.progressBar(_gMainProgressBar, query=True, isCancelled=True):
+                _cancel_requested = True
+                pm.displayWarning("Guide validation cancelled by user")
+                return True
+        except Exception:
+            pass
+    return False
+
+
+# Blueprint section settings mapping - defines which attributes belong to each section
+OVERRIDE_SECTION_ATTRS = {
+    "override_rig_settings": [
+        "rig_name", "mode", "step"
+    ],
+    "override_anim_channels": [
+        "proxyChannels", "classicChannelNames", "attrPrefixName"
+    ],
+    "override_base_rig_control": [
+        "worldCtl", "world_ctl_name"
+    ],
+    "override_skinning": [
+        "importSkin", "skin"
+    ],
+    "override_joint_settings": [
+        "joint_rig", "joint_worldOri", "force_uniScale",
+        "connect_joints", "force_SSC"
+    ],
+    "override_data_collector": [
+        "data_collector", "data_collector_path",
+        "data_collector_embedded", "data_collector_embedded_custom_joint"
+    ],
+    "override_color_settings": [
+        "L_color_fk", "L_color_ik", "R_color_fk", "R_color_ik",
+        "C_color_fk", "C_color_ik", "Use_RGB_Color",
+        "L_RGB_fk", "L_RGB_ik", "R_RGB_fk", "R_RGB_ik",
+        "C_RGB_fk", "C_RGB_ik"
+    ],
+    "override_naming_rules": [
+        "ctl_name_rule", "joint_name_rule",
+        "side_left_name", "side_right_name", "side_center_name",
+        "side_joint_left_name", "side_joint_right_name",
+        "side_joint_center_name", "ctl_name_ext", "joint_name_ext",
+        "ctl_des_letter_case", "joint_des_letter_case"
+    ],
+    "override_pre_custom_steps": [
+        "doPreCustomStep", "preCustomStep"
+    ],
+    "override_post_custom_steps": [
+        "doPostCustomStep", "postCustomStep"
+    ]
+}
+
+
+def resolve_blueprint_path(path):
+    """Resolve blueprint guide file path.
+
+    Supports:
+        - Absolute paths (returned as-is if file exists)
+        - Relative paths (resolved using MGEAR_SHIFTER_CUSTOMSTEP_PATH env var)
+
+    Args:
+        path (str): Path to the blueprint guide file (.sgt)
+
+    Returns:
+        str or None: Resolved absolute path if file exists, None otherwise
+    """
+    if not path:
+        return None
+
+    # If absolute path and file exists, return it
+    if os.path.isabs(path):
+        if os.path.isfile(path):
+            return path
+        return None
+
+    # Try to resolve relative path using MGEAR_SHIFTER_CUSTOMSTEP_PATH
+    custom_step_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY)
+    if custom_step_path:
+        # Split on path separator in case there are multiple paths
+        for base_path in custom_step_path.split(os.pathsep):
+            full_path = os.path.join(base_path, path)
+            if os.path.isfile(full_path):
+                return full_path
+
+    # Try current working directory as fallback
+    cwd_path = os.path.join(os.getcwd(), path)
+    if os.path.isfile(cwd_path):
+        return cwd_path
+
+    return None
+
+
+def make_blueprint_path_relative(path):
+    """Convert an absolute blueprint path to relative if within custom step path.
+
+    Args:
+        path (str): Absolute or relative path to the blueprint guide file
+
+    Returns:
+        str: Relative path if within MGEAR_SHIFTER_CUSTOMSTEP_PATH, original otherwise
+    """
+    if not path:
+        return path
+
+    # Normalize path separators
+    path = os.path.normpath(path)
+
+    # If already relative, return as-is
+    if not os.path.isabs(path):
+        return path
+
+    # Try to make it relative to MGEAR_SHIFTER_CUSTOMSTEP_PATH
+    custom_step_path = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY)
+    if custom_step_path:
+        for base_path in custom_step_path.split(os.pathsep):
+            base_path = os.path.normpath(base_path)
+            # Use normcase for case-insensitive comparison on Windows
+            if os.path.normcase(path).startswith(
+                os.path.normcase(base_path + os.sep)
+            ):
+                return os.path.relpath(path, base_path)
+
+    return path
+
+
+def load_blueprint_guide(path):
+    """Load blueprint guide settings from a serialized guide file.
+
+    Args:
+        path (str): Path to the blueprint guide file (.sgt)
+
+    Returns:
+        dict or None: Guide settings dictionary, or None if loading fails
+    """
+    resolved_path = resolve_blueprint_path(path)
+    if not resolved_path:
+        mgear.log(
+            "Blueprint guide file not found: {}".format(path),
+            mgear.sev_warning
+        )
+        return None
+
+    try:
+        with open(resolved_path, 'r') as f:
+            conf = json.load(f)
+        return conf
+    except (IOError, ValueError) as e:
+        mgear.log(
+            "Error loading blueprint guide: {}".format(str(e)),
+            mgear.sev_error
+        )
+        return None
 
 
 class Main(object):
@@ -137,7 +346,7 @@ class Main(object):
                 self.valid = False
             else:
                 cnx = pm.listConnections(
-                    node + "." + scriptName, destination=False, source=True
+                    f"{node}.{scriptName}", destination=False, source=True
                 )
                 if isinstance(paramDef, attribute.FCurveParamDef):
                     paramDef.value = fcurve.getFCurveValues(
@@ -148,10 +357,10 @@ class Main(object):
                     paramDef.value = None
                     self.values[scriptName] = cnx[0]
                 else:
-                    paramDef.value = pm.getAttr(node + "." + scriptName)
-                    self.values[scriptName] = pm.getAttr(
-                        node + "." + scriptName
-                    )
+                    # Cache getAttr result to avoid redundant call
+                    attr_value = pm.getAttr(f"{node}.{scriptName}")
+                    paramDef.value = attr_value
+                    self.values[scriptName] = attr_value
 
     def addColorParam(self, scriptName, value=False):
         """Add color paramenter to the paramenter definition Dictionary.
@@ -493,6 +702,43 @@ class Rig(Main):
             "joint_index_padding", "long", 0, 0, 99
         )
 
+        # --------------------------------------------------
+        # Blueprint Guide Settings
+        self.pUseBlueprint = self.addParam("use_blueprint", "bool", False)
+        self.pBlueprintPath = self.addParam("blueprint_path", "string", "")
+
+        # Section override flags (when True, use local values instead of blueprint)
+        self.pOverrideRigSettings = self.addParam(
+            "override_rig_settings", "bool", False
+        )
+        self.pOverrideAnimChannels = self.addParam(
+            "override_anim_channels", "bool", False
+        )
+        self.pOverrideBaseRigControl = self.addParam(
+            "override_base_rig_control", "bool", False
+        )
+        self.pOverrideSkinning = self.addParam(
+            "override_skinning", "bool", False
+        )
+        self.pOverrideJointSettings = self.addParam(
+            "override_joint_settings", "bool", False
+        )
+        self.pOverrideDataCollector = self.addParam(
+            "override_data_collector", "bool", False
+        )
+        self.pOverrideColorSettings = self.addParam(
+            "override_color_settings", "bool", False
+        )
+        self.pOverrideNamingRules = self.addParam(
+            "override_naming_rules", "bool", False
+        )
+        self.pOverridePreCustomSteps = self.addParam(
+            "override_pre_custom_steps", "bool", False
+        )
+        self.pOverridePostCustomSteps = self.addParam(
+            "override_post_custom_steps", "bool", False
+        )
+
     def setFromSelection(self):
         """Set the guide hierarchy from selection."""
         selection = pm.ls(selection=True)
@@ -513,6 +759,99 @@ class Rig(Main):
 
         return True
 
+    def getMergedOptions(self):
+        """Get merged options combining local values with blueprint settings.
+
+        When blueprint is enabled and a section is not overridden,
+        values from the blueprint guide will be used instead of local values.
+
+        Returns:
+            dict: Merged options dictionary
+        """
+        # Start with a copy of local values
+        merged = dict(self.values)
+
+        # Check if blueprint is enabled
+        use_blueprint = self.values.get("use_blueprint", False)
+        blueprint_path = self.values.get("blueprint_path", "")
+
+        if not use_blueprint or not blueprint_path:
+            return merged
+
+        # Load blueprint guide
+        blueprint_conf = load_blueprint_guide(blueprint_path)
+        if not blueprint_conf:
+            mgear.log(
+                "Could not load blueprint guide, using local settings",
+                mgear.sev_warning
+            )
+            return merged
+
+        # Get blueprint guide settings (stored under "guide_root" -> "param_values")
+        guide_root = blueprint_conf.get("guide_root", {})
+        blueprint_values = guide_root.get("param_values", {})
+        if not blueprint_values:
+            mgear.log(
+                "No param_values found in blueprint guide_root",
+                mgear.sev_warning
+            )
+            return merged
+
+        # Define which settings belong to each section
+        section_settings = {
+            "override_rig_settings": [
+                "rig_name", "mode", "step"
+            ],
+            "override_anim_channels": [
+                "proxyChannels", "classicChannelNames", "attrPrefixName"
+            ],
+            "override_base_rig_control": [
+                "worldCtl", "world_ctl_name"
+            ],
+            "override_skinning": [
+                "importSkin", "skin"
+            ],
+            "override_joint_settings": [
+                "joint_rig", "joint_worldOri", "force_uniScale",
+                "connect_joints", "force_SSC"
+            ],
+            "override_data_collector": [
+                "data_collector", "data_collector_path",
+                "data_collector_embedded", "data_collector_embedded_custom_joint"
+            ],
+            "override_color_settings": [
+                "L_color_fk", "L_color_ik", "R_color_fk", "R_color_ik",
+                "C_color_fk", "C_color_ik", "Use_RGB_Color",
+                "L_RGB_fk", "L_RGB_ik", "R_RGB_fk", "R_RGB_ik",
+                "C_RGB_fk", "C_RGB_ik"
+            ],
+            "override_naming_rules": [
+                "ctl_name_rule", "joint_name_rule",
+                "side_left_name", "side_right_name", "side_center_name",
+                "side_joint_left_name", "side_joint_right_name",
+                "side_joint_center_name", "ctl_name_ext", "joint_name_ext",
+                "ctl_description_letter_case", "joint_description_letter_case",
+                "ctl_index_padding", "joint_index_padding"
+            ],
+            "override_pre_custom_steps": [
+                "doPreCustomStep", "preCustomStep"
+            ],
+            "override_post_custom_steps": [
+                "doPostCustomStep", "postCustomStep"
+            ]
+        }
+
+        # For each section, if NOT overridden, use blueprint values
+        for override_attr, settings in section_settings.items():
+            is_overridden = self.values.get(override_attr, False)
+            if not is_overridden:
+                # Use blueprint values for this section
+                for setting in settings:
+                    if setting in blueprint_values:
+                        merged[setting] = blueprint_values[setting]
+
+        return merged
+
     def setFromHierarchy(self, root, branch=True):
         """Set the guide from given hierarchy.
 
@@ -520,86 +859,113 @@ class Rig(Main):
             root (dagNode): The root of the hierarchy to parse.
             branch (bool): True to parse children components.
 
+        Can be cancelled by pressing ESC during execution.
         """
-        startTime = datetime.datetime.now()
-        # Start
-        mgear.log("Checking guide")
+        init_guide_cancel()
+        try:
+            startTime = datetime.datetime.now()
+            # Start
+            mgear.log("Checking guide")
 
-        # Get the model and the root
-        self.model = root.getParent(generations=-1)
-        while True:
-            if root.hasAttr("comp_type") or self.model == root:
-                break
-            root = root.getParent()
-            mgear.log(root)
+            # Get the model and the root
+            self.model = root.getParent(generations=-1)
+            while True:
+                if root.hasAttr("comp_type") or self.model == root:
+                    break
+                root = root.getParent()
+                mgear.log(root)
 
-        # ---------------------------------------------------
-        # First check and set the options
-        mgear.log("Get options")
-        self.setParamDefValuesFromProperty(self.model)
+            if check_guide_cancelled():
+                self.valid = False
+                return
 
-        # ---------------------------------------------------
-        # Get the controllers
-        mgear.log("Get controllers")
-        self.controllers_org = dag.findChild(self.model, "controllers_org")
-        if self.controllers_org:
-            for child in self.controllers_org.getChildren():
-                self.controllers[child.name().split("|")[-1]] = child
+            # ---------------------------------------------------
+            # First check and set the options
+            mgear.log("Get options")
+            self.setParamDefValuesFromProperty(self.model)
 
-        # ---------------------------------------------------
-        # Components
-        mgear.log("Get components")
-        self.findComponentRecursive(root, branch)
-        endTime = datetime.datetime.now()
-        finalTime = endTime - startTime
-        mgear.log("Find recursive in  [ " + str(finalTime) + " ]")
-        # Parenting
-        if self.valid:
-            for name in self.componentsIndex:
-                mgear.log("Get parenting for: " + name)
-                # TODO: In the future should use connections to retrive this
-                # data
-                # We try the fastes aproach, will fail if is not the top node
-                try:
-                    # search for his parent
-                    compParent = self.components[name].root.getParent()
-                    if compParent and compParent.hasAttr("isGearGuide"):
+            if check_guide_cancelled():
+                self.valid = False
+                return
 
-                        names = naming.get_component_and_relative_name(
-                            compParent.name(long=None)
-                        )
+            # ---------------------------------------------------
+            # Get the controllers
+            mgear.log("Get controllers")
+            self.controllers_org = dag.findChild(self.model, "controllers_org")
+            if self.controllers_org:
+                for child in self.controllers_org.getChildren():
+                    self.controllers[child.name().split("|")[-1]] = child
 
-                        pName = names[0]
-                        pLocal = names[1]
-                        # Handle name clashing when parsing the guide
-                        # to determine the parent component
-                        if "|" in pName:
-                            pName = pName.split("|")[-1]
-                        pComp = self.components[pName]
-                        self.components[name].parentComponent = pComp
-                        self.components[name].parentLocalName = pLocal
-                # This will scan the hierachy in reverse. It is much slower
-                except KeyError:
-                    # search children and set him as parent
-                    compParent = self.components[name]
-                    # for localName, element in compParent.getObjects(
-                    #         self.model, False).items():
-                    # NOTE: getObjects3 is an experimental function
-                    for localName, element in compParent.getObjects3(
-                        self.model
-                    ).items():
-                        for name in self.componentsIndex:
-                            compChild = self.components[name]
-                            compChild_parent = compChild.root.getParent()
-                            if (
-                                element is not None
-                                and element == compChild_parent
-                            ):
+            if check_guide_cancelled():
+                self.valid = False
+                return
+
+            # ---------------------------------------------------
+            # Components
+            mgear.log("Get components")
+            self.findComponentRecursive(root, branch)
+
+            if check_guide_cancelled():
+                self.valid = False
+                return
+
+            endTime = datetime.datetime.now()
+            finalTime = endTime - startTime
+            mgear.log("Find recursive in  [ " + str(finalTime) + " ]")
+            # Parenting
+            if self.valid:
+                for name in self.componentsIndex:
+                    if check_guide_cancelled():
+                        self.valid = False
+                        return
+
+                    mgear.log("Get parenting for: " + name)
+                    # TODO: In the future should use connections to retrive this
+                    # data
+                    # We try the fastes aproach, will fail if is not the top node
+                    try:
+                        # search for his parent
+                        compParent = self.components[name].root.getParent()
+                        if compParent and compParent.hasAttr("isGearGuide"):
+
+                            names = naming.get_component_and_relative_name(
+                                compParent.name(long=None)
+                            )
+
+                            pName = names[0]
+                            pLocal = names[1]
+                            # Handle name clashing when parsing the guide
+                            # to determine the parent component
+                            if "|" in pName:
+                                pName = pName.rsplit("|", 1)[-1]
+                            pComp = self.components[pName]
+                            self.components[name].parentComponent = pComp
+                            self.components[name].parentLocalName = pLocal
+                    # This will scan the hierachy in reverse. It is much slower
+                    except KeyError:
+                        # search children and set him as parent
+                        compParent = self.components[name]
+                        # for localName, element in compParent.getObjects(
+                        #         self.model, False).items():
+                        # NOTE: getObjects3 is an experimental function
+                        # Build parent lookup dict once to avoid O(n²) nested loop
+                        parent_lookup = {}
+                        for comp_name in self.componentsIndex:
+                            comp = self.components[comp_name]
+                            parent_lookup[comp.root.getParent()] = comp
+                        # Now lookup is O(1) instead of O(n)
+                        for localName, element in compParent.getObjects3(
+                            self.model
+                        ).items():
+                            if element is not None and element in parent_lookup:
+                                compChild = parent_lookup[element]
                                 compChild.parentComponent = compParent
                                 compChild.parentLocalName = localName
 
-            # More option values
-            self.addOptionsValues()
+                # More option values
+                self.addOptionsValues()
+        finally:
+            end_guide_cancel()
 
         # End
         if not self.valid:
@@ -611,7 +977,7 @@ class Rig(Main):
 
         endTime = datetime.datetime.now()
         finalTime = endTime - startTime
-        mgear.log("Guide loaded from hierarchy in  [ " + str(finalTime) + " ]")
+        mgear.log(f"Guide loaded from hierarchy in  [ {finalTime} ]")
 
     def set_from_dict(self, guide_template_dict):
 
@@ -731,7 +1097,13 @@ class Rig(Main):
         Arguments:
             node (dagNode): Object frome where start the search.
             branch (bool): If True search recursive all the children.
+
+        Can be cancelled by pressing ESC during execution.
         """
+        if check_guide_cancelled():
+            self.valid = False
+            return
+
         # TODO: why mouth component is passing str node??
         if not isinstance(node, str):
             if node.hasAttr("comp_type"):
@@ -749,6 +1121,9 @@ class Rig(Main):
 
             if branch:
                 for child in node.getChildren(type="transform"):
+                    if check_guide_cancelled():
+                        self.valid = False
+                        return
                     self.findComponentRecursive(child)
 
     def getComponentGuide(self, comp_type):
@@ -797,6 +1172,7 @@ class Rig(Main):
         )
         self.controllers_org.attr("visibility").set(0)
 
+    @utils.one_undo
     def drawNewComponent(self, parent, comp_type, showUI=True):
         """Add a new component to the guide.
 
@@ -998,20 +1374,20 @@ class Rig(Main):
         if pm.attributeQuery("ismodel", node=sel, ex=True):
             self.model = sel
         else:
-            pm.displayWarning("select the top guide node")
+            pm.displayWarning("Select the top guide node.")
             return
 
         name = self.model.name()
         self.setFromHierarchy(self.model, True)
         if self.valid and not force:
-            pm.displayInfo("The Guide is updated")
+            pm.displayInfo("The guide is up to date.")
             return
 
         pm.rename(self.model, name + "_old")
         deleteLater = self.model
         self.drawUpdate(deleteLater)
         pm.rename(self.model, name)
-        pm.displayInfo("The guide %s have been updated" % name)
+        pm.displayInfo(f"Guide successfully updated: {name}")
         pm.delete(deleteLater)
 
     def duplicate(self, root, symmetrize=False):
@@ -1043,6 +1419,8 @@ class Rig(Main):
             if symmetrize:
                 if not comp_guide.symmetrize():
                     return
+                else:
+                    comp_guide.duplicate_symmetry_status = True
 
         # Draw
         if pm.attributeQuery("ismodel", node=root, ex=True):
@@ -1092,7 +1470,6 @@ class Rig(Main):
                 comp_guide.setIndex(self.model)
 
                 comp_guide.draw(parent)
-
         pm.select(self.components[self.componentsIndex[0]].root)
 
     def updateProperties(self, root, newName, newSide, newIndex):
@@ -1374,173 +1751,6 @@ class HelperSlots(object):
         self.close()
         pyqt.deleteInstances(self, MayaQDockWidget)
 
-    def get_cs_file_fullpath(self, cs_data):
-        filepath = cs_data.split("|")[-1][1:]
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            fullpath = os.path.join(
-                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""), filepath
-            )
-        else:
-            fullpath = filepath
-
-        return fullpath
-
-    @classmethod
-    def _editFile(cls, fullpath):
-
-        if sys.platform.startswith("darwin"):
-            subprocess.call(("open", fullpath))
-        elif os.name == "nt":
-            os.startfile(fullpath)
-        elif os.name == "posix":
-            subprocess.call(("xdg-open", fullpath))
-
-    def editFile(self, widgetList):
-        for cs in widgetList.selectedItems():
-            try:
-                cs_data = cs.text()
-                fullpath = self.get_cs_file_fullpath(cs_data)
-
-                if fullpath:
-                    self._editFile(fullpath)
-                else:
-                    pm.displayWarning("Please select one item from the list")
-            except Exception:
-                pm.displayError("The step can't be find or does't exists")
-
-    def format_info(self, data):
-        data_parts = data.split("|")
-        cs_name = data_parts[0]
-        if cs_name.startswith("*"):
-            cs_status = "Deactivated"
-            cs_name = cs_name[1:]
-        else:
-            cs_status = "Active"
-
-        cs_fullpath = self.get_cs_file_fullpath(data)
-        if "_shared" in data:
-            cs_shared_owner = self.shared_owner(cs_fullpath)
-            cs_shared_status = "Shared"
-        else:
-            cs_shared_status = "Local"
-            cs_shared_owner = "None"
-
-        info = '<html><head/><body><p><span style=" font-weight:600;">\
-        {0}</span></p><p>------------------</p><p><span style=" \
-        font-weight:600;">Status</span>: {1}</p><p><span style=" \
-        font-weight:600;">Shared Status:</span> {2}</p><p><span \
-        style=" font-weight:600;">Shared Owner:</span> \
-        {3}</p><p><span style=" font-weight:600;">Full Path</span>: \
-        {4}</p></body></html>'.format(
-            cs_name, cs_status, cs_shared_status, cs_shared_owner, cs_fullpath
-        )
-        return info
-
-    def shared_owner(self, cs_fullpath):
-
-        scan_dir = os.path.abspath(os.path.join(cs_fullpath, os.pardir))
-        while not scan_dir.endswith("_shared"):
-            scan_dir = os.path.abspath(os.path.join(scan_dir, os.pardir))
-            # escape infinite loop
-            if scan_dir == "/":
-                break
-        scan_dir = os.path.abspath(os.path.join(scan_dir, os.pardir))
-        return os.path.split(scan_dir)[1]
-
-    @classmethod
-    def get_steps_dict(cls, itemsList):
-        stepsDict = {}
-        stepsDict["itemsList"] = itemsList
-        for item in itemsList:
-            step = open(item, "r")
-            data = step.read()
-            stepsDict[item] = data
-            step.close()
-
-        return stepsDict
-
-    @classmethod
-    def runStep(cls, stepPath, customStepDic):
-        try:
-            with pm.UndoChunk():
-                pm.displayInfo("EXEC: Executing custom step: %s" % stepPath)
-                # use forward slash for OS compatibility
-                if sys.platform.startswith("darwin"):
-                    stepPath = stepPath.replace("\\", "/")
-
-                fileName = os.path.split(stepPath)[1].split(".")[0]
-
-                if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                    runPath = os.path.join(
-                        os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""),
-                        stepPath,
-                    )
-                else:
-                    runPath = stepPath
-
-                customStep = imp.load_source(fileName, runPath)
-                if hasattr(customStep, "CustomShifterStep"):
-                    argspec = inspect.getfullargspec(
-                        customStep.CustomShifterStep.__init__
-                    )
-                    if "stored_dict" in argspec.args:
-                        cs = customStep.CustomShifterStep(customStepDic)
-                        cs.setup()
-                        cs.run()
-                    else:
-                        cs = customStep.CustomShifterStep()
-                        cs.run(customStepDic)
-                    customStepDic[cs.name] = cs
-                    pm.displayInfo(
-                        "SUCCEED: Custom Shifter Step Class: %s. "
-                        "Succeed!!" % stepPath
-                    )
-                else:
-                    pm.displayInfo(
-                        "SUCCEED: Custom Step simple script: %s. "
-                        "Succeed!!" % stepPath
-                    )
-
-        except Exception as ex:
-            template = "An exception of type {0} occurred. "
-            "Arguments:\n{1!r}"
-            message = template.format(type(ex).__name__, ex.args)
-            pm.displayError(message)
-            pm.displayError(traceback.format_exc())
-            cont = pm.confirmBox(
-                "FAIL: Custom Step Fail",
-                "The step:%s has failed. Continue with next step?" % stepPath
-                + "\n\n"
-                + message
-                + "\n\n"
-                + traceback.format_exc(),
-                "Continue",
-                "Stop Build",
-                "Edit",
-                "Try Again!",
-            )
-            if cont == "Stop Build":
-                # stop Build
-                return True
-            elif cont == "Edit":
-                cls._editFile(stepPath)
-            elif cont == "Try Again!":
-                try:  # just in case there is nothing to undo
-                    pm.undo()
-                except Exception:
-                    pass
-                pm.displayInfo("Trying again! : {}".format(stepPath))
-                inception = cls.runStep(stepPath, customStepDic)
-                if inception:  # stops build from the recursion loop.
-                    return True
-            else:
-                return False
-
-    def runManualStep(self, widgetList):
-        selItems = widgetList.selectedItems()
-        for item in selItems:
-            self.runStep(item.text().split("|")[-1][1:], customStepDic={})
-
 
 class GuideSettingsTab(QtWidgets.QDialog, guui.Ui_Form):
     def __init__(self, parent=None):
@@ -1548,15 +1758,18 @@ class GuideSettingsTab(QtWidgets.QDialog, guui.Ui_Form):
         self.setupUi(self)
 
 
-class CustomStepTab(QtWidgets.QDialog, csui.Ui_Form):
-    def __init__(self, parent=None):
-        super(CustomStepTab, self).__init__(parent)
-        self.setupUi(self)
+CustomStepTab = csw.CustomStepTab
 
 
 class NamingRulesTab(QtWidgets.QDialog, naui.Ui_Form):
     def __init__(self, parent=None):
         super(NamingRulesTab, self).__init__(parent)
+        self.setupUi(self)
+
+
+class BlueprintTab(QtWidgets.QDialog, btui.Ui_BlueprintTab):
+    def __init__(self, parent=None):
+        super(BlueprintTab, self).__init__(parent)
         self.setupUi(self)
 
 
@@ -1578,7 +1791,7 @@ class GuideMainSettings(QtWidgets.QDialog, HelperSlots):
 
 
 # class GuideSettings(MayaQWidgetDockableMixin, QtWidgets.QDialog, HelperSlots):
-class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
+class GuideSettings(MayaQWidgetDockableMixin, csw.CustomStepMixin, GuideMainSettings):
     greenBrush = QtGui.QColor(0, 160, 0)
     redBrush = QtGui.QColor(180, 0, 0)
     whiteBrush = QtGui.QColor(255, 255, 255)
@@ -1594,9 +1807,14 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
         # component root before open the settings dialog
         self.root = pm.selected()[0]
 
+        # Initialize blueprint custom steps state flags
+        self._showing_blueprint_pre = False
+        self._showing_blueprint_post = False
+
         self.guideSettingsTab = guideSettingsTab()
         self.customStepTab = customStepTab()
         self.namingRulesTab = NamingRulesTab()
+        self.blueprintTab = BlueprintTab()
 
         self.setup_SettingWindow()
         self.create_controls()
@@ -1605,31 +1823,6 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
         self.create_connections()
 
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
-
-        # hover info
-        self.pre_cs = self.customStepTab.preCustomStep_listWidget
-        self.pre_cs.setMouseTracking(True)
-        self.pre_cs.entered.connect(self.pre_info)
-
-        self.post_cs = self.customStepTab.postCustomStep_listWidget
-        self.post_cs.setMouseTracking(True)
-        self.post_cs.entered.connect(self.post_info)
-
-    def pre_info(self, index):
-        self.hover_info_item_entered(self.pre_cs, index)
-
-    def post_info(self, index):
-        self.hover_info_item_entered(self.post_cs, index)
-
-    def hover_info_item_entered(self, view, index):
-        if index.isValid():
-            info_data = self.format_info(index.data())
-            QtWidgets.QToolTip.showText(
-                QtGui.QCursor.pos(),
-                info_data,
-                view.viewport(),
-                view.visualRect(index),
-            )
 
     def setup_SettingWindow(self):
         self.mayaMainWindow = pyqt.maya_main_window()
@@ -1647,6 +1840,10 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
         # Close Button
         self.close_button = QtWidgets.QPushButton("Close")
 
+        # Create blueprint headers for Guide Settings and Naming Rules tabs
+        self._create_guide_settings_blueprint_header()
+        self._create_naming_rules_blueprint_header()
+
     def populate_controls(self):
         """Populate the controls values
         from the custom attributes of the component.
@@ -1656,6 +1853,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
         self.tabs.insertTab(0, self.guideSettingsTab, "Guide Settings")
         self.tabs.insertTab(1, self.customStepTab, "Custom Steps")
         self.tabs.insertTab(2, self.namingRulesTab, "Naming Rules")
+        self.tabs.insertTab(3, self.blueprintTab, "Blueprint")
 
         # populate main settings
         self.guideSettingsTab.rigName_lineEdit.setText(
@@ -1765,22 +1963,1064 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
             tap.useRGB_checkBox.isChecked(),
         )
 
-        # pupulate custom steps sttings
-        self.populateCheck(
-            self.customStepTab.preCustomStep_checkBox, "doPreCustomStep"
-        )
-        for item in self.root.attr("preCustomStep").get().split(","):
-            self.customStepTab.preCustomStep_listWidget.addItem(item)
-        self.refreshStatusColor(self.customStepTab.preCustomStep_listWidget)
-
-        self.populateCheck(
-            self.customStepTab.postCustomStep_checkBox, "doPostCustomStep"
-        )
-        for item in self.root.attr("postCustomStep").get().split(","):
-            self.customStepTab.postCustomStep_listWidget.addItem(item)
-        self.refreshStatusColor(self.customStepTab.postCustomStep_listWidget)
+        # populate custom steps settings
+        self.populate_custom_step_controls()
 
         self.populate_naming_controls()
+
+        self.populate_blueprint_controls()
+
+        self.populate_override_controls()
+
+    def populate_blueprint_controls(self):
+        """Populate the blueprint tab controls."""
+        tap = self.blueprintTab
+        self.populateCheck(tap.useBlueprint_checkBox, "use_blueprint")
+        # Convert to relative path for display if possible
+        blueprint_path = self.root.attr("blueprint_path").get()
+        relative_path = make_blueprint_path_relative(blueprint_path)
+        tap.blueprint_lineEdit.setText(relative_path)
+        # Also update the attribute if path was converted
+        if relative_path != blueprint_path:
+            self.root.attr("blueprint_path").set(relative_path)
+        self.update_blueprint_status()
+
+    def populate_override_controls(self):
+        """Populate the override checkbox controls.
+
+        For checkable GroupBoxes, we use setChecked() directly since they
+        don't support setCheckState(). Regular QCheckBox uses populateCheck().
+        """
+        tap = self.guideSettingsTab
+
+        # Checkable GroupBoxes - use setChecked directly
+        tap.groupBox.setChecked(
+            self.root.attr("override_rig_settings").get()
+        )
+        tap.groupBox_6.setChecked(
+            self.root.attr("override_anim_channels").get()
+        )
+        tap.groupBox_7.setChecked(
+            self.root.attr("override_base_rig_control").get()
+        )
+        tap.groupBox_2.setChecked(
+            self.root.attr("override_skinning").get()
+        )
+        tap.groupBox_3.setChecked(
+            self.root.attr("override_joint_settings").get()
+        )
+        tap.groupBox_8.setChecked(
+            self.root.attr("override_data_collector").get()
+        )
+        tap.groupBox_5.setChecked(
+            self.root.attr("override_color_settings").get()
+        )
+
+        # Naming Rules and Custom Steps tab overrides (regular checkboxes)
+        self.populateCheck(
+            self.namingRulesTab.override_namingRules_checkBox,
+            "override_naming_rules"
+        )
+        self.populateCheck(
+            self.customStepTab.override_preCustomSteps_checkBox,
+            "override_pre_custom_steps"
+        )
+        self.populateCheck(
+            self.customStepTab.override_postCustomSteps_checkBox,
+            "override_post_custom_steps"
+        )
+        # Update section enabled states based on blueprint and override settings
+        self.update_section_states()
+        # Populate blueprint headers for Guide Settings and Naming Rules
+        self._populate_blueprint_headers()
+
+    def update_blueprint_status(self):
+        """Update the blueprint status label based on current path."""
+        tap = self.blueprintTab
+        path = tap.blueprint_lineEdit.text()
+
+        if not path:
+            tap.blueprint_status_label.setText("")
+            tap.blueprint_status_label.setStyleSheet("")
+            return
+
+        resolved_path = resolve_blueprint_path(path)
+        if resolved_path:
+            tap.blueprint_status_label.setText(
+                "Found: {}".format(resolved_path)
+            )
+            tap.blueprint_status_label.setStyleSheet(
+                "color: rgb(100, 200, 100);"
+            )
+        else:
+            tap.blueprint_status_label.setText(
+                "File not found"
+            )
+            tap.blueprint_status_label.setStyleSheet(
+                "color: rgb(200, 100, 100);"
+            )
+
+    def update_section_states(self):
+        """Update the enabled/disabled state of sections based on blueprint settings.
+
+        For checkable GroupBoxes, we use setCheckable(False) to hide the checkbox
+        when Blueprint is disabled, and setCheckable(True) to show it when enabled.
+        The titles are also updated to include "Local Override:" prefix when active.
+        """
+        use_blueprint = self.root.attr("use_blueprint").get()
+        tap = self.guideSettingsTab
+
+        # Guide Settings tab checkable GroupBoxes with their base titles and attribute names
+        groupbox_data = [
+            (tap.groupBox, "Rig Settings", "override_rig_settings"),
+            (tap.groupBox_6, "Animation Channels Settings", "override_anim_channels"),
+            (tap.groupBox_7, "Base Rig Control", "override_base_rig_control"),
+            (tap.groupBox_2, "Skinning Settings", "override_skinning"),
+            (tap.groupBox_3, "Joint Settings", "override_joint_settings"),
+            (tap.groupBox_8, "Post Build Data Collector", "override_data_collector"),
+            (tap.groupBox_5, "Color Settings", "override_color_settings"),
+        ]
+
+        # Stylesheet for blue title and tooltip when blueprint is active
+        blue_title_style = (
+            "QGroupBox::title { color: rgb(100, 180, 255); }"
+            "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
+        )
+
+        # Blueprint tooltip text
+        blueprint_tooltip = (
+            '<p style="background-color: black; color: rgb(100, 180, 255);">'
+            "When checked, local settings are used.<br/>"
+            "When unchecked, settings are inherited from blueprint.</p>"
+        )
+
+        # If blueprint is not enabled, disable checkable mode and reset styling
+        if not use_blueprint:
+            for groupBox, baseTitle, attrName in groupbox_data:
+                # Disable checkable mode (hides the checkbox in the title)
+                groupBox.setCheckable(False)
+                # Reset to original title
+                groupBox.setTitle(baseTitle)
+                # Clear any styling and tooltip
+                groupBox.setStyleSheet("")
+                groupBox.setToolTip("")
+
+            # Also reset Naming Rules tab
+            self.namingRulesTab.override_namingRules_checkBox.setVisible(False)
+            self.namingRulesTab.override_namingRules_checkBox.setToolTip("")
+            self.namingRulesTab.override_namingRules_checkBox.setStyleSheet("")
+            self.namingRulesTab.setStyleSheet("")
+            for child in self.namingRulesTab.findChildren(QtWidgets.QWidget):
+                if child != self.namingRulesTab.override_namingRules_checkBox:
+                    child.setEnabled(True)
+
+            # Reset Custom Steps tab (Pre and Post sections)
+            self.customStepTab.override_preCustomSteps_checkBox.setVisible(False)
+            self.customStepTab.override_postCustomSteps_checkBox.setVisible(False)
+            self.customStepTab.override_preCustomSteps_checkBox.setToolTip("")
+            self.customStepTab.override_postCustomSteps_checkBox.setToolTip("")
+            self.customStepTab.override_preCustomSteps_checkBox.setStyleSheet("")
+            self.customStepTab.override_postCustomSteps_checkBox.setStyleSheet("")
+            self.customStepTab.preCollapsible.setStyleSheet("")
+            self.customStepTab.postCollapsible.setStyleSheet("")
+            # Reset collapsible titles to original (remove [Blueprint] prefix)
+            self.customStepTab.preCollapsible.header_wgt.set_text("Pre Custom Step")
+            self.customStepTab.postCollapsible.header_wgt.set_text("Post Custom Step")
+            for child in self.customStepTab.preCollapsible.findChildren(QtWidgets.QWidget):
+                child.setEnabled(True)
+            for child in self.customStepTab.postCollapsible.findChildren(QtWidgets.QWidget):
+                child.setEnabled(True)
+
+            # Reset show blueprint state flags and restore local view
+            self._showing_blueprint_pre = False
+            self._showing_blueprint_post = False
+            # Restore local custom steps view if blueprint view was active
+            self._restore_local_custom_steps_view()
+        else:
+            # Enable checkable mode with "Local Override:" prefix and blue styling
+            for groupBox, baseTitle, attrName in groupbox_data:
+                # Block signals to prevent toggled signal from overwriting Maya attribute
+                groupBox.blockSignals(True)
+                groupBox.setCheckable(True)
+                # Set checked state from Maya attribute (default is False = inherit from blueprint)
+                groupBox.setChecked(self.root.attr(attrName).get())
+                groupBox.blockSignals(False)
+                groupBox.setTitle("Local Override: " + baseTitle)
+                groupBox.setStyleSheet(blue_title_style)
+                groupBox.setToolTip(blueprint_tooltip)
+                self.update_section_enabled_state(groupBox, groupBox)
+
+            # Also update Naming Rules tab
+            self.namingRulesTab.override_namingRules_checkBox.setVisible(True)
+            self.namingRulesTab.override_namingRules_checkBox.setToolTip(blueprint_tooltip)
+            self.namingRulesTab.override_namingRules_checkBox.setStyleSheet(
+                "color: rgb(100, 180, 255);"
+            )
+            self.update_tab_enabled_state(
+                self.namingRulesTab,
+                self.namingRulesTab.override_namingRules_checkBox
+            )
+
+            # Update Custom Steps Pre and Post sections
+            self.customStepTab.override_preCustomSteps_checkBox.setVisible(True)
+            self.customStepTab.override_postCustomSteps_checkBox.setVisible(True)
+            self.customStepTab.override_preCustomSteps_checkBox.setToolTip(blueprint_tooltip)
+            self.customStepTab.override_postCustomSteps_checkBox.setToolTip(blueprint_tooltip)
+            self.customStepTab.override_preCustomSteps_checkBox.setStyleSheet(
+                "color: rgb(100, 180, 255);"
+            )
+            self.customStepTab.override_postCustomSteps_checkBox.setStyleSheet(
+                "color: rgb(100, 180, 255);"
+            )
+            self.update_custom_step_section_state(
+                self.customStepTab.preCollapsible,
+                self.customStepTab.override_preCustomSteps_checkBox
+            )
+            self.update_custom_step_section_state(
+                self.customStepTab.postCollapsible,
+                self.customStepTab.override_postCustomSteps_checkBox
+            )
+
+            # Blueprint menu is always visible - handlers check use_blueprint state
+
+    def update_section_enabled_state(self, groupBox, overrideCheckBox):
+        """Enable/disable a section based on its override checkbox.
+
+        For checkable GroupBoxes, Qt automatically enables/disables child widgets
+        when the GroupBox is checked/unchecked. We just need to apply visual styling.
+
+        Args:
+            groupBox: The QGroupBox to enable/disable
+            overrideCheckBox: The override checkbox controlling this section
+                              (for checkable GroupBoxes, this is the same as groupBox)
+        """
+        is_overridden = overrideCheckBox.isChecked()
+        # Base style for blue title and tooltip
+        base_style = (
+            "QGroupBox::title { color: rgb(100, 180, 255); }"
+            "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
+        )
+        # Apply visual style - keep blue title, add grey background when not overridden
+        if is_overridden:
+            groupBox.setStyleSheet(base_style)
+        else:
+            groupBox.setStyleSheet(
+                base_style +
+                "QGroupBox { background-color: rgba(100, 100, 100, 30); }"
+            )
+
+    def update_tab_enabled_state(self, tab, overrideCheckBox):
+        """Enable/disable a tab's contents based on its override checkbox.
+
+        Args:
+            tab: The tab widget to enable/disable
+            overrideCheckBox: The override checkbox controlling this tab
+        """
+        is_overridden = overrideCheckBox.isChecked()
+
+        # Get list of widgets to exclude from disabling (blueprint header and its children)
+        exclude_widgets = set()
+        if hasattr(self, 'naming_rules_blueprint_header'):
+            exclude_widgets.add(self.naming_rules_blueprint_header)
+            for child in self.naming_rules_blueprint_header.findChildren(QtWidgets.QWidget):
+                exclude_widgets.add(child)
+
+        # Enable children widgets (except the override checkbox and blueprint header)
+        for child in tab.findChildren(QtWidgets.QWidget):
+            if child != overrideCheckBox and child not in exclude_widgets:
+                child.setEnabled(is_overridden)
+        # Tooltip style for consistency
+        tooltip_style = "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
+        # Apply visual style
+        if is_overridden:
+            tab.setStyleSheet(tooltip_style)
+        else:
+            tab.setStyleSheet(
+                tooltip_style +
+                "background-color: rgba(100, 100, 100, 30);"
+            )
+
+    def update_custom_step_section_state(self, collapsible, overrideCheckBox):
+        """Enable/disable a custom step section based on its override checkbox.
+
+        Args:
+            collapsible: The collapsible widget (preCollapsible or postCollapsible)
+            overrideCheckBox: The override checkbox controlling this section
+        """
+        is_overridden = overrideCheckBox.isChecked()
+        # Enable children widgets
+        for child in collapsible.findChildren(QtWidgets.QWidget):
+            child.setEnabled(is_overridden)
+        # Tooltip style for consistency
+        tooltip_style = "QToolTip { background-color: black; color: rgb(100, 180, 255); }"
+        # Apply visual style
+        if is_overridden:
+            collapsible.setStyleSheet(tooltip_style)
+        else:
+            collapsible.setStyleSheet(
+                tooltip_style +
+                "background-color: rgba(100, 100, 100, 30);"
+            )
+
+    # =========================================================================
+    # Blueprint Header Methods (Guide Settings & Naming Rules)
+    # =========================================================================
+
+    def _create_guide_settings_blueprint_header(self):
+        """Create the blueprint header widget for Guide Settings tab."""
+        self.guide_settings_blueprint_header = QtWidgets.QFrame()
+        self.guide_settings_blueprint_header.setObjectName(
+            "guide_settings_blueprint_header"
+        )
+        self.guide_settings_blueprint_header.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        header_layout = QtWidgets.QHBoxLayout(self.guide_settings_blueprint_header)
+        header_layout.setContentsMargins(4, 2, 4, 2)
+        header_layout.setSpacing(6)
+
+        # Blueprint indicator icon (small colored square)
+        self.guide_settings_blueprint_indicator = QtWidgets.QLabel()
+        self.guide_settings_blueprint_indicator.setFixedSize(12, 12)
+        self.guide_settings_blueprint_indicator.setStyleSheet(
+            "background-color: #4682B4; border-radius: 2px;"
+        )
+        self.guide_settings_blueprint_indicator.setToolTip(
+            "Blueprint is active for Guide Settings"
+        )
+        header_layout.addWidget(self.guide_settings_blueprint_indicator)
+
+        # Info label
+        self.guide_settings_blueprint_label = QtWidgets.QLabel("Blueprint Active")
+        self.guide_settings_blueprint_label.setStyleSheet(
+            "color: rgb(100, 180, 255); font-weight: bold;"
+        )
+        header_layout.addWidget(self.guide_settings_blueprint_label)
+
+        # View Blueprint Settings button
+        self.guide_settings_view_pushButton = QtWidgets.QPushButton("View")
+        self.guide_settings_view_pushButton.setObjectName(
+            "guide_settings_view_pushButton"
+        )
+        self.guide_settings_view_pushButton.setToolTip(
+            "View blueprint settings for Guide Settings"
+        )
+        self.guide_settings_view_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.guide_settings_view_pushButton)
+
+        # Copy button
+        self.guide_settings_copy_pushButton = QtWidgets.QPushButton("Copy")
+        self.guide_settings_copy_pushButton.setObjectName(
+            "guide_settings_copy_pushButton"
+        )
+        self.guide_settings_copy_pushButton.setToolTip(
+            "Copy blueprint settings to local and enable local override"
+        )
+        self.guide_settings_copy_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.guide_settings_copy_pushButton)
+
+        header_layout.addStretch()
+
+        # Store blueprint data reference
+        self.guide_settings_blueprint_data = None
+        # Hidden by default until blueprint is enabled
+        self.guide_settings_blueprint_header.setVisible(False)
+
+    def _create_naming_rules_blueprint_header(self):
+        """Create the blueprint header widget for Naming Rules tab."""
+        self.naming_rules_blueprint_header = QtWidgets.QFrame()
+        self.naming_rules_blueprint_header.setObjectName(
+            "naming_rules_blueprint_header"
+        )
+        self.naming_rules_blueprint_header.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        header_layout = QtWidgets.QHBoxLayout(self.naming_rules_blueprint_header)
+        header_layout.setContentsMargins(4, 2, 4, 2)
+        header_layout.setSpacing(6)
+
+        # Blueprint indicator icon (small colored square)
+        self.naming_rules_blueprint_indicator = QtWidgets.QLabel()
+        self.naming_rules_blueprint_indicator.setFixedSize(12, 12)
+        self.naming_rules_blueprint_indicator.setStyleSheet(
+            "background-color: #4682B4; border-radius: 2px;"
+        )
+        self.naming_rules_blueprint_indicator.setToolTip(
+            "Blueprint is active for Naming Rules"
+        )
+        header_layout.addWidget(self.naming_rules_blueprint_indicator)
+
+        # Info label
+        self.naming_rules_blueprint_label = QtWidgets.QLabel("Blueprint Active")
+        self.naming_rules_blueprint_label.setStyleSheet(
+            "color: rgb(100, 180, 255); font-weight: bold;"
+        )
+        header_layout.addWidget(self.naming_rules_blueprint_label)
+
+        # View Blueprint Settings button
+        self.naming_rules_view_pushButton = QtWidgets.QPushButton("View")
+        self.naming_rules_view_pushButton.setObjectName(
+            "naming_rules_view_pushButton"
+        )
+        self.naming_rules_view_pushButton.setToolTip(
+            "View blueprint settings for Naming Rules"
+        )
+        self.naming_rules_view_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.naming_rules_view_pushButton)
+
+        # Copy button
+        self.naming_rules_copy_pushButton = QtWidgets.QPushButton("Copy")
+        self.naming_rules_copy_pushButton.setObjectName(
+            "naming_rules_copy_pushButton"
+        )
+        self.naming_rules_copy_pushButton.setToolTip(
+            "Copy blueprint settings to local and enable local override"
+        )
+        self.naming_rules_copy_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.naming_rules_copy_pushButton)
+
+        header_layout.addStretch()
+
+        # Store blueprint data reference
+        self.naming_rules_blueprint_data = None
+        # Hidden by default until blueprint is enabled
+        self.naming_rules_blueprint_header.setVisible(False)
+
+    def _populate_blueprint_headers(self):
+        """Populate blueprint headers based on guide blueprint settings."""
+        use_blueprint = self.root.attr("use_blueprint").get()
+        blueprint_path = self.root.attr("blueprint_path").get()
+
+        # Check if blueprint is enabled and valid
+        if not use_blueprint or not blueprint_path:
+            self._set_guide_settings_header_inactive()
+            self._set_naming_rules_header_inactive()
+            return
+
+        # Load blueprint data
+        blueprint_data = load_blueprint_guide(blueprint_path)
+        if not blueprint_data:
+            self._set_guide_settings_header_inactive()
+            self._set_naming_rules_header_inactive()
+            return
+
+        # Store blueprint data for later use
+        self.guide_settings_blueprint_data = blueprint_data
+        self.naming_rules_blueprint_data = blueprint_data
+
+        # Activate headers
+        self._set_guide_settings_header_active()
+        self._set_naming_rules_header_active()
+
+    def _set_guide_settings_header_inactive(self):
+        """Set the Guide Settings blueprint header to inactive state."""
+        self.guide_settings_blueprint_header.setVisible(False)
+        self.guide_settings_blueprint_data = None
+
+    def _set_guide_settings_header_active(self):
+        """Set the Guide Settings blueprint header to active state."""
+        self.guide_settings_blueprint_header.setVisible(True)
+        self.guide_settings_blueprint_header.setStyleSheet(
+            "QFrame#guide_settings_blueprint_header { "
+            "background-color: rgba(70, 130, 180, 40); border-radius: 2px; }"
+        )
+
+    def _set_naming_rules_header_inactive(self):
+        """Set the Naming Rules blueprint header to inactive state."""
+        self.naming_rules_blueprint_header.setVisible(False)
+        self.naming_rules_blueprint_data = None
+
+    def _set_naming_rules_header_active(self):
+        """Set the Naming Rules blueprint header to active state."""
+        self.naming_rules_blueprint_header.setVisible(True)
+        self.naming_rules_blueprint_header.setStyleSheet(
+            "QFrame#naming_rules_blueprint_header { "
+            "background-color: rgba(70, 130, 180, 40); border-radius: 2px; }"
+        )
+        # Insert header into Naming Rules tab layout at the top
+        layout = self.namingRulesTab.verticalLayout_3
+        if self.naming_rules_blueprint_header.parent() != self.namingRulesTab:
+            layout.insertWidget(0, self.naming_rules_blueprint_header)
+
+    def _on_view_guide_settings_blueprint(self):
+        """Show a dialog with the blueprint settings for Guide Settings."""
+        if not self.guide_settings_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Blueprint Settings",
+                "No blueprint data available."
+            )
+            return
+
+        # Get all Guide Settings section attributes from OVERRIDE_SECTION_ATTRS
+        guide_settings_attrs = []
+        for section in ["override_rig_settings", "override_anim_channels",
+                        "override_base_rig_control", "override_skinning",
+                        "override_joint_settings", "override_data_collector",
+                        "override_color_settings"]:
+            guide_settings_attrs.extend(
+                OVERRIDE_SECTION_ATTRS.get(section, [])
+            )
+
+        self._show_blueprint_values_dialog(
+            "Guide Settings",
+            guide_settings_attrs
+        )
+
+    def _on_view_naming_rules_blueprint(self):
+        """Show a dialog with the blueprint settings for Naming Rules."""
+        if not self.naming_rules_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Blueprint Settings",
+                "No blueprint data available."
+            )
+            return
+
+        naming_rules_attrs = OVERRIDE_SECTION_ATTRS.get("override_naming_rules", [])
+        self._show_blueprint_values_dialog(
+            "Naming Rules",
+            naming_rules_attrs
+        )
+
+    def _show_blueprint_values_dialog(self, title, attr_list):
+        """Show a dialog displaying blueprint values for the specified attributes.
+
+        Args:
+            title: Dialog title
+            attr_list: List of attribute names to display
+        """
+        blueprint_data = self.guide_settings_blueprint_data
+
+        # Get param_values from guide_root in blueprint data
+        param_values = {}
+        if blueprint_data:
+            guide_root = blueprint_data.get("guide_root", {})
+            param_values = guide_root.get("param_values", {})
+
+        # Create dialog
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Blueprint Settings - {}".format(title))
+        dialog.resize(450, 400)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        # Info label
+        info_label = QtWidgets.QLabel(
+            "Settings from the blueprint guide for {}:".format(title)
+        )
+        layout.addWidget(info_label)
+
+        # Settings tree
+        tree = QtWidgets.QTreeWidget()
+        tree.setHeaderLabels(["Parameter", "Value"])
+        tree.setColumnCount(2)
+
+        for attr_name in sorted(attr_list):
+            if attr_name in param_values:
+                value = param_values[attr_name]
+                item = QtWidgets.QTreeWidgetItem([str(attr_name), str(value)])
+                tree.addTopLevelItem(item)
+
+        tree.resizeColumnToContents(0)
+        layout.addWidget(tree)
+
+        # Close button
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        dialog.exec_()
+
+    def _on_copy_guide_settings_from_blueprint(self):
+        """Copy blueprint settings to local Guide Settings and enable overrides."""
+        if not self.guide_settings_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Copy from Blueprint",
+                "No blueprint data available."
+            )
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Copy from Blueprint",
+            "This will copy all Guide Settings from the blueprint to local "
+            "and enable all local overrides.\n\nContinue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        blueprint_data = self.guide_settings_blueprint_data
+
+        # Get param_values from guide_root in blueprint data
+        param_values = {}
+        if blueprint_data:
+            guide_root = blueprint_data.get("guide_root", {})
+            param_values = guide_root.get("param_values", {})
+
+        # Copy settings from blueprint to local for each section
+        sections_to_copy = [
+            "override_rig_settings",
+            "override_anim_channels",
+            "override_base_rig_control",
+            "override_skinning",
+            "override_joint_settings",
+            "override_data_collector",
+            "override_color_settings"
+        ]
+
+        for section in sections_to_copy:
+            attr_list = OVERRIDE_SECTION_ATTRS.get(section, [])
+            for attr_name in attr_list:
+                if attr_name in param_values:
+                    try:
+                        self.root.attr(attr_name).set(param_values[attr_name])
+                    except Exception:
+                        pass  # Skip attributes that can't be set
+
+            # Enable the override for this section
+            try:
+                self.root.attr(section).set(True)
+            except Exception:
+                pass
+
+        # Refresh UI
+        self.populate_controls()
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Copy from Blueprint",
+            "Blueprint settings have been copied to local.\n"
+            "All Guide Settings local overrides are now enabled."
+        )
+
+    def _on_copy_naming_rules_from_blueprint(self):
+        """Copy blueprint settings to local Naming Rules and enable override."""
+        if not self.naming_rules_blueprint_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Copy from Blueprint",
+                "No blueprint data available."
+            )
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Copy from Blueprint",
+            "This will copy all Naming Rules from the blueprint to local "
+            "and enable local override.\n\nContinue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        blueprint_data = self.naming_rules_blueprint_data
+
+        # Get param_values from guide_root in blueprint data
+        param_values = {}
+        if blueprint_data:
+            guide_root = blueprint_data.get("guide_root", {})
+            param_values = guide_root.get("param_values", {})
+
+        attr_list = OVERRIDE_SECTION_ATTRS.get("override_naming_rules", [])
+
+        for attr_name in attr_list:
+            if attr_name in param_values:
+                try:
+                    self.root.attr(attr_name).set(param_values[attr_name])
+                except Exception:
+                    pass
+
+        # Enable the naming rules override
+        try:
+            self.root.attr("override_naming_rules").set(True)
+        except Exception:
+            pass
+
+        # Refresh UI
+        self.populate_controls()
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Copy from Blueprint",
+            "Blueprint settings have been copied to local.\n"
+            "Naming Rules local override is now enabled."
+        )
+
+    # =========================================================================
+    # Blueprint Custom Steps Methods
+    # =========================================================================
+
+    def _restore_local_custom_steps_view(self):
+        """Restore the local custom steps view (called when blueprint is disabled)."""
+        # This method ensures local custom steps are displayed
+        # by triggering a refresh of the custom step lists
+        if hasattr(self, '_showing_blueprint_pre') and self._showing_blueprint_pre:
+            self._showing_blueprint_pre = False
+            self._refresh_pre_custom_steps_list()
+        if hasattr(self, '_showing_blueprint_post') and self._showing_blueprint_post:
+            self._showing_blueprint_post = False
+            self._refresh_post_custom_steps_list()
+
+    def _get_blueprint_custom_steps(self):
+        """Load custom steps from the blueprint guide file.
+
+        Returns:
+            tuple: (pre_custom_steps, post_custom_steps, do_pre, do_post)
+                   or (None, None, False, False) if blueprint not available
+        """
+        blueprint_path = self.root.attr("blueprint_path").get()
+        if not blueprint_path:
+            return None, None, False, False
+
+        blueprint_conf = load_blueprint_guide(blueprint_path)
+        if not blueprint_conf:
+            return None, None, False, False
+
+        guide_root = blueprint_conf.get("guide_root", {})
+        param_values = guide_root.get("param_values", {})
+
+        pre_steps = param_values.get("preCustomStep", "")
+        post_steps = param_values.get("postCustomStep", "")
+        do_pre = param_values.get("doPreCustomStep", False)
+        do_post = param_values.get("doPostCustomStep", False)
+
+        return pre_steps, post_steps, do_pre, do_post
+
+    def on_show_blueprint_pre_custom_steps(self, checked):
+        """Handle Show Blueprint Pre Custom Steps action toggle.
+
+        Args:
+            checked: Whether the action is checked (True = show blueprint)
+        """
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            try:
+                self.customStepTab.showBlueprintPre_action.setChecked(False)
+            except RuntimeError:
+                pass
+            return
+
+        self._showing_blueprint_pre = checked
+
+        if checked:
+            # When showing blueprint, uncheck local override (we're viewing blueprint, not local)
+            checkbox = self.customStepTab.override_preCustomSteps_checkBox
+            if checkbox.isChecked():
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
+                self.root.attr("override_pre_custom_steps").set(False)
+                self.update_custom_step_section_state(
+                    self.customStepTab.preCollapsible,
+                    checkbox
+                )
+
+            # Load and display blueprint pre custom steps (read-only)
+            pre_steps, _, do_pre, _ = self._get_blueprint_custom_steps()
+            if pre_steps is not None:
+                self._display_blueprint_custom_steps(
+                    self.customStepTab.preCustomStep_listWidget,
+                    self.customStepTab.preCustomStep_checkBox,
+                    pre_steps,
+                    do_pre,
+                    is_pre=True
+                )
+            else:
+                mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+                try:
+                    self.customStepTab.showBlueprintPre_action.setChecked(False)
+                except RuntimeError:
+                    pass
+                self._showing_blueprint_pre = False
+        else:
+            # Restore local pre custom steps
+            self._refresh_pre_custom_steps_list()
+
+    def on_show_blueprint_post_custom_steps(self, checked):
+        """Handle Show Blueprint Post Custom Steps action toggle.
+
+        Args:
+            checked: Whether the action is checked (True = show blueprint)
+        """
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            try:
+                self.customStepTab.showBlueprintPost_action.setChecked(False)
+            except RuntimeError:
+                pass
+            return
+
+        self._showing_blueprint_post = checked
+
+        if checked:
+            # When showing blueprint, uncheck local override (we're viewing blueprint, not local)
+            checkbox = self.customStepTab.override_postCustomSteps_checkBox
+            if checkbox.isChecked():
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
+                self.root.attr("override_post_custom_steps").set(False)
+                self.update_custom_step_section_state(
+                    self.customStepTab.postCollapsible,
+                    checkbox
+                )
+
+            # Load and display blueprint post custom steps (read-only)
+            _, post_steps, _, do_post = self._get_blueprint_custom_steps()
+            if post_steps is not None:
+                self._display_blueprint_custom_steps(
+                    self.customStepTab.postCustomStep_listWidget,
+                    self.customStepTab.postCustomStep_checkBox,
+                    post_steps,
+                    do_post,
+                    is_pre=False
+                )
+            else:
+                mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+                try:
+                    self.customStepTab.showBlueprintPost_action.setChecked(False)
+                except RuntimeError:
+                    pass
+                self._showing_blueprint_post = False
+        else:
+            # Restore local post custom steps
+            self._refresh_post_custom_steps_list()
+
+    def _display_blueprint_custom_steps(self, listWidget, enableCheckbox,
+                                         steps_string, is_enabled, is_pre):
+        """Display blueprint custom steps in read-only mode.
+
+        Args:
+            listWidget: The CustomStepListWidget to populate
+            enableCheckbox: The enable checkbox for this section
+            steps_string: The custom steps string from blueprint
+            is_enabled: Whether the custom steps are enabled in blueprint
+            is_pre: True for pre custom steps, False for post
+        """
+        # Clear existing items
+        listWidget.clear()
+
+        # Set the enable checkbox state (but don't save to Maya attribute)
+        enableCheckbox.blockSignals(True)
+        enableCheckbox.setChecked(is_enabled)
+        enableCheckbox.blockSignals(False)
+
+        # Parse and display the steps using the list widget's loadFromJson
+        listWidget.loadFromJson(steps_string)
+
+        # Make list read-only by disabling edit actions
+        listWidget.setEnabled(False)
+        enableCheckbox.setEnabled(False)
+
+        # Update the collapsible title to indicate blueprint view
+        collapsible = (self.customStepTab.preCollapsible if is_pre
+                      else self.customStepTab.postCollapsible)
+        base_title = "Pre Custom Step" if is_pre else "Post Custom Step"
+        collapsible.header_wgt.set_text("[Blueprint] " + base_title)
+        collapsible.setStyleSheet(
+            "background-color: rgba(100, 180, 255, 30);"
+        )
+
+    def _refresh_pre_custom_steps_list(self):
+        """Refresh the pre custom steps list with local values."""
+        listWidget = self.customStepTab.preCustomStep_listWidget
+        enableCheckbox = self.customStepTab.preCustomStep_checkBox
+
+        # Re-enable widgets
+        listWidget.setEnabled(True)
+        enableCheckbox.setEnabled(True)
+
+        # Restore title
+        self.customStepTab.preCollapsible.header_wgt.set_text("Pre Custom Step")
+
+        # Reload from Maya attribute
+        steps_string = self.root.attr("preCustomStep").get()
+        listWidget.loadFromJson(steps_string)
+
+        # Restore enable state
+        enableCheckbox.blockSignals(True)
+        enableCheckbox.setChecked(self.root.attr("doPreCustomStep").get())
+        enableCheckbox.blockSignals(False)
+
+        # Update styling based on override state
+        use_blueprint = self.root.attr("use_blueprint").get()
+        if use_blueprint:
+            self.update_custom_step_section_state(
+                self.customStepTab.preCollapsible,
+                self.customStepTab.override_preCustomSteps_checkBox
+            )
+        else:
+            self.customStepTab.preCollapsible.setStyleSheet("")
+
+    def _refresh_post_custom_steps_list(self):
+        """Refresh the post custom steps list with local values."""
+        listWidget = self.customStepTab.postCustomStep_listWidget
+        enableCheckbox = self.customStepTab.postCustomStep_checkBox
+
+        # Re-enable widgets
+        listWidget.setEnabled(True)
+        enableCheckbox.setEnabled(True)
+
+        # Restore title
+        self.customStepTab.postCollapsible.header_wgt.set_text("Post Custom Step")
+
+        # Reload from Maya attribute
+        steps_string = self.root.attr("postCustomStep").get()
+        listWidget.loadFromJson(steps_string)
+
+        # Restore enable state
+        enableCheckbox.blockSignals(True)
+        enableCheckbox.setChecked(self.root.attr("doPostCustomStep").get())
+        enableCheckbox.blockSignals(False)
+
+        # Update styling based on override state
+        use_blueprint = self.root.attr("use_blueprint").get()
+        if use_blueprint:
+            self.update_custom_step_section_state(
+                self.customStepTab.postCollapsible,
+                self.customStepTab.override_postCustomSteps_checkBox
+            )
+        else:
+            self.customStepTab.postCollapsible.setStyleSheet("")
+
+    def on_make_pre_custom_steps_local(self):
+        """Copy blueprint pre custom steps to local configuration."""
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            return
+
+        pre_steps, _, do_pre, _ = self._get_blueprint_custom_steps()
+        if pre_steps is None:
+            mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+            return
+
+        # Confirm with user
+        result = QtWidgets.QMessageBox.question(
+            self,
+            "Make Pre Custom Steps Local",
+            "This will replace your local pre custom steps configuration "
+            "with the blueprint's configuration.\n\n"
+            "Do you want to continue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if result != QtWidgets.QMessageBox.Yes:
+            return
+
+        # Copy to local Maya attributes
+        self.root.attr("preCustomStep").set(pre_steps)
+        self.root.attr("doPreCustomStep").set(do_pre)
+
+        # Check the override checkbox (now using local values)
+        self.customStepTab.override_preCustomSteps_checkBox.setChecked(True)
+
+        # Turn off blueprint view if active
+        try:
+            if self.customStepTab.showBlueprintPre_action.isChecked():
+                self.customStepTab.showBlueprintPre_action.setChecked(False)
+        except RuntimeError:
+            pass
+        self._showing_blueprint_pre = False
+
+        # Refresh the display
+        self._refresh_pre_custom_steps_list()
+
+        mgear.log("Pre custom steps copied from blueprint to local")
+
+    def on_make_post_custom_steps_local(self):
+        """Copy blueprint post custom steps to local configuration."""
+        # Early exit if blueprint is not enabled
+        if not self.root.attr("use_blueprint").get():
+            return
+
+        _, post_steps, _, do_post = self._get_blueprint_custom_steps()
+        if post_steps is None:
+            mgear.log("Could not load blueprint custom steps", mgear.sev_warning)
+            return
+
+        # Confirm with user
+        result = QtWidgets.QMessageBox.question(
+            self,
+            "Make Post Custom Steps Local",
+            "This will replace your local post custom steps configuration "
+            "with the blueprint's configuration.\n\n"
+            "Do you want to continue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if result != QtWidgets.QMessageBox.Yes:
+            return
+
+        # Copy to local Maya attributes
+        self.root.attr("postCustomStep").set(post_steps)
+        self.root.attr("doPostCustomStep").set(do_post)
+
+        # Check the override checkbox (now using local values)
+        self.customStepTab.override_postCustomSteps_checkBox.setChecked(True)
+
+        # Turn off blueprint view if active
+        try:
+            if self.customStepTab.showBlueprintPost_action.isChecked():
+                self.customStepTab.showBlueprintPost_action.setChecked(False)
+        except RuntimeError:
+            pass
+        self._showing_blueprint_post = False
+
+        # Refresh the display
+        self._refresh_post_custom_steps_list()
+
+        mgear.log("Post custom steps copied from blueprint to local")
+
+    def browse_blueprint_path(self):
+        """Open file browser to select blueprint guide file."""
+        # Get starting directory from environment variable
+        start_dir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
+        if start_dir:
+            # Use first path if multiple paths are specified
+            start_dir = start_dir.split(os.pathsep)[0]
+
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select Blueprint Guide",
+            start_dir,
+            "Shifter Guide Template (*.sgt);;All Files (*.*)"
+        )
+
+        if file_path:
+            # Convert to relative path if within MGEAR_SHIFTER_CUSTOMSTEP_PATH
+            file_path = make_blueprint_path_relative(file_path)
+
+            self.blueprintTab.blueprint_lineEdit.setText(file_path)
+            self.root.attr("blueprint_path").set(file_path)
+            self.update_blueprint_status()
+            self.update_section_states()
+            self._populate_blueprint_headers()
+
+    def on_blueprint_enabled_changed(self, *args):
+        """Handle blueprint enabled checkbox state change."""
+        self.updateCheck(
+            self.blueprintTab.useBlueprint_checkBox, "use_blueprint"
+        )
+        self.update_section_states()
+        self._populate_blueprint_headers()
+
+    def on_override_changed(self, overrideCheckBox, groupBox, attrName, *args):
+        """Handle override checkbox state change.
+
+        Args:
+            overrideCheckBox: The override checkbox that was changed
+            groupBox: The QGroupBox to enable/disable
+            attrName: The attribute name to update
+        """
+        self.updateCheck(overrideCheckBox, attrName)
+        self.update_section_enabled_state(groupBox, overrideCheckBox)
 
     def populate_naming_controls(self):
         # populate name settings
@@ -1847,6 +3087,12 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
         self.settings_layout.addWidget(self.close_button)
 
         self.setLayout(self.settings_layout)
+
+        # Add Guide Settings blueprint header inside the Guide Settings tab
+        # Insert at the top of mainLayout (above the grid container)
+        self.guideSettingsTab.mainLayout.insertWidget(
+            0, self.guide_settings_blueprint_header
+        )
 
     def create_connections(self):
         """Create the slots connections to the controls functions"""
@@ -1995,95 +3241,8 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
             )
         )
 
-        # custom Step Tab
-        csTap = self.customStepTab
-        csTap.preCustomStep_checkBox.stateChanged.connect(
-            partial(
-                self.updateCheck,
-                csTap.preCustomStep_checkBox,
-                "doPreCustomStep",
-            )
-        )
-        csTap.preCustomStepAdd_pushButton.clicked.connect(self.addCustomStep)
-        csTap.preCustomStepNew_pushButton.clicked.connect(self.newCustomStep)
-        csTap.preCustomStepDuplicate_pushButton.clicked.connect(
-            self.duplicateCustomStep
-        )
-        csTap.preCustomStepExport_pushButton.clicked.connect(
-            self.exportCustomStep
-        )
-        csTap.preCustomStepImport_pushButton.clicked.connect(
-            self.importCustomStep
-        )
-        csTap.preCustomStepRemove_pushButton.clicked.connect(
-            partial(
-                self.removeSelectedFromListWidget,
-                csTap.preCustomStep_listWidget,
-                "preCustomStep",
-            )
-        )
-        csTap.preCustomStep_listWidget.installEventFilter(self)
-        csTap.preCustomStepRun_pushButton.clicked.connect(
-            partial(self.runManualStep, csTap.preCustomStep_listWidget)
-        )
-        csTap.preCustomStepEdit_pushButton.clicked.connect(
-            partial(self.editFile, csTap.preCustomStep_listWidget)
-        )
-
-        csTap.postCustomStep_checkBox.stateChanged.connect(
-            partial(
-                self.updateCheck,
-                csTap.postCustomStep_checkBox,
-                "doPostCustomStep",
-            )
-        )
-        csTap.postCustomStepAdd_pushButton.clicked.connect(
-            partial(self.addCustomStep, False)
-        )
-        csTap.postCustomStepNew_pushButton.clicked.connect(
-            partial(self.newCustomStep, False)
-        )
-        csTap.postCustomStepDuplicate_pushButton.clicked.connect(
-            partial(self.duplicateCustomStep, False)
-        )
-        csTap.postCustomStepExport_pushButton.clicked.connect(
-            partial(self.exportCustomStep, False)
-        )
-        csTap.postCustomStepImport_pushButton.clicked.connect(
-            partial(self.importCustomStep, False)
-        )
-        csTap.postCustomStepRemove_pushButton.clicked.connect(
-            partial(
-                self.removeSelectedFromListWidget,
-                csTap.postCustomStep_listWidget,
-                "postCustomStep",
-            )
-        )
-        csTap.postCustomStep_listWidget.installEventFilter(self)
-        csTap.postCustomStepRun_pushButton.clicked.connect(
-            partial(self.runManualStep, csTap.postCustomStep_listWidget)
-        )
-        csTap.postCustomStepEdit_pushButton.clicked.connect(
-            partial(self.editFile, csTap.postCustomStep_listWidget)
-        )
-
-        # right click menus
-        csTap.preCustomStep_listWidget.setContextMenuPolicy(
-            QtCore.Qt.CustomContextMenu
-        )
-        csTap.preCustomStep_listWidget.customContextMenuRequested.connect(
-            self.preCustomStepMenu
-        )
-        csTap.postCustomStep_listWidget.setContextMenuPolicy(
-            QtCore.Qt.CustomContextMenu
-        )
-        csTap.postCustomStep_listWidget.customContextMenuRequested.connect(
-            self.postCustomStepMenu
-        )
-
-        # search hightlight
-        csTap.preSearch_lineEdit.textChanged.connect(self.preHighlightSearch)
-        csTap.postSearch_lineEdit.textChanged.connect(self.postHighlightSearch)
+        # Custom Step Tab
+        self.create_custom_step_connections()
 
         # Naming Tab
         tap = self.namingRulesTab
@@ -2233,15 +3392,213 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
             self.export_name_config
         )
 
-    def eventFilter(self, sender, event):
-        if event.type() == QtCore.QEvent.ChildRemoved:
-            if sender == self.customStepTab.preCustomStep_listWidget:
-                self.updateListAttr(sender, "preCustomStep")
-            elif sender == self.customStepTab.postCustomStep_listWidget:
-                self.updateListAttr(sender, "postCustomStep")
-            return True
+        # Blueprint Tab connections
+        self.create_blueprint_connections()
+
+        # Override checkbox connections
+        self.create_override_connections()
+
+    def create_blueprint_connections(self):
+        """Create signal connections for the blueprint tab."""
+        tap = self.blueprintTab
+        tap.useBlueprint_checkBox.stateChanged.connect(
+            self.on_blueprint_enabled_changed
+        )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            partial(
+                self.updateLineEditPath,
+                tap.blueprint_lineEdit,
+                "blueprint_path"
+            )
+        )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            self.update_blueprint_status
+        )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            self.update_section_states
+        )
+        tap.blueprint_lineEdit.editingFinished.connect(
+            self._populate_blueprint_headers
+        )
+        tap.blueprint_pushButton.clicked.connect(
+            self.browse_blueprint_path
+        )
+
+        # Blueprint header button connections (Guide Settings and Naming Rules)
+        self.guide_settings_view_pushButton.clicked.connect(
+            self._on_view_guide_settings_blueprint
+        )
+        self.guide_settings_copy_pushButton.clicked.connect(
+            self._on_copy_guide_settings_from_blueprint
+        )
+        self.naming_rules_view_pushButton.clicked.connect(
+            self._on_view_naming_rules_blueprint
+        )
+        self.naming_rules_copy_pushButton.clicked.connect(
+            self._on_copy_naming_rules_from_blueprint
+        )
+
+    def create_override_connections(self):
+        """Create signal connections for override checkboxes.
+
+        Note: For Guide Settings sections, the GroupBox itself is checkable,
+        so the checkbox reference points to the GroupBox. We use the 'toggled'
+        signal for checkable GroupBoxes.
+        """
+        tap = self.guideSettingsTab
+
+        # Connect each checkable GroupBox (override checkbox = groupBox)
+        # The override_xxx_checkBox references ARE the GroupBoxes now
+        override_mappings = [
+            (tap.groupBox, "override_rig_settings"),
+            (tap.groupBox_6, "override_anim_channels"),
+            (tap.groupBox_7, "override_base_rig_control"),
+            (tap.groupBox_2, "override_skinning"),
+            (tap.groupBox_3, "override_joint_settings"),
+            (tap.groupBox_8, "override_data_collector"),
+            (tap.groupBox_5, "override_color_settings"),
+        ]
+
+        for groupBox, attrName in override_mappings:
+            groupBox.toggled.connect(
+                partial(
+                    self.on_override_changed,
+                    groupBox,
+                    groupBox,
+                    attrName
+                )
+            )
+
+        # Tab override connections (Naming Rules)
+        self.namingRulesTab.override_namingRules_checkBox.stateChanged.connect(
+            partial(
+                self.on_tab_override_changed,
+                self.namingRulesTab.override_namingRules_checkBox,
+                self.namingRulesTab,
+                "override_naming_rules"
+            )
+        )
+
+        # Custom Steps Pre and Post override connections
+        self.customStepTab.override_preCustomSteps_checkBox.stateChanged.connect(
+            partial(
+                self.on_custom_step_override_changed,
+                self.customStepTab.override_preCustomSteps_checkBox,
+                self.customStepTab.preCollapsible,
+                "override_pre_custom_steps"
+            )
+        )
+        self.customStepTab.override_postCustomSteps_checkBox.stateChanged.connect(
+            partial(
+                self.on_custom_step_override_changed,
+                self.customStepTab.override_postCustomSteps_checkBox,
+                self.customStepTab.postCollapsible,
+                "override_post_custom_steps"
+            )
+        )
+
+        # Blueprint menu connections for Custom Steps
+        try:
+            self.customStepTab.showBlueprintPre_action.triggered.connect(
+                self.on_show_blueprint_pre_custom_steps
+            )
+            self.customStepTab.showBlueprintPost_action.triggered.connect(
+                self.on_show_blueprint_post_custom_steps
+            )
+            self.customStepTab.makePreLocal_action.triggered.connect(
+                self.on_make_pre_custom_steps_local
+            )
+            self.customStepTab.makePostLocal_action.triggered.connect(
+                self.on_make_post_custom_steps_local
+            )
+            # Sync menu state when menu is about to show
+            self.customStepTab.blueprintMenu.aboutToShow.connect(
+                self._sync_blueprint_menu_state
+            )
+        except RuntimeError:
+            mgear.log("Blueprint menu actions not available", mgear.sev_warning)
+
+    def on_tab_override_changed(self, overrideCheckBox, tab, attrName, *args):
+        """Handle tab override checkbox state change.
+
+        Args:
+            overrideCheckBox: The override checkbox that was changed
+            tab: The tab widget to enable/disable
+            attrName: The attribute name to update
+        """
+        self.updateCheck(overrideCheckBox, attrName)
+        self.update_tab_enabled_state(tab, overrideCheckBox)
+
+    def on_custom_step_override_changed(self, overrideCheckBox, collapsible, attrName, *args):
+        """Handle custom step section override checkbox state change.
+
+        Args:
+            overrideCheckBox: The override checkbox that was changed
+            collapsible: The collapsible widget to enable/disable
+            attrName: The attribute name to update
+        """
+        self.updateCheck(overrideCheckBox, attrName)
+        self.update_custom_step_section_state(collapsible, overrideCheckBox)
+
+        # When local override is enabled, uncheck "Show Blueprint" and show local steps
+        is_checked = overrideCheckBox.isChecked()
+        if is_checked:
+            if attrName == "override_pre_custom_steps":
+                # Uncheck the show blueprint action
+                self._uncheck_show_blueprint_action("pre")
+                # Always update state and refresh
+                self._showing_blueprint_pre = False
+                self._refresh_pre_custom_steps_list()
+            elif attrName == "override_post_custom_steps":
+                # Uncheck the show blueprint action
+                self._uncheck_show_blueprint_action("post")
+                # Always update state and refresh
+                self._showing_blueprint_post = False
+                self._refresh_post_custom_steps_list()
+
+    def _uncheck_show_blueprint_action(self, which):
+        """Uncheck a Show Blueprint menu action by updating internal state.
+
+        The actual menu action state will be synced when the menu is shown
+        via _sync_blueprint_menu_state().
+
+        Args:
+            which: "pre" or "post" to indicate which action to uncheck
+        """
+        # Update internal state - menu will sync when shown
+        if which == "pre":
+            self._showing_blueprint_pre = False
         else:
-            return QtWidgets.QDialog.eventFilter(self, sender, event)
+            self._showing_blueprint_post = False
+
+    def _sync_blueprint_menu_state(self):
+        """Sync the Blueprint menu action states with internal tracking.
+
+        Called when the Blueprint menu is about to show, to ensure the
+        checkable actions reflect the current state.
+        """
+        try:
+            # Sync pre action state
+            pre_action = self.customStepTab.showBlueprintPre_action
+            if pre_action is not None:
+                pre_action.blockSignals(True)
+                pre_action.setChecked(self._showing_blueprint_pre)
+                pre_action.blockSignals(False)
+
+            # Sync post action state
+            post_action = self.customStepTab.showBlueprintPost_action
+            if post_action is not None:
+                post_action.blockSignals(True)
+                post_action.setChecked(self._showing_blueprint_post)
+                post_action.blockSignals(False)
+        except (RuntimeError, AttributeError):
+            # Actions may have been garbage collected
+            pass
+
+    def eventFilter(self, sender, event):
+        if self.custom_step_event_filter(sender, event):
+            return True
+        return QtWidgets.QDialog.eventFilter(self, sender, event)
 
     # Slots ########################################################
 
@@ -2317,7 +3674,7 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
         if not isinstance(file_path, string_types):
             file_path = file_path[0]
         config = json.load(open(file_path))
-        for key in config.keys():
+        for key in config:
             self.root.attr(key).set(config[key])
         self.populate_naming_controls()
 
@@ -2452,485 +3809,6 @@ class GuideSettings(MayaQWidgetDockableMixin, GuideMainSettings):
                 "Nothing selected or selection is not joint or Transform type"
             )
 
-    def addCustomStep(self, pre=True, *args):
-        """Add a new custom step
-
-        Arguments:
-            pre (bool, optional): If true adds the steps to the pre step list
-            *args: Maya's Dummy
-
-        Returns:
-            None: None
-        """
-
-        if pre:
-            stepAttr = "preCustomStep"
-            stepWidget = self.customStepTab.preCustomStep_listWidget
-        else:
-            stepAttr = "postCustomStep"
-            stepWidget = self.customStepTab.postCustomStep_listWidget
-
-        # Check if we have a custom env for the custom steps initial folder
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-        else:
-            startDir = self.root.attr(stepAttr).get()
-
-        filePaths = pm.fileDialog2(
-            fileMode=4,
-            startingDirectory=startDir,
-            okc="Add",
-            fileFilter="Custom Step .py (*.py)",
-        )
-        if not filePaths:
-            return
-
-        # Quick clean the first empty item
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
-        for filePath in filePaths:
-            if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                filePath = os.path.abspath(filePath)
-                baseReplace = os.path.abspath(
-                    os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-                )
-                # backslashes (windows paths) can cause escape characters
-                filePath = filePath.replace(baseReplace, "").replace("\\", "/")
-                # remove front forward
-                if "/" == filePath[0]:
-                    filePath = filePath[1:]
-
-            fileName = os.path.split(filePath)[1].split(".")[0]
-            stepWidget.addItem(fileName + " | " + filePath)
-        self.updateListAttr(stepWidget, stepAttr)
-        self.refreshStatusColor(stepWidget)
-
-    def newCustomStep(self, pre=True, *args):
-        """Creates a new custom step
-
-        Arguments:
-            pre (bool, optional): If true adds the steps to the pre step list
-            *args: Maya's Dummy
-
-        Returns:
-            None: None
-        """
-
-        if pre:
-            stepAttr = "preCustomStep"
-            stepWidget = self.customStepTab.preCustomStep_listWidget
-        else:
-            stepAttr = "postCustomStep"
-            stepWidget = self.customStepTab.postCustomStep_listWidget
-
-        # Check if we have a custom env for the custom steps initial folder
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-        else:
-            startDir = self.root.attr(stepAttr).get()
-
-        filePath = pm.fileDialog2(
-            fileMode=0,
-            startingDirectory=startDir,
-            okc="New",
-            fileFilter="Custom Step .py (*.py)",
-        )
-        if not filePath:
-            return
-        if not isinstance(filePath, string_types):
-            filePath = filePath[0]
-
-        n, e = os.path.splitext(filePath)
-        stepName = os.path.split(n)[-1]
-        # raw custome step string
-        rawString = r'''import mgear.shifter.custom_step as cstp
-
-
-class CustomShifterStep(cstp.customShifterMainStep):
-    """Custom Step description
-    """
-
-    def setup(self):
-        """
-        Setting the name property makes the custom step accessible
-        in later steps.
-
-        i.e: Running  self.custom_step("{stepName}")  from steps ran after
-             this one, will grant this step.
-        """
-        self.name = "{stepName}"
-
-    def run(self):
-        """Run method.
-
-            i.e:  self.mgear_run.global_ctl
-                gets the global_ctl from shifter rig build base
-
-            i.e:  self.component("control_C0").ctl
-                gets the ctl from shifter component called control_C0
-
-            i.e:  self.custom_step("otherCustomStepName").ctlMesh
-                gets the ctlMesh from a previous custom step called
-                "otherCustomStepName"
-
-        Returns:
-            None: None
-        """
-        return'''.format(
-            stepName=stepName
-        )
-        f = open(filePath, "w")
-        f.write(rawString + "\n")
-        f.close()
-
-        # Quick clean the first empty item
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
-
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            filePath = os.path.abspath(filePath)
-            baseReplace = os.path.abspath(
-                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            )
-            filePath = filePath.replace(baseReplace, "")[1:]
-
-        fileName = os.path.split(filePath)[1].split(".")[0]
-        stepWidget.addItem(fileName + " | " + filePath)
-        self.updateListAttr(stepWidget, stepAttr)
-        self.refreshStatusColor(stepWidget)
-
-    def duplicateCustomStep(self, pre=True, *args):
-        """Duplicate the selected step
-
-        Arguments:
-            pre (bool, optional): If true adds the steps to the pre step list
-            *args: Maya's Dummy
-
-        Returns:
-            None: None
-        """
-
-        if pre:
-            stepAttr = "preCustomStep"
-            stepWidget = self.customStepTab.preCustomStep_listWidget
-        else:
-            stepAttr = "postCustomStep"
-            stepWidget = self.customStepTab.postCustomStep_listWidget
-
-        # Check if we have a custom env for the custom steps initial folder
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-        else:
-            startDir = self.root.attr(stepAttr).get()
-
-        if stepWidget.selectedItems():
-            sourcePath = (
-                stepWidget.selectedItems()[0].text().split("|")[-1][1:]
-            )
-
-        filePath = pm.fileDialog2(
-            fileMode=0,
-            startingDirectory=startDir,
-            okc="New",
-            fileFilter="Custom Step .py (*.py)",
-        )
-        if not filePath:
-            return
-        if not isinstance(filePath, string_types):
-            filePath = filePath[0]
-
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            sourcePath = os.path.join(startDir, sourcePath)
-        shutil.copy(sourcePath, filePath)
-
-        # Quick clean the first empty item
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
-
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            filePath = os.path.abspath(filePath)
-            baseReplace = os.path.abspath(
-                os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            )
-            filePath = filePath.replace(baseReplace, "")[1:]
-
-        fileName = os.path.split(filePath)[1].split(".")[0]
-        stepWidget.addItem(fileName + " | " + filePath)
-        self.updateListAttr(stepWidget, stepAttr)
-        self.refreshStatusColor(stepWidget)
-
-    def exportCustomStep(self, pre=True, *args):
-        """Export custom steps to a json file
-
-        Arguments:
-            pre (bool, optional): If true takes the steps from the
-                pre step list
-            *args: Maya's Dummy
-
-        Returns:
-            None: None
-
-        """
-
-        if pre:
-            stepWidget = self.customStepTab.preCustomStep_listWidget
-        else:
-            stepWidget = self.customStepTab.postCustomStep_listWidget
-
-        # Quick clean the first empty item
-        itemsList = [
-            i.text() for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-        ]
-        if itemsList and not itemsList[0]:
-            stepWidget.takeItem(0)
-
-        # Check if we have a custom env for the custom steps initial folder
-        if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-            startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            itemsList = [
-                os.path.join(startDir, i.text().split("|")[-1][1:])
-                for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-            ]
-        else:
-            itemsList = [
-                i.text().split("|")[-1][1:]
-                for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-            ]
-            if itemsList:
-                startDir = os.path.split(itemsList[-1])[0]
-            else:
-                pm.displayWarning("No custom steps to export.")
-                return
-        stepsDict = self.get_steps_dict(itemsList)
-
-        data_string = json.dumps(stepsDict, indent=4, sort_keys=True)
-        filePath = pm.fileDialog2(
-            fileMode=0,
-            startingDirectory=startDir,
-            fileFilter="Shifter Custom Steps .scs (*%s)" % ".scs",
-        )
-        if not filePath:
-            return
-        if not isinstance(filePath, string_types):
-            filePath = filePath[0]
-        f = open(filePath, "w")
-        f.write(data_string)
-        f.close()
-
-    def importCustomStep(self, pre=True, *args):
-        """Import custom steps from a json file
-
-        Arguments:
-            pre (bool, optional): If true import to pre steps list
-            *args: Maya's Dummy
-
-        Returns:
-            None: None
-
-        """
-
-        if pre:
-            stepAttr = "preCustomStep"
-            stepWidget = self.customStepTab.preCustomStep_listWidget
-        else:
-            stepAttr = "postCustomStep"
-            stepWidget = self.customStepTab.postCustomStep_listWidget
-
-        # option import only paths or unpack steps
-        option = pm.confirmDialog(
-            title="Shifter Custom Step Import Style",
-            message="Do you want to import only the path or"
-            " unpack and import?",
-            button=["Only Path", "Unpack", "Cancel"],
-            defaultButton="Only Path",
-            cancelButton="Cancel",
-            dismissString="Cancel",
-        )
-
-        if option in ["Only Path", "Unpack"]:
-            if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                startDir = os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-            else:
-                startDir = pm.workspace(q=True, rootDirectory=True)
-
-            filePath = pm.fileDialog2(
-                fileMode=1,
-                startingDirectory=startDir,
-                fileFilter="Shifter Custom Steps .scs (*%s)" % ".scs",
-            )
-            if not filePath:
-                return
-            if not isinstance(filePath, string_types):
-                filePath = filePath[0]
-            stepDict = json.load(open(filePath))
-            stepsList = []
-
-        if option == "Only Path":
-            for item in stepDict["itemsList"]:
-                stepsList.append(item)
-
-        elif option == "Unpack":
-            unPackDir = pm.fileDialog2(fileMode=2, startingDirectory=startDir)
-            if not filePath:
-                return
-            if not isinstance(unPackDir, string_types):
-                unPackDir = unPackDir[0]
-
-            for item in stepDict["itemsList"]:
-                fileName = os.path.split(item)[1]
-                fileNewPath = os.path.join(unPackDir, fileName)
-                stepsList.append(fileNewPath)
-                f = open(fileNewPath, "w")
-                f.write(stepDict[item])
-                f.close()
-
-        if option in ["Only Path", "Unpack"]:
-
-            for item in stepsList:
-                # Quick clean the first empty item
-                itemsList = [
-                    i.text()
-                    for i in stepWidget.findItems("", QtCore.Qt.MatchContains)
-                ]
-                if itemsList and not itemsList[0]:
-                    stepWidget.takeItem(0)
-
-                if os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, ""):
-                    item = os.path.abspath(item)
-                    baseReplace = os.path.abspath(
-                        os.environ.get(MGEAR_SHIFTER_CUSTOMSTEP_KEY, "")
-                    )
-                    item = item.replace(baseReplace, "")[1:]
-
-                fileName = os.path.split(item)[1].split(".")[0]
-                stepWidget.addItem(fileName + " | " + item)
-                self.updateListAttr(stepWidget, stepAttr)
-
-    def _customStepMenu(self, cs_listWidget, stepAttr, QPos):
-        "right click context menu for custom step"
-        currentSelection = cs_listWidget.currentItem()
-        if currentSelection is None:
-            return
-        self.csMenu = QtWidgets.QMenu()
-        parentPosition = cs_listWidget.mapToGlobal(QtCore.QPoint(0, 0))
-        menu_item_01 = self.csMenu.addAction("Toggle Custom Step")
-        self.csMenu.addSeparator()
-        menu_item_02 = self.csMenu.addAction("Turn OFF Selected")
-        menu_item_03 = self.csMenu.addAction("Turn ON Selected")
-        self.csMenu.addSeparator()
-        menu_item_04 = self.csMenu.addAction("Turn OFF All")
-        menu_item_05 = self.csMenu.addAction("Turn ON All")
-
-        menu_item_01.triggered.connect(
-            partial(self.toggleStatusCustomStep, cs_listWidget, stepAttr)
-        )
-        menu_item_02.triggered.connect(
-            partial(self.setStatusCustomStep, cs_listWidget, stepAttr, False)
-        )
-        menu_item_03.triggered.connect(
-            partial(self.setStatusCustomStep, cs_listWidget, stepAttr, True)
-        )
-        menu_item_04.triggered.connect(
-            partial(
-                self.setStatusCustomStep, cs_listWidget, stepAttr, False, False
-            )
-        )
-        menu_item_05.triggered.connect(
-            partial(
-                self.setStatusCustomStep, cs_listWidget, stepAttr, True, False
-            )
-        )
-
-        self.csMenu.move(parentPosition + QPos)
-        self.csMenu.show()
-
-    def preCustomStepMenu(self, QPos):
-        self._customStepMenu(
-            self.customStepTab.preCustomStep_listWidget, "preCustomStep", QPos
-        )
-
-    def postCustomStepMenu(self, QPos):
-        self._customStepMenu(
-            self.customStepTab.postCustomStep_listWidget,
-            "postCustomStep",
-            QPos,
-        )
-
-    def toggleStatusCustomStep(self, cs_listWidget, stepAttr):
-        items = cs_listWidget.selectedItems()
-        for item in items:
-            if item.text().startswith("*"):
-                item.setText(item.text()[1:])
-                item.setForeground(self.whiteDownBrush)
-            else:
-                item.setText("*" + item.text())
-                item.setForeground(self.redBrush)
-
-        self.updateListAttr(cs_listWidget, stepAttr)
-        self.refreshStatusColor(cs_listWidget)
-
-    def setStatusCustomStep(
-        self, cs_listWidget, stepAttr, status=True, selected=True
-    ):
-        if selected:
-            items = cs_listWidget.selectedItems()
-        else:
-            items = self.getAllItems(cs_listWidget)
-        for item in items:
-            off = item.text().startswith("*")
-            if status and off:
-                item.setText(item.text()[1:])
-            elif not status and not off:
-                item.setText("*" + item.text())
-            self.setStatusColor(item)
-        self.updateListAttr(cs_listWidget, stepAttr)
-        self.refreshStatusColor(cs_listWidget)
-
-    def getAllItems(self, cs_listWidget):
-        return [cs_listWidget.item(i) for i in range(cs_listWidget.count())]
-
-    def setStatusColor(self, item):
-        if item.text().startswith("*"):
-            item.setForeground(self.redBrush)
-        elif "_shared" in item.text():
-            item.setForeground(self.greenBrush)
-        else:
-            item.setForeground(self.whiteDownBrush)
-
-    def refreshStatusColor(self, cs_listWidget):
-        items = self.getAllItems(cs_listWidget)
-        for i in items:
-            self.setStatusColor(i)
-
-    # Highligter filter
-    def _highlightSearch(self, cs_listWidget, searchText):
-        items = self.getAllItems(cs_listWidget)
-        for i in items:
-            if searchText and searchText.lower() in i.text().lower():
-                i.setBackground(QtGui.QColor(128, 128, 128, 255))
-            else:
-                i.setBackground(QtGui.QColor(255, 255, 255, 0))
-
-    def preHighlightSearch(self):
-        searchText = self.customStepTab.preSearch_lineEdit.text()
-        self._highlightSearch(
-            self.customStepTab.preCustomStep_listWidget, searchText
-        )
-
-    def postHighlightSearch(self):
-        searchText = self.customStepTab.postSearch_lineEdit.text()
-        self._highlightSearch(
-            self.customStepTab.postCustomStep_listWidget, searchText
-        )
 
 
 # Backwards compatibility aliases

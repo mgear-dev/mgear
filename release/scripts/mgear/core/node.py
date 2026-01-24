@@ -8,6 +8,22 @@ from mgear.core import attribute
 
 from .six import PY2, string_types
 
+# Type tuple for faster isinstance checks (used frequently in node creation)
+_CONNECTABLE_TYPES = None
+
+
+def _is_connectable(value):
+    """Check if value is a connectable attribute (string or pm.Attribute).
+
+    This is used frequently in node creation functions to determine
+    whether to connect or set a value.
+    """
+    global _CONNECTABLE_TYPES
+    if _CONNECTABLE_TYPES is None:
+        _CONNECTABLE_TYPES = (string_types, pm.Attribute)
+    return isinstance(value, _CONNECTABLE_TYPES)
+
+
 #############################################
 # CREATE SIMPLE NODES
 #############################################
@@ -540,7 +556,7 @@ def createMulDivNode(inputA, inputB, operation=1, output=None):
 
     """
     node = pm.createNode("multiplyDivide")
-    pm.setAttr(node + ".operation", operation)
+    pm.setAttr(f"{node}.operation", operation)
 
     if not isinstance(inputA, list):
         inputA = [inputA]
@@ -549,29 +565,29 @@ def createMulDivNode(inputA, inputB, operation=1, output=None):
         inputB = [inputB]
 
     for item, s in zip(inputA, "XYZ"):
-        if isinstance(item, string_types) or isinstance(item, pm.Attribute):
+        if _is_connectable(item):
             try:
-                pm.connectAttr(item, node + ".input1" + s, f=True)
+                pm.connectAttr(item, f"{node}.input1{s}", f=True)
             except (UnicodeEncodeError, RuntimeError):
                 # Maya in Japanese have an issue with unicodeEndoce
                 # UnicodeEncodeError is a workaround
-                pm.connectAttr(item, node + ".input1", f=True)
+                pm.connectAttr(item, f"{node}.input1", f=True)
                 break
 
         else:
-            pm.setAttr(node + ".input1" + s, item)
+            pm.setAttr(f"{node}.input1{s}", item)
 
     for item, s in zip(inputB, "XYZ"):
-        if isinstance(item, string_types) or isinstance(item, pm.Attribute):
+        if _is_connectable(item):
             try:
-                pm.connectAttr(item, node + ".input2" + s, f=True)
+                pm.connectAttr(item, f"{node}.input2{s}", f=True)
             except (UnicodeEncodeError, RuntimeError):
                 # Maya in Japanese have an issue with unicodeEndoce
                 # UnicodeEncodeError is a workaround
-                pm.connectAttr(item, node + ".input2", f=True)
+                pm.connectAttr(item, f"{node}.input2", f=True)
                 break
         else:
-            pm.setAttr(node + ".input2" + s, item)
+            pm.setAttr(f"{node}.input2{s}", item)
 
     if output:
         if not isinstance(output, list):
@@ -611,26 +627,20 @@ def createClampNode(input, in_min, in_max):
 
     for in_item, min_item, max_item, s in zip(input, in_min, in_max, "RGB"):
 
-        if isinstance(in_item, string_types) or isinstance(
-            in_item, pm.Attribute
-        ):
-            pm.connectAttr(in_item, node + ".input" + s)
+        if _is_connectable(in_item):
+            pm.connectAttr(in_item, f"{node}.input{s}")
         else:
-            pm.setAttr(node + ".input" + s, in_item)
+            pm.setAttr(f"{node}.input{s}", in_item)
 
-        if isinstance(min_item, string_types) or isinstance(
-            min_item, pm.Attribute
-        ):
-            pm.connectAttr(min_item, node + ".min" + s)
+        if _is_connectable(min_item):
+            pm.connectAttr(min_item, f"{node}.min{s}")
         else:
-            pm.setAttr(node + ".min" + s, min_item)
+            pm.setAttr(f"{node}.min{s}", min_item)
 
-        if isinstance(max_item, string_types) or isinstance(
-            max_item, pm.Attribute
-        ):
-            pm.connectAttr(max_item, node + ".max" + s)
+        if _is_connectable(max_item):
+            pm.connectAttr(max_item, f"{node}.max{s}")
         else:
-            pm.setAttr(node + ".max" + s, max_item)
+            pm.setAttr(f"{node}.max{s}", max_item)
 
     return node
 
@@ -655,12 +665,12 @@ def createPlusMinusAverage1D(input, operation=1, output=None):
 
     for i, x in enumerate(input):
         try:
-            pm.connectAttr(x, node + ".input1D[%s]" % str(i))
+            pm.connectAttr(x, f"{node}.input1D[{i}]")
         except RuntimeError:
-            pm.setAttr(node + ".input1D[%s]" % str(i), x)
+            pm.setAttr(f"{node}.input1D[{i}]", x)
 
     if output:
-        pm.connectAttr(node + ".output1D", output)
+        pm.connectAttr(f"{node}.output1D", output)
 
     return node
 
@@ -790,33 +800,32 @@ def createDivNodeMulti(name, inputs1=[], inputs2=[]):
 
     Arguments:
         name (str): The name for the new node.
-        inputs1 (list of attr): The list of attributes
-        inputs2 (list of attr): The list of attributes
+        inputs1 (list of attr): The list of attributes to divide (numerators)
+        inputs2 (list of attr): The list of attributes to divide by (denominators)
 
     Returns:
         list: The output attributes list.
 
     """
-    for i, input in enumerate(pm.inputs[1:]):
-        real_name = name + "_" + str(i)
+    outputs = [inputs1[0]]
+    for i, input in enumerate(inputs2[1:]):
+        real_name = f"{name}_{i}"
         node_name = pm.createNode("multiplyDivide", n=real_name)
-        pm.setAttr(node_name + ".operation", 2)
+        pm.setAttr(f"{node_name}.operation", 2)
 
-        if isinstance(pm.outputs[-1], string_types) or isinstance(
-            pm.outputs[-1], pm.Attribute
-        ):
-            pm.connectAttr(pm.outputs[-1], node_name + ".input1X", f=True)
+        if isinstance(outputs[-1], (string_types, pm.Attribute)):
+            pm.connectAttr(outputs[-1], f"{node_name}.input1X", f=True)
         else:
-            pm.setAttr(node_name + ".input1X", pm.outputs[-1])
+            pm.setAttr(f"{node_name}.input1X", outputs[-1])
 
-        if isinstance(input, string_types) or isinstance(input, pm.Attribute):
-            pm.connectAttr(input, node_name + ".input2X", f=True)
+        if isinstance(input, (string_types, pm.Attribute)):
+            pm.connectAttr(input, f"{node_name}.input2X", f=True)
         else:
-            pm.setAttr(node_name + ".input2X", input)
+            pm.setAttr(f"{node_name}.input2X", input)
 
-        pm.outputs.append(node_name + ".output")
+        outputs.append(f"{node_name}.output")
 
-    return pm.outputs
+    return outputs
 
 
 def createClampNodeMulti(name, inputs=[], in_min=[], in_max=[]):

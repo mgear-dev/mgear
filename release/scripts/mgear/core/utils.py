@@ -156,12 +156,14 @@ def getModuleBasePath(directories, moduleName):
             moduleBasePath = basepath
             break
     else:
-        moduleBasePath = ""
-        message = "= GEAR RIG SYSTEM ======"
-        message += "component base directory not found " " for {}".format(
-            moduleName
-        )
-        mgear.log(message, mgear.sev_error)
+        message = (
+            "Component '{}' not found in any registered component directory.\n"
+            "Please check:\n"
+            "  1. The component is installed correctly\n"
+            "  2. The MGEAR_COMPONENTS_PATH environment variable includes the component's parent directory\n"
+            "  3. The component name is spelled correctly in the guide"
+        ).format(moduleName)
+        raise ImportError(message)
 
     return moduleBasePath
 
@@ -261,6 +263,35 @@ def one_undo(func):
 
         finally:
             cmds.undoInfo(closeChunk=True)
+
+    return wrap
+
+
+def undo_off(func):
+    """Decorator - Turn off Maya undo while func is running.
+
+    Disables the undo queue before executing the wrapped function and
+    re-enables it afterwards. If the function fails, undo is still
+    safely restored before the exception is raised.
+
+    type: (function) -> function
+
+    """
+
+    @wraps(func)
+    def wrap(*args, **kwargs):
+        # type: (*str, **str) -> None
+
+        try:
+            cmds.undoInfo(stateWithoutFlush=False)
+            pm.displayInfo("Undo off for: {}".format(func.__name__))
+            return func(*args, **kwargs)
+
+        except Exception as e:
+            raise e
+
+        finally:
+            cmds.undoInfo(stateWithoutFlush=True)
 
     return wrap
 

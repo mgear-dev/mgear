@@ -534,7 +534,7 @@ class Component(component.Main):
         self.tws3_rot.setAttr("sx", 0.001)
 
         self.tws3_drv = primitive.addTransform(
-            self.legBones[3],
+            self.legBones[2],
             self.getName("tws3_drv"),
             transform.getTransform(self.legBones[3]),
         )
@@ -1003,6 +1003,9 @@ class Component(component.Main):
                 1,
                 self.chain3bones[i + 1] + ".tx",
             )
+
+        # fix the squash Stretch when Full3bonesIK is 0
+        pm.pointConstraint(self.legBones[3], self.tws3_drv, mo=True)
 
         # IK 2 bones ===============================================
 

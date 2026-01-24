@@ -434,7 +434,8 @@ def collect_curve_shapes(crv, rplStr=["", ""]):
     shapes_names = []
     shapesDict = {}
     for shape in crv.getShapes():
-        shapes_names.append(shape.name().replace(rplStr[0], rplStr[1]))
+        shape_name = shape.name()
+        shapes_names.append(shape_name.replace(rplStr[0], rplStr[1]))
         c_form = shape.form()
         degree = shape.degree()
         knots = list(shape.getKnots())
@@ -442,7 +443,7 @@ def collect_curve_shapes(crv, rplStr=["", ""]):
         form_id = c_form.index
         pnts = [[cv.x, cv.y, cv.z] for cv in shape.getCVs(space="object")]
         lineWidth = shape.lineWidth.get()
-        shapesDict[shape.name()] = {
+        shapesDict[shape_name] = {
             "points": pnts,
             "degree": degree,
             "form": form,
@@ -634,7 +635,7 @@ def create_curve_from_data_by_name(
         )
         set_color(obj, color)
         # check for backwards compatibility
-        if "line_width" in shp_dict[sh].keys():
+        if "line_width" in shp_dict[sh]:
             lineWidth = shp_dict[sh]["line_width"]
             set_thickness(obj, lineWidth)
 
@@ -740,7 +741,7 @@ def update_curve_from_data(data, rplStr=["", ""]):
             )
             set_color(obj, color)
             # check for backwards compatibility
-            if "line_width" in shp_dict[sh].keys():
+            if "line_width" in shp_dict[sh]:
                 lineWidth = shp_dict[sh]["line_width"]
                 set_thickness(obj, lineWidth)
 

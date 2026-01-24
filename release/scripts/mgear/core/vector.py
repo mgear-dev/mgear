@@ -280,9 +280,8 @@ class Blade(object):
 
         self.transform = t
         mdata = t.get()
-        d = [mdata[j][i]
-             for j in range(len(mdata))
-             for i in range(len(mdata[0]))]
+        # Flatten matrix efficiently
+        d = [val for row in mdata for val in row]
 
         m = OpenMaya.MMatrix()
         OpenMaya.MScriptUtil.createMatrixFromList(d, m)

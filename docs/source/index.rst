@@ -26,15 +26,15 @@ Welcome to mGear: Rigging Framework for Autodesk Maya
    overview
    quickStart
    official-unofficial-workflow
-   framework
-   solvers
+   shifterUserDocumentation
    animbitsUserDocumentation
    rigbitsUserDocumentation
+   utilbitsUserDocumentation
    ueGearUserDocumentation
    crankUserDocumentation
-   shifterUserDocumentation
    shifterComponentReference
-   synopticUserDocumentation
+   framework
+   solvers
    videoTutorials
    FAQ
    releaseLog

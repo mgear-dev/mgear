@@ -17,7 +17,8 @@ from mgear.core import string
 from mgear.core import node
 from mgear.pymaya import versions
 
-from mgear.core import dag, vector, transform, applyop, attribute, icon, pyqt
+from mgear.core import dag, vector, transform, applyop, attribute, icon, pyqt, utils
+from mgear.core import upv_visualizer
 
 from mgear.shifter import guide, guide_manager
 from . import chain_guide_initializer
@@ -142,6 +143,14 @@ class ComponentGuide(guide.Main):
         # store guide locators names
         self.guide_locators = []
 
+        # Duplicate symmetry status
+        # When duplicate symmetry guides this status flag will help to detemine
+        # if we need to execute a logic when or not
+        # for example in postDraw method, we may want to execute a code when
+        # duplicate symmetry testin if is R side, but not when the guide is re-imported
+        # and postDraw is executed again
+        self.duplicate_symmetry_status = False
+
         # Init the guide
         self.postInit()
         self.initialHierarchy()
@@ -220,6 +229,12 @@ class ComponentGuide(guide.Main):
         self.pLColorfk = self.addColorParam("RGB_fk", [0, 0, 1])
         self.pLColorik = self.addColorParam("RGB_ik", [0, 0.25, 1])
 
+        # Blueprint Settings ------------------------------
+        # When True, use local component settings instead of blueprint
+        self.pBlueprintLocalOverride = self.addParam(
+            "blueprint_local_override", "bool", False
+        )
+
         # Items -------------------------------------------
         typeItems = [self.compType, self.compType]
         for type in self.compatible:
@@ -267,6 +282,76 @@ class ComponentGuide(guide.Main):
 
         """
         return
+
+    def getMergedValues(self):
+        """Get merged component values combining local with blueprint settings.
+
+        When blueprint is enabled and the component's local override is False,
+        values from the matching component in the blueprint guide will be used
+        instead of local values.
+
+        Returns:
+            dict: Merged values dictionary
+        """
+        # Start with a copy of local values
+        merged = dict(self.values)
+
+        # Check if we have a model (guide root)
+        if not hasattr(self, 'model') or not self.model:
+            return merged
+
+        # Check if blueprint is enabled on the main guide
+        if not self.model.hasAttr("use_blueprint"):
+            return merged
+
+        use_blueprint = self.model.attr("use_blueprint").get()
+        if not use_blueprint:
+            return merged
+
+        # Check if local override is enabled for this component
+        if self.root.hasAttr("blueprint_local_override"):
+            local_override = self.root.attr("blueprint_local_override").get()
+            if local_override:
+                # Use local settings
+                return merged
+
+        # Get blueprint path
+        blueprint_path = self.model.attr("blueprint_path").get()
+        if not blueprint_path:
+            return merged
+
+        # Load blueprint guide
+        blueprint_conf = guide.load_blueprint_guide(blueprint_path)
+        if not blueprint_conf:
+            return merged
+
+        # Get this component's full name
+        comp_name = self.values.get("comp_name", "")
+        comp_side = self.values.get("comp_side", "")
+        comp_index = self.values.get("comp_index", 0)
+        component_fullname = "{}_{}{}".format(comp_name, comp_side, comp_index)
+
+        # Check if this component exists in the blueprint
+        components_dict = blueprint_conf.get("components_dict", {})
+        if component_fullname not in components_dict:
+            return merged
+
+        # Get blueprint component settings
+        blueprint_component = components_dict[component_fullname]
+        blueprint_values = blueprint_component.get("param_values", {})
+
+        # Merge: use blueprint values, but keep local identity
+        for key, value in blueprint_values.items():
+            # Skip component identity attributes - always use local
+            if key in ("comp_type", "comp_name", "comp_side", "comp_index"):
+                continue
+            # Skip blueprint_local_override - always use local
+            if key == "blueprint_local_override":
+                continue
+            # Use blueprint value
+            merged[key] = value
+
+        return merged
 
     # ====================================================
     # SET / GET
@@ -382,19 +467,19 @@ class ComponentGuide(guide.Main):
         self.child_components = c_dict["child_components"]
 
         temp_dict = {}
-        for k in c_dict["tra"].keys():
+        for k in c_dict["tra"]:
             temp_dict[k] = datatypes.Matrix(c_dict["tra"][k])
         self.tra = temp_dict
 
         self.atra = [datatypes.Matrix(t) for t in c_dict["atra"]]
 
         temp_dict = {}
-        for k in c_dict["pos"].keys():
+        for k in c_dict["pos"]:
             temp_dict[k] = datatypes.Vector(c_dict["pos"][k])
         self.pos = temp_dict
 
         self.apos = [datatypes.Vector(v) for v in c_dict["apos"]]
-        for b in c_dict["blade"].keys():
+        for b in c_dict["blade"]:
             self.blades[b] = vector.Blade(datatypes.Matrix(c_dict["blade"][b]))
 
         self.size = self.getSize()
@@ -407,13 +492,13 @@ class ComponentGuide(guide.Main):
         c_dict["param_values"] = self.get_param_values()
 
         temp_dict = {}
-        for k in self.tra.keys():
+        for k in self.tra:
             temp_dict[k] = self.tra[k].get()
         c_dict["tra"] = temp_dict
 
         c_dict["atra"] = [t.get() for t in self.atra]
         temp_dict = {}
-        for k in self.pos.keys():
+        for k in self.pos:
             temp_dict[k] = self.pos[k].get()
         c_dict["pos"] = temp_dict
 
@@ -433,7 +518,7 @@ class ComponentGuide(guide.Main):
 
     def get_blades_transform(self):
         b_tra = {}
-        for b in self.blades.keys():
+        for b in self.blades:
             b_tra[b] = self.blades[b].transform.get()
 
         return b_tra
@@ -557,6 +642,7 @@ class ComponentGuide(guide.Main):
 
         return True
 
+    @utils.one_undo
     def rename(self, root, newName, newSide, newIndex):
         """Rename the component.
 
@@ -590,21 +676,20 @@ class ComponentGuide(guide.Main):
         # objList = dag.findComponentChildren(self.parent,
         #                                     oldName, oldSideIndex)
         # NOTE: Experimenta  using findComponentChildren3
-        objList = dag.findComponentChildren3(self.parent, oldName, oldSideIndex)
-        newSideIndex = newSide + str(self.values["comp_index"])
+        objList = dag.findComponentChildren4(self.parent, oldName, oldSideIndex)
+        newSideIndex = f"{newSide}{self.values['comp_index']}"
         objList.append(self.parent)
         for obj in objList:
-            tmpObjName = obj.name().split("|")[-1]
-            suffix = tmpObjName.split("_")[-1]
-            # if len(tmpObjName.split("_")) == 3:
-            #     new_name = "_".join([newName, newSideIndex, suffix])
-            #     print "new name = " + new_name
-            # else:
-            subIndex = tmpObjName.split("_")[-2]
-            if subIndex == oldSideIndex:
-                new_name = "_".join([newName, newSideIndex, suffix])
+            # Use rsplit to split only once from the right, avoiding multiple splits
+            obj_name = obj.name()
+            tmpObjName = obj_name.rsplit("|", 1)[-1]
+            parts = tmpObjName.rsplit("_", 2)  # Split into at most 3 parts from right
+            suffix = parts[-1]
+            subIndex = parts[-2] if len(parts) > 2 else ""
+            if subIndex == oldSideIndex or len(parts) <= 2:
+                new_name = f"{newName}_{newSideIndex}_{suffix}"
             else:
-                new_name = "_".join([newName, newSideIndex, subIndex, suffix])
+                new_name = f"{newName}_{newSideIndex}_{subIndex}_{suffix}"
             pm.rename(obj, new_name)
 
     # ====================================================
@@ -889,6 +974,67 @@ class ComponentGuide(guide.Main):
         self.connect_x_ray(disp_crv)
         return disp_crv
 
+    def addUpvLocator(
+        self,
+        mid_loc,
+        end_loc,
+        eff_loc,
+        position=None,
+        float_value=0.5,
+        color=18,
+        width=0.3,
+    ):
+        """Add an up-vector (pole vector) locator visualization system.
+
+        Creates a pole vector locator that automatically positions itself based
+        on the limb chain poositions. This is commonly used for IK setups on arms
+        and legs.
+
+        Args:
+            mid_loc (dagNode): The middle joint locator (e.g., elbow or knee).
+            end_loc (dagNode): The end joint locator (e.g., wrist or ankle).
+            eff_loc (dagNode): The end effector locator.
+            position (vector, optional): Initial position for the upv locator.
+                If None, uses the eff_loc position.
+            float_value (float, optional): Pole vector distance coefficient.
+                Defaults to 0.5.
+            color (int, optional): Maya color index for the locator.
+                Defaults to 17.
+            width (float, optional): Display width of the locator.
+                Defaults to 0.5.
+
+        Returns:
+            tuple: A tuple containing (upv, upvcrv) where:
+                - upv (dagNode): The pole vector locator.
+                - upvcrv (dagNode): The display curve connecting mid_loc to upv.
+
+        Example:
+            # For an arm component:
+            self.upv, self.upvcrv = self.addUpvLocator(
+                self.elbow, self.wrist, self.eff, color=18, width=0.3
+            )
+
+            # For a leg component:
+            self.upv, self.upvcrv = self.addUpvLocator(
+                self.knee, self.ankle, self.eff
+            )
+
+        """
+        if position is None:
+            position = eff_loc.getTranslation(space="world")
+
+        upv = self.addLoc("upv", self.root, position, color=color, width=width)
+        upvcrv = self.addDispCurve("upvcrv", [mid_loc, upv])
+        upv_visualizer.create_upv_system(
+            self.root,
+            mid_loc,
+            end_loc,
+            eff_loc,
+            upvcrv,
+            upv,
+            float_value=float_value,
+        )
+        return upv, upvcrv
 
     # ====================================================
     # MISC
@@ -961,12 +1107,20 @@ class ComponentGuide(guide.Main):
 
         """
         objects = {}
+        # Pre-compute prefix and its length
+        prefix = f"{self.fullName}_"
+        prefix_len = len(prefix)
+        # Get model's long name for comparison
+        model_long = model.longName() if hasattr(model, 'longName') else str(model)
 
-        for child in cmds.ls(self.fullName + "_*", type="transform"):
-            if pm.PyNode(child).getParent(-1) == model:
-                objects[
-                    child[child.index(self.fullName + "_") + len(self.fullName + "_") :]
-                ] = child
+        for child in cmds.ls(f"{self.fullName}_*", type="transform", long=True):
+            # Check if top parent matches model using string comparison (faster than PyNode)
+            # Top parent is the second element after splitting by |
+            parts = child.split("|")
+            if len(parts) > 1 and parts[1] == model_long.split("|")[-1]:
+                # Get short name for the key
+                short_name = parts[-1]
+                objects[short_name[prefix_len:]] = short_name
 
         return objects
 
@@ -1262,6 +1416,9 @@ class componentMainSettings(QtWidgets.QDialog, guide.helperSlots):
         # Close Button
         self.close_button = QtWidgets.QPushButton("Close")
 
+        # Blueprint Header Widget
+        self._create_blueprint_header()
+
     def populate_controls(self):
         """Populate Controls attribute values
 
@@ -1368,6 +1525,9 @@ class componentMainSettings(QtWidgets.QDialog, guide.helperSlots):
                 ctl_tab, self.AliasNameDescriptor, "Space Alias Description Names"
             )
 
+        # Populate blueprint header
+        self._populate_blueprint_header()
+
     def refresh_controls(self):
         joint_names = [
             name.strip() for name in self.root.attr("joint_names").get().split(",")
@@ -1378,6 +1538,395 @@ class componentMainSettings(QtWidgets.QDialog, guide.helperSlots):
             summary = "(None)"
         self.mainSettingsTab.jointNames_label.setText("Joint Names " + summary)
 
+    # =========================================================================
+    # Blueprint Header Methods
+    # =========================================================================
+
+    def _create_blueprint_header(self):
+        """Create the blueprint header widget with override controls."""
+        self.blueprint_header = QtWidgets.QFrame()
+        self.blueprint_header.setObjectName("blueprint_header")
+        self.blueprint_header.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        header_layout = QtWidgets.QHBoxLayout(self.blueprint_header)
+        header_layout.setContentsMargins(4, 2, 4, 2)
+        header_layout.setSpacing(6)
+
+        # Blueprint indicator icon (small colored square)
+        self.blueprint_indicator = QtWidgets.QLabel()
+        self.blueprint_indicator.setFixedSize(12, 12)
+        self.blueprint_indicator.setStyleSheet(
+            "background-color: #4682B4; border-radius: 2px;"
+        )
+        self.blueprint_indicator.setToolTip("Blueprint is active for this component")
+        header_layout.addWidget(self.blueprint_indicator)
+
+        # Local override checkbox (compact)
+        self.blueprint_local_override_checkBox = QtWidgets.QCheckBox("Blueprint Local Override")
+        self.blueprint_local_override_checkBox.setObjectName(
+            "blueprint_local_override_checkBox"
+        )
+        self.blueprint_local_override_checkBox.setToolTip(
+            "Check to use local settings instead of blueprint"
+        )
+        header_layout.addWidget(self.blueprint_local_override_checkBox)
+
+        # View Blueprint Settings button (compact)
+        self.blueprint_view_pushButton = QtWidgets.QPushButton("View")
+        self.blueprint_view_pushButton.setObjectName("blueprint_view_pushButton")
+        self.blueprint_view_pushButton.setToolTip("View blueprint settings")
+        self.blueprint_view_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.blueprint_view_pushButton)
+
+        # Make Local button (compact)
+        self.blueprint_make_local_pushButton = QtWidgets.QPushButton("Copy")
+        self.blueprint_make_local_pushButton.setObjectName(
+            "blueprint_make_local_pushButton"
+        )
+        self.blueprint_make_local_pushButton.setToolTip(
+            "Copy blueprint settings to local"
+        )
+        self.blueprint_make_local_pushButton.setMaximumWidth(50)
+        header_layout.addWidget(self.blueprint_make_local_pushButton)
+
+        header_layout.addStretch()
+
+        # Store blueprint data for later use
+        self.blueprint_data = None
+        self.blueprint_component_data = None
+        self.blueprint_active = False
+        self.component_in_blueprint = False
+
+        # For status label compatibility
+        self.blueprint_status_label = QtWidgets.QLabel()
+        self.blueprint_status_label.hide()
+
+    def _get_guide_model(self):
+        """Get the main guide model (root) for this component."""
+        return self.root.getParent(generations=-1)
+
+    def _get_component_fullname(self):
+        """Get the component's full name (name_side+index)."""
+        comp_name = self.root.attr("comp_name").get()
+        comp_side = self.root.attr("comp_side").get()
+        comp_index = self.root.attr("comp_index").get()
+        return "{}_{}{}".format(comp_name, comp_side, comp_index)
+
+    def _populate_blueprint_header(self):
+        """Populate the blueprint header based on the guide's blueprint settings."""
+        guide_model = self._get_guide_model()
+
+        # Check if blueprint is enabled on the main guide
+        if not guide_model.hasAttr("use_blueprint"):
+            self._set_blueprint_header_inactive("No blueprint attribute found")
+            return
+
+        use_blueprint = guide_model.attr("use_blueprint").get()
+        if not use_blueprint:
+            self._set_blueprint_header_inactive("Blueprint not enabled")
+            return
+
+        blueprint_path = guide_model.attr("blueprint_path").get()
+        if not blueprint_path:
+            self._set_blueprint_header_inactive("No blueprint path set")
+            return
+
+        # Load the blueprint guide
+        self.blueprint_data = guide.load_blueprint_guide(blueprint_path)
+        if not self.blueprint_data:
+            self._set_blueprint_header_inactive("Could not load blueprint")
+            return
+
+        # Check if this component exists in the blueprint
+        components_dict = self.blueprint_data.get("components_dict", {})
+        component_fullname = self._get_component_fullname()
+
+        if component_fullname not in components_dict:
+            self._set_blueprint_header_inactive(
+                "Component '{}' not in blueprint".format(component_fullname)
+            )
+            return
+
+        # Component exists in blueprint - enable the header
+        self.blueprint_component_data = components_dict[component_fullname]
+        self.blueprint_active = True
+        self.component_in_blueprint = True
+
+        self._set_blueprint_header_active()
+
+        # Populate local override checkbox (block signals to avoid writing back)
+        self.blueprint_local_override_checkBox.blockSignals(True)
+        if self.root.hasAttr("blueprint_local_override"):
+            local_override = self.root.attr("blueprint_local_override").get()
+            self.blueprint_local_override_checkBox.setChecked(local_override)
+        else:
+            self.blueprint_local_override_checkBox.setChecked(False)
+        self.blueprint_local_override_checkBox.blockSignals(False)
+
+        # Update the greyed-out state based on override setting
+        self._update_settings_enabled_state()
+
+    def _set_blueprint_header_inactive(self, reason=""):
+        """Set the blueprint header to inactive state."""
+        self.blueprint_active = False
+        self.component_in_blueprint = False
+        self.blueprint_header.setVisible(False)
+        self.blueprint_status_label.setText("")
+
+    def _set_blueprint_header_active(self):
+        """Set the blueprint header to active state."""
+        self.blueprint_header.setVisible(True)
+        self.blueprint_header.setStyleSheet(
+            "QFrame#blueprint_header { background-color: rgba(70, 130, 180, 40); "
+            "border-radius: 2px; }"
+        )
+
+    def _update_settings_enabled_state(self):
+        """Enable or disable settings widgets based on blueprint override state."""
+        if not self.blueprint_active:
+            return
+
+        local_override = self.blueprint_local_override_checkBox.isChecked()
+
+        # Enable/disable the tabs content
+        self.tabs.setEnabled(local_override)
+
+        # Update visual style
+        if local_override:
+            self.tabs.setStyleSheet("")
+            self.blueprint_view_pushButton.setEnabled(True)
+            self.blueprint_make_local_pushButton.setEnabled(False)
+        else:
+            self.tabs.setStyleSheet(
+                "QTabWidget { background-color: rgba(100, 100, 100, 30); }"
+            )
+            self.blueprint_view_pushButton.setEnabled(True)
+            self.blueprint_make_local_pushButton.setEnabled(True)
+
+    def _on_blueprint_local_override_changed(self, *args):
+        """Handle local override checkbox state change."""
+        # Update the attribute on the component root using isChecked() for reliability
+        self.root.attr("blueprint_local_override").set(
+            self.blueprint_local_override_checkBox.isChecked()
+        )
+
+        # Update the enabled state of settings
+        self._update_settings_enabled_state()
+
+    def _on_view_blueprint_settings(self):
+        """Show a dialog with the blueprint settings for this component."""
+        if not self.blueprint_component_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Blueprint Settings",
+                "No blueprint data available for this component."
+            )
+            return
+
+        param_values = self.blueprint_component_data.get("param_values", {})
+
+        # Create a simple dialog to display the settings
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Blueprint Settings - {}".format(
+            self._get_component_fullname()
+        ))
+        dialog.resize(400, 500)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        # Info label
+        info_label = QtWidgets.QLabel(
+            "Settings from the blueprint guide for this component:"
+        )
+        layout.addWidget(info_label)
+
+        # Settings tree/list
+        tree = QtWidgets.QTreeWidget()
+        tree.setHeaderLabels(["Parameter", "Value"])
+        tree.setColumnCount(2)
+
+        for key, value in sorted(param_values.items()):
+            item = QtWidgets.QTreeWidgetItem([str(key), str(value)])
+            tree.addTopLevelItem(item)
+
+        tree.resizeColumnToContents(0)
+        layout.addWidget(tree)
+
+        # Close button
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        dialog.exec_()
+
+    def _on_make_local_from_blueprint(self):
+        """Copy blueprint settings to local component and enable override."""
+        if not self.blueprint_component_data:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Make Local",
+                "No blueprint data available for this component."
+            )
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Make Local from Blueprint",
+            "This will copy all settings from the blueprint to this component "
+            "and enable local override.\n\nContinue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        param_values = self.blueprint_component_data.get("param_values", {})
+
+        # Copy settings from blueprint to local component
+        for key, value in param_values.items():
+            # Skip component identity attributes
+            if key in ("comp_type", "comp_name", "comp_side", "comp_index"):
+                continue
+
+            if self.root.hasAttr(key):
+                try:
+                    self.root.attr(key).set(value)
+                except Exception:
+                    pass  # Skip attributes that can't be set
+
+        # Enable local override
+        if self.root.hasAttr("blueprint_local_override"):
+            self.root.attr("blueprint_local_override").set(True)
+
+        # Refresh UI controls to show updated values
+        # Re-populate component controls from the updated attributes
+        self.populate_componentControls()
+
+        # Update the blueprint header state (checkbox and enabled state)
+        self.blueprint_local_override_checkBox.blockSignals(True)
+        self.blueprint_local_override_checkBox.setChecked(True)
+        self.blueprint_local_override_checkBox.blockSignals(False)
+        self._update_settings_enabled_state()
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Make Local",
+            "Blueprint settings have been copied to this component.\n"
+            "Local override is now enabled."
+        )
+
+    def _refresh_all_controls(self):
+        """Refresh all UI controls to reflect current attribute values.
+
+        This method refreshes both the base controls and component-specific
+        controls. Child classes can override refresh_componentControls()
+        to refresh their component-specific widgets.
+        """
+        # Refresh main settings tab values
+        self.mainSettingsTab.name_lineEdit.setText(
+            self.root.attr("comp_name").get()
+        )
+        sideSet = ["C", "L", "R"]
+        sideIndex = sideSet.index(self.root.attr("comp_side").get())
+        self.mainSettingsTab.side_comboBox.setCurrentIndex(sideIndex)
+        self.mainSettingsTab.componentIndex_spinBox.setValue(
+            self.root.attr("comp_index").get()
+        )
+        if self.root.attr("useIndex").get():
+            self.mainSettingsTab.useJointIndex_checkBox.setCheckState(
+                QtCore.Qt.Checked
+            )
+        else:
+            self.mainSettingsTab.useJointIndex_checkBox.setCheckState(
+                QtCore.Qt.Unchecked
+            )
+        self.mainSettingsTab.parentJointIndex_spinBox.setValue(
+            self.root.attr("parentJointIndex").get()
+        )
+        self.mainSettingsTab.host_lineEdit.setText(
+            self.root.attr("ui_host").get()
+        )
+        self.mainSettingsTab.subGroup_lineEdit.setText(
+            self.root.attr("ctlGrp").get()
+        )
+        self.mainSettingsTab.joint_offset_x_doubleSpinBox.setValue(
+            self.root.attr("joint_rot_offset_x").get()
+        )
+        self.mainSettingsTab.joint_offset_y_doubleSpinBox.setValue(
+            self.root.attr("joint_rot_offset_y").get()
+        )
+        self.mainSettingsTab.joint_offset_z_doubleSpinBox.setValue(
+            self.root.attr("joint_rot_offset_z").get()
+        )
+
+        # Refresh color settings
+        self.mainSettingsTab.overrideColors_checkBox.setCheckState(
+            QtCore.Qt.Checked
+            if self.root.Override_Color.get()
+            else QtCore.Qt.Unchecked
+        )
+        self.mainSettingsTab.useRGB_checkBox.setCheckState(
+            QtCore.Qt.Checked
+            if self.root.Use_RGB_Color.get()
+            else QtCore.Qt.Unchecked
+        )
+
+        tab = self.mainSettingsTab
+        index_widgets = (
+            (tab.color_fk_spinBox, tab.color_fk_label, "color_fk"),
+            (tab.color_ik_spinBox, tab.color_ik_label, "color_ik"),
+        )
+        rgb_widgets = (
+            (tab.RGB_fk_pushButton, tab.RGB_fk_slider, "RGB_fk"),
+            (tab.RGB_ik_pushButton, tab.RGB_ik_slider, "RGB_ik"),
+        )
+
+        for spinBox, label, source_attr in index_widgets:
+            color_index = self.root.attr(source_attr).get()
+            spinBox.setValue(color_index)
+            self.updateWidgetStyleSheet(
+                label, [i / 255.0 for i in MAYA_OVERRIDE_COLOR[color_index]]
+            )
+
+        for button, slider, source_attr in rgb_widgets:
+            self.updateRgbColorWidgets(
+                button, self.root.attr(source_attr).get(), slider
+            )
+
+        self.refresh_controls()
+
+        # Refresh component-specific controls (child classes should override)
+        self.refresh_componentControls()
+
+        # Update blueprint header state
+        self._update_settings_enabled_state()
+
+    def refresh_componentControls(self):
+        """Refresh component-specific UI controls.
+
+        Child classes should override this method to refresh their
+        component-specific widgets after attribute values have changed
+        (e.g., after "Make Local from Blueprint" copies values).
+
+        Note: If not overridden, component-specific controls won't update
+        immediately, but the Maya attributes will be correct. Reopening
+        the settings dialog will show the updated values.
+        """
+        pass
+
+    def _create_blueprint_connections(self):
+        """Create signal connections for blueprint header controls."""
+        self.blueprint_local_override_checkBox.stateChanged.connect(
+            self._on_blueprint_local_override_changed
+        )
+        self.blueprint_view_pushButton.clicked.connect(
+            self._on_view_blueprint_settings
+        )
+        self.blueprint_make_local_pushButton.clicked.connect(
+            self._on_make_local_from_blueprint
+        )
+
     def create_layout(self):
         """
         Create the layout for the component base settings
@@ -1385,12 +1934,47 @@ class componentMainSettings(QtWidgets.QDialog, guide.helperSlots):
         """
         return
 
+    def get_settings_widgets(self):
+        """Return widgets for component settings layout.
+
+        Child classes can call this method when building their layout
+        to get the standard widgets including the blueprint header.
+
+        Returns:
+            tuple: (blueprint_header, tabs, close_button)
+        """
+        return (self.blueprint_header, self.tabs, self.close_button)
+
+    def finalize_layout(self):
+        """Finalize the layout by inserting the blueprint header.
+
+        Child classes should call this method at the end of their
+        create_componentLayout() method, or it will be called automatically
+        when the dialog is shown.
+        """
+        if hasattr(self, 'settings_layout') and hasattr(self, 'blueprint_header'):
+            # Check if blueprint header is already in layout
+            if self.blueprint_header.parent() != self:
+                # Insert blueprint header at the top of the layout
+                self.settings_layout.insertWidget(0, self.blueprint_header)
+            self._layout_finalized = True
+
+    def showEvent(self, event):
+        """Override showEvent to ensure blueprint header is inserted."""
+        # Finalize layout if not already done
+        if not getattr(self, '_layout_finalized', False):
+            self.finalize_layout()
+        super(componentMainSettings, self).showEvent(event)
+
     def create_connections(self):
         """
         Create the slots connections to the controls functions
 
         """
         self.close_button.clicked.connect(self.close_settings)
+
+        # Blueprint header connections
+        self._create_blueprint_connections()
 
         self.mainSettingsTab.name_lineEdit.editingFinished.connect(
             self.updateComponentName

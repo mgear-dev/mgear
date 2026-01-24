@@ -722,17 +722,6 @@ def skin_copy_add(sourceMesh=None, targetMesh=None, layer_name=None, *args):
         *args: Additional arguments passed to the function. Not used in the
             current implementation.
 
-    Notes:
-        - This function requires `pm` (pymel.core) and assumes the existence of
-          a `skin.skinCopy` function for copying skin weights.
-        - It also uses `getSkinCluster` to retrieve the skin cluster associated
-          with a given mesh. Implementations of `skin.skinCopy` and `getSkinCluster`
-          are assumed to be available in the current script or environment.
-
-    No Longer Returned:
-        None: This function does not return a value but modifies the target mesh
-            by adding or updating its skinning information based on the source mesh.
-
     Returns:
         PyNode: New skin cluster
     """

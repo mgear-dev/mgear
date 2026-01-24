@@ -1,5 +1,6 @@
-"""Nvigate the DAG hierarchy"""
+"""Navigate the DAG hierarchy"""
 
+from typing import List
 
 import maya.cmds as cmds
 import mgear.pymaya as pm
@@ -255,3 +256,39 @@ def findComponentChildren3(node, name, sideIndex):
             children.append(item)
 
     return [pm.PyNode(x) for x in children]
+
+
+def findComponentChildren4(node: pm.PyNode, name: str, sideIndex: str) -> List[pm.PyNode]:
+    """
+    Return all transform DAG nodes that belong to a given component.
+
+    :param pm.PyNode node: The root node whose hierarchy to search.
+    :param str name: Component name, for example "root" or "ik_hand_root".
+    :param str sideIndex: Side or index string, for example "C0".
+    :return: Matching transform nodes belonging to the component.
+    :rtype: list[pm.PyNode]
+    """
+    name_tokens = name.split("_")
+    prefix_len = len(name_tokens) + 1
+    children = set()
+
+    # -- All descendant transforms plus the node itself
+    paths = pm.listRelatives(node.name(),
+                             allDescendents=True,
+                             fullPath=True,
+                             type="transform") or []
+
+    for path in paths:
+        check_name = path.split("|")[-1]
+        parts = check_name.split("_")
+
+        # -- Check if transform belongs to the component
+        is_component = (len(parts) >= prefix_len
+                        and parts[:prefix_len - 1] == name_tokens
+                        and parts[prefix_len - 1] == sideIndex)
+
+        if is_component:
+            children.add(path)
+
+    return [pm.PyNode(x) for x in children]
+

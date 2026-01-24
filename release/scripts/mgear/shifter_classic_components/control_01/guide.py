@@ -43,7 +43,7 @@ class Guide(guide.ComponentGuide):
     email = EMAIL
     version = VERSION
 
-    connectors = ["orientation"]
+    connectors = ["orientation", "position", "point"]
     ctl_names_description = ["ctl"]
 
     # =====================================================
@@ -135,7 +135,10 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
                           'null',
                           'pyramid',
                           'sphere',
-                          'square']
+                          'square',
+                          'gear',
+                          'mgear',
+                          ]
 
         super(componentSettings, self).__init__(parent=parent)
         self.settingsTab = settingsTab()

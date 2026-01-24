@@ -2,6 +2,103 @@ Release Log
 ===========
 
 
+5.2.1
+------
+**Enhancements**
+	* Shifter: Spring_Gravity_01: General improvements and mirror behavior #581
+	* Shifter: chain_spring_01: Add mirror behavior #607
+	* Shifter: EPIC leg and arm 02: Add option to configure swing and twist of the first joint (arm/Thigh) #570
+	* Shifter: UPV Visualization for Arm/Leg Guides polish implementation #567
+	* Shifter: Initial refactor to change the settingsUI from QtDesigner to human editable, also now it can be subclassed for component variants
+	* Shifter: Add cancel build mechanism pressing ESC #606
+	* Shifter: Update message when component is not found and raise import error
+	* Shifter: Adding position and point connector to shifter components. Implemented on control_01
+	* Shifter: Guide settings UPDATE MRO #603
+	* Rigbits: Eye Rigger: Add option driven offset layers for automation #579
+	* Rigbits: Eye Rigger: Add option to control vertical offset when simplified #579
+	* Rigbits: CreateGhostCtl: Ensure visibility attr is also connected on shapes
+	* Core: Update pickwalk to work on Shifter Guides
+	* Core: Fix pickwalk to support joints and other type of objects
+
+**Bug Fix**
+	* Shifter: control_01 "orientation" connector broken. Fixed by using parentConstraint with skipTranslate #578
+	* Shifter: 3jnt leg flip on mGear 5.1 #577
+	* Shifter: EPIC_arm_01: Fix arm joint position offset when moving FK0_ctl control
+	* Shifter: EPIC_spine_02: Wrong joint orientation when spine is placed horizontal with IK World align setting activated #605
+	* Compatibility fixes for Python and PySide versions
+
+5.2.0
+------
+**New Features**
+	* Shifter: Blueprint Guide: New feature for defining standardized rig settings shared across multiple characters with per-section and per-component local override support. Includes Guide Explorer color coding for blueprint status visualization.
+	* Shifter: Custom Steps UI 2.0: Complete overhaul with drag and drop support, collapsible sections, custom step groups, config IO to JSON, multi-selection support, and improved visual styling #113
+	* Shifter: Custom Step Templates: Template selection dialog when creating new custom steps with pre-built templates for common tasks (Import Skin Pack, Import Guide Visualizer Config, Import RBF Config, Import SDK Config, Import Eye Rigger Config, Import Channel Master Config, Import Anim Picker)
+	* Shifter: Guide Explorer: New interface for exploring guides #592
+	* Shifter: Guide Tools: Initial implementation #588
+	* Utilbits: xPlorer: New tool with multi-selection, visibility toggle, attribute editor, search functionality, and arrow navigation #602
+	* Rigbits: Eye Rigger 2.1: Simplified options and miscellaneous improvements #579
+	* Rigbits: SDK Manager: Independent channel selection for Translate/Rotate/Scale with individual X, Y, Z axis checkboxes #604
+	* Mocap Tools: HumanIK Mapper: Batch Bake to Timeline button #590
+
+**Enhancements**
+	* Core: Icon: Adding Gear and mGear logo curve icons, update control_01 components
+	* Core: Utils: Added undo off decorator for performance optimization
+	* Shifter: Build speed optimization
+	* Shifter: Guide traversal support in core dag and component guide #584
+	* Shifter: Improving custom steps implementation and new method to run Sub-custom_Steps #601
+	* Shifter: Adding Duplicate Symmetry Status flag for postDraw method logic
+	* Shifter: Component creation and rename methods wrapped with single-undo decorator #589
+	* Shifter: Update Shifter templates menu with better description for UE templates
+	* Shifter: Update mannequin templates to use only EPIC components #58
+	* Shifter: lite_chain_01: Adding mirror behavior
+	* Channel Master: Update UI logic for slider sync behaviour #539 #593
+	* RBF Manager: Added option to use custom names on RBF setups #595
+	* RBF Manager: Better naming checker and logic when custom name is cancelled #595
+	* SDK Manager: Misc fixes and UI updates #587
+	* SDK Manager: Converted .ui file to pure Python for easier maintenance #604
+	* SDK Manager: Removed driver restriction - any transform can now be used as driver #604
+	* SDK Manager: Added documentation #604
+	* Rigbits: Added comprehensive user documentation for all tools #604
+	* Animbits: Added user documentation for Cache Manager, HumanIK Mapper, Space Recorder, Spring Manager #604
+	* PyMaya: node.addAttr return attr correctly
+	* PyMaya: Attr: added getRange() method
+	* PyMaya: Node: refactor sets members method to support Pymel like flatten flag query
+	* Core: Applyop: create_proximity_constraint now returns pyNode not string
+	* Utilbits: Update menu and adding random colors tool #602
+	* Allow underscores in rig_name property #558
+	* Quick function for setting and updating mGear component types #559
+
+**Bug Fix**
+	* Core: upv_visualizer: replace floatMath by multiplyDivide (floatMath node from lookDev toolkit not always loaded) #567
+	* Rigbits: Fix alignToPointsLoop
+	* Rigbits: Lip rigger autoSkin not working #533 #562
+	* Rigbits: Fix create_proximity_tweak
+	* Rigbits: Eye Rigger 2.1: add kwargs for old version config compatibility #579
+	* Shifter: Fix "Show Settings After Create New Component" checkbox being ignored in PySide6 #583
+	* Shifter: Fix broken error handling when opening Guide Manager #569
+	* Shifter: custom_step.py: fix dup method
+	* Shifter: Skeletal and Geometry root validation added #573
+	* SDK Manager: Fix issue with unitConversion nodes #587
+	* SDK Manager: Fix driver_attr_drop_down #587
+	* SDK Manager: sdk_io fix copySDKsNode #587
+	* PyMaya: Fix node.py listAttr
+	* RBF Manager: When driver is used to drive several setups, multiple poses added creating decomposition error on the solver #595
+	* Core: PickWalk: fix pickwalk up and down for non controls
+	* Ghost Slider Function erroring out (PyMaya compatibility) #513
+	* Knee Auto Thickness: Changes rotate order value on readerB to improve stability #529 #564
+	* Fix an error when generating diamond icon with pos offset #561
+	* SimpleRig: Fix issue with relatives reversed order at generation time
+	* Fix type hints #586
+	* FIX: adding stateChanged connection to import skin checkbox in guide settings #440
+
+**Solvers**
+	* Fix memory leak in rollSplineKine: replace dynamic MQuaternion array with local vars #572
+
+**ueGear**
+	* UE 5.6 - Metahuman DDC export has new joint naming #536 #568
+	* Remote Control ObjectPath defaults to 5.5+
+	* Fix update camera "FBX export" error
+
 5.1.0
 ------
 **Enhancements**

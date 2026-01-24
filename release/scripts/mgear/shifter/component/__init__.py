@@ -7,7 +7,10 @@ Shifter component rig class.
 #############################################
 import re
 
-# pymel
+# Maya
+from maya import cmds
+
+# pymaya
 import mgear.pymaya as pm
 from mgear.pymaya import datatypes
 from mgear.pymaya import versions
@@ -61,7 +64,8 @@ class Main(object):
 
         self.options = self.rig.options
         self.model = self.rig.model
-        self.settings = self.guide.values
+        # Use merged values to apply blueprint settings when enabled
+        self.settings = self.guide.getMergedValues()
         self.setupWS = self.rig.setupWS
 
         self.WIP = self.options["mode"]
@@ -138,7 +142,7 @@ class Main(object):
         # --------------------------------------------------
         # Step
         self.stepMethods = [
-            eval("self.step_0{}".format(str(i)), {"self": self})
+            getattr(self, "step_0{}".format(i))
             for i in range(len(self.steps))
         ]
 
@@ -153,9 +157,17 @@ class Main(object):
         relation.
         """
         self.preScript()
+        if self.rig._checkBuildCancelled():
+            return
         self.initialHierarchy()
+        if self.rig._checkBuildCancelled():
+            return
         self.initControlTag()
+        if self.rig._checkBuildCancelled():
+            return
         self.addObjects()
+        if self.rig._checkBuildCancelled():
+            return
         self.setRelation()
         return
 
@@ -165,10 +177,20 @@ class Main(object):
         Get the properties host, create parameters and set layout and logic.
         """
         self.getHost()
+        if self.rig._checkBuildCancelled():
+            return
         self.config_bind_planes()
+        if self.rig._checkBuildCancelled():
+            return
         self.validateProxyChannels()
+        if self.rig._checkBuildCancelled():
+            return
         self.addFullNameParam()
+        if self.rig._checkBuildCancelled():
+            return
         self.addAttributes()
+        if self.rig._checkBuildCancelled():
+            return
         self.set_ui_host_components_controls()
         return
 
@@ -184,8 +206,14 @@ class Main(object):
         Step 03. Connect the component to the rest of the rig.
         """
         self.initConnector()
+        if self.rig._checkBuildCancelled():
+            return
         self.addConnection()
+        if self.rig._checkBuildCancelled():
+            return
         self.connect()
+        if self.rig._checkBuildCancelled():
+            return
         self.postConnect()
         return
 
@@ -201,7 +229,11 @@ class Main(object):
         Step 05. Finalize the component and post Script.
         """
         self.finalize()
+        if self.rig._checkBuildCancelled():
+            return
         self.postScript()
+        if self.rig._checkBuildCancelled():
+            return
         self.collect_build_data()
         return
 
@@ -273,7 +305,7 @@ class Main(object):
 
         # we process the combine bind planes with the first component
         if not self.combinedBindPlanes:
-            for k in self.bindPlanes.keys():
+            for k in self.bindPlanes:
                 if len(self.bindPlanes[k]) >= 2:
                     combined_mesh = pm.polyUnite(
                         self.bindPlanes[k],
@@ -437,13 +469,15 @@ class Main(object):
                 )
                 rule_name = self.name + rule_name
 
-            # use exiting joint
-            if pm.ls(customName) and self.options["connect_joints"]:
-                jnt = pm.ls(customName)[0]
-                keep_off = True
+            # use existing joint - prefer cached lookup over pm.ls() for speed
+            cached_custom = self.rig.getCachedJoint(customName) if customName else None
+            cached_rule = self.rig.getCachedJoint(rule_name)
 
-            elif pm.ls(rule_name) and self.options["connect_joints"]:
-                jnt = pm.ls(rule_name)[0]
+            if cached_custom and self.options["connect_joints"]:
+                jnt = cached_custom
+                keep_off = True
+            elif cached_rule and self.options["connect_joints"]:
+                jnt = cached_rule
                 keep_off = True
             else:
                 if isinstance(obj, datatypes.Matrix):
@@ -592,11 +626,9 @@ class Main(object):
                     # leaf joint
                     if leaf_joint and not UniScale:
                         leaf_joint_name = "leaf_" + jnt.name()
-                        if (
-                            pm.ls(leaf_joint_name)
-                            and self.options["connect_joints"]
-                        ):
-                            leaf_jnt = pm.PyNode(leaf_joint_name)
+                        cached_leaf = self.rig.getCachedJoint(leaf_joint_name)
+                        if cached_leaf and self.options["connect_joints"]:
+                            leaf_jnt = cached_leaf
                         else:
                             leaf_jnt = primitive.addJoint(
                                 jnt, "leaf_" + jnt.name(), t
@@ -643,25 +675,19 @@ class Main(object):
                     else:
                         driven_m = pm.getAttr(jnt + ".parentInverseMatrix[0]")
                         m = t * driven_m
-                        jnt.attr("rotateX").set(0)
-                        jnt.attr("rotateY").set(0)
-                        jnt.attr("rotateZ").set(0)
+                        jnt.rotate.set([0, 0, 0])
                         if jnt.scaleZ.get() < 0:
                             jnt.scaleZ.set(1)
                     tm = datatypes.TransformationMatrix(m)
                     r = datatypes.degrees(tm.getRotation())
-                    jnt.attr("jointOrientX").set(r[0])
-                    jnt.attr("jointOrientY").set(r[1])
-                    jnt.attr("jointOrientZ").set(r[2])
+                    jnt.jointOrient.set([r[0], r[1], r[2]])
                 elif not neutral_rot:
                     jnt.setAttr("jointOrient", 0, 0, 0)
                     driven_m = pm.getAttr(jnt + ".parentInverseMatrix[0]")
                     m = t * driven_m
                     tm = datatypes.TransformationMatrix(m)
                     r = datatypes.degrees(tm.getRotation())
-                    jnt.attr("rotateX").set(r[0])
-                    jnt.attr("rotateY").set(r[1])
-                    jnt.attr("rotateZ").set(r[2])
+                    jnt.rotate.set([r[0], r[1], r[2]])
 
                 # set not keyable
                 attribute.setNotKeyableAttributes(jnt)
@@ -808,9 +834,7 @@ class Main(object):
 
             # setting the joint orient compensation in order to have clean
             # rotation channels
-            jnt.attr("jointOrientX").set(jnt.attr("rx").get())
-            jnt.attr("jointOrientY").set(jnt.attr("ry").get())
-            jnt.attr("jointOrientZ").set(jnt.attr("rz").get())
+            jnt.jointOrient.set(jnt.rotate.get())
 
             im = m.inverse()
 
@@ -855,23 +879,23 @@ class Main(object):
         # TODO: This workaround, should be removed onces the evaluation issue
         # is fixed
         # github issue: Shifter: Joint connection: Maya evaluation Bug #210
-        dm = jnt.r.listConnections(p=True, type="decomposeMatrix")
+        # Using cmds for connection operations
+        jnt_name = jnt.name()
+        dm = cmds.listConnections(f"{jnt_name}.r", p=True, type="decomposeMatrix")
         if dm:
-            at = dm[0]
-            dm_node = at.node()
-            pm.disconnectAttr(at, jnt.r)
-            pm.connectAttr(dm_node.outputRotateX, jnt.rx)
-            pm.connectAttr(dm_node.outputRotateY, jnt.ry)
-            pm.connectAttr(dm_node.outputRotateZ, jnt.rz)
+            dm_node = dm[0].split(".")[0]
+            cmds.disconnectAttr(dm[0], f"{jnt_name}.r")
+            cmds.connectAttr(f"{dm_node}.outputRotateX", f"{jnt_name}.rx")
+            cmds.connectAttr(f"{dm_node}.outputRotateY", f"{jnt_name}.ry")
+            cmds.connectAttr(f"{dm_node}.outputRotateZ", f"{jnt_name}.rz")
 
-        dm = jnt.t.listConnections(p=True, type="decomposeMatrix")
+        dm = cmds.listConnections(f"{jnt_name}.t", p=True, type="decomposeMatrix")
         if dm:
-            at = dm[0]
-            dm_node = at.node()
-            pm.disconnectAttr(at, jnt.t)
-            pm.connectAttr(dm_node.outputTranslateX, jnt.tx)
-            pm.connectAttr(dm_node.outputTranslateY, jnt.ty)
-            pm.connectAttr(dm_node.outputTranslateZ, jnt.tz)
+            dm_node = dm[0].split(".")[0]
+            cmds.disconnectAttr(dm[0], f"{jnt_name}.t")
+            cmds.connectAttr(f"{dm_node}.outputTranslateX", f"{jnt_name}.tx")
+            cmds.connectAttr(f"{dm_node}.outputTranslateY", f"{jnt_name}.ty")
+            cmds.connectAttr(f"{dm_node}.outputTranslateZ", f"{jnt_name}.tz")
 
         return jnt
 
@@ -948,7 +972,7 @@ class Main(object):
             dagNode: The Control.
 
         """
-        if "degree" not in kwargs.keys():
+        if "degree" not in kwargs:
             kwargs["degree"] = 1
 
         # remove the _ctl hardcoded in component name
@@ -1005,7 +1029,7 @@ class Main(object):
         )
 
         bufferName = fullName + "_controlBuffer"
-        if bufferName in self.rig.guide.controllers.keys():
+        if bufferName in self.rig.guide.controllers:
             ctl_ref = self.rig.guide.controllers[bufferName]
             ctl = primitive.addTransform(parent, fullName, m)
             color = curve.get_color(ctl_ref)
@@ -1101,12 +1125,16 @@ class Main(object):
                 self.transform2Lock.append(parent)
 
         # Set the control shapes isHistoricallyInteresting
-        for oShape in ctl.getShapes():
-            oShape.isHistoricallyInteresting.set(False)
+        # Use cmds for faster shape operations
+        ctl_name = ctl.name()
+        shapes = cmds.listRelatives(ctl_name, shapes=True, fullPath=True) or []
+        maya_version = versions.current()
+        for shape in shapes:
+            cmds.setAttr(f"{shape}.isHistoricallyInteresting", False)
             # connecting the always draw shapes on top to global attribute
-            if versions.current() >= 20220000:
-                pm.connectAttr(
-                    self.rig.ctlXRay_att, oShape.attr("alwaysDrawOnTop")
+            if maya_version >= 20220000:
+                cmds.connectAttr(
+                    self.rig.ctlXRay_att.name(), f"{shape}.alwaysDrawOnTop"
                 )
 
         # set controller tag
@@ -1161,16 +1189,12 @@ class Main(object):
             objects = [objects]
 
         for name in names:
-            if name not in self.groups.keys():
-                self.groups[name] = []
-
-            self.groups[name].extend(objects)
+            self.groups.setdefault(name, []).extend(objects)
 
             if parentGrp:
-                if parentGrp not in self.subGroups.keys():
-                    self.subGroups[parentGrp] = []
-                if name not in self.subGroups[parentGrp]:
-                    self.subGroups[parentGrp].append(name)
+                subgrp = self.subGroups.setdefault(parentGrp, [])
+                if name not in subgrp:
+                    subgrp.append(name)
 
     def add_match_ref(self, ctl, parent, name, cnx=True):
         """Add maching reference transform. This is use to track the positions
@@ -1212,7 +1236,7 @@ class Main(object):
         if comp_relative and comp_relative.hostRelatives:
             hostRelatives = comp_relative.hostRelatives
             relative_name = self.rig.getRelativeName(self.settings["ui_host"])
-            if relative_name in hostRelatives.keys():
+            if relative_name in hostRelatives:
                 self.uihost = hostRelatives[relative_name]
             else:
                 pm.displayWarning(
@@ -1232,30 +1256,34 @@ class Main(object):
 
         """
 
-        # adds the attribute
+        # adds the attribute - cache existing attrs for faster lookup
+        uihost_name = self.uihost.name()
+        existing_attrs = set(cmds.listAttr(uihost_name) or [])
 
         idx = 0
         if self.options["classicChannelNames"]:
-            attrName = self.getName("id{}_ctl".format(str(idx)))
-            while self.uihost.hasAttr(attrName):
+            attrName = self.getName(f"id{idx}_ctl")
+            while attrName in existing_attrs:
                 idx += 1
-                attrName = self.getName("id{}_ctl".format(str(idx)))
+                attrName = self.getName(f"id{idx}_ctl")
 
         else:
-            attrName = self.getAttrName("id{}_ctl".format(str(idx)))
-            while self.uihost.hasAttr(attrName):
+            attrName = self.getAttrName(f"id{idx}_ctl")
+            while attrName in existing_attrs:
                 idx += 1
-                attrName = self.getAttrName("id{}_ctl".format(str(idx)))
+                attrName = self.getAttrName(f"id{idx}_ctl")
         attr_cnx_name = attrName + "_cnx"
         self.uihost.addAttr(attr_cnx_name, at="message", m=1)
 
         # creates a usable string list and message connections
-        controls_string = ""
+        # Build string list efficiently with join instead of += concatenation
+        ctl_names = []
         for e, ctl in enumerate(self.controlers):
-            controls_string += "{},".format(ctl.name())
+            ctl_names.append(ctl.name())
             pm.connectAttr(ctl.message, self.uihost.attr(attr_cnx_name)[e])
-            ctl.uiHost.set(self.uihost.name())
+            ctl.uiHost.set(uihost_name)
             pm.connectAttr(self.uihost.message, ctl.uiHost_cnx)
+        controls_string = ",".join(ctl_names) + ","
 
         attribute.addAttribute(
             node=self.uihost,
@@ -1563,7 +1591,7 @@ class Main(object):
             dagNode: The relational object.
 
         """
-        if name not in self.relatives.keys():
+        if name not in self.relatives:
             mgear.log(
                 "Can't find reference for object : "
                 + self.fullName
@@ -1584,7 +1612,7 @@ class Main(object):
             dagNode: The relational object.
 
         """
-        if name not in self.controlRelatives.keys():
+        if name not in self.controlRelatives:
             mgear.log(
                 "Control tag relative: Can't find reference for "
                 " object : " + self.fullName + "." + name,
@@ -1611,7 +1639,7 @@ class Main(object):
         """
         comp_name = self.rig.getComponentName(name)
         rel_name = self.rig.getRelativeName(name)
-        if rel_name not in comp_relative.aliasRelatives.keys():
+        if rel_name not in comp_relative.aliasRelatives:
             return name
 
         if fullName:
@@ -1718,7 +1746,7 @@ class Main(object):
 
         """
 
-        if self.settings["connector"] not in self.connections.keys():
+        if self.settings["connector"] not in self.connections:
             # mgear.log("Unable to connect object", mgear.sev_error)
             # return False
             pm.displayWarning(
@@ -1752,12 +1780,28 @@ class Main(object):
         self.connectRef(self.settings["ikrefarray"], self.ik_cns)
         self.connectRef(self.settings["upvrefarray"], self.upv_cns, True)
 
-    def connect_orientCns(self):
-        """Connection with ori cns
+    def _connect_constraint(self, cns_type="orient"):
+        """Connection with constraint
 
-        Connection definition using orientation constraint.
+        Shared connection definition using orientation or parent constraint
+        (translation only).
+
+        Args:
+            cns_type (str): Type of constraint, "orient", "point" or "parent".
 
         """
+        if cns_type == "orient":
+            # cns_func = pm.orientConstraint
+            cns_func = pm.parentConstraint
+        elif cns_type == "point":
+            cns_func = pm.pointConstraint
+        elif cns_type in ["parent", "parent_translation"]:
+            cns_func = pm.parentConstraint
+        else:
+            raise ValueError(
+                "Invalid constraint type: {}. Use 'orient' 'point' or "
+                "'parent'.".format(cns_type)
+            )
 
         self.parent.addChild(self.root)
 
@@ -1774,8 +1818,13 @@ class Main(object):
                     ref.append(self.rig.findRelative(ref_name))
 
                 ref.append(self.ik_cns)
-                cns_node = pm.orientConstraint(*ref, maintainOffset=True)
-                cns_attr_names = pm.orientConstraint(
+                cns_kwargs = {"maintainOffset": True}
+                if cns_type == "parent_translation":
+                    cns_kwargs["skipRotate"] = ["x", "y", "z"]
+                elif cns_type == "orient":
+                    cns_kwargs["skipTranslate"] = ["x", "y", "z"]
+                cns_node = cns_func(*ref, **cns_kwargs)
+                cns_attr_names = cns_func(
                     cns_node, query=True, weightAliasList=True
                 )
                 cns_attr = []
@@ -1791,6 +1840,17 @@ class Main(object):
                     pm.setAttr(node_name + ".colorIfTrueR", 1)
                     pm.setAttr(node_name + ".colorIfFalseR", 0)
                     pm.connectAttr(node_name + ".outColorR", attr)
+
+    def connect_orientCns(self):
+        """Connection with orientation constraint."""
+        self._connect_constraint("orient")
+
+    def connect_positionCns(self):
+        """Connection with parent constraint. But only using translation"""
+        self._connect_constraint("parent_translation")
+
+    def connect_pointCns(self):
+        self._connect_constraint("point")
 
     def connect_orientCns2(self):
         """Connection with ori cns
@@ -1938,9 +1998,9 @@ class Main(object):
                             + "_space_ref"
                         )
 
-                        # check if already exist
-                        if pm.ls(ref_trans_name):
-                            ref_trans = pm.ls(ref_trans_name)[0]
+                        # check if already exist - use cmds for faster lookup
+                        if cmds.objExists(ref_trans_name):
+                            ref_trans = pm.PyNode(ref_trans_name)
                         else:
                             ref_trans = primitive.addTransform(
                                 original_trans,
@@ -2265,7 +2325,7 @@ class Main(object):
                     )
                 )
             elif isinstance(jpo, dict):
-                if "newActiveJnt" in jpo.keys():
+                if "newActiveJnt" in jpo:
                     if jpo["newActiveJnt"] == "component_jnt_org":
                         jpo["newActiveJnt"] = self.component_jnt_org
                     elif jpo["newActiveJnt"] == "parent_relative_jnt":
@@ -2302,9 +2362,10 @@ class Main(object):
 
                 self.jointList.append(self.addJoint(**jpo))
 
+        # Set joint radius using cmds for better performance
+        radiusValue = self.options["joint_radius"]
         for jnt in self.jointList:
-            radiusValue = self.options["joint_radius"]
-            jnt.radius.set(radiusValue)
+            cmds.setAttr(f"{jnt.name()}.radius", radiusValue)
 
     # =====================================================
     # FINALIZE
@@ -2344,7 +2405,7 @@ class Main(object):
         self.build_data["Index"] = self.index
 
         temp_dict = {}
-        for k in self.guide.tra.keys():
+        for k in self.guide.tra:
             temp_dict[k] = self.guide.tra[k].get()
         self.build_data["guideTransforms"] = temp_dict
 
@@ -2394,7 +2455,7 @@ class Main(object):
                 for dc in j.data_contracts.get().split(","):
                     # check if the Data contract indentifier type is a valid
                     # data contract
-                    if dc not in self.build_data.keys():
+                    if dc not in self.build_data:
                         pm.displayWarning(
                             "{} is not a valid Data Contract Key".format(dc)
                         )

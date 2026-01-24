@@ -328,9 +328,19 @@ class CollapsibleHeader(QtWidgets.QWidget):
 
 
 class CollapsibleWidget(QtWidgets.QWidget):
-    def __init__(self, text, expanded=True, parent=None):
+    def __init__(self, text, expanded=True, expandable=True, parent=None):
+        """Create a collapsible widget with header and body.
+
+        Args:
+            text: Header text
+            expanded: Initial expanded state
+            expandable: If True, widget expands to fill available space when
+                       expanded. If False, widget stays fixed size.
+            parent: Parent widget
+        """
         super(CollapsibleWidget, self).__init__(parent)
 
+        self._expandable = expandable
         self.header_wgt = CollapsibleHeader(text)
         self.header_wgt.clicked.connect(self.on_header_clicked)
         self.body_wgt = QtWidgets.QWidget()
@@ -355,6 +365,17 @@ class CollapsibleWidget(QtWidgets.QWidget):
     def set_expanded(self, expanded):
         self.header_wgt.set_expanded(expanded)
         self.body_wgt.setVisible(expanded)
+        # Update size policy based on expanded state and expandable setting
+        if expanded and self._expandable:
+            self.setSizePolicy(
+                QtWidgets.QSizePolicy.Preferred,
+                QtWidgets.QSizePolicy.Expanding
+            )
+        else:
+            self.setSizePolicy(
+                QtWidgets.QSizePolicy.Preferred,
+                QtWidgets.QSizePolicy.Fixed
+            )
 
     def set_header_background_color(self, color):
         self.header_wgt.set_background_color(color)

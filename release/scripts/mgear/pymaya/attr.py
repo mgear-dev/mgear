@@ -206,12 +206,12 @@ class Attribute(base.Attr):
         sn = this_plug.partialName(
             False, False, False, False, False, False
         ).split(".")[-1]
-        res = re.match("{}\[([0-9])+\]".format(ln), name)
+        res = re.match(r"{}\[([0-9]+)\]".format(re.escape(ln)), name)
         if res:
             return super(Attribute, self).__getattribute__("__getitem__")(
                 int(res.group(1))
             )
-        res = re.match("{}\[([0-9])+\]".format(sn), name)
+        res = re.match(r"{}\[([0-9]+)\]".format(re.escape(sn)), name)
         if res:
             return super(Attribute, self).__getattribute__("__getitem__")(
                 int(res.group(1))
@@ -220,26 +220,17 @@ class Attribute(base.Attr):
         if this_plug.isCompound:
             for ci in range(this_plug.numChildren()):
                 cp = this_plug.child(ci)
-                at = None
-                if (
-                    name
-                    == cp.partialName(
-                        False, False, False, False, False, True
-                    ).split(".")[-1]
-                ):
+                # Cache partialName calls - get both long and short forms
+                long_name = cp.partialName(False, False, False, False, False, True).rsplit(".", 1)[-1]
+                if name == long_name:
                     at = Attribute(cp)
-                elif (
-                    name
-                    == cp.partialName(
-                        False, False, False, False, False, False
-                    ).split(".")[-1]
-                ):
+                    attr_cache[name] = at
+                    return at
+                short_name = cp.partialName(False, False, False, False, False, False).rsplit(".", 1)[-1]
+                if name == short_name:
                     at = Attribute(cp)
-                else:
-                    continue
-
-                attr_cache[name] = at
-                return at
+                    attr_cache[name] = at
+                    return at
 
         raise exception.MayaAttributeError("No '{}' attr found".format(name))
 
@@ -362,3 +353,27 @@ class Attribute(base.Attr):
         if match:
             return int(match.group(1))
         return None
+
+    def elements(self):
+        """Return the existing element names of an array attribute.
+
+        Returns a list of attribute name strings for each existing element in a
+        multi/array attribute. For sparse arrays, returns names like
+        ["inputCurves[0]", "inputCurves[2]", "inputCurves[5]"].
+
+        Returns:
+            list: List of element attribute name strings.
+
+        Raises:
+            TypeError: If the attribute is not an array plug.
+        """
+        if not self.__plug.isArray:
+            raise TypeError(
+                "{} is not an array (multi) plug".format(self.name())
+            )
+
+        base_name = self.__plug.partialName(
+            False, False, False, False, False, True
+        )
+        indices = self.__plug.getExistingArrayAttributeIndices()
+        return ["{}[{}]".format(base_name, i) for i in indices]
