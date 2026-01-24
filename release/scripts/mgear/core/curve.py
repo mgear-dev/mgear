@@ -64,16 +64,16 @@ def addCurve(
     Arguments:
         parent (dagNode): Parent object.
         name (str): Name
-        points (list of float | list of datatypes.Vector | list of om2.MPoint):
+        points (list[float] | list[om2.MVector] | list[om2.MPoint]):
             points of the curve in a one dimension array
             [point0X, point0Y, point0Z, 1, point1X, point1Y, point1Z, 1, ...].
         close (bool): True to close the curve.
         degree (int): 1 for linear curve, 3 for Cubic.
         m (matrix): Global transform.
-        op (bool, optional): If True will add a curve that pass over the points
-                            This is equivalent of using"editPoint " flag
+        op (bool, optional): If True will add a curve that pass over the points.
+            This is equivalent of using "editPoint" flag.
 
-    No Longer Returned:
+    Returns:
         dagNode: The newly created curve.
     """
     # Check and convert only if the item is an MPoint
