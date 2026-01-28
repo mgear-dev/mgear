@@ -159,6 +159,20 @@ class Component(component.Main):
             self.loc.append(loc)
             self.jnt_pos.append([loc, i, None, False])
 
+        # IK/FK Matching
+        if self.isFkIk:
+            for i, fk in enumerate(self.fk_ctl):
+                self.add_match_ref(fk,
+                                   self.chain[i],
+                                   f"{fk.name()}_mth")
+            self.add_match_ref(self.ik_ctl,
+                               self.fk_ctl[-1],
+                               "ik_mth")
+
+            self.add_match_ref(self.upv_ctl,
+                               self.fk_ctl[0],
+                               "upv_mth")
+
     # =====================================================
     # ATTRIBUTES
     # =====================================================
