@@ -1,4 +1,4 @@
-"""Wire to Skinning - Core business logic.
+"""Wire to Skinning - Core logic.
 
 This module contains the core functions for:
 - Getting wire deformer and curve information
@@ -14,11 +14,13 @@ import math
 
 # mGear
 from mgear.core import deboor
+from mgear.core import skin as core_skin
 
 # Maya
 from maya import cmds
 from maya import mel
 import maya.api.OpenMaya as om2
+import maya.OpenMaya as om
 
 # Constants
 DEFAULT_WEIGHT_THRESHOLD = 0.001
@@ -301,24 +303,25 @@ def get_mesh_wire_deformers(mesh):
 def get_mesh_skin_cluster(mesh):
     """Get the skin cluster affecting a mesh.
 
+    Uses mgear.core.skin.getSkinCluster for robust skin cluster detection.
+
     Args:
         mesh (str): Name of the mesh.
 
     Returns:
         str: Name of the skin cluster, or None if not found.
     """
-    try:
-        skin_cluster = mel.eval('findRelatedSkinCluster("{}")'.format(mesh))
-        return skin_cluster if skin_cluster else None
-    except Exception:
-        return None
+    skin_cls = core_skin.getSkinCluster(mesh)
+    if skin_cls:
+        return skin_cls.name()
+    return None
 
 
 def get_existing_skin_weights(mesh, skin_cluster):
     """Get existing skin weights from a skin cluster.
 
-    Retrieves all weight values for all vertices from an existing skin cluster.
-    Used to preserve/blend with existing weights when adding new wire influences.
+    Uses OpenMaya API for efficient batch weight retrieval (much faster than
+    per-vertex cmds.skinPercent calls). Leverages mgear.core.skin utilities.
 
     Args:
         mesh (str): Name of the mesh.
@@ -331,29 +334,40 @@ def get_existing_skin_weights(mesh, skin_cluster):
     if not skin_cluster or not cmds.objExists(skin_cluster):
         return {}
 
-    num_verts = cmds.polyEvaluate(mesh, vertex=True)
-    influences = cmds.skinCluster(skin_cluster, query=True, influence=True) or []
+    # Get PyNode for skin cluster
+    import mgear.pymaya as pm
 
-    if not influences:
-        return {}
+    skin_cls = pm.PyNode(skin_cluster)
 
+    print("Reading existing skin weights using OpenMaya API...")
+
+    # Get geometry components using core.skin utilities
+    dag_path, components = core_skin.getGeometryComponents(skin_cls)
+
+    # Get all weights in one batch call (fast!)
+    weights_array = core_skin.getCurrentWeights(skin_cls, dag_path, components)
+
+    # Get influence names
+    influence_paths = om.MDagPathArray()
+    skin_fn = core_skin.get_skin_cluster_fn(skin_cluster)
+    num_influences = skin_fn.influenceObjects(influence_paths)
+
+    influence_names = [
+        om.MFnDependencyNode(influence_paths[i].node()).name()
+        for i in range(influence_paths.length())
+    ]
+
+    # Calculate number of vertices
+    num_verts = int(weights_array.length() / num_influences)
+
+    # Convert flat weight array to per-vertex dictionary
     weights = {}
-
-    print("Reading existing skin weights for {} vertices...".format(num_verts))
-
     for v_idx in range(num_verts):
-        vert = "{}.vtx[{}]".format(mesh, v_idx)
         vert_weights = {}
-
-        for jnt in influences:
-            try:
-                w = cmds.skinPercent(
-                    skin_cluster, vert, query=True, transform=jnt
-                )
-                if w > 0.0001:
-                    vert_weights[jnt] = w
-            except Exception:
-                pass
+        for inf_idx, inf_name in enumerate(influence_names):
+            w = weights_array[v_idx * num_influences + inf_idx]
+            if w > 0.0001:
+                vert_weights[inf_name] = w
 
         if vert_weights:
             weights[v_idx] = vert_weights
@@ -810,9 +824,10 @@ def create_skin_cluster(
     static_joint=None,
     uses_static_joint=False,
 ):
-    """Create a skin cluster and apply the computed weights.
+    """Create a skin cluster and apply the computed weights using OpenMaya.
 
     Preserves existing skin weights for vertices not affected by the wire.
+    Uses OpenMaya batch operations for significantly faster weight application.
 
     Args:
         mesh (str): Name of the mesh.
@@ -901,18 +916,6 @@ def create_skin_cluster(
             cmds.warning("Failed to create skin cluster: {}".format(str(e)))
             return None
 
-        # For a NEW skin cluster, initialize ALL vertices to static_jnt
-        if static_joint and uses_static_joint:
-            print("Initializing all vertices to static joint...")
-            num_verts = cmds.polyEvaluate(mesh, vertex=True)
-
-            cmds.skinPercent(
-                skin_cluster,
-                "{}.vtx[0:{}]".format(mesh, num_verts - 1),
-                transformValue=[(static_joint, 1.0)],
-                normalize=True,
-            )
-
     # Unlock all joints we're working with
     for jnt in all_joints:
         try:
@@ -933,44 +936,42 @@ def create_skin_cluster(
         )
     )
 
-    processed = 0
+    # Build CV index to joint name mapping
+    cv_to_joint = {idx: jnt for idx, jnt in enumerate(joints)}
 
+    # For new skin cluster, initialize all vertices to static joint
+    if not existing_skin and static_joint and uses_static_joint:
+        print("Initializing all vertices to static joint...")
+        core_skin.initializeToInfluence(skin_cluster, static_joint)
+
+    # Convert weights format: {v_idx: {key: w}} -> {v_idx: {joint_name: w}}
+    vertex_weights = {}
     for v_idx, vert_weights in affected_weights.items():
-        weight_list = []
-
+        vertex_weights[v_idx] = {}
         for key, w in vert_weights.items():
+            # Determine joint name from key
             if key == "static":
-                if static_joint:
-                    weight_list.append((static_joint, w))
-            elif isinstance(key, int) and 0 <= key < len(joints):
-                # CV index - map to joint
-                weight_list.append((joints[key], w))
-            elif isinstance(key, str) and cmds.objExists(key):
-                # Joint name from existing weights
-                weight_list.append((key, w))
+                jnt_name = static_joint
+            elif isinstance(key, int):
+                jnt_name = cv_to_joint.get(key)
+            else:
+                jnt_name = key
 
-        if weight_list:
-            try:
-                cmds.skinPercent(
-                    skin_cluster,
-                    "{}.vtx[{}]".format(mesh, v_idx),
-                    transformValue=weight_list,
-                    normalize=True,
-                )
-            except Exception as e:
-                cmds.warning(
-                    "Failed to set weights for vertex {}: {}".format(v_idx, str(e))
-                )
+            if jnt_name:
+                vertex_weights[v_idx][jnt_name] = w
 
-        processed += 1
-        if processed % 500 == 0:
-            print(
-                "  Applied weights to {}/{} vertices...".format(
-                    processed, len(affected_weights)
-                )
-            )
+    # Apply weights using core_skin partial update function
+    # Uses setVertexWeights which only modifies affected vertices,
+    # preserving existing weights on all other vertices.
+    # This is more efficient than setInfluenceWeights for partial updates.
+    print("Applying weights with core_skin.setVertexWeights...")
+    core_skin.setVertexWeights(skin_cluster, vertex_weights)
 
-    print("Skin weights applied successfully to {} vertices.".format(processed))
+    print(
+        "Skin weights applied successfully to {} vertices.".format(
+            len(affected_weights)
+        )
+    )
     return skin_cluster
 
 

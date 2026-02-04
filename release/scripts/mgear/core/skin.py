@@ -470,6 +470,171 @@ def setBlendWeights(skinCls, dagPath, components, dataDic, compressed):
     )
 
 
+######################################
+# Partial Vertex Weight Updates
+######################################
+
+
+def setVertexWeights(skinCluster, vertexWeights, normalize=False):
+    """Set skin weights for specific vertices only, preserving others.
+
+    This function is optimized for PARTIAL updates where you only want to
+    modify a subset of vertices while preserving existing weights on all
+    other vertices. It directly manipulates the weight array in memory
+    and applies all changes in a single batch call.
+
+    Use this instead of setInfluenceWeights when:
+    - You only need to update a subset of vertices
+    - You want to preserve existing weights on non-affected vertices
+    - Performance is critical for partial updates
+
+    Use setInfluenceWeights instead when:
+    - You're importing a complete skin file
+    - You want to replace ALL weights on the mesh
+
+    Args:
+        skinCluster (str): Name of the skin cluster.
+        vertexWeights (dict): Weight data per vertex.
+            Format: {vertex_idx: {influence_name: weight, ...}, ...}
+            Only vertices in this dict will be modified.
+        normalize (bool): If True, normalize weights after setting.
+            Defaults to False (assumes input is already normalized).
+
+    Returns:
+        bool: True if successful, False otherwise.
+
+    Example:
+        >>> # Update only vertices 0, 5, and 10
+        >>> weights = {
+        ...     0: {"joint1": 0.5, "joint2": 0.5},
+        ...     5: {"joint1": 1.0},
+        ...     10: {"joint2": 0.7, "joint3": 0.3},
+        ... }
+        >>> setVertexWeights("skinCluster1", weights)
+    """
+    skinCls = pm.PyNode(skinCluster)
+    dagPath, components = getGeometryComponents(skinCls)
+
+    # Get current weights
+    weightsArray = getCurrentWeights(skinCls, dagPath, components)
+
+    # Get influence info
+    skinFn = get_skin_cluster_fn(skinCluster)
+    influencePaths = OpenMaya.MDagPathArray()
+    numInfluences = skinFn.influenceObjects(influencePaths)
+
+    # Build influence name to index map
+    influenceMap = {}
+    for i in range(influencePaths.length()):
+        infName = OpenMaya.MFnDependencyNode(influencePaths[i].node()).name()
+        influenceMap[infName] = i
+
+    numVerts = int(weightsArray.length() / numInfluences)
+
+    # Modify weights for specified vertices only
+    for vIdx, vertWeights in vertexWeights.items():
+        if vIdx >= numVerts:
+            continue
+
+        # Zero out all influences for this vertex first
+        for infIdx in range(numInfluences):
+            weightsArray.set(0.0, vIdx * numInfluences + infIdx)
+
+        # Set the specified weights
+        for infName, w in vertWeights.items():
+            if infName in influenceMap:
+                infIdx = influenceMap[infName]
+                weightsArray.set(w, vIdx * numInfluences + infIdx)
+
+    # Build influence indices array
+    influenceIndices = OpenMaya.MIntArray()
+    influenceIndices.setLength(numInfluences)
+    for i in range(numInfluences):
+        influenceIndices[i] = i
+
+    # Apply all weights in one batch call
+    skinFn.setWeights(dagPath, components, influenceIndices, weightsArray, normalize)
+
+    return True
+
+
+def getInfluenceMap(skinCluster):
+    """Get a mapping of influence names to their indices.
+
+    Args:
+        skinCluster (str): Name of the skin cluster.
+
+    Returns:
+        dict: Mapping of {influence_name: index, ...}
+    """
+    skinFn = get_skin_cluster_fn(skinCluster)
+    influencePaths = OpenMaya.MDagPathArray()
+    skinFn.influenceObjects(influencePaths)
+
+    influenceMap = {}
+    for i in range(influencePaths.length()):
+        infName = OpenMaya.MFnDependencyNode(influencePaths[i].node()).name()
+        influenceMap[infName] = i
+
+    return influenceMap
+
+
+def initializeToInfluence(skinCluster, influenceName):
+    """Initialize all vertices to a single influence with weight 1.0.
+
+    Useful for setting up a "static" or "base" joint that holds
+    all vertices before applying partial weight updates.
+
+    Args:
+        skinCluster (str): Name of the skin cluster.
+        influenceName (str): Name of the influence to set to 1.0.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    skinCls = pm.PyNode(skinCluster)
+    dagPath, components = getGeometryComponents(skinCls)
+
+    skinFn = get_skin_cluster_fn(skinCluster)
+    influencePaths = OpenMaya.MDagPathArray()
+    numInfluences = skinFn.influenceObjects(influencePaths)
+
+    # Find influence index
+    influenceIdx = None
+    for i in range(influencePaths.length()):
+        infName = OpenMaya.MFnDependencyNode(influencePaths[i].node()).name()
+        if infName == influenceName:
+            influenceIdx = i
+            break
+
+    if influenceIdx is None:
+        pm.displayWarning(
+            "Influence '{}' not found in skin cluster".format(influenceName)
+        )
+        return False
+
+    # Get current weights and modify
+    weightsArray = getCurrentWeights(skinCls, dagPath, components)
+    numVerts = int(weightsArray.length() / numInfluences)
+
+    for vIdx in range(numVerts):
+        # Zero all influences
+        for infIdx in range(numInfluences):
+            weightsArray.set(0.0, vIdx * numInfluences + infIdx)
+        # Set target influence to 1.0
+        weightsArray.set(1.0, vIdx * numInfluences + influenceIdx)
+
+    # Build influence indices
+    influenceIndices = OpenMaya.MIntArray()
+    influenceIndices.setLength(numInfluences)
+    for i in range(numInfluences):
+        influenceIndices[i] = i
+
+    skinFn.setWeights(dagPath, components, influenceIndices, weightsArray, False)
+
+    return True
+
+
 # @utils.timeFunc
 def setData(skinCls, dataDic, compressed):
     dagPath, components = getGeometryComponents(skinCls)
