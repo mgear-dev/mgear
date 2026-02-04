@@ -41,6 +41,8 @@ from .core import (
     get_wire_deformer_info,
     get_wire_weight_map,
     get_mesh_wire_deformers,
+    get_mesh_skin_cluster,
+    get_existing_skin_weights,
     ensure_static_joint_exists,
     compute_skin_weights_deboor,
     get_edges_positions,

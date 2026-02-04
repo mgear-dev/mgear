@@ -555,11 +555,26 @@ class WireToSkinningUI(
             self.set_status("No wire deformers to convert", error=True)
             return
 
+        # Log processing info
+        print("=" * 60)
+        print("WIRE TO SKINNING CONVERSION")
+        print("=" * 60)
+        print("Mesh: {}".format(mesh))
+        print("Wire deformers to process: {}".format(len(wires)))
+        for i, w in enumerate(wires):
+            print("  [{}] {}".format(i + 1, w))
+        print("-" * 60)
+
         all_joints = []
 
-        for wire in wires:
+        for wire_idx, wire in enumerate(wires):
             if not cmds.objExists(wire):
                 continue
+
+            # Log current wire being processed
+            print("\n[{}/{}] Processing wire: {}".format(
+                wire_idx + 1, len(wires), wire
+            ))
 
             wire_info = core.get_wire_deformer_info(wire)
 
@@ -610,6 +625,23 @@ class WireToSkinningUI(
                     )
                     continue
 
+            # Check for existing skin cluster and get weights
+            existing_skin = core.get_mesh_skin_cluster(mesh)
+            existing_weights = None
+
+            if existing_skin:
+                print("  Found existing skin cluster: {}".format(existing_skin))
+                print("  Will blend with existing weights...")
+                self.set_status(
+                    "Reading existing weights for {}...".format(wire)
+                )
+                QtWidgets.QApplication.processEvents()
+                existing_weights = core.get_existing_skin_weights(
+                    mesh, existing_skin
+                )
+            else:
+                print("  No existing skin cluster - using static joint fallback")
+
             # Compute weights
             self.set_status("Computing weights for {}...".format(wire))
             QtWidgets.QApplication.processEvents()
@@ -621,6 +653,7 @@ class WireToSkinningUI(
                 wire_deformer=wire,
                 weight_threshold=0.001,
                 static_joint_name="static_jnt",
+                existing_weights=existing_weights,
             )
 
             # Delete or disable wire
@@ -649,13 +682,19 @@ class WireToSkinningUI(
             all_joints.extend(joints)
             if uses_static_joint and "static_jnt" not in all_joints:
                 all_joints.append("static_jnt")
+
+            print("  Completed: {}".format(wire))
             self.set_status("Converted {} to skin cluster".format(wire))
 
+        print("\n" + "=" * 60)
         if all_joints:
+            print("CONVERSION COMPLETE")
+            print("Total joints created/used: {}".format(len(all_joints)))
             self.set_status(
                 "Conversion complete! Created {} joints".format(len(all_joints))
             )
             self.refresh_wire_list()
+        print("=" * 60)
 
     # =========================================================================
     # CONFIGURATION EXPORT/IMPORT

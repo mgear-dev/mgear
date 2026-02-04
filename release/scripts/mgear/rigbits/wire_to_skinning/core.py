@@ -298,6 +298,70 @@ def get_mesh_wire_deformers(mesh):
     return wires
 
 
+def get_mesh_skin_cluster(mesh):
+    """Get the skin cluster affecting a mesh.
+
+    Args:
+        mesh (str): Name of the mesh.
+
+    Returns:
+        str: Name of the skin cluster, or None if not found.
+    """
+    try:
+        skin_cluster = mel.eval('findRelatedSkinCluster("{}")'.format(mesh))
+        return skin_cluster if skin_cluster else None
+    except Exception:
+        return None
+
+
+def get_existing_skin_weights(mesh, skin_cluster):
+    """Get existing skin weights from a skin cluster.
+
+    Retrieves all weight values for all vertices from an existing skin cluster.
+    Used to preserve/blend with existing weights when adding new wire influences.
+
+    Args:
+        mesh (str): Name of the mesh.
+        skin_cluster (str): Name of the skin cluster.
+
+    Returns:
+        dict: Dictionary mapping vertex index to joint weights.
+            Format: {vertex_idx: {joint_name: weight, ...}, ...}
+    """
+    if not skin_cluster or not cmds.objExists(skin_cluster):
+        return {}
+
+    num_verts = cmds.polyEvaluate(mesh, vertex=True)
+    influences = cmds.skinCluster(skin_cluster, query=True, influence=True) or []
+
+    if not influences:
+        return {}
+
+    weights = {}
+
+    print("Reading existing skin weights for {} vertices...".format(num_verts))
+
+    for v_idx in range(num_verts):
+        vert = "{}.vtx[{}]".format(mesh, v_idx)
+        vert_weights = {}
+
+        for jnt in influences:
+            try:
+                w = cmds.skinPercent(
+                    skin_cluster, vert, query=True, transform=jnt
+                )
+                if w > 0.0001:
+                    vert_weights[jnt] = w
+            except Exception:
+                pass
+
+        if vert_weights:
+            weights[v_idx] = vert_weights
+
+    print("Read weights for {} vertices with non-zero influence.".format(len(weights)))
+    return weights
+
+
 # =============================================================================
 # STATIC JOINT
 # =============================================================================
@@ -333,11 +397,13 @@ def compute_skin_weights_deboor(
     wire_deformer=None,
     weight_threshold=DEFAULT_WEIGHT_THRESHOLD,
     static_joint_name=DEFAULT_STATIC_JOINT_NAME,
+    existing_weights=None,
 ):
     """Compute skin weights using de Boor algorithm to match wire deformer.
 
     Optimized to only process vertices that have wire deformer influence.
-    Uses wire weight map to blend between wire joints and static joint.
+    Uses wire weight map to blend between wire joints and existing weights
+    (if available) or static joint.
 
     Args:
         mesh (str): Name of the mesh.
@@ -346,6 +412,10 @@ def compute_skin_weights_deboor(
         wire_deformer (str): Name of the wire deformer (for weight map).
         weight_threshold (float): Minimum wire weight to process vertex.
         static_joint_name (str): Name of the static joint.
+        existing_weights (dict): Optional existing skin weights per vertex.
+            Format: {vertex_idx: {joint_name: weight, ...}, ...}
+            When provided, non-wire-affected weight blends with existing
+            instead of going to static joint.
 
     Returns:
         tuple: (weights_dict, uses_static_joint)
@@ -427,9 +497,12 @@ def compute_skin_weights_deboor(
                 closest_pt = closest_point
                 u = curve_fn.getParamAtPoint(closest_pt, space=om2.MSpace.kWorld)
         except Exception:
-            # Assign to static joint if curve lookup fails
-            weights[v_idx] = {"static": 1.0}
-            uses_static_joint = True
+            # Use existing weights if available, otherwise static joint
+            if existing_weights and v_idx in existing_weights:
+                weights[v_idx] = existing_weights[v_idx].copy()
+            else:
+                weights[v_idx] = {"static": 1.0}
+                uses_static_joint = True
             continue
 
         # Calculate distance
@@ -448,9 +521,12 @@ def compute_skin_weights_deboor(
         combined_falloff = wire_weight * distance_falloff
 
         if combined_falloff < weight_threshold:
-            # Assign to static joint
-            weights[v_idx] = {"static": 1.0}
-            uses_static_joint = True
+            # Use existing weights if available, otherwise static joint
+            if existing_weights and v_idx in existing_weights:
+                weights[v_idx] = existing_weights[v_idx].copy()
+            else:
+                weights[v_idx] = {"static": 1.0}
+                uses_static_joint = True
             continue
 
         # Clamp u to valid range
@@ -471,20 +547,42 @@ def compute_skin_weights_deboor(
                     joint_weights[cv_idx] = w
                     total += w
 
-        # Add static joint weight for the remaining influence
-        static_weight = 1.0 - combined_falloff
-        if static_weight > 0.0001:
-            joint_weights["static"] = static_weight
-            uses_static_joint = True
-            total += static_weight
+        # Add remaining influence to existing weights or static joint
+        remaining_weight = 1.0 - combined_falloff
+        if remaining_weight > 0.0001:
+            if existing_weights and v_idx in existing_weights:
+                # Distribute remaining weight to existing influences
+                existing = existing_weights[v_idx]
+                existing_total = sum(existing.values())
+                if existing_total > 0:
+                    for jnt_name, w in existing.items():
+                        # Scale existing weight proportionally
+                        scaled_w = (w / existing_total) * remaining_weight
+                        if scaled_w > 0.0001:
+                            joint_weights[jnt_name] = (
+                                joint_weights.get(jnt_name, 0) + scaled_w
+                            )
+                            total += scaled_w
+                else:
+                    joint_weights["static"] = remaining_weight
+                    uses_static_joint = True
+                    total += remaining_weight
+            else:
+                # No existing weights, use static joint
+                joint_weights["static"] = remaining_weight
+                uses_static_joint = True
+                total += remaining_weight
 
         # Normalize
         if total > 0:
             for key in joint_weights:
                 joint_weights[key] /= total
         else:
-            joint_weights["static"] = 1.0
-            uses_static_joint = True
+            if existing_weights and v_idx in existing_weights:
+                joint_weights = existing_weights[v_idx].copy()
+            else:
+                joint_weights["static"] = 1.0
+                uses_static_joint = True
 
         weights[v_idx] = joint_weights
 
@@ -845,7 +943,11 @@ def create_skin_cluster(
                 if static_joint:
                     weight_list.append((static_joint, w))
             elif isinstance(key, int) and 0 <= key < len(joints):
+                # CV index - map to joint
                 weight_list.append((joints[key], w))
+            elif isinstance(key, str) and cmds.objExists(key):
+                # Joint name from existing weights
+                weight_list.append((key, w))
 
         if weight_list:
             try:
