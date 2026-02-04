@@ -652,6 +652,10 @@ def create_wire_deformer(mesh, curve, dropoff_distance=1.0, name="wire"):
 
     wire_deformer = wire_result[0] if wire_result else None
 
+    # Set rotation to 0 to prevent twisting
+    if wire_deformer:
+        cmds.setAttr(wire_deformer + ".rotation", 0)
+
     return wire_deformer
 
 

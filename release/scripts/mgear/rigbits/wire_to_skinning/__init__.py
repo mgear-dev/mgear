@@ -14,6 +14,8 @@ Example:
 
 __version__ = "1.0.0"
 
+from maya import cmds
+
 from mgear.core import pyqt
 
 from .ui import WireToSkinningUI
@@ -25,6 +27,11 @@ def show(*args):
     Returns:
         WireToSkinningUI: The UI instance.
     """
+    # Delete existing workspace control if it exists
+    workspace_control = WireToSkinningUI.TOOL_NAME + "WorkspaceControl"
+    if cmds.workspaceControl(workspace_control, exists=True):
+        cmds.deleteUI(workspace_control)
+
     return pyqt.showDialog(WireToSkinningUI, dockable=True)
 
 
