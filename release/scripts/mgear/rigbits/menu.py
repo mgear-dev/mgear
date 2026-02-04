@@ -43,6 +43,8 @@ def install():
         ("Eyelid Rigger 2.1", str_eye_rigger, "mgear_eye_rigger.svg"),
         ("Facial Rigger 1.0 (Legacy)", str_facial_rigger, "mgear_facial_rigger.svg"),
         ("-----", None),
+        ("Wire to Skinning", str_wire_to_skinning, "mgear_wire_to_skinning.svg"),
+        ("-----", None),
         ("Proxy Geo", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
         ("Proxy Slicer", str_proxySlicer, "mgear_proxy_slicer.svg"),
         ("Proxy Slicer Parenting", str_proxySlicer_parent, "mgear_proxy_slicer.svg"),
@@ -260,6 +262,11 @@ facial_rigger.show()
 str_eye_rigger = """
 from mgear.rigbits import facial_rigger2
 facial_rigger2.eye_riggerUI.show()
+"""
+
+str_wire_to_skinning = """
+from mgear.rigbits import wire_to_skinning
+wire_to_skinning.show()
 """
 
 # Gimmick joints str commands
