@@ -25,6 +25,7 @@ import maya.OpenMaya as om
 # Constants
 DEFAULT_WEIGHT_THRESHOLD = 0.001
 DEFAULT_STATIC_JOINT_NAME = "static_jnt"
+CONFIG_FILE_EXT = ".wts"  # Wire To Skinning configuration file extension
 
 
 # =============================================================================
@@ -981,11 +982,14 @@ def create_skin_cluster(
 
 
 def export_configuration(mesh, filepath):
-    """Export wire deformer configuration to JSON file.
+    """Export wire deformer configuration to file.
+
+    Exports wire deformer settings to a .wts (Wire To Skinning) file,
+    which uses JSON format internally.
 
     Args:
         mesh (str): Name of the mesh.
-        filepath (str): Path to save the JSON file.
+        filepath (str): Path to save the configuration file (.wts).
 
     Returns:
         bool: True if successful, False otherwise.
@@ -1025,10 +1029,12 @@ def export_configuration(mesh, filepath):
 
 
 def import_configuration(filepath, target_mesh=None):
-    """Import wire deformer configuration from JSON file.
+    """Import wire deformer configuration from file.
+
+    Imports wire deformer settings from a .wts (Wire To Skinning) file.
 
     Args:
-        filepath (str): Path to the JSON file.
+        filepath (str): Path to the configuration file (.wts).
         target_mesh (str): Optional target mesh (uses stored mesh if not provided).
 
     Returns:

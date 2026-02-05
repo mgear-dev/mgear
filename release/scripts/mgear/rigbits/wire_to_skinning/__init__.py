@@ -35,8 +35,11 @@ def show(*args):
     return pyqt.showDialog(WireToSkinningUI, dockable=True)
 
 
-# Expose core functions for scripting access
+# Expose core functions and constants for scripting access
 from .core import (
+    # Constants
+    CONFIG_FILE_EXT,
+    # Functions
     get_curve_info,
     get_wire_deformer_info,
     get_wire_weight_map,

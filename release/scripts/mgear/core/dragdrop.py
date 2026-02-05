@@ -17,6 +17,7 @@ import mgear
 from mgear.shifter import io
 from mgear.core import skin
 from mgear.rigbits import rbf_io
+from mgear.rigbits import wire_to_skinning
 
 # mel override procs
 MEL_OVERRIDE_CMD = r"""
@@ -116,6 +117,9 @@ def mgear_file_drop_action(theFile):
     elif theFile.endswith(rbf_io.RBF_FILE_EXTENSION):
         print("Import mGear RBF config file: {}".format(theFile))
         rbf_io.importRBFs(theFile)
+    elif theFile.endswith(wire_to_skinning.CONFIG_FILE_EXT):
+        print("Import Wire to Skinning config file: {}".format(theFile))
+        wire_to_skinning_file_prompt(theFile)
     else:
         mel.eval('performFileImportAction("{}");'.format(theFile))
     return 1
@@ -139,6 +143,52 @@ def guide_file_prompt(guide_filePath):
         io.build_from_file(filePath=guide_filePath)
     else:
         pass
+
+
+def wire_to_skinning_file_prompt(wts_filePath):
+    """Prompt dialogue for importing a .wts wire to skinning config file.
+
+    Args:
+        wts_filePath (str): filepath to .wts configuration file
+    """
+    # Get selected mesh or prompt user
+    selection = cmds.ls(selection=True, type="transform")
+    mesh = None
+
+    if selection:
+        # Check if selection has a mesh shape
+        for sel in selection:
+            shapes = cmds.listRelatives(sel, shapes=True, type="mesh")
+            if shapes:
+                mesh = sel
+                break
+
+    if mesh:
+        message = (
+            "Import wire configuration to selected mesh?\n\n"
+            "Mesh: {}\nFile: {}".format(mesh, wts_filePath)
+        )
+        buttons = ["Import", "Cancel"]
+    else:
+        message = (
+            "No mesh selected.\n\n"
+            "Select a mesh and try again, or import using the stored mesh "
+            "name from the configuration file.\n\n"
+            "File: {}".format(wts_filePath)
+        )
+        buttons = ["Import (use stored mesh)", "Cancel"]
+
+    results = cmds.confirmDialog(
+        title="Wire to Skinning",
+        message=message,
+        button=buttons,
+        defaultButton=buttons[0],
+        cancelButton="Cancel",
+        dismissString="Cancel",
+    )
+
+    if results != "Cancel":
+        wire_to_skinning.import_configuration(wts_filePath, target_mesh=mesh)
 
 
 def install_utils_menu(m):

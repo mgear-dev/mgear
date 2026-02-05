@@ -709,12 +709,12 @@ class WireToSkinningUI(
             return
 
         filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Wire Configuration", "", "JSON Files (*.json)"
+            self, "Export Wire Configuration", "", "Wire To Skinning (*.wts)"
         )
 
         if filepath:
-            if not filepath.endswith(".json"):
-                filepath += ".json"
+            if not filepath.endswith(".wts"):
+                filepath += ".wts"
 
             if core.export_configuration(mesh, filepath):
                 self.set_status(
@@ -726,7 +726,7 @@ class WireToSkinningUI(
     def import_config(self):
         """Import configuration from file."""
         filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Import Wire Configuration", "", "JSON Files (*.json)"
+            self, "Import Wire Configuration", "", "Wire To Skinning (*.wts)"
         )
 
         if filepath:
