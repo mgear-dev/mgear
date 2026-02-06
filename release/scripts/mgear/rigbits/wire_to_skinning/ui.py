@@ -9,6 +9,7 @@ import ast
 # mGear
 from mgear.vendor.Qt import QtWidgets, QtCore
 from mgear.core import pyqt
+from mgear.core import utils as core_utils
 from mgear.core.widgets import CollapsibleWidget
 
 # Maya
@@ -466,19 +467,19 @@ class WireToSkinningUI(
         if result == QtWidgets.QMessageBox.Yes:
             if cmds.objExists(wire_name):
                 wire_info = core.get_wire_deformer_info(wire_name)
-                cmds.delete(wire_name)
-
-                if wire_info["wire_curve"] and cmds.objExists(
-                    wire_info["wire_curve"]
-                ):
-                    cmds.delete(wire_info["wire_curve"])
-                if wire_info["base_curve"] and cmds.objExists(
-                    wire_info["base_curve"]
-                ):
-                    cmds.delete(wire_info["base_curve"])
-
+                self._delete_wire_with_undo(wire_name, wire_info)
                 self.refresh_wire_list()
                 self.set_status("Deleted wire deformer: {}".format(wire_name))
+
+    @core_utils.one_undo
+    def _delete_wire_with_undo(self, wire_name, wire_info):
+        """Delete wire deformer and related curves in a single undo chunk."""
+        cmds.delete(wire_name)
+
+        if wire_info["wire_curve"] and cmds.objExists(wire_info["wire_curve"]):
+            cmds.delete(wire_info["wire_curve"])
+        if wire_info["base_curve"] and cmds.objExists(wire_info["base_curve"]):
+            cmds.delete(wire_info["base_curve"])
 
     def create_wire(self):
         """Create a wire deformer from the specified inputs."""
@@ -700,6 +701,61 @@ class WireToSkinningUI(
     # CONFIGURATION EXPORT/IMPORT
     # =========================================================================
 
+    def _get_conversion_settings(self):
+        """Get current conversion settings from UI.
+
+        Returns:
+            dict: Conversion settings dictionary.
+        """
+        return {
+            "convert_all": self.convert_all_cb.isChecked(),
+            "selected_wire": self.wire_combo.currentText(),
+            "use_auto_joints": self.auto_joints_rb.isChecked(),
+            "joint_prefix": self.joint_prefix_input.text(),
+            "parent_joint": self.parent_joint_input.text(),
+            "custom_joints": self.joint_list.get_joints(),
+            "delete_wire": self.delete_wire_cb.isChecked(),
+        }
+
+    def _apply_conversion_settings(self, settings):
+        """Apply conversion settings to UI.
+
+        Args:
+            settings (dict): Conversion settings dictionary.
+        """
+        if not settings:
+            return
+
+        # Convert all checkbox
+        if "convert_all" in settings:
+            self.convert_all_cb.setChecked(settings["convert_all"])
+
+        # Selected wire in dropdown (set after wire list is refreshed)
+        if "selected_wire" in settings:
+            idx = self.wire_combo.findText(settings["selected_wire"])
+            if idx >= 0:
+                self.wire_combo.setCurrentIndex(idx)
+
+        # Joint options
+        if settings.get("use_auto_joints", True):
+            self.auto_joints_rb.setChecked(True)
+        else:
+            self.custom_joints_rb.setChecked(True)
+
+        if "joint_prefix" in settings:
+            self.joint_prefix_input.setText(settings["joint_prefix"])
+
+        if "parent_joint" in settings:
+            self.parent_joint_input.setText(settings["parent_joint"])
+
+        if "custom_joints" in settings:
+            self.joint_list.set_joints(settings["custom_joints"])
+
+        if "delete_wire" in settings:
+            self.delete_wire_cb.setChecked(settings["delete_wire"])
+
+        self.update_joint_options_ui()
+
     def export_config(self):
         """Export configuration to file."""
         mesh = self.mesh_input.text()
@@ -716,7 +772,10 @@ class WireToSkinningUI(
             if not filepath.endswith(".wts"):
                 filepath += ".wts"
 
-            if core.export_configuration(mesh, filepath):
+            # Get current conversion settings
+            conversion_settings = self._get_conversion_settings()
+
+            if core.export_configuration(mesh, filepath, conversion_settings):
                 self.set_status(
                     "Configuration exported to: {}".format(filepath)
                 )
@@ -736,8 +795,17 @@ class WireToSkinningUI(
             result = core.import_configuration(filepath, target)
 
             if result:
+                # Update mesh input if it was empty
+                if not target and result.get("mesh"):
+                    self.mesh_input.setText(result["mesh"])
+
+                # Apply conversion settings if present
+                if result.get("conversion_settings"):
+                    self._apply_conversion_settings(result["conversion_settings"])
+
+                wires = result.get("wires", [])
                 self.set_status(
-                    "Imported {} wire deformer(s)".format(len(result))
+                    "Imported {} wire deformer(s)".format(len(wires))
                 )
                 self.refresh_wire_list()
             else:

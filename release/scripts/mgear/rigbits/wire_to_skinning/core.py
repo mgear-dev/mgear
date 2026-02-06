@@ -981,7 +981,7 @@ def create_skin_cluster(
 # =============================================================================
 
 
-def export_configuration(mesh, filepath):
+def export_configuration(mesh, filepath, conversion_settings=None):
     """Export wire deformer configuration to file.
 
     Exports wire deformer settings to a .wts (Wire To Skinning) file,
@@ -990,6 +990,15 @@ def export_configuration(mesh, filepath):
     Args:
         mesh (str): Name of the mesh.
         filepath (str): Path to save the configuration file (.wts).
+        conversion_settings (dict, optional): Settings for conversion to skin.
+            Keys:
+                - convert_all (bool): Convert all wire deformers.
+                - selected_wire (str): Currently selected wire in dropdown.
+                - use_auto_joints (bool): Create joints automatically at CVs.
+                - joint_prefix (str): Prefix for auto-created joints.
+                - parent_joint (str): Parent joint name for auto-created joints.
+                - custom_joints (list): List of custom joint names.
+                - delete_wire (bool): Delete wire after conversion.
 
     Returns:
         bool: True if successful, False otherwise.
@@ -1001,6 +1010,10 @@ def export_configuration(mesh, filepath):
         return False
 
     config = {"mesh": mesh, "wires": []}
+
+    # Store conversion settings if provided
+    if conversion_settings:
+        config["conversion_settings"] = conversion_settings
 
     for wire in wires:
         wire_info = get_wire_deformer_info(wire)
@@ -1038,7 +1051,11 @@ def import_configuration(filepath, target_mesh=None):
         target_mesh (str): Optional target mesh (uses stored mesh if not provided).
 
     Returns:
-        list: List of created wire deformers, or False if failed.
+        dict: Result dictionary with keys:
+            - wires (list): List of created wire deformers.
+            - mesh (str): The mesh name used.
+            - conversion_settings (dict): Stored conversion settings, or None.
+        Returns False if import failed.
     """
     with open(filepath, "r") as f:
         config = json.load(f)
@@ -1078,4 +1095,8 @@ def import_configuration(filepath, target_mesh=None):
 
             created_wires.append(wire)
 
-    return created_wires
+    return {
+        "wires": created_wires,
+        "mesh": mesh,
+        "conversion_settings": config.get("conversion_settings"),
+    }
