@@ -301,11 +301,18 @@ def getVertexPositions(geo):
 
     elif isinstance(shape, pm.nodetypes.NurbsSurface):
         # For NURBS surfaces, iterate CVs
+        shapeName = shape.name()
+        spansU = cmds.getAttr(shapeName + ".spansU")
+        spansV = cmds.getAttr(shapeName + ".spansV")
+        degreeU = cmds.getAttr(shapeName + ".degreeU")
+        degreeV = cmds.getAttr(shapeName + ".degreeV")
+        numCVsU = spansU + degreeU
+        numCVsV = spansV + degreeV
         idx = 0
-        for u in range(shape.numCVsInU()):
-            for v in range(shape.numCVsInV()):
+        for u in range(numCVsU):
+            for v in range(numCVsV):
                 pos = cmds.pointPosition(
-                    "{}.cv[{}][{}]".format(shape.name(), u, v), world=True
+                    "{}.cv[{}][{}]".format(shapeName, u, v), world=True
                 )
                 positions[idx] = [round(pos[0], 6), round(pos[1], 6), round(pos[2], 6)]
                 idx += 1
@@ -313,9 +320,12 @@ def getVertexPositions(geo):
 
     elif isinstance(shape, pm.nodetypes.NurbsCurve):
         # For NURBS curves, iterate CVs
-        numCVs = shape.numCVs()
+        shapeName = shape.name()
+        spans = cmds.getAttr(shapeName + ".spans")
+        degree = cmds.getAttr(shapeName + ".degree")
+        numCVs = spans + degree
         for i in range(numCVs):
-            pos = cmds.pointPosition("{}.cv[{}]".format(shape.name(), i), world=True)
+            pos = cmds.pointPosition("{}.cv[{}]".format(shapeName, i), world=True)
             positions[i] = [round(pos[0], 6), round(pos[1], 6), round(pos[2], 6)]
         return positions, "nurbsCurve"
 
@@ -1195,10 +1205,23 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
                     meshVertices = pm.polyEvaluate(objShapes, vertex=True)
                 elif isinstance(objNode.getShape(), pm.nodetypes.NurbsSurface):
                     # if nurbs, count the cvs instead of the vertices.
-                    meshVertices = sum([len(shape.cv) for shape in objShapes])
+                    # Use cmds to get spans and degree for CV count
+                    meshVertices = 0
+                    for shape in objShapes:
+                        shapeName = shape.name()
+                        spansU = cmds.getAttr(shapeName + ".spansU")
+                        spansV = cmds.getAttr(shapeName + ".spansV")
+                        degreeU = cmds.getAttr(shapeName + ".degreeU")
+                        degreeV = cmds.getAttr(shapeName + ".degreeV")
+                        meshVertices += (spansU + degreeU) * (spansV + degreeV)
                 elif isinstance(objNode.getShape(), pm.nodetypes.NurbsCurve):
-                    # meshVertices = sum([len(shape.cv) for shape in objShapes])
-                    meshVertices = sum(1 for _ in objShapes[0].cv)
+                    # Use cmds to get spans and degree for CV count
+                    meshVertices = 0
+                    for shape in objShapes:
+                        shapeName = shape.name()
+                        spans = cmds.getAttr(shapeName + ".spans")
+                        degree = cmds.getAttr(shapeName + ".degree")
+                        meshVertices += spans + degree
                 else:
                     # TODO: Implement other skinnable objs like lattices.
                     meshVertices = 0
