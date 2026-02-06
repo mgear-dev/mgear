@@ -461,13 +461,27 @@ class SettingsMixin(object):
     def load_settings(self):
         for key, (widget, default_value) in self.user_settings.items():
             value = self.settings.value(key, defaultValue=default_value)
-            # in Maya using python 2 will return string and we need to conver to  bool
-            if value in ["true", "True"]:
-                value = True
-            elif value in ["false", "False"]:
-                value = False
-            else:
-                value = False
+            # Convert string values to appropriate types based on widget
+            if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QAction)):
+                # For checkboxes/actions, convert string to bool
+                if value in ["true", "True", True]:
+                    value = True
+                elif value in ["false", "False", False]:
+                    value = False
+                else:
+                    value = bool(default_value)
+            elif isinstance(widget, QtWidgets.QComboBox):
+                # For combo boxes, ensure integer
+                try:
+                    value = int(value)
+                except (ValueError, TypeError):
+                    value = int(default_value) if default_value else 0
+            elif isinstance(widget, QtWidgets.QLineEdit):
+                # For line edits, ensure string
+                if value is None:
+                    value = str(default_value) if default_value else ""
+                else:
+                    value = str(value)
             self._set_widget_value(widget, value)
             self._connect_widget_signal(widget)
 

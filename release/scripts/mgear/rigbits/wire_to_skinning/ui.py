@@ -52,6 +52,10 @@ class WireToSkinningUI(
         self.user_settings = {
             "wireToSkinning_convert_all": (self.convert_all_cb, False),
             "wireToSkinning_delete_wire": (self.delete_wire_cb, False),
+            "wireToSkinning_static_joint_name": (
+                self.static_joint_input,
+                "static_jnt",
+            ),
         }
         self.load_settings()
 
@@ -194,6 +198,16 @@ class WireToSkinningUI(
         )
         self.joint_list = JointListWidget()
 
+        # Static joint
+        self.static_joint_label = QtWidgets.QLabel("Static Joint:")
+        self.static_joint_input = QtWidgets.QLineEdit()
+        self.static_joint_input.setText("static_jnt")
+        self.static_joint_input.setPlaceholderText(
+            "Joint for vertices outside wire influence"
+        )
+        self.static_joint_btn = QtWidgets.QPushButton("<<")
+        self.static_joint_btn.setFixedWidth(30)
+
         # Delete wire checkbox
         self.delete_wire_cb = QtWidgets.QCheckBox(
             "Delete wire deformer after conversion"
@@ -292,6 +306,12 @@ class WireToSkinningUI(
         joint_layout.addWidget(self.custom_joint_label)
         joint_layout.addWidget(self.joint_list)
 
+        static_layout = QtWidgets.QHBoxLayout()
+        static_layout.addWidget(self.static_joint_label)
+        static_layout.addWidget(self.static_joint_input)
+        static_layout.addWidget(self.static_joint_btn)
+        joint_layout.addLayout(static_layout)
+
         self.convert_section.addWidget(self.joint_group)
         self.convert_section.addWidget(self.delete_wire_cb)
         self.convert_section.addWidget(self.convert_btn)
@@ -325,6 +345,7 @@ class WireToSkinningUI(
         self.auto_joints_rb.toggled.connect(self.update_joint_options_ui)
         self.custom_joints_rb.toggled.connect(self.update_joint_options_ui)
         self.parent_joint_btn.clicked.connect(self.get_parent_joint)
+        self.static_joint_btn.clicked.connect(self.get_static_joint)
         self.convert_btn.clicked.connect(self.convert_to_skin)
 
         # Mesh input change
@@ -451,6 +472,12 @@ class WireToSkinningUI(
         if selection:
             self.parent_joint_input.setText(selection[0])
 
+    def get_static_joint(self):
+        """Get static joint from selection."""
+        selection = cmds.ls(selection=True, type="joint")
+        if selection:
+            self.static_joint_input.setText(selection[0])
+
     # =========================================================================
     # WIRE DEFORMER OPERATIONS
     # =========================================================================
@@ -545,6 +572,7 @@ class WireToSkinningUI(
         delete_wire = self.delete_wire_cb.isChecked()
         use_auto_joints = self.auto_joints_rb.isChecked()
         parent_joint = self.parent_joint_input.text()
+        static_joint_name = self.static_joint_input.text() or "static_jnt"
 
         if convert_all:
             wires = core.get_mesh_wire_deformers(mesh)
@@ -653,7 +681,7 @@ class WireToSkinningUI(
                 wire_info,
                 wire_deformer=wire,
                 weight_threshold=0.001,
-                static_joint_name="static_jnt",
+                static_joint_name=static_joint_name,
                 existing_weights=existing_weights,
             )
 
@@ -670,7 +698,7 @@ class WireToSkinningUI(
             self.set_status("Applying skin weights for {}...".format(wire))
             QtWidgets.QApplication.processEvents()
 
-            static_jnt = "static_jnt" if uses_static_joint else None
+            static_jnt = static_joint_name if uses_static_joint else None
             core.create_skin_cluster(
                 mesh,
                 joints,
@@ -681,8 +709,8 @@ class WireToSkinningUI(
             )
 
             all_joints.extend(joints)
-            if uses_static_joint and "static_jnt" not in all_joints:
-                all_joints.append("static_jnt")
+            if uses_static_joint and static_joint_name not in all_joints:
+                all_joints.append(static_joint_name)
 
             print("  Completed: {}".format(wire))
             self.set_status("Converted {} to skin cluster".format(wire))
@@ -714,6 +742,7 @@ class WireToSkinningUI(
             "joint_prefix": self.joint_prefix_input.text(),
             "parent_joint": self.parent_joint_input.text(),
             "custom_joints": self.joint_list.get_joints(),
+            "static_joint": self.static_joint_input.text(),
             "delete_wire": self.delete_wire_cb.isChecked(),
         }
 
@@ -750,6 +779,9 @@ class WireToSkinningUI(
 
         if "custom_joints" in settings:
             self.joint_list.set_joints(settings["custom_joints"])
+
+        if "static_joint" in settings:
+            self.static_joint_input.setText(settings["static_joint"])
 
         if "delete_wire" in settings:
             self.delete_wire_cb.setChecked(settings["delete_wire"])
