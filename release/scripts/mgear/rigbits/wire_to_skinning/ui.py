@@ -101,6 +101,11 @@ class WireToSkinningUI(
             "1. Create Wire Deformer", expandable=False
         )
 
+        # Wire creation mode selection
+        self.edge_mode_rb = QtWidgets.QRadioButton("From Edge Loop")
+        self.edge_mode_rb.setChecked(True)
+        self.joint_mode_rb = QtWidgets.QRadioButton("From Joints")
+
         # Mesh input
         self.mesh_label = QtWidgets.QLabel("Target Mesh:")
         self.mesh_input = QtWidgets.QLineEdit()
@@ -115,11 +120,27 @@ class WireToSkinningUI(
         self.edge_btn = QtWidgets.QPushButton("<<")
         self.edge_btn.setFixedWidth(30)
 
-        # Number of CVs
+        # Number of CVs (for edge mode)
         self.cv_label = QtWidgets.QLabel("Number of CVs:")
         self.cv_spinbox = QtWidgets.QSpinBox()
         self.cv_spinbox.setRange(4, 100)
         self.cv_spinbox.setValue(8)
+
+        # Joint input (for joint mode)
+        self.joint_wire_label = QtWidgets.QLabel("Source Joints:")
+        self.joint_wire_input = QtWidgets.QLineEdit()
+        self.joint_wire_input.setPlaceholderText("Select joints for wire curve")
+        self.joint_wire_btn = QtWidgets.QPushButton("<<")
+        self.joint_wire_btn.setFixedWidth(30)
+
+        # Joint order option (for joint mode)
+        self.joint_order_label = QtWidgets.QLabel("Joint Order:")
+        self.joint_order_combo = QtWidgets.QComboBox()
+        self.joint_order_combo.addItems([
+            "Selection Order",
+            "Hierarchy Order",
+            "Position X",
+        ])
 
         # Dropoff distance
         self.dropoff_label = QtWidgets.QLabel("Dropoff Distance:")
@@ -241,30 +262,56 @@ class WireToSkinningUI(
         scroll_layout.setSpacing(10)
 
         # --- Create Wire Section ---
+        # Mode selection
+        mode_layout = QtWidgets.QHBoxLayout()
+        mode_layout.addWidget(self.edge_mode_rb)
+        mode_layout.addWidget(self.joint_mode_rb)
+        mode_layout.addStretch()
+        self.create_section.addLayout(mode_layout)
+
+        # Mesh input
         mesh_layout = QtWidgets.QHBoxLayout()
         mesh_layout.addWidget(self.mesh_label)
         mesh_layout.addWidget(self.mesh_input)
         mesh_layout.addWidget(self.mesh_btn)
         self.create_section.addLayout(mesh_layout)
 
+        # Edge input (for edge mode)
         edge_layout = QtWidgets.QHBoxLayout()
         edge_layout.addWidget(self.edge_label)
         edge_layout.addWidget(self.edge_input)
         edge_layout.addWidget(self.edge_btn)
         self.create_section.addLayout(edge_layout)
 
+        # CV count (for edge mode)
         cv_layout = QtWidgets.QHBoxLayout()
         cv_layout.addWidget(self.cv_label)
         cv_layout.addWidget(self.cv_spinbox)
         cv_layout.addStretch()
         self.create_section.addLayout(cv_layout)
 
+        # Joint input (for joint mode)
+        joint_wire_layout = QtWidgets.QHBoxLayout()
+        joint_wire_layout.addWidget(self.joint_wire_label)
+        joint_wire_layout.addWidget(self.joint_wire_input)
+        joint_wire_layout.addWidget(self.joint_wire_btn)
+        self.create_section.addLayout(joint_wire_layout)
+
+        # Joint order (for joint mode)
+        joint_order_layout = QtWidgets.QHBoxLayout()
+        joint_order_layout.addWidget(self.joint_order_label)
+        joint_order_layout.addWidget(self.joint_order_combo)
+        joint_order_layout.addStretch()
+        self.create_section.addLayout(joint_order_layout)
+
+        # Dropoff distance (both modes)
         dropoff_layout = QtWidgets.QHBoxLayout()
         dropoff_layout.addWidget(self.dropoff_label)
         dropoff_layout.addWidget(self.dropoff_spinbox)
         dropoff_layout.addStretch()
         self.create_section.addLayout(dropoff_layout)
 
+        # Wire name (both modes)
         name_layout = QtWidgets.QHBoxLayout()
         name_layout.addWidget(self.wire_name_label)
         name_layout.addWidget(self.wire_name_input)
@@ -333,9 +380,14 @@ class WireToSkinningUI(
         self.export_action.triggered.connect(self.export_config)
         self.import_action.triggered.connect(self.import_config)
 
-        # Create wire section
+        # Create wire section - mode selection
+        self.edge_mode_rb.toggled.connect(self.update_create_mode_ui)
+        self.joint_mode_rb.toggled.connect(self.update_create_mode_ui)
+
+        # Create wire section - inputs
         self.mesh_btn.clicked.connect(self.get_mesh_from_selection)
         self.edge_btn.clicked.connect(self.get_edges_from_selection)
+        self.joint_wire_btn.clicked.connect(self.get_joints_from_selection)
         self.create_wire_btn.clicked.connect(self.create_wire)
 
         # Wire list section
@@ -353,6 +405,7 @@ class WireToSkinningUI(
 
     def set_initial_state(self):
         """Set initial widget states after UI is built."""
+        self.update_create_mode_ui()
         self.update_joint_options_ui()
         self.refresh_wire_list()
 
@@ -376,6 +429,24 @@ class WireToSkinningUI(
     # =========================================================================
     # UI UPDATE METHODS
     # =========================================================================
+
+    def update_create_mode_ui(self):
+        """Update UI based on wire creation mode (edge loop vs joints)."""
+        edge_mode = self.edge_mode_rb.isChecked()
+
+        # Edge mode widgets
+        self.edge_label.setVisible(edge_mode)
+        self.edge_input.setVisible(edge_mode)
+        self.edge_btn.setVisible(edge_mode)
+        self.cv_label.setVisible(edge_mode)
+        self.cv_spinbox.setVisible(edge_mode)
+
+        # Joint mode widgets
+        self.joint_wire_label.setVisible(not edge_mode)
+        self.joint_wire_input.setVisible(not edge_mode)
+        self.joint_wire_btn.setVisible(not edge_mode)
+        self.joint_order_label.setVisible(not edge_mode)
+        self.joint_order_combo.setVisible(not edge_mode)
 
     def update_joint_options_ui(self):
         """Update UI based on joint option selection."""
@@ -466,6 +537,18 @@ class WireToSkinningUI(
         else:
             self.set_status("No edges selected", error=True)
 
+    def get_joints_from_selection(self):
+        """Get joints from current selection for wire creation."""
+        selection = cmds.ls(selection=True, type="joint")
+        if selection:
+            # Apply ordering based on combo selection
+            order_index = self.joint_order_combo.currentIndex()
+            order_by = ["selection", "hierarchy", "position_x"][order_index]
+            ordered = core.get_ordered_joints(selection, order_by)
+            self.joint_wire_input.setText(", ".join(ordered))
+        else:
+            self.set_status("No joints selected", error=True)
+
     def get_parent_joint(self):
         """Get parent joint from selection."""
         selection = cmds.ls(selection=True, type="joint")
@@ -511,14 +594,31 @@ class WireToSkinningUI(
     def create_wire(self):
         """Create a wire deformer from the specified inputs."""
         mesh = self.mesh_input.text()
-        edge_str = self.edge_input.text()
-        num_cvs = self.cv_spinbox.value()
         dropoff = self.dropoff_spinbox.value()
         wire_name = self.wire_name_input.text() or "wire"
 
         if not mesh or not cmds.objExists(mesh):
             self.set_status("Please specify a valid mesh", error=True)
             return
+
+        # Check which mode we're in
+        if self.edge_mode_rb.isChecked():
+            # Edge loop mode
+            self._create_wire_from_edges(mesh, dropoff, wire_name)
+        else:
+            # Joint mode
+            self._create_wire_from_joints(mesh, dropoff, wire_name)
+
+    def _create_wire_from_edges(self, mesh, dropoff, wire_name):
+        """Create wire deformer from edge loop.
+
+        Args:
+            mesh (str): Target mesh name.
+            dropoff (float): Wire dropoff distance.
+            wire_name (str): Base name for wire deformer.
+        """
+        edge_str = self.edge_input.text()
+        num_cvs = self.cv_spinbox.value()
 
         if not edge_str:
             self.set_status("Please select edges", error=True)
@@ -560,6 +660,53 @@ class WireToSkinningUI(
         else:
             self.set_status("Failed to create wire deformer", error=True)
 
+    def _create_wire_from_joints(self, mesh, dropoff, wire_name):
+        """Create wire deformer from joints.
+
+        Args:
+            mesh (str): Target mesh name.
+            dropoff (float): Wire dropoff distance.
+            wire_name (str): Base name for wire deformer.
+        """
+        joint_str = self.joint_wire_input.text()
+
+        if not joint_str:
+            self.set_status("Please select joints", error=True)
+            return
+
+        # Parse joint names from comma-separated string
+        joints = [j.strip() for j in joint_str.split(",") if j.strip()]
+
+        if len(joints) < 2:
+            self.set_status("Need at least 2 joints", error=True)
+            return
+
+        # Validate joints exist
+        for joint in joints:
+            if not cmds.objExists(joint):
+                self.set_status("Joint not found: {}".format(joint), error=True)
+                return
+            if cmds.nodeType(joint) != "joint":
+                self.set_status("Not a joint: {}".format(joint), error=True)
+                return
+
+        # Create wire from joints
+        result = core.create_wire_from_joints(
+            mesh, joints, dropoff_distance=dropoff, name=wire_name
+        )
+
+        if result:
+            wire, curve, _curvecns = result
+            self.set_status(
+                "Created wire deformer: {} (connected to {} joints)".format(
+                    wire, len(joints)
+                )
+            )
+            self.refresh_wire_list()
+            cmds.select(curve)
+        else:
+            self.set_status("Failed to create wire deformer", error=True)
+
     def convert_to_skin(self):
         """Convert wire deformer(s) to skin cluster."""
         mesh = self.mesh_input.text()
@@ -595,6 +742,8 @@ class WireToSkinningUI(
         print("-" * 60)
 
         all_joints = []
+        created_joints_count = 0
+        used_joints_count = 0
 
         for wire_idx, wire in enumerate(wires):
             if not cmds.objExists(wire):
@@ -631,8 +780,18 @@ class WireToSkinningUI(
                 continue
 
             # Get or create joints
-            if use_auto_joints:
-                # Use wire name as prefix for joints
+            # First check if wire curve has connected joints (from joint mode)
+            connected_joints = core.get_curve_connected_joints(
+                wire_info["wire_curve"]
+            )
+            joints_were_created = False
+
+            if connected_joints:
+                # Wire was created from joints - use them directly
+                joints = connected_joints
+                print("  Using connected joints: {}".format(joints))
+            elif use_auto_joints:
+                # Auto-create joints at CVs (existing behavior)
                 prefix = wire
                 parent = (
                     parent_joint
@@ -642,7 +801,10 @@ class WireToSkinningUI(
                 joints = core.create_joints_at_cvs(
                     curve_info, prefix=prefix, parent=parent
                 )
+                joints_were_created = True
+                print("  Created joints at CVs: {}".format(joints))
             else:
+                # Use custom joint list (existing behavior)
                 joints = self.joint_list.get_joints()
                 if len(joints) != curve_info["num_cvs"]:
                     self.set_status(
@@ -653,6 +815,7 @@ class WireToSkinningUI(
                         error=True,
                     )
                     continue
+                print("  Using custom joints: {}".format(joints))
 
             # Check for existing skin cluster and get weights
             existing_skin = core.get_mesh_skin_cluster(mesh)
@@ -709,6 +872,10 @@ class WireToSkinningUI(
             )
 
             all_joints.extend(joints)
+            if joints_were_created:
+                created_joints_count += len(joints)
+            else:
+                used_joints_count += len(joints)
             if uses_static_joint and static_joint_name not in all_joints:
                 all_joints.append(static_joint_name)
 
@@ -719,9 +886,20 @@ class WireToSkinningUI(
         if all_joints:
             print("CONVERSION COMPLETE")
             print("Total joints created/used: {}".format(len(all_joints)))
-            self.set_status(
-                "Conversion complete! Created {} joints".format(len(all_joints))
-            )
+            # Build status message based on what happened
+            if created_joints_count > 0 and used_joints_count > 0:
+                status_msg = "Conversion complete! Created {} joints, used {}".format(
+                    created_joints_count, used_joints_count
+                )
+            elif created_joints_count > 0:
+                status_msg = "Conversion complete! Created {} joints".format(
+                    created_joints_count
+                )
+            else:
+                status_msg = "Conversion complete! Used {} joints".format(
+                    used_joints_count
+                )
+            self.set_status(status_msg)
             self.refresh_wire_list()
         print("=" * 60)
 

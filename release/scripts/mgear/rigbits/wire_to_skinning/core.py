@@ -773,6 +773,256 @@ def create_wire_deformer(mesh, curve, dropoff_distance=1.0, name="wire"):
 
 
 # =============================================================================
+# WIRE FROM JOINTS FUNCTIONS
+# =============================================================================
+
+
+def get_curve_connected_joints(curve):
+    """Get joints connected to curve via mgear_curveCns deformer.
+
+    Args:
+        curve (str): Name of the curve.
+
+    Returns:
+        list: Joint names in CV order, or empty list if not connected.
+    """
+    # Get curve shape if transform was passed (use fullPath to avoid name clashes)
+    if cmds.objectType(curve) == "transform":
+        shapes = cmds.listRelatives(
+            curve, shapes=True, type="nurbsCurve", fullPath=True
+        )
+        if shapes:
+            curve_shape = shapes[0]
+        else:
+            return []
+    else:
+        curve_shape = curve
+
+    # Find curveCns deformer in history
+    history = cmds.listHistory(curve_shape)
+    if not history:
+        return []
+
+    curvecns_nodes = [
+        h for h in history if cmds.nodeType(h) == "mgear_curveCns"
+    ]
+    if not curvecns_nodes:
+        return []
+
+    curvecns = curvecns_nodes[0]
+    joints = []
+
+    # Get connections to inputs array
+    i = 0
+    while True:
+        attr = "{}.inputs[{}]".format(curvecns, i)
+        try:
+            conn = cmds.listConnections(attr, source=True, destination=False)
+        except Exception:
+            break
+
+        if not conn:
+            break
+        joints.append(conn[0])
+        i += 1
+
+    return joints
+
+
+def create_curve_from_joints(joints, name="wire_curve"):
+    """Create a NURBS curve where each CV is at a joint position.
+
+    The curve is NOT rebuilt - CVs match joints 1:1 for curvecns connection.
+
+    Args:
+        joints (list): List of joint names in order.
+        name (str): Name for the curve.
+
+    Returns:
+        str: Name of created curve, or None if failed.
+    """
+    if len(joints) < 2:
+        cmds.warning("Need at least 2 joints to create curve")
+        return None
+
+    # Get world positions of joints
+    positions = []
+    for jnt in joints:
+        if not cmds.objExists(jnt):
+            cmds.warning("Joint not found: {}".format(jnt))
+            return None
+        pos = cmds.xform(jnt, query=True, worldSpace=True, translation=True)
+        positions.append(pos)
+
+    # Determine curve degree based on joint count
+    num_joints = len(joints)
+    if num_joints == 2:
+        degree = 1  # Linear
+    elif num_joints == 3:
+        degree = 2  # Quadratic
+    else:
+        degree = 3  # Cubic
+
+    # Create curve through joint positions
+    curve = cmds.curve(point=positions, degree=degree, name=name)
+
+    return curve
+
+
+def connect_curve_to_joints(curve, joints):
+    """Connect curve CVs to joints using mgear_curveCns deformer.
+
+    Args:
+        curve (str): Name of the NURBS curve.
+        joints (list): List of joint names matching CV count and order.
+
+    Returns:
+        str: Name of the curveCns deformer node, or None if failed.
+    """
+    # Ensure mgear_solvers plugin is loaded
+    if not cmds.pluginInfo("mgear_solvers", query=True, loaded=True):
+        try:
+            cmds.loadPlugin("mgear_solvers")
+        except Exception:
+            cmds.warning("Failed to load mgear_solvers plugin")
+            return None
+
+    # Create curveCns deformer
+    cmds.select(curve)
+    deformer_result = cmds.deformer(type="mgear_curveCns")
+    if not deformer_result:
+        cmds.warning("Failed to create mgear_curveCns deformer")
+        return None
+
+    curvecns = deformer_result[0]
+
+    # Connect each joint's worldMatrix to the deformer's inputs
+    for i, jnt in enumerate(joints):
+        cmds.connectAttr(
+            "{}.worldMatrix".format(jnt),
+            "{}.inputs[{}]".format(curvecns, i),
+        )
+
+    cmds.select(clear=True)
+    return curvecns
+
+
+def create_wire_from_joints(mesh, joints, dropoff_distance=1.0, name="wire"):
+    """Create a wire deformer from joints with curve connected via curveCns.
+
+    This creates a curve where each CV matches a joint position, connects
+    the CVs to the joints so the curve follows joint movement, then creates
+    a wire deformer on the mesh using this curve.
+
+    Args:
+        mesh (str): Name of the mesh to deform.
+        joints (list): List of joint names in order.
+        dropoff_distance (float): Dropoff distance for the wire.
+        name (str): Base name for the wire deformer and curve.
+
+    Returns:
+        tuple: (wire_deformer, curve, curvecns_node) or (None, None, None).
+    """
+    # Validate mesh
+    if not mesh or not cmds.objExists(mesh):
+        cmds.warning("Mesh not found: {}".format(mesh))
+        return None, None, None
+
+    # Validate joints
+    if len(joints) < 2:
+        cmds.warning("Need at least 2 joints to create wire")
+        return None, None, None
+
+    for jnt in joints:
+        if not cmds.objExists(jnt):
+            cmds.warning("Joint not found: {}".format(jnt))
+            return None, None, None
+
+    # Create curve from joints
+    curve_name = name + "_curve"
+    curve = create_curve_from_joints(joints, curve_name)
+    if not curve:
+        return None, None, None
+
+    # Connect curve to joints
+    curvecns = connect_curve_to_joints(curve, joints)
+    if not curvecns:
+        cmds.delete(curve)
+        return None, None, None
+
+    # Create wire deformer
+    wire = create_wire_deformer(mesh, curve, dropoff_distance, name)
+    if not wire:
+        cmds.delete(curve)
+        return None, None, None
+
+    return wire, curve, curvecns
+
+
+def get_ordered_joints(joints, order_by="selection"):
+    """Get joints in specified order.
+
+    Args:
+        joints (list): List of joint names.
+        order_by (str): Ordering method:
+            - "selection": Return as-is (selection order)
+            - "hierarchy": Order by parent-child hierarchy
+            - "position_x": Sort by world X position
+
+    Returns:
+        list: Ordered joint names.
+    """
+    if not joints:
+        return []
+
+    if order_by == "selection":
+        return joints[:]
+
+    elif order_by == "hierarchy":
+        # Build parent-child relationships
+        joint_set = set(joints)
+        ordered = []
+        remaining = joints[:]
+
+        # Find joints with no parent in the list (roots)
+        roots = []
+        for jnt in joints:
+            parent = cmds.listRelatives(jnt, parent=True)
+            if not parent or parent[0] not in joint_set:
+                roots.append(jnt)
+
+        # Traverse from roots
+        def add_children(jnt):
+            if jnt in remaining:
+                ordered.append(jnt)
+                remaining.remove(jnt)
+            children = cmds.listRelatives(jnt, children=True, type="joint")
+            if children:
+                for child in children:
+                    if child in joint_set:
+                        add_children(child)
+
+        for root in roots:
+            add_children(root)
+
+        # Add any remaining joints (disconnected chains)
+        ordered.extend(remaining)
+        return ordered
+
+    elif order_by == "position_x":
+        # Sort by world X position
+        joint_positions = []
+        for jnt in joints:
+            pos = cmds.xform(jnt, query=True, worldSpace=True, translation=True)
+            joint_positions.append((jnt, pos[0]))
+
+        sorted_joints = sorted(joint_positions, key=lambda x: x[1])
+        return [jnt for jnt, _ in sorted_joints]
+
+    return joints[:]
+
+
+# =============================================================================
 # SKIN CLUSTER FUNCTIONS
 # =============================================================================
 
@@ -1033,6 +1283,12 @@ def export_configuration(mesh, filepath, conversion_settings=None):
                     "knots": curve_info["knots"],
                 },
             }
+
+            # Check if curve has connected joints (from joint mode)
+            connected_joints = get_curve_connected_joints(wire_info["wire_curve"])
+            if connected_joints:
+                wire_config["connected_joints"] = connected_joints
+
             config["wires"].append(wire_config)
 
     with open(filepath, "w") as f:
@@ -1072,19 +1328,45 @@ def import_configuration(filepath, target_mesh=None):
         curve_data = wire_config.get("curve", {})
         cvs = curve_data.get("cvs", [])
         degree = curve_data.get("degree", 3)
+        connected_joints = wire_config.get("connected_joints", [])
 
         if not cvs:
             continue
 
-        # Create curve from CVs
-        curve_name = wire_config.get("curve_name", "imported_wire_curve")
-        curve = cmds.curve(point=cvs, degree=degree, name=curve_name)
-
-        # Create wire deformer
         wire_name = wire_config.get("name", "imported_wire")
         dropoff = wire_config.get("dropoff_distance", 1.0)
+        wire = None
+        curve = None
 
-        wire = create_wire_deformer(mesh, curve, dropoff, wire_name)
+        # Check if we should recreate from joints
+        if connected_joints:
+            # Verify all joints exist
+            joints_exist = all(cmds.objExists(j) for j in connected_joints)
+
+            if joints_exist:
+                # Recreate wire from joints (preserves joint connection)
+                result = create_wire_from_joints(
+                    mesh, connected_joints, dropoff, wire_name
+                )
+                if result:
+                    wire, curve, _curvecns = result
+                    print(
+                        "Imported wire '{}' connected to joints: {}".format(
+                            wire_name, connected_joints
+                        )
+                    )
+            else:
+                missing = [j for j in connected_joints if not cmds.objExists(j)]
+                cmds.warning(
+                    "Some connected joints not found: {}. "
+                    "Creating static curve instead.".format(missing)
+                )
+
+        # Fallback: create static curve from CV positions
+        if not wire:
+            curve_name = wire_config.get("curve_name", "imported_wire_curve")
+            curve = cmds.curve(point=cvs, degree=degree, name=curve_name)
+            wire = create_wire_deformer(mesh, curve, dropoff, wire_name)
 
         if wire:
             # Set additional attributes
