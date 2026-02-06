@@ -13,6 +13,16 @@ def install_skinning_menu():
     commands = (
         ("Copy Skin", partial(skin.skinCopy, None, None), "mgear_copy.svg"),
         (
+            "Copy Skin Add",
+            partial(skin.skin_copy_add, None, None),
+            "mgear_copy-add.svg",
+        ),
+        (
+            "Copy Skin Partial",
+            partial(skin.skinCopyPartial, None, None),
+            "mgear_copy-partial.svg",
+        ),
+        (
             "Select Skin Deformers",
             skin.selectDeformers,
             "mgear_mouse-pointer.svg",

@@ -925,6 +925,312 @@ def skin_copy_add(sourceMesh=None, targetMesh=None, layer_name=None, *args):
     return new_skin
 
 
+def _skinCopyPartialExecute(sourceMesh, vertices, normalize=True):
+    """Execute the partial skin copy operation.
+
+    Strategy:
+        1. Store original weights
+        2. Apply copySkinWeights to all vertices
+        3. Store copied weights
+        4. Restore original weights (fast batch with setWeights)
+        5. Apply copied weights to selected vertices only (setVertexWeights)
+
+    Args:
+        sourceMesh: Source mesh name or node with skinCluster.
+        vertices (list): List of vertex components to copy weights to.
+        normalize (bool): Normalize weights after copying.
+
+    """
+    sourceName = str(sourceMesh)
+
+    # Validate source skinCluster
+    sourceSkin = getSkinCluster(sourceMesh)
+    if not sourceSkin:
+        cmds.warning(
+            "Source mesh '{}' has no skinCluster.".format(sourceName)
+        )
+        return False
+
+    sourceSkinName = str(sourceSkin)
+
+    # Get source influences
+    sourceInfluences = cmds.skinCluster(
+        sourceSkinName, query=True, influence=True
+    )
+
+    # Group vertices by target mesh and extract indices
+    verticesByMesh = {}
+    for vtx in vertices:
+        vtxStr = str(vtx)
+        nodeName = vtxStr.split(".")[0]
+        # Check if it's a shape node and get transform
+        nodeType = cmds.nodeType(nodeName)
+        if nodeType == "mesh":
+            parents = cmds.listRelatives(nodeName, parent=True)
+            if parents:
+                nodeName = parents[0]
+        # Extract vertex index
+        vtxIdx = int(vtxStr.split("[")[1].split("]")[0])
+        if nodeName not in verticesByMesh:
+            verticesByMesh[nodeName] = []
+        verticesByMesh[nodeName].append(vtxIdx)
+
+    # Process each target mesh
+    totalVertices = 0
+    for meshName, vtxIndices in verticesByMesh.items():
+        targetSkin = getSkinCluster(meshName)
+
+        if not targetSkin:
+            cmds.warning(
+                "Target mesh '{}' has no skinCluster, skipping.".format(
+                    meshName
+                )
+            )
+            continue
+
+        targetSkinName = str(targetSkin)
+        targetSkinNode = pm.PyNode(targetSkinName)
+
+        # Get current target influences
+        targetInfluences = cmds.skinCluster(
+            targetSkinName, query=True, influence=True
+        )
+
+        # Add missing influences from source to target
+        for inf in sourceInfluences:
+            if inf not in targetInfluences:
+                try:
+                    cmds.skinCluster(
+                        targetSkinName,
+                        edit=True,
+                        addInfluence=inf,
+                        weight=0.0,
+                    )
+                except Exception:
+                    pass
+
+        # Get geometry components and skin function
+        dagPath, components = getGeometryComponents(targetSkinNode)
+        skinFn = get_skin_cluster_fn(targetSkinName)
+        influencePaths = OpenMaya.MDagPathArray()
+        numInfluences = skinFn.influenceObjects(influencePaths)
+
+        # 1. Store original weights
+        originalWeights = getCurrentWeights(targetSkinNode, dagPath, components)
+
+        # 2. Apply copySkinWeights to all vertices
+        cmds.copySkinWeights(
+            sourceSkin=sourceSkinName,
+            destinationSkin=targetSkinName,
+            noMirror=True,
+            surfaceAssociation="closestPoint",
+            influenceAssociation=["oneToOne", "closestJoint", "name"],
+            normalize=normalize,
+        )
+
+        # 3. Store copied weights
+        copiedWeights = getCurrentWeights(targetSkinNode, dagPath, components)
+
+        # 4. Merge: replace only selected vertex weights in original array
+        for vtxIdx in vtxIndices:
+            for infIdx in range(numInfluences):
+                arrayIdx = vtxIdx * numInfluences + infIdx
+                originalWeights.set(copiedWeights[arrayIdx], arrayIdx)
+
+        # 5. Apply merged weights in one batch
+        influenceIndices = OpenMaya.MIntArray()
+        influenceIndices.setLength(numInfluences)
+        for i in range(numInfluences):
+            influenceIndices[i] = i
+
+        skinFn.setWeights(
+            dagPath, components, influenceIndices, originalWeights, normalize
+        )
+
+        totalVertices += len(vtxIndices)
+
+    cmds.inViewMessage(
+        amg="Copied skin to <hl>{}</hl> vertices".format(totalVertices),
+        pos="midCenter",
+        fade=True,
+    )
+    return True
+
+
+class SkinCopyPartialUI(QtWidgets.QDialog):
+    """UI for copying skin weights to selected vertices."""
+
+    def __init__(self, parent=None):
+        super(SkinCopyPartialUI, self).__init__(parent)
+        self.setWindowTitle("Copy Skin Partial")
+        self.setMinimumWidth(300)
+        self.setWindowFlags(
+            self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint
+        )
+
+        self._build_ui()
+        self._connect_signals()
+
+    def _build_ui(self):
+        """Build the UI layout."""
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Source mesh section
+        source_grp = QtWidgets.QGroupBox("Source Mesh")
+        source_layout = QtWidgets.QHBoxLayout(source_grp)
+        self.source_line = QtWidgets.QLineEdit()
+        self.source_line.setPlaceholderText("Select mesh and click <<")
+        self.source_btn = QtWidgets.QPushButton("<<")
+        self.source_btn.setFixedWidth(30)
+        self.source_btn.setToolTip("Load selected mesh")
+        source_layout.addWidget(self.source_line)
+        source_layout.addWidget(self.source_btn)
+        layout.addWidget(source_grp)
+
+        # Options
+        self.normalize_chk = QtWidgets.QCheckBox("Normalize weights")
+        self.normalize_chk.setChecked(True)
+        layout.addWidget(self.normalize_chk)
+
+        # Copy button
+        self.copy_btn = QtWidgets.QPushButton("Copy to Selected Vertices")
+        self.copy_btn.setMinimumHeight(40)
+        layout.addWidget(self.copy_btn)
+
+        # Info label
+        self.info_label = QtWidgets.QLabel(
+            "Select vertices on target mesh(es), then click Copy."
+        )
+        self.info_label.setStyleSheet("color: gray;")
+        layout.addWidget(self.info_label)
+
+    def _connect_signals(self):
+        """Connect signals."""
+        self.source_btn.clicked.connect(self._load_source)
+        self.copy_btn.clicked.connect(self._copy)
+
+    def _load_source(self):
+        """Load source mesh from selection."""
+        selection = pm.ls(sl=True, fl=True)
+        meshes = [
+            s for s in selection
+            if hasattr(s, "getShape")
+            and s.getShape() is not None
+            and ".vtx[" not in str(s)
+        ]
+        if meshes:
+            self.source_line.setText(meshes[0].name())
+        else:
+            pm.displayWarning("Please select a mesh with skinCluster.")
+
+    def _copy(self):
+        """Execute the copy operation."""
+        source_name = self.source_line.text().strip()
+        if not source_name:
+            pm.displayWarning("Please set a source mesh.")
+            return
+
+        # Validate source mesh
+        if not pm.objExists(source_name):
+            pm.displayError("Source mesh '{}' not found.".format(source_name))
+            return
+
+        sourceMesh = pm.PyNode(source_name)
+        sourceSkin = getSkinCluster(sourceMesh)
+        if not sourceSkin:
+            pm.displayError(
+                "Source mesh '{}' has no skinCluster.".format(source_name)
+            )
+            return
+
+        # Get selected vertices
+        selection = pm.ls(sl=True, fl=True)
+        vertices = [v for v in selection if ".vtx[" in str(v)]
+
+        if not vertices:
+            pm.displayWarning("Please select vertices on target mesh.")
+            return
+
+        normalize = self.normalize_chk.isChecked()
+
+        # Store vertex names as strings for safe reselection
+        vertex_names = [str(v) for v in vertices]
+
+        # Execute copy
+        try:
+            _skinCopyPartialExecute(sourceMesh, vertices, normalize)
+        except Exception as e:
+            pm.displayError("Copy failed: {}".format(e))
+            import traceback
+            traceback.print_exc()
+            return
+
+        # Keep vertices selected
+        try:
+            pm.select(vertex_names, r=True)
+        except Exception:
+            pass  # Selection may fail if vertices changed
+
+
+def openSkinCopyPartialUI():
+    """Open the Copy Skin Partial UI."""
+    parent = pyqt.maya_main_window()
+    dialog = SkinCopyPartialUI(parent)
+    dialog.show()
+    return dialog
+
+
+def skinCopyPartial(sourceMesh=None, targetMesh=None, normalize=True):
+    """Copy skin weights from source mesh to selected vertices on target mesh.
+
+    Uses closest point matching - for each selected vertex on the target,
+    finds the closest vertex on the source and copies its weights.
+
+    When called without sourceMesh, opens the UI for interactive use.
+
+    Args:
+        sourceMesh (str or PyNode): Source mesh with skinCluster.
+            If None, opens UI.
+        targetMesh (str or PyNode): Target mesh with skinCluster.
+            If None, derives from selected vertices.
+        normalize (bool): Normalize weights after copying. Defaults to True.
+
+    Returns:
+        bool: True if successful, False otherwise.
+
+    Example:
+        .. code-block:: python
+
+            from mgear.core import skin
+
+            # Open UI for interactive use
+            skin.skinCopyPartial()
+
+            # Scripted: provide source mesh explicitly
+            skin.skinCopyPartial(sourceMesh="body_geo")
+    """
+    # If no source provided, open UI
+    if not sourceMesh:
+        openSkinCopyPartialUI()
+        return True
+
+    # Get selected vertices
+    selection = pm.ls(sl=True, fl=True)
+    vertices = [v for v in selection if ".vtx[" in str(v)]
+
+    if not vertices:
+        pm.displayWarning("Please select vertices on target mesh.")
+        return False
+
+    # Unused but kept for API compatibility
+    _ = targetMesh
+
+    if isinstance(sourceMesh, string_types):
+        sourceMesh = pm.PyNode(sourceMesh)
+
+    return _skinCopyPartialExecute(sourceMesh, vertices, normalize)
+
+
 ######################################
 # Skin Utils
 ######################################
