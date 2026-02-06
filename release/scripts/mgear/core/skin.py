@@ -1065,7 +1065,9 @@ class SkinCopyPartialUI(QtWidgets.QDialog):
         self.setWindowTitle("Copy Skin Partial")
         self.setMinimumWidth(300)
         self.setWindowFlags(
-            self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint
+            QtCore.Qt.Window
+            | QtCore.Qt.WindowCloseButtonHint
+            | QtCore.Qt.WindowMinimizeButtonHint
         )
 
         self._build_ui()
@@ -1104,10 +1106,15 @@ class SkinCopyPartialUI(QtWidgets.QDialog):
         self.info_label.setStyleSheet("color: gray;")
         layout.addWidget(self.info_label)
 
+        # Close button
+        self.close_btn = QtWidgets.QPushButton("Close")
+        layout.addWidget(self.close_btn)
+
     def _connect_signals(self):
         """Connect signals."""
         self.source_btn.clicked.connect(self._load_source)
         self.copy_btn.clicked.connect(self._copy)
+        self.close_btn.clicked.connect(self.close)
 
     def _load_source(self):
         """Load source mesh from selection."""
