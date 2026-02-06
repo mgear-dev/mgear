@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Mesh outline (hexagon-like shape) -->
+  <polygon points="12 2, 21 7, 21 17, 12 22, 3 17, 3 7"/>
+  <!-- Partition dividers -->
+  <line x1="12" y1="2" x2="12" y2="22"/>
+  <line x1="3" y1="12" x2="21" y2="12"/>
+  <!-- Colored partition indicators (small filled circles) -->
+  <circle cx="7" cy="7" r="2" fill="#7cb5a0" stroke="none"/>
+  <circle cx="17" cy="7" r="2" fill="#a07cb5" stroke="none"/>
+  <circle cx="7" cy="17" r="2" fill="#b5a07c" stroke="none"/>
+  <circle cx="17" cy="17" r="2" fill="#7c9eb5" stroke="none"/>
+</svg>
