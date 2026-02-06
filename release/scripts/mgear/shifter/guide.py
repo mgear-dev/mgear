@@ -1073,6 +1073,23 @@ class Rig(Main):
 
         return self.guide_template_dict
 
+    def refresh_metadata(self):
+        attr = self.model.attr("user")
+        newvalue = getpass.getuser()
+        attr.set(newvalue)
+
+        attr = self.model.attr("date")
+        newvalue = str(datetime.datetime.now())
+        attr.set(newvalue)
+
+        attr = self.model.attr("maya_version")
+        newvalue = str(mel.eval("getApplicationVersionAsFloat"))
+        attr.set(newvalue)
+
+        attr = self.model.attr("gear_version")
+        newvalue = mgear.getVersion()
+        attr.set(newvalue)
+
     def addOptionsValues(self):
         """Gather or change some options values according to some others.
 
