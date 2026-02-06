@@ -57,6 +57,11 @@ def install_skinning_menu():
             partial(skin.exportJsonSkinPack, None, None),
             "mgear_package_out.svg",
         ),
+        (
+            "Export Skin Pack ASCII with Position Data",
+            partial(skin.exportJsonSkinPackWithPositions, None, None),
+            "mgear_package_out_positions.svg",
+        ),
         ("-----", None),
         ("Get Names in gSkin File", partial(skin.getObjsFromSkinFile, None)),
         ("-----", None),

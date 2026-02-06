@@ -253,6 +253,75 @@ def getCompleteWeights(mesh, skinCluster=None):
     return weights
 
 
+def getVertexPositions(geo):
+    """Get world space positions for all vertices/CVs of a geometry.
+
+    Supports meshes, NURBS surfaces, and NURBS curves.
+
+    Args:
+        geo (str or PyNode): Geometry object (mesh, nurbsSurface, or nurbsCurve).
+
+    Returns:
+        tuple: (positions_dict, geometry_type)
+            - positions_dict: {vertex_index: [x, y, z], ...}
+            - geometry_type: "mesh", "nurbsSurface", or "nurbsCurve"
+
+    Example:
+        >>> positions, geoType = getVertexPositions("pSphere1")
+        >>> print(positions[0])
+        [0.0, 1.0, 0.0]
+    """
+    if isinstance(geo, string_types):
+        geo = pm.PyNode(geo)
+
+    shape = geo.getShape()
+    if shape is None:
+        return {}, "unknown"
+
+    positions = {}
+
+    if isinstance(shape, pm.nodetypes.Mesh):
+        # Use OpenMaya for efficient batch retrieval on meshes
+        selList = OpenMaya.MSelectionList()
+        selList.add(shape.name())
+        dagPath = OpenMaya.MDagPath()
+        selList.getDagPath(0, dagPath)
+
+        meshFn = OpenMaya.MFnMesh(dagPath)
+        points = OpenMaya.MPointArray()
+        meshFn.getPoints(points, OpenMaya.MSpace.kWorld)
+
+        for i in range(points.length()):
+            positions[i] = [
+                round(points[i].x, 6),
+                round(points[i].y, 6),
+                round(points[i].z, 6),
+            ]
+        return positions, "mesh"
+
+    elif isinstance(shape, pm.nodetypes.NurbsSurface):
+        # For NURBS surfaces, iterate CVs
+        idx = 0
+        for u in range(shape.numCVsInU()):
+            for v in range(shape.numCVsInV()):
+                pos = cmds.pointPosition(
+                    "{}.cv[{}][{}]".format(shape.name(), u, v), world=True
+                )
+                positions[idx] = [round(pos[0], 6), round(pos[1], 6), round(pos[2], 6)]
+                idx += 1
+        return positions, "nurbsSurface"
+
+    elif isinstance(shape, pm.nodetypes.NurbsCurve):
+        # For NURBS curves, iterate CVs
+        numCVs = shape.numCVs()
+        for i in range(numCVs):
+            pos = cmds.pointPosition("{}.cv[{}]".format(shape.name(), i), world=True)
+            positions[i] = [round(pos[0], 6), round(pos[1], 6), round(pos[2], 6)]
+        return positions, "nurbsCurve"
+
+    return {}, "unknown"
+
+
 ######################################
 # Skin Collectors
 ######################################
@@ -309,12 +378,45 @@ def collectData(skinCls, dataDic):
     dataDic["skinClsName"] = skinCls.name()
 
 
+def _collectVertexPositions(obj, dataDic):
+    """Collect vertex world positions and add to data dictionary.
+
+    Stores ALL vertex positions for accurate volume-based reconstruction.
+    This is necessary because the temp geometry needs exact vertex positions
+    for closest-point matching to work correctly.
+
+    Args:
+        obj (PyNode): The geometry object being exported.
+        dataDic (dict): Data dictionary to update with positions.
+    """
+    positions, geoType = getVertexPositions(obj)
+
+    if not positions:
+        return
+
+    # Store ALL positions for accurate volume reconstruction
+    dataDic["vertexPositions"] = positions
+    dataDic["geometryType"] = geoType
+
+
 ######################################
 # Skin export
 ######################################
 
 
-def exportSkin(filePath=None, objs=None, *args):
+def exportSkin(filePath=None, objs=None, storePositions=False, *args):
+    """Export skinCluster data to file.
+
+    Args:
+        filePath (str, optional): File path for export. If None, opens dialog.
+        objs (list, optional): Objects to export. If None, uses selection.
+        storePositions (bool): If True, stores vertex world positions for
+            volume-based import fallback when vertex counts don't match.
+            Increases file size. Default False for backward compatibility.
+
+    Returns:
+        bool: True if export successful, False otherwise.
+    """
     if not objs:
         if pm.selected():
             objs = pm.selected()
@@ -377,6 +479,10 @@ def exportSkin(filePath=None, objs=None, *args):
 
             collectData(skinCls, dataDic)
 
+            # Store vertex positions for volume-based import if requested
+            if storePositions:
+                _collectVertexPositions(obj, dataDic)
+
             packDic["objs"].append(obj.name())
             packDic["objDDic"].append(dataDic)
             exportMsg = "Exported skinCluster {} ({} influences, {} points) {}"
@@ -401,7 +507,16 @@ def exportSkin(filePath=None, objs=None, *args):
 
 
 @utils.timeFunc
-def exportSkinPack(packPath=None, objs=None, use_json=False, *args):
+def exportSkinPack(packPath=None, objs=None, use_json=False, storePositions=False, *args):
+    """Export multiple skinClusters to a skin pack.
+
+    Args:
+        packPath (str, optional): Pack file path. If None, opens dialog.
+        objs (list, optional): Objects to export. If None, uses selection.
+        use_json (bool): If True, use JSON format. Default False (binary).
+        storePositions (bool): If True, stores vertex world positions for
+            volume-based import fallback. Default False.
+    """
     if use_json:
         file_ext = FILE_JSON_EXT
     else:
@@ -435,7 +550,7 @@ def exportSkinPack(packPath=None, objs=None, use_json=False, *args):
     for obj in objs:
         fileName = obj.stripNamespace() + file_ext
         filePath = os.path.join(packDic["rootPath"], fileName)
-        if exportSkin(filePath, [obj], use_json):
+        if exportSkin(filePath, [obj], storePositions=storePositions):
             packDic["packFiles"].append(fileName)
             pm.displayInfo(filePath)
         else:
@@ -455,8 +570,29 @@ def exportSkinPack(packPath=None, objs=None, use_json=False, *args):
         )
 
 
-def exportJsonSkinPack(packPath=None, objs=None, *args):
-    exportSkinPack(packPath, objs, use_json=True)
+def exportJsonSkinPack(packPath=None, objs=None, storePositions=False, *args):
+    """Export multiple skinClusters to a JSON skin pack.
+
+    Args:
+        packPath (str, optional): Pack file path. If None, opens dialog.
+        objs (list, optional): Objects to export. If None, uses selection.
+        storePositions (bool): If True, stores vertex world positions for
+            volume-based import fallback. Default False.
+    """
+    exportSkinPack(packPath, objs, use_json=True, storePositions=storePositions)
+
+
+def exportJsonSkinPackWithPositions(packPath=None, objs=None, *args):
+    """Export multiple skinClusters to JSON with vertex positions.
+
+    This is a convenience wrapper that enables storePositions for
+    volume-based import support when vertex counts don't match.
+
+    Args:
+        packPath (str, optional): Pack file path. If None, opens dialog.
+        objs (list, optional): Objects to export. If None, uses selection.
+    """
+    exportJsonSkinPack(packPath, objs, storePositions=True)
 
 
 ######################################
@@ -715,6 +851,258 @@ def setData(skinCls, dataDic, compressed):
 ######################################
 
 
+def _buildPositionLookup(sourcePositions, precision=6):
+    """Build a hash lookup table for exact position matching.
+
+    Args:
+        sourcePositions (dict): {vertex_index: [x, y, z], ...} source positions.
+        precision (int): Decimal places to round positions for matching.
+
+    Returns:
+        dict: {(x, y, z): vertex_index, ...} for O(1) lookup.
+    """
+    lookup = {}
+    for idx, pos in sourcePositions.items():
+        # Round to precision and convert to tuple for hashability
+        key = (
+            round(pos[0], precision),
+            round(pos[1], precision),
+            round(pos[2], precision),
+        )
+        lookup[key] = int(idx)
+    return lookup
+
+
+def _findClosestSourceVertices(targetPositions, sourcePositions, positionLookup):
+    """Find closest source vertex for each target vertex.
+
+    Uses exact position matching first (O(1)), then falls back to
+    closest-point search for non-matching vertices.
+
+    Args:
+        targetPositions (dict): {vertex_index: [x, y, z], ...} target positions.
+        sourcePositions (dict): {vertex_index: [x, y, z], ...} source positions.
+        positionLookup (dict): Hash table for exact position matching.
+
+    Returns:
+        tuple: (mapping_dict, exact_matches, closest_matches, cancelled)
+            - mapping_dict: {target_idx: source_idx, ...}
+            - exact_matches: count of exact position matches
+            - closest_matches: count of closest-point lookups
+            - cancelled: True if user cancelled
+    """
+    mapping = {}
+    exactMatches = 0
+    closestMatches = 0
+
+    # Try to use numpy for faster distance calculations
+    try:
+        import numpy as np
+        useNumpy = True
+        # Pre-build numpy arrays for source positions
+        srcIndices = []
+        srcCoords = []
+        for idx, pos in sourcePositions.items():
+            srcIndices.append(int(idx))
+            srcCoords.append(pos)
+        srcIndices = np.array(srcIndices)
+        srcCoords = np.array(srcCoords)
+    except ImportError:
+        useNumpy = False
+
+    # Setup progress bar
+    numTargets = len(targetPositions)
+    gMainProgressBar = pm.mel.eval("$tmp = $gMainProgressBar")
+    cmds.progressBar(
+        gMainProgressBar,
+        edit=True,
+        beginProgress=True,
+        isInterruptable=True,
+        status="Mapping skin weights by position...",
+        maxValue=numTargets,
+    )
+
+    try:
+        updateInterval = max(1, numTargets // 100)  # Update every 1%
+
+        for i, (targetIdx, targetPos) in enumerate(targetPositions.items()):
+            # Check for cancel
+            if i % updateInterval == 0:
+                if cmds.progressBar(gMainProgressBar, query=True, isCancelled=True):
+                    pm.displayWarning("Skin import cancelled by user")
+                    return mapping, exactMatches, closestMatches, True
+                cmds.progressBar(gMainProgressBar, edit=True, step=updateInterval)
+
+            # Try exact position match first (O(1) lookup)
+            posKey = (
+                round(targetPos[0], 6),
+                round(targetPos[1], 6),
+                round(targetPos[2], 6),
+            )
+            if posKey in positionLookup:
+                mapping[targetIdx] = positionLookup[posKey]
+                exactMatches += 1
+                continue
+
+            # Fall back to closest-point search
+            if useNumpy:
+                # Vectorized distance calculation
+                targetCoord = np.array(targetPos)
+                diffs = srcCoords - targetCoord
+                distsSq = np.sum(diffs * diffs, axis=1)
+                closestIdx = srcIndices[np.argmin(distsSq)]
+            else:
+                # Python fallback
+                minDist = float("inf")
+                closestIdx = 0
+                for idx, srcPos in sourcePositions.items():
+                    idx = int(idx)
+                    dx = targetPos[0] - srcPos[0]
+                    dy = targetPos[1] - srcPos[1]
+                    dz = targetPos[2] - srcPos[2]
+                    dist = dx * dx + dy * dy + dz * dz
+                    if dist < minDist:
+                        minDist = dist
+                        closestIdx = idx
+
+            mapping[targetIdx] = closestIdx
+            closestMatches += 1
+
+    finally:
+        cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
+
+    return mapping, exactMatches, closestMatches, False
+
+
+def _getSourceVertexWeights(sourceVertexIdx, dataDic, compressed):
+    """Get weights for a specific source vertex from imported data.
+
+    Args:
+        sourceVertexIdx (int): Source vertex index.
+        dataDic (dict): Imported skin data.
+        compressed (bool): Whether data uses compressed format.
+
+    Returns:
+        dict: {influence_name: weight, ...} for this vertex.
+    """
+    vertWeights = {}
+
+    for influence, wtValues in dataDic["weights"].items():
+        if compressed:
+            # Compressed format: {idx: weight, ...} or {"idx": weight, ...}
+            wt = wtValues.get(sourceVertexIdx, wtValues.get(str(sourceVertexIdx), 0.0))
+        else:
+            # Legacy format: list of weights
+            if sourceVertexIdx < len(wtValues):
+                wt = wtValues[sourceVertexIdx]
+            else:
+                wt = 0.0
+
+        if wt > 0.0001:
+            vertWeights[influence] = wt
+
+    return vertWeights
+
+
+def _importSkinVolumeMethod(objNode, targetSkinCluster, dataDic, compressed):
+    """Import skin weights using volume/closest-point matching.
+
+    Called when vertex counts don't match and vertexMismatchMode allows it.
+    Uses optimized position-based weight mapping:
+    1. Exact position matches use O(1) hash lookup (fast for unchanged vertices)
+    2. Non-matching vertices use closest-point search (numpy-accelerated if available)
+    3. Progress bar allows user to cancel long operations
+
+    Args:
+        objNode (PyNode): Target mesh/surface/curve node.
+        targetSkinCluster (PyNode): Target skin cluster (already created).
+        dataDic (dict): Imported skin data dictionary.
+        compressed (bool): Whether data uses compressed format.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    try:
+        storedPositions = dataDic.get("vertexPositions", {})
+
+        if not storedPositions:
+            # No stored positions - skip import
+            objName = objNode.name() if hasattr(objNode, "name") else str(objNode)
+            pm.displayWarning(
+                "Skipping import for '{}': No vertex positions stored in skin "
+                "file. To use volume-based import, re-export with 'Export Skin "
+                "Pack ASCII with Position Data'.".format(objName)
+            )
+            return False
+
+        pm.displayInfo(
+            "Using stored vertex positions ({} points) for "
+            "position-based weight transfer".format(len(storedPositions))
+        )
+
+        # Get target vertex positions
+        targetPositions, _ = getVertexPositions(objNode)
+        if not targetPositions:
+            pm.displayWarning("Failed to get target vertex positions")
+            return False
+
+        pm.displayInfo(
+            "Mapping {} target vertices to {} source vertices...".format(
+                len(targetPositions), len(storedPositions)
+            )
+        )
+
+        # Build position lookup for exact matching
+        positionLookup = _buildPositionLookup(storedPositions)
+
+        # Find closest source vertex for each target vertex
+        vertexMapping, exactMatches, closestMatches, cancelled = (
+            _findClosestSourceVertices(
+                targetPositions, storedPositions, positionLookup
+            )
+        )
+
+        if cancelled:
+            return False
+
+        pm.displayInfo(
+            "Position matching: {} exact, {} closest-point".format(
+                exactMatches, closestMatches
+            )
+        )
+
+        # Build weight mapping: target vertex -> weights from closest source
+        targetWeights = {}
+        for targetIdx, sourceIdx in vertexMapping.items():
+            srcWeights = _getSourceVertexWeights(sourceIdx, dataDic, compressed)
+            if srcWeights:
+                targetWeights[targetIdx] = srcWeights
+
+        if not targetWeights:
+            pm.displayWarning("No weights could be mapped")
+            return False
+
+        # Apply weights using setVertexWeights
+        pm.displayInfo("Applying weights to {} vertices...".format(len(targetWeights)))
+        setVertexWeights(targetSkinCluster.name(), targetWeights, normalize=True)
+
+        # Apply skinning method from imported data
+        for attr in ["skinningMethod", "normalizeWeights"]:
+            if attr in dataDic:
+                targetSkinCluster.attr(attr).set(dataDic[attr])
+
+        pm.displayInfo(
+            "Successfully mapped weights for {} vertices".format(len(targetWeights))
+        )
+        return True
+
+    except Exception as e:
+        pm.displayWarning("Volume-based import failed: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def _getObjsFromSkinFile(filePath=None, *args):
     # retrive the object names inside gSkin file
     if not filePath:
@@ -748,8 +1136,19 @@ def getObjsFromSkinFile(filePath=None, *args):
 
 
 # @utils.timeFunc
-def importSkin(filePath=None, *args):
+def importSkin(filePath=None, vertexMismatchMode="auto", *args):
+    """Import skinCluster data from file.
 
+    Args:
+        filePath (str, optional): File path for import. If None, opens dialog.
+        vertexMismatchMode (str): Behavior when vertex counts don't match:
+            - "skip": Skip import with warning
+            - "closestPoint": Use closest point matching to transfer weights
+            - "auto": Index-based first, fallback to closestPoint (default)
+
+    Returns:
+        None
+    """
     if not filePath:
         f1 = "mGear Skin (*{0} *{1})".format(FILE_EXT, FILE_JSON_EXT)
         f2 = ";;gSkin Binary (*{0});;jSkin ASCII  (*{1})".format(
@@ -808,7 +1207,14 @@ def importSkin(filePath=None, *args):
                     importedVertices = data["vertexCount"]
                 else:
                     importedVertices = len(data["blendWeights"])
-                if meshVertices != importedVertices:
+
+                vertexMismatch = meshVertices != importedVertices
+            except Exception:
+                vertexMismatch = False
+
+            # Handle vertex count mismatch based on mode
+            if vertexMismatch:
+                if vertexMismatchMode == "skip":
                     warningMsg = "Vertex counts on {} do not match. {} != {}"
                     pm.displayWarning(
                         warningMsg.format(
@@ -816,9 +1222,54 @@ def importSkin(filePath=None, *args):
                         )
                     )
                     continue
-            except Exception:
-                pass
+                elif vertexMismatchMode in ("closestPoint", "auto"):
+                    pm.displayInfo(
+                        "Vertex count mismatch on {}. Using closest-point "
+                        "matching ({} -> {} vertices)...".format(
+                            objName, importedVertices, meshVertices
+                        )
+                    )
+                    # Ensure skin cluster exists for volume import
+                    skinCluster = getSkinCluster(objNode)
+                    if not skinCluster:
+                        try:
+                            joints = list(data["weights"].keys())
+                            skinName = data["skinClsName"].replace("|", "")
+                            skinCluster = pm.skinCluster(
+                                joints, objNode, tsb=True, nw=2, n=skinName
+                            )
+                            if isinstance(skinCluster, list):
+                                skinCluster = skinCluster[0]
+                        except Exception:
+                            sceneJoints = set(
+                                [pm.PyNode(x).name() for x in pm.ls(type="joint")]
+                            )
+                            notFound = []
+                            for j in data["weights"].keys():
+                                if j not in sceneJoints:
+                                    notFound.append(str(j))
+                            pm.displayWarning(
+                                "Object: {} Skipped. Can't find corresponding "
+                                "joints: {}".format(objName, notFound)
+                            )
+                            continue
 
+                    # Use volume-based import
+                    success = _importSkinVolumeMethod(
+                        objNode, skinCluster, data, compressed
+                    )
+                    if success:
+                        print(
+                            "Imported skin (volume method) for: {}".format(objName)
+                        )
+                    else:
+                        print(
+                            "Skipped skin import for: {} (volume method failed, "
+                            "see warning above)".format(objName)
+                        )
+                    continue
+
+            # Standard index-based import (vertex counts match)
             if getSkinCluster(objNode):
                 skinCluster = getSkinCluster(objNode)
             else:
@@ -871,7 +1322,7 @@ def importSkinPack(filePath=None, *args):
         packDic = json.load(fp)
         for pFile in packDic["packFiles"]:
             filePath = os.path.join(os.path.split(filePath)[0], pFile)
-            importSkin(filePath, True)
+            importSkin(filePath)
 
 
 ######################################
