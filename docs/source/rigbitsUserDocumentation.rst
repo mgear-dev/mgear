@@ -605,3 +605,168 @@ Menu Bar
 * **Reset All Ctls** - Reset all controls to default
 * **Reset SDK Ctls** - Reset only SDK controls
 * **Reset Anim Tweaks** - Reset only animation tweak controls
+
+Wire to Skinning
+================
+
+A tool for creating wire deformers and converting them to skin clusters using the de Boor algorithm for NURBS-based weight computation.
+
+.. image:: images/rigbits/wire_to_skinning/wire_to_skinning_UI.png
+    :align: center
+    :scale: 80%
+
+Overview
+--------
+
+Wire to Skinning provides a workflow for:
+
+1. **Creating wire deformers** from edge loops or joints
+2. **Converting wire deformers to skin clusters** with precise B-spline weight distribution
+3. **Export/Import configurations** for reusable wire setups
+
+This tool is particularly useful for facial rigging, secondary deformation, and any setup requiring smooth, NURBS-based weight falloff.
+
+.. Tip::
+
+    Wire deformers are excellent for quick deformation tests. Use this tool to convert your wire setup to production-ready skin clusters once you're happy with the result.
+
+Create Wire Section
+-------------------
+
+The top section allows creating wire deformers using two methods:
+
+**Edge Loop Mode:**
+
+* Select edges from the mesh to define the wire curve path
+* Specify the number of CVs for the curve (more CVs = more joints/control)
+* The curve is rebuilt to match the target CV count
+
+**Joint Mode:**
+
+* Select existing joints to define the wire curve
+* The curve CVs are connected to joints via ``mgear_curveCns`` deformer
+* Moving joints automatically updates the wire curve
+* Joint ordering options: Selection order, Hierarchy, or Position X
+
+**Common Parameters:**
+
+* **Mesh** - Target mesh for the wire deformer
+* **Wire Name** - Base name for the created wire deformer
+* **Dropoff** - Wire influence falloff distance
+
+Existing Wires Section
+----------------------
+
+Displays all wire deformers currently affecting the selected mesh.
+
+* **Refresh** - Update the wire list
+* **Select** - Select the wire deformer in Maya
+* **Remove** - Delete the wire deformer and its curves
+
+Convert to Skin Section
+-----------------------
+
+Converts wire deformers to skin clusters using the de Boor algorithm for B-spline basis function evaluation.
+
+**Wire Selection:**
+
+* **All Wires** - Convert all wire deformers on the mesh
+* **Selected Wire** - Convert only the selected wire from the dropdown
+
+**Joint Options:**
+
+* **Auto-create joints** - Create joints at each curve CV position
+
+  * **Prefix** - Naming prefix for auto-created joints
+  * **Parent Joint** - Optional parent for the joint chain
+
+* **Custom joints** - Use manually specified joints (must match CV count)
+
+**Conversion Parameters:**
+
+* **Static Joint** - Joint for vertices outside wire influence (default: ``static_jnt``)
+* **Delete Wire** - Remove the wire deformer after conversion
+
+**How Conversion Works:**
+
+1. For each vertex, finds the closest point on the wire curve
+2. Computes B-spline basis functions at that parameter using de Boor's algorithm
+3. Distributes weights across nearby joints based on curve continuity
+4. Blends with existing skin weights or assigns to static joint for unaffected areas
+
+.. Tip::
+
+    When converting a wire created from joints, the tool automatically uses those connected joints for skinning - no need to manually specify them.
+
+Configuration Export/Import
+---------------------------
+
+Save and load wire configurations for reuse across scenes or characters.
+
+**File Menu:**
+
+* **Export Configuration** - Save wire setup to a ``.wts`` file
+* **Import Configuration** - Load wire setup from a ``.wts`` file
+
+**Exported Data:**
+
+* Wire deformer settings (dropoff, scale, envelope)
+* Curve CV positions
+* Connected joint names (for joint-mode wires)
+* Conversion settings
+
+**Import Behavior:**
+
+* Recreates wire deformers from saved curve data
+* For joint-connected wires, automatically reconnects to existing joints
+* Falls back to static curves if referenced joints don't exist
+
+.. Tip::
+
+    Enable mGear file drop (mGear > Utilities > Enable mGear file drop) to import ``.wts`` files by dragging them into Maya's viewport.
+
+Scripting Access
+----------------
+
+The tool's core functions are available for scripting:
+
+.. code-block:: python
+
+    from mgear.rigbits import wire_to_skinning
+
+    # Show the UI
+    wire_to_skinning.show()
+
+    # Create wire from edges
+    positions = wire_to_skinning.get_edges_positions(edges)
+    curve = wire_to_skinning.create_curve_from_positions(positions, num_cvs=8)
+    wire = wire_to_skinning.create_wire_deformer(mesh, curve, dropoff_distance=5.0)
+
+    # Create wire from joints
+    wire, curve, curvecns = wire_to_skinning.create_wire_from_joints(
+        mesh, joints, dropoff_distance=5.0, name="lip_wire"
+    )
+
+    # Convert wire to skin
+    curve_info = wire_to_skinning.get_curve_info(curve)
+    wire_info = wire_to_skinning.get_wire_deformer_info(wire)
+    weights, uses_static = wire_to_skinning.compute_skin_weights_deboor(
+        mesh, curve_info, wire_info, wire_deformer=wire
+    )
+    joints = wire_to_skinning.create_joints_at_cvs(curve_info, prefix="lip")
+    skin = wire_to_skinning.create_skin_cluster(mesh, joints, weights)
+
+    # Export/Import configuration
+    wire_to_skinning.export_configuration(mesh, "/path/to/config.wts")
+    wire_to_skinning.import_configuration("/path/to/config.wts", target_mesh=mesh)
+
+**Core Module Functions:**
+
+The underlying functions are also available in ``mgear.core`` modules:
+
+* ``mgear.core.curve.getCurveInfo()`` - Get curve CVs, degree, knots
+* ``mgear.core.deformer.createWireDeformer()`` - Create wire deformer
+* ``mgear.core.deformer.getWireDeformerInfo()`` - Get wire deformer attributes
+* ``mgear.core.deformer.getWireWeightMap()`` - Get per-vertex wire weights
+* ``mgear.core.deformer.getMeshWireDeformers()`` - Find wire deformers on mesh
+* ``mgear.core.skin.getCompleteWeights()`` - Get skin weights by vertex
