@@ -12,15 +12,17 @@ This module contains the core functions for:
 import json
 import math
 
-# mGear
+# mGear - core modules
+from mgear.core import applyop
+from mgear.core import curve as core_curve
 from mgear.core import deboor
+from mgear.core import deformer as core_deformer
 from mgear.core import skin as core_skin
 
 # Maya
 from maya import cmds
 from maya import mel
 import maya.api.OpenMaya as om2
-import maya.OpenMaya as om
 
 # Constants
 DEFAULT_WEIGHT_THRESHOLD = 0.001
@@ -36,6 +38,8 @@ CONFIG_FILE_EXT = ".wts"  # Wire To Skinning configuration file extension
 def get_curve_info(curve):
     """Get curve information including CVs, degree, and knots.
 
+    Wrapper for mgear.core.curve.getCurveInfo().
+
     Args:
         curve (str): Name of the curve transform or shape.
 
@@ -43,101 +47,13 @@ def get_curve_info(curve):
         dict: Dictionary with curve information, or None if failed.
             Keys: shape, degree, spans, num_cvs, cvs, knots, min_param, max_param
     """
-    if not curve or not cmds.objExists(curve):
-        cmds.warning("Curve does not exist: {}".format(curve))
-        return None
-
-    curve_shape = None
-    node_type = cmds.nodeType(curve)
-
-    if node_type == "nurbsCurve":
-        curve_shape = curve
-    elif node_type == "transform":
-        shapes = cmds.listRelatives(
-            curve, shapes=True, type="nurbsCurve", fullPath=True
-        )
-        if shapes:
-            curve_shape = shapes[0]
-    else:
-        shapes = cmds.listRelatives(curve, shapes=True, fullPath=True)
-        if shapes:
-            for shape in shapes:
-                if cmds.nodeType(shape) == "nurbsCurve":
-                    curve_shape = shape
-                    break
-
-    if not curve_shape:
-        cmds.warning("Could not find nurbsCurve shape for: {}".format(curve))
-        return None
-
-    try:
-        # Use OpenMaya API for reliable curve info retrieval
-        sel_list = om2.MSelectionList()
-        sel_list.add(curve_shape)
-        dag_path = sel_list.getDagPath(0)
-        curve_fn = om2.MFnNurbsCurve(dag_path)
-
-        degree = curve_fn.degree
-        num_cvs = curve_fn.numCVs
-        spans = curve_fn.numSpans
-
-        # Get CVs
-        cvs = []
-        cv_positions = curve_fn.cvPositions(om2.MSpace.kWorld)
-        for i in range(num_cvs):
-            pos = cv_positions[i]
-            cvs.append([pos.x, pos.y, pos.z])
-
-        # Get parameter range
-        min_param = curve_fn.knotDomain[0]
-        max_param = curve_fn.knotDomain[1]
-
-        # Get knots from Maya
-        # MFnNurbsCurve.knots() returns n + p - 1 knots
-        # Full knot vector should have n + p + 1 knots
-        maya_knots = list(curve_fn.knots())
-        expected_length = num_cvs + degree + 1
-
-        if len(maya_knots) == num_cvs + degree - 1:
-            # Add the missing endpoint knots
-            knots = [maya_knots[0]] + maya_knots + [maya_knots[-1]]
-        elif len(maya_knots) == expected_length:
-            knots = maya_knots
-        else:
-            # Build uniform knot vector as fallback
-            print(
-                "Building uniform knot vector. Maya returned {} knots, "
-                "expected {}".format(len(maya_knots), expected_length)
-            )
-            knots = []
-            for i in range(expected_length):
-                if i <= degree:
-                    knots.append(min_param)
-                elif i >= num_cvs:
-                    knots.append(max_param)
-                else:
-                    t = (i - degree) / float(spans)
-                    knots.append(min_param + t * (max_param - min_param))
-
-        return {
-            "shape": curve_shape,
-            "degree": degree,
-            "spans": spans,
-            "num_cvs": num_cvs,
-            "cvs": cvs,
-            "knots": knots,
-            "min_param": min_param,
-            "max_param": max_param,
-        }
-    except Exception as e:
-        cmds.warning(
-            "Error getting curve info for {}: {}".format(curve_shape, str(e))
-        )
-        return None
+    return core_curve.getCurveInfo(curve)
 
 
 def get_wire_deformer_info(wire_deformer):
     """Get wire deformer information.
+
+    Wrapper for mgear.core.deformer.getWireDeformerInfo().
 
     Args:
         wire_deformer (str): Name of the wire deformer node.
@@ -146,102 +62,13 @@ def get_wire_deformer_info(wire_deformer):
         dict: Dictionary with wire info, or None if failed.
             Keys: wire_curve, base_curve, dropoff_distance, scale, envelope
     """
-    if not wire_deformer or not cmds.objExists(wire_deformer):
-        cmds.warning("Wire deformer does not exist: {}".format(wire_deformer))
-        return None
-
-    wire_curve = None
-    base_curve = None
-
-    # Try to get the deformed wire curve
-    deformed_connections = cmds.listConnections(
-        wire_deformer + ".deformedWire",
-        source=True,
-        destination=False,
-        shapes=True,
-    )
-
-    if deformed_connections:
-        for conn in deformed_connections:
-            if cmds.nodeType(conn) == "nurbsCurve":
-                parents = cmds.listRelatives(conn, parent=True, fullPath=True)
-                if parents:
-                    wire_curve = parents[0]
-                else:
-                    wire_curve = conn
-                break
-            elif cmds.nodeType(conn) == "transform":
-                wire_curve = conn
-                break
-
-    # If still not found, try baseWire
-    if not wire_curve:
-        base_connections = cmds.listConnections(
-            wire_deformer + ".baseWire",
-            source=True,
-            destination=False,
-            shapes=True,
-        )
-        if base_connections:
-            for conn in base_connections:
-                if cmds.nodeType(conn) == "nurbsCurve":
-                    parents = cmds.listRelatives(conn, parent=True, fullPath=True)
-                    if parents:
-                        wire_curve = parents[0]
-                    else:
-                        wire_curve = conn
-                    break
-
-    # Try to find base curve
-    base_wire_conn = cmds.listConnections(
-        wire_deformer + ".baseWire",
-        source=True,
-        destination=False,
-        shapes=True,
-    )
-    if base_wire_conn:
-        for conn in base_wire_conn:
-            if cmds.nodeType(conn) == "nurbsCurve":
-                parents = cmds.listRelatives(conn, parent=True, fullPath=True)
-                if parents:
-                    base_curve = parents[0]
-                else:
-                    base_curve = conn
-                break
-
-    # Get dropoff distance
-    try:
-        dropoff_distance = cmds.getAttr(wire_deformer + ".dropoffDistance[0]")
-        if isinstance(dropoff_distance, list):
-            dropoff_distance = dropoff_distance[0] if dropoff_distance else 1.0
-    except Exception:
-        dropoff_distance = 1.0
-
-    # Get scale
-    try:
-        scale = cmds.getAttr(wire_deformer + ".scale[0]")
-        if isinstance(scale, list):
-            scale = scale[0] if scale else 1.0
-    except Exception:
-        scale = 1.0
-
-    # Get envelope
-    try:
-        envelope = cmds.getAttr(wire_deformer + ".envelope")
-    except Exception:
-        envelope = 1.0
-
-    return {
-        "wire_curve": wire_curve,
-        "base_curve": base_curve,
-        "dropoff_distance": dropoff_distance,
-        "scale": scale,
-        "envelope": envelope,
-    }
+    return core_deformer.getWireDeformerInfo(wire_deformer)
 
 
 def get_wire_weight_map(wire_deformer, mesh):
     """Get the wire deformer's weight map for each vertex.
+
+    Wrapper for mgear.core.deformer.getWireWeightMap().
 
     Args:
         wire_deformer (str): Name of the wire deformer.
@@ -250,45 +77,14 @@ def get_wire_weight_map(wire_deformer, mesh):
     Returns:
         dict: Dictionary mapping vertex index to weight value (0.0 to 1.0).
     """
-    num_verts = cmds.polyEvaluate(mesh, vertex=True)
-    weights = {}
-
-    # Find the geometry index for this mesh
-    geometry_index = 0
-    try:
-        output_geom = cmds.listConnections(
-            wire_deformer + ".outputGeometry",
-            source=False,
-            destination=True,
-            plugs=True,
-        )
-        if output_geom:
-            for i, conn in enumerate(output_geom):
-                if mesh in conn or mesh.split("|")[-1] in conn:
-                    geometry_index = i
-                    break
-    except Exception:
-        pass
-
-    # Try to get weights from the deformer
-    for v_idx in range(num_verts):
-        try:
-            weight_attr = "{}.weightList[{}].weights[{}]".format(
-                wire_deformer, geometry_index, v_idx
-            )
-            if cmds.objExists(weight_attr):
-                w = cmds.getAttr(weight_attr)
-                weights[v_idx] = w if w is not None else 1.0
-            else:
-                weights[v_idx] = 1.0
-        except Exception:
-            weights[v_idx] = 1.0
-
-    return weights
+    # Note: core_deformer uses (mesh, wireDeformer) order
+    return core_deformer.getWireWeightMap(mesh, wire_deformer)
 
 
 def get_mesh_wire_deformers(mesh):
     """Get all wire deformers affecting a mesh.
+
+    Wrapper for mgear.core.deformer.getMeshWireDeformers().
 
     Args:
         mesh (str): Name of the mesh.
@@ -296,9 +92,7 @@ def get_mesh_wire_deformers(mesh):
     Returns:
         list: List of wire deformer names.
     """
-    history = cmds.listHistory(mesh, pruneDagObjects=True) or []
-    wires = [h for h in history if cmds.nodeType(h) == "wire"]
-    return wires
+    return core_deformer.getMeshWireDeformers(mesh)
 
 
 def get_mesh_skin_cluster(mesh):
@@ -321,8 +115,8 @@ def get_mesh_skin_cluster(mesh):
 def get_existing_skin_weights(mesh, skin_cluster):
     """Get existing skin weights from a skin cluster.
 
-    Uses OpenMaya API for efficient batch weight retrieval (much faster than
-    per-vertex cmds.skinPercent calls). Leverages mgear.core.skin utilities.
+    Uses mgear.core.skin.getCompleteWeights() for efficient batch weight
+    retrieval via OpenMaya API.
 
     Args:
         mesh (str): Name of the mesh.
@@ -335,44 +129,8 @@ def get_existing_skin_weights(mesh, skin_cluster):
     if not skin_cluster or not cmds.objExists(skin_cluster):
         return {}
 
-    # Get PyNode for skin cluster
-    import mgear.pymaya as pm
-
-    skin_cls = pm.PyNode(skin_cluster)
-
     print("Reading existing skin weights using OpenMaya API...")
-
-    # Get geometry components using core.skin utilities
-    dag_path, components = core_skin.getGeometryComponents(skin_cls)
-
-    # Get all weights in one batch call (fast!)
-    weights_array = core_skin.getCurrentWeights(skin_cls, dag_path, components)
-
-    # Get influence names
-    influence_paths = om.MDagPathArray()
-    skin_fn = core_skin.get_skin_cluster_fn(skin_cluster)
-    num_influences = skin_fn.influenceObjects(influence_paths)
-
-    influence_names = [
-        om.MFnDependencyNode(influence_paths[i].node()).name()
-        for i in range(influence_paths.length())
-    ]
-
-    # Calculate number of vertices
-    num_verts = int(weights_array.length() / num_influences)
-
-    # Convert flat weight array to per-vertex dictionary
-    weights = {}
-    for v_idx in range(num_verts):
-        vert_weights = {}
-        for inf_idx, inf_name in enumerate(influence_names):
-            w = weights_array[v_idx * num_influences + inf_idx]
-            if w > 0.0001:
-                vert_weights[inf_name] = w
-
-        if vert_weights:
-            weights[v_idx] = vert_weights
-
+    weights = core_skin.getCompleteWeights(mesh, skin_cluster)
     print("Read weights for {} vertices with non-zero influence.".format(len(weights)))
     return weights
 
@@ -743,6 +501,8 @@ def create_curve_from_positions(positions, num_cvs, name="wire_curve"):
 def create_wire_deformer(mesh, curve, dropoff_distance=1.0, name="wire"):
     """Create a wire deformer on mesh using curve.
 
+    Wrapper for mgear.core.deformer.createWireDeformer().
+
     Args:
         mesh (str): Name of the mesh.
         curve (str): Name of the curve.
@@ -752,24 +512,7 @@ def create_wire_deformer(mesh, curve, dropoff_distance=1.0, name="wire"):
     Returns:
         str: Name of created wire deformer, or None if failed.
     """
-    wire_result = cmds.wire(
-        mesh,
-        wire=curve,
-        name=name,
-        groupWithBase=False,
-        envelope=1.0,
-        crossingEffect=0,
-        localInfluence=0,
-        dropoffDistance=(0, dropoff_distance),
-    )
-
-    wire_deformer = wire_result[0] if wire_result else None
-
-    # Set rotation to 0 to prevent twisting
-    if wire_deformer:
-        cmds.setAttr(wire_deformer + ".rotation", 0)
-
-    return wire_deformer
+    return core_deformer.createWireDeformer(mesh, curve, dropoff_distance, name)
 
 
 # =============================================================================
@@ -872,6 +615,8 @@ def create_curve_from_joints(joints, name="wire_curve"):
 def connect_curve_to_joints(curve, joints):
     """Connect curve CVs to joints using mgear_curveCns deformer.
 
+    Uses mgear.core.applyop.gear_curvecns_op() for the connection.
+
     Args:
         curve (str): Name of the NURBS curve.
         joints (list): List of joint names matching CV count and order.
@@ -879,32 +624,13 @@ def connect_curve_to_joints(curve, joints):
     Returns:
         str: Name of the curveCns deformer node, or None if failed.
     """
-    # Ensure mgear_solvers plugin is loaded
-    if not cmds.pluginInfo("mgear_solvers", query=True, loaded=True):
-        try:
-            cmds.loadPlugin("mgear_solvers")
-        except Exception:
-            cmds.warning("Failed to load mgear_solvers plugin")
-            return None
-
-    # Create curveCns deformer
-    cmds.select(curve)
-    deformer_result = cmds.deformer(type="mgear_curveCns")
-    if not deformer_result:
-        cmds.warning("Failed to create mgear_curveCns deformer")
+    try:
+        curvecns = applyop.gear_curvecns_op(curve, joints)
+        cmds.select(clear=True)
+        return str(curvecns) if curvecns else None
+    except Exception as e:
+        cmds.warning("Failed to create curveCns: {}".format(e))
         return None
-
-    curvecns = deformer_result[0]
-
-    # Connect each joint's worldMatrix to the deformer's inputs
-    for i, jnt in enumerate(joints):
-        cmds.connectAttr(
-            "{}.worldMatrix".format(jnt),
-            "{}.inputs[{}]".format(curvecns, i),
-        )
-
-    cmds.select(clear=True)
-    return curvecns
 
 
 def create_wire_from_joints(mesh, joints, dropoff_distance=1.0, name="wire"):

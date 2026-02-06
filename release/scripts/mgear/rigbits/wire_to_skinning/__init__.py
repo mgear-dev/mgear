@@ -10,6 +10,13 @@ Includes configuration export/import functionality.
 Example:
     >>> from mgear.rigbits import wire_to_skinning
     >>> wire_to_skinning.show()
+
+Note:
+    Core functions are also available in mgear.core modules:
+    - Curve info: mgear.core.curve.getCurveInfo()
+    - Wire deformers: mgear.core.deformer (createWireDeformer, getWireDeformerInfo,
+      getWireWeightMap, getMeshWireDeformers)
+    - Skin weights: mgear.core.skin.getCompleteWeights()
 """
 
 __version__ = "1.0.0"

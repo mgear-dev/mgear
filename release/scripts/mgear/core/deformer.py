@@ -146,3 +146,237 @@ def create_proximity_wrap(
     cmds.setAttr(f"{deformer_name}.smoothInfluences", smoothInfluences)
 
     return deformer_name
+
+
+# =============================================================================
+# WIRE DEFORMER FUNCTIONS
+# =============================================================================
+
+
+def createWireDeformer(mesh, curve, dropoffDistance=1.0, name="wire"):
+    """Create a wire deformer on a mesh using a curve.
+
+    Args:
+        mesh (str): Name of the target mesh.
+        curve (str): Name of the driver curve.
+        dropoffDistance (float): Dropoff distance for the wire influence.
+            Defaults to 1.0.
+        name (str): Name for the wire deformer. Defaults to "wire".
+
+    Returns:
+        str: Name of created wire deformer, or None if failed.
+
+    Example:
+        >>> wire = createWireDeformer("pSphere1", "curve1", dropoffDistance=5.0)
+    """
+    wire_result = cmds.wire(
+        mesh,
+        wire=curve,
+        name=name,
+        groupWithBase=False,
+        envelope=1.0,
+        crossingEffect=0,
+        localInfluence=0,
+        dropoffDistance=(0, dropoffDistance),
+    )
+
+    wire_deformer = wire_result[0] if wire_result else None
+
+    # Set rotation to 0 to prevent twisting
+    if wire_deformer:
+        cmds.setAttr(wire_deformer + ".rotation", 0)
+
+    return wire_deformer
+
+
+def getWireDeformerInfo(wireDeformer):
+    """Get wire deformer information.
+
+    Retrieves the wire curve, base curve, and key attributes from a wire
+    deformer node.
+
+    Args:
+        wireDeformer (str): Name of the wire deformer node.
+
+    Returns:
+        dict: Dictionary with wire info, or None if failed.
+            Keys:
+                - wire_curve (str): The deformed/animated curve
+                - base_curve (str): The original undeformed curve
+                - dropoff_distance (float): Wire influence falloff distance
+                - scale (float): Wire scale multiplier
+                - envelope (float): Wire envelope value
+
+    Example:
+        >>> info = getWireDeformerInfo("wire1")
+        >>> print(info["dropoff_distance"])
+        5.0
+    """
+    if not wireDeformer or not cmds.objExists(wireDeformer):
+        cmds.warning("Wire deformer does not exist: {}".format(wireDeformer))
+        return None
+
+    wire_curve = None
+    base_curve = None
+
+    # Try to get the deformed wire curve
+    deformed_connections = cmds.listConnections(
+        wireDeformer + ".deformedWire",
+        source=True,
+        destination=False,
+        shapes=True,
+    )
+
+    if deformed_connections:
+        for conn in deformed_connections:
+            if cmds.nodeType(conn) == "nurbsCurve":
+                parents = cmds.listRelatives(conn, parent=True, fullPath=True)
+                if parents:
+                    wire_curve = parents[0]
+                else:
+                    wire_curve = conn
+                break
+            elif cmds.nodeType(conn) == "transform":
+                wire_curve = conn
+                break
+
+    # If still not found, try baseWire
+    if not wire_curve:
+        base_connections = cmds.listConnections(
+            wireDeformer + ".baseWire",
+            source=True,
+            destination=False,
+            shapes=True,
+        )
+        if base_connections:
+            for conn in base_connections:
+                if cmds.nodeType(conn) == "nurbsCurve":
+                    parents = cmds.listRelatives(conn, parent=True, fullPath=True)
+                    if parents:
+                        wire_curve = parents[0]
+                    else:
+                        wire_curve = conn
+                    break
+
+    # Try to find base curve
+    base_wire_conn = cmds.listConnections(
+        wireDeformer + ".baseWire",
+        source=True,
+        destination=False,
+        shapes=True,
+    )
+    if base_wire_conn:
+        for conn in base_wire_conn:
+            if cmds.nodeType(conn) == "nurbsCurve":
+                parents = cmds.listRelatives(conn, parent=True, fullPath=True)
+                if parents:
+                    base_curve = parents[0]
+                else:
+                    base_curve = conn
+                break
+
+    # Get dropoff distance
+    try:
+        dropoff_distance = cmds.getAttr(wireDeformer + ".dropoffDistance[0]")
+        if isinstance(dropoff_distance, list):
+            dropoff_distance = dropoff_distance[0] if dropoff_distance else 1.0
+    except Exception:
+        dropoff_distance = 1.0
+
+    # Get scale
+    try:
+        scale = cmds.getAttr(wireDeformer + ".scale[0]")
+        if isinstance(scale, list):
+            scale = scale[0] if scale else 1.0
+    except Exception:
+        scale = 1.0
+
+    # Get envelope
+    try:
+        envelope = cmds.getAttr(wireDeformer + ".envelope")
+    except Exception:
+        envelope = 1.0
+
+    return {
+        "wire_curve": wire_curve,
+        "base_curve": base_curve,
+        "dropoff_distance": dropoff_distance,
+        "scale": scale,
+        "envelope": envelope,
+    }
+
+
+def getWireWeightMap(mesh, wireDeformer):
+    """Get the wire deformer's per-vertex weight map.
+
+    Retrieves the weight value for each vertex affected by the wire deformer.
+    Weights of 1.0 mean full influence, 0.0 means no influence.
+
+    Args:
+        mesh (str): Name of the mesh.
+        wireDeformer (str): Name of the wire deformer.
+
+    Returns:
+        dict: Dictionary mapping vertex index to weight value (0.0 to 1.0).
+
+    Example:
+        >>> weights = getWireWeightMap("pSphere1", "wire1")
+        >>> print(weights[0])  # Weight for vertex 0
+        1.0
+    """
+    num_verts = cmds.polyEvaluate(mesh, vertex=True)
+    weights = {}
+
+    # Find the geometry index for this mesh
+    geometry_index = 0
+    try:
+        output_geom = cmds.listConnections(
+            wireDeformer + ".outputGeometry",
+            source=False,
+            destination=True,
+            plugs=True,
+        )
+        if output_geom:
+            for i, conn in enumerate(output_geom):
+                if mesh in conn or mesh.split("|")[-1] in conn:
+                    geometry_index = i
+                    break
+    except Exception:
+        pass
+
+    # Try to get weights from the deformer
+    for v_idx in range(num_verts):
+        try:
+            weight_attr = "{}.weightList[{}].weights[{}]".format(
+                wireDeformer, geometry_index, v_idx
+            )
+            if cmds.objExists(weight_attr):
+                w = cmds.getAttr(weight_attr)
+                weights[v_idx] = w if w is not None else 1.0
+            else:
+                weights[v_idx] = 1.0
+        except Exception:
+            weights[v_idx] = 1.0
+
+    return weights
+
+
+def getMeshWireDeformers(mesh):
+    """Get all wire deformers affecting a mesh.
+
+    Searches the mesh's deformation history for wire deformer nodes.
+
+    Args:
+        mesh (str): Name of the mesh.
+
+    Returns:
+        list: List of wire deformer names, or empty list if none found.
+
+    Example:
+        >>> wires = getMeshWireDeformers("pSphere1")
+        >>> print(wires)
+        ['wire1', 'wire2']
+    """
+    history = cmds.listHistory(mesh, pruneDagObjects=True) or []
+    wires = [h for h in history if cmds.nodeType(h) == "wire"]
+    return wires

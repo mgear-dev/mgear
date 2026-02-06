@@ -187,6 +187,72 @@ def getCurrentWeights(skinCls, dagPath, components):
     return weights
 
 
+def getCompleteWeights(mesh, skinCluster=None):
+    """Get complete skin weights for all vertices organized by vertex index.
+
+    This function efficiently retrieves all skin weights using OpenMaya API
+    in a single batch call, then organizes them by vertex index with
+    influence (joint) names as keys.
+
+    Args:
+        mesh (str): Name of the mesh.
+        skinCluster (str, optional): Skin cluster name. If None, will
+            auto-detect from mesh history.
+
+    Returns:
+        dict: Dictionary mapping vertex index to joint weights.
+            Format: {vertex_idx: {joint_name: weight, ...}, ...}
+            Only includes vertices with non-zero weights.
+
+    Example:
+        >>> weights = getCompleteWeights("pSphere1")
+        >>> print(weights[0])  # Weights for vertex 0
+        {'joint1': 0.5, 'joint2': 0.5}
+    """
+    # Auto-detect skin cluster if not provided
+    if skinCluster is None:
+        skinCls = getSkinCluster(mesh)
+        if not skinCls:
+            return {}
+    else:
+        if not cmds.objExists(skinCluster):
+            return {}
+        skinCls = pm.PyNode(skinCluster)
+
+    # Get geometry components using existing utility
+    dagPath, components = getGeometryComponents(skinCls)
+
+    # Get all weights in one batch call (fast!)
+    weightsArray = getCurrentWeights(skinCls, dagPath, components)
+
+    # Get influence names
+    influencePaths = OpenMaya.MDagPathArray()
+    skinFn = get_skin_cluster_fn(skinCls.name())
+    numInfluences = skinFn.influenceObjects(influencePaths)
+
+    influenceNames = [
+        OpenMaya.MFnDependencyNode(influencePaths[i].node()).name()
+        for i in range(influencePaths.length())
+    ]
+
+    # Calculate number of vertices
+    numVerts = int(weightsArray.length() / numInfluences)
+
+    # Convert flat weight array to per-vertex dictionary
+    weights = {}
+    for vIdx in range(numVerts):
+        vertWeights = {}
+        for infIdx, infName in enumerate(influenceNames):
+            w = weightsArray[vIdx * numInfluences + infIdx]
+            if w > 0.0001:
+                vertWeights[infName] = w
+
+        if vertWeights:
+            weights[vIdx] = vertWeights
+
+    return weights
+
+
 ######################################
 # Skin Collectors
 ######################################

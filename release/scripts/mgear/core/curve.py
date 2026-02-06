@@ -369,6 +369,127 @@ def findLenghtFromParam(crv, param):
 # ========================================
 
 
+def getCurveInfo(curve):
+    """Get curve information including CVs, degree, and knots using OpenMaya API.
+
+    This function provides reliable curve information using OpenMaya API v2,
+    which handles edge cases better than cmds queries.
+
+    Args:
+        curve (str): Name of the curve transform or shape.
+
+    Returns:
+        dict: Dictionary with curve information, or None if failed.
+            Keys:
+                - shape (str): Curve shape name
+                - degree (int): Curve degree
+                - spans (int): Number of spans
+                - num_cvs (int): Number of control vertices
+                - cvs (list): List of CV positions as [x, y, z]
+                - knots (list): Full knot vector
+                - min_param (float): Minimum parameter value
+                - max_param (float): Maximum parameter value
+
+    Example:
+        >>> info = getCurveInfo("curve1")
+        >>> print(info["degree"])
+        3
+        >>> print(info["num_cvs"])
+        8
+    """
+    if not curve or not cmds.objExists(curve):
+        cmds.warning("Curve does not exist: {}".format(curve))
+        return None
+
+    curve_shape = None
+    node_type = cmds.nodeType(curve)
+
+    if node_type == "nurbsCurve":
+        curve_shape = curve
+    elif node_type == "transform":
+        shapes = cmds.listRelatives(
+            curve, shapes=True, type="nurbsCurve", fullPath=True
+        )
+        if shapes:
+            curve_shape = shapes[0]
+    else:
+        shapes = cmds.listRelatives(curve, shapes=True, fullPath=True)
+        if shapes:
+            for shape in shapes:
+                if cmds.nodeType(shape) == "nurbsCurve":
+                    curve_shape = shape
+                    break
+
+    if not curve_shape:
+        cmds.warning("Could not find nurbsCurve shape for: {}".format(curve))
+        return None
+
+    try:
+        # Use OpenMaya API v2 for reliable curve info retrieval
+        sel_list = om2.MSelectionList()
+        sel_list.add(curve_shape)
+        dag_path = sel_list.getDagPath(0)
+        curve_fn = om2.MFnNurbsCurve(dag_path)
+
+        degree = curve_fn.degree
+        num_cvs = curve_fn.numCVs
+        spans = curve_fn.numSpans
+
+        # Get CVs in world space
+        cvs = []
+        cv_positions = curve_fn.cvPositions(om2.MSpace.kWorld)
+        for i in range(num_cvs):
+            pos = cv_positions[i]
+            cvs.append([pos.x, pos.y, pos.z])
+
+        # Get parameter range
+        min_param = curve_fn.knotDomain[0]
+        max_param = curve_fn.knotDomain[1]
+
+        # Get knots from Maya
+        # MFnNurbsCurve.knots() returns n + p - 1 knots
+        # Full knot vector should have n + p + 1 knots
+        maya_knots = list(curve_fn.knots())
+        expected_length = num_cvs + degree + 1
+
+        if len(maya_knots) == num_cvs + degree - 1:
+            # Add the missing endpoint knots
+            knots = [maya_knots[0]] + maya_knots + [maya_knots[-1]]
+        elif len(maya_knots) == expected_length:
+            knots = maya_knots
+        else:
+            # Build uniform knot vector as fallback
+            print(
+                "Building uniform knot vector. Maya returned {} knots, "
+                "expected {}".format(len(maya_knots), expected_length)
+            )
+            knots = []
+            for i in range(expected_length):
+                if i <= degree:
+                    knots.append(min_param)
+                elif i >= num_cvs:
+                    knots.append(max_param)
+                else:
+                    t = (i - degree) / float(spans)
+                    knots.append(min_param + t * (max_param - min_param))
+
+        return {
+            "shape": curve_shape,
+            "degree": degree,
+            "spans": spans,
+            "num_cvs": num_cvs,
+            "cvs": cvs,
+            "knots": knots,
+            "min_param": min_param,
+            "max_param": max_param,
+        }
+    except Exception as e:
+        cmds.warning(
+            "Error getting curve info for {}: {}".format(curve_shape, str(e))
+        )
+        return None
+
+
 def get_color(node):
     """Get the color from shape node
 
