@@ -107,6 +107,12 @@ class EvaluationPartitionUI(
             "Re-apply all shaders to visualize current groups"
         )
 
+        self.toggle_shaders_btn = QtWidgets.QPushButton("Show Original Shaders")
+        self.toggle_shaders_btn.setCheckable(True)
+        self.toggle_shaders_btn.setToolTip(
+            "Toggle between partition and original shaders"
+        )
+
         self.reset_btn = QtWidgets.QPushButton("Reset All")
         self.reset_btn.setToolTip("Reset to single default group with all faces")
         self.reset_btn.setStyleSheet("background-color: #aa4444;")
@@ -149,6 +155,7 @@ class EvaluationPartitionUI(
         actions_group = QtWidgets.QGroupBox("Actions")
         actions_layout = QtWidgets.QHBoxLayout(actions_group)
         actions_layout.addWidget(self.apply_shaders_btn)
+        actions_layout.addWidget(self.toggle_shaders_btn)
         actions_layout.addWidget(self.reset_btn)
 
         main_layout.addWidget(actions_group)
@@ -175,12 +182,14 @@ class EvaluationPartitionUI(
 
         # Actions
         self.apply_shaders_btn.clicked.connect(self.apply_all_shaders)
+        self.toggle_shaders_btn.clicked.connect(self.toggle_shaders)
         self.reset_btn.clicked.connect(self.reset_all_groups)
 
     def set_initial_state(self):
         """Set initial widget states after UI is built."""
         self.export_action.setEnabled(False)
         self.apply_shaders_btn.setEnabled(False)
+        self.toggle_shaders_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self.group_list.add_btn.setEnabled(False)
 
@@ -243,6 +252,9 @@ class EvaluationPartitionUI(
         # Create new manager
         self.group_manager = core.PolygonGroupManager(mesh)
 
+        # Capture original shading before applying partition shaders
+        core.capture_original_shading(self.group_manager)
+
         # Create default group with all faces
         default_group = core.create_default_group(self.group_manager)
         self.group_manager.groups.append(default_group)
@@ -256,6 +268,9 @@ class EvaluationPartitionUI(
         # Enable buttons
         self.export_action.setEnabled(True)
         self.apply_shaders_btn.setEnabled(True)
+        self.toggle_shaders_btn.setEnabled(True)
+        self.toggle_shaders_btn.setChecked(False)
+        self.toggle_shaders_btn.setText("Show Original Shaders")
         self.reset_btn.setEnabled(True)
         self.group_list.add_btn.setEnabled(True)
 
@@ -497,6 +512,15 @@ class EvaluationPartitionUI(
         cmds.undoInfo(openChunk=True)
 
         try:
+            # Preserve original shading if same mesh, otherwise capture
+            preserved_shading = {}
+            if (
+                self.group_manager
+                and core.names_match(self.group_manager.mesh, mesh)
+                and self.group_manager.original_shading
+            ):
+                preserved_shading = self.group_manager.original_shading
+
             # Clean up existing manager
             if self.group_manager:
                 core.cleanup_all_shaders(self.group_manager)
@@ -504,12 +528,21 @@ class EvaluationPartitionUI(
             # Clear UI
             self.group_list.clear_all()
 
+            # Capture original shading if not preserved
+            if not preserved_shading:
+                temp_manager = core.PolygonGroupManager(mesh)
+                core.capture_original_shading(temp_manager)
+                preserved_shading = temp_manager.original_shading
+
             # Apply configuration
             self.group_manager = core.apply_configuration(config, mesh=mesh)
 
             if not self.group_manager:
                 self.set_status("Failed to apply configuration", error=True)
                 return
+
+            # Restore original shading data
+            self.group_manager.original_shading = preserved_shading
 
             # Update mesh input
             self.mesh_input.setText(mesh)
@@ -525,6 +558,9 @@ class EvaluationPartitionUI(
             # Enable buttons
             self.export_action.setEnabled(True)
             self.apply_shaders_btn.setEnabled(True)
+            self.toggle_shaders_btn.setEnabled(True)
+            self.toggle_shaders_btn.setChecked(False)
+            self.toggle_shaders_btn.setText("Show Original Shaders")
             self.reset_btn.setEnabled(True)
             self.group_list.add_btn.setEnabled(True)
 
@@ -557,14 +593,40 @@ class EvaluationPartitionUI(
         cmds.undoInfo(openChunk=True)
 
         try:
-            for group in self.group_manager.groups:
-                core.assign_faces_to_shader(
-                    self.group_manager.mesh,
-                    group.face_indices,
-                    group.shading_group,
-                )
+            core.show_partition_shaders(self.group_manager)
+
+            # Update toggle button state
+            self.toggle_shaders_btn.setChecked(False)
+            self.toggle_shaders_btn.setText("Show Original Shaders")
 
             self.set_status("Applied all shaders")
+
+        finally:
+            cmds.undoInfo(closeChunk=True)
+
+    def toggle_shaders(self):
+        """Toggle between partition and original shaders."""
+        if not self.group_manager:
+            return
+
+        if not self.group_manager.original_shading:
+            self.set_status("No original shading data available", error=True)
+            self.toggle_shaders_btn.setChecked(False)
+            return
+
+        cmds.undoInfo(openChunk=True)
+
+        try:
+            core.toggle_shaders(self.group_manager)
+
+            if self.group_manager.showing_partitions:
+                self.toggle_shaders_btn.setText("Show Original Shaders")
+                self.toggle_shaders_btn.setChecked(False)
+                self.set_status("Showing partition shaders")
+            else:
+                self.toggle_shaders_btn.setText("Show Partition Shaders")
+                self.toggle_shaders_btn.setChecked(True)
+                self.set_status("Showing original shaders")
 
         finally:
             cmds.undoInfo(closeChunk=True)

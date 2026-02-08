@@ -65,6 +65,8 @@ class PolygonGroupManager:
     def __init__(self, mesh):
         self.mesh = mesh
         self.groups = []
+        self.original_shading = {}
+        self.showing_partitions = True
         self._mesh_short_name = mesh.split("|")[-1].replace(":", "_")
 
     def get_group_by_name(self, name):
@@ -555,6 +557,121 @@ def reset_to_default(manager):
     manager.groups.append(default_group)
 
     return default_group
+
+
+# =====================================================
+# SHADER TOGGLE FUNCTIONS
+# =====================================================
+
+
+def capture_original_shading(manager):
+    """Capture the current per-face shading group assignments.
+
+    Should be called before any partition shaders are applied, so the
+    original materials can be restored later via toggle.
+
+    Args:
+        manager (PolygonGroupManager): The PolygonGroupManager instance.
+
+    Returns:
+        dict: Mapping of shading group name to set of face indices.
+    """
+    mesh = manager.mesh
+    original = {}
+
+    # Get shape node
+    shapes = cmds.listRelatives(
+        mesh, shapes=True, type="mesh", fullPath=True
+    )
+    if not shapes:
+        return original
+    shape = shapes[0]
+
+    # Get all shading groups connected to this shape
+    shading_groups = cmds.listSets(type=1, object=shape) or []
+
+    for sg in shading_groups:
+        members = cmds.sets(sg, query=True) or []
+
+        face_indices = set()
+        for member in members:
+            # Filter to our mesh's face components
+            if ".f[" not in member:
+                # Whole object assignment (no per-face)
+                if names_match(member, mesh):
+                    face_indices = get_all_face_indices(mesh)
+                    break
+                continue
+
+            member_mesh = member.split(".f[")[0]
+            if not names_match(member_mesh, mesh):
+                continue
+
+            index_str = member.split(".f[")[1].rstrip("]")
+            try:
+                face_indices.add(int(index_str))
+            except ValueError:
+                if ":" in index_str:
+                    start, end = index_str.split(":")
+                    face_indices.update(range(int(start), int(end) + 1))
+
+        if face_indices:
+            original[sg] = face_indices
+
+    manager.original_shading = original
+    return original
+
+
+def show_partition_shaders(manager):
+    """Assign partition shaders to the mesh.
+
+    Args:
+        manager (PolygonGroupManager): The PolygonGroupManager instance.
+    """
+    for group in manager.groups:
+        if group.face_indices and group.shading_group:
+            assign_faces_to_shader(
+                manager.mesh, group.face_indices, group.shading_group
+            )
+    manager.showing_partitions = True
+
+
+def show_original_shaders(manager):
+    """Restore the original shading group assignments.
+
+    Args:
+        manager (PolygonGroupManager): The PolygonGroupManager instance.
+
+    Returns:
+        bool: True if original shaders were restored, False if no
+            original shading data is available.
+    """
+    if not manager.original_shading:
+        cmds.warning("No original shading data captured.")
+        return False
+
+    for sg, face_indices in manager.original_shading.items():
+        if cmds.objExists(sg):
+            assign_faces_to_shader(manager.mesh, face_indices, sg)
+
+    manager.showing_partitions = False
+    return True
+
+
+def toggle_shaders(manager):
+    """Toggle between partition and original shaders.
+
+    Args:
+        manager (PolygonGroupManager): The PolygonGroupManager instance.
+
+    Returns:
+        bool: True if now showing partitions, False if showing original.
+    """
+    if manager.showing_partitions:
+        show_original_shaders(manager)
+    else:
+        show_partition_shaders(manager)
+    return manager.showing_partitions
 
 
 # =====================================================

@@ -61,6 +61,11 @@ from .core import (
     rename_group,
     cleanup_all_shaders,
     reset_to_default,
+    # Shader toggle functions
+    capture_original_shading,
+    show_partition_shaders,
+    show_original_shaders,
+    toggle_shaders,
     # Configuration functions
     group_to_dict,
     dict_to_group_data,
