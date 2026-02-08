@@ -66,6 +66,21 @@ from .core import (
     show_partition_shaders,
     show_original_shaders,
     toggle_shaders,
+    # Partition execution (step 1)
+    split_polygon_groups,
+    execute_partition,
+    # Pipeline steps 2-4: Blendshape transfer
+    transfer_blendshapes,
+    clean_unused_bs_targets,
+    reconnect_bs_inputs,
+    # Pipeline steps 5-7: Skin cluster transfer
+    copy_skin_clusters,
+    remove_unused_influences,
+    copy_skin_configuration,
+    # Pipeline step 8: Proximity wrap proxy
+    create_proximity_wrap_proxy,
+    # Full pipeline
+    execute_full_pipeline,
     # Configuration functions
     group_to_dict,
     dict_to_group_data,

@@ -675,6 +675,1188 @@ def toggle_shaders(manager):
 
 
 # =====================================================
+# DEFORMER UTILITIES
+# =====================================================
+
+BS_TARGET_ATTR = (
+    "{}.inputTarget[0].inputTargetGroup[{}].inputTargetItem"
+)
+
+
+def _get_mesh_deformers(mesh):
+    """Get all deformer nodes from mesh history.
+
+    Args:
+        mesh (str): The mesh transform name.
+
+    Returns:
+        list: List of deformer node names.
+    """
+    history = (
+        cmds.listHistory(mesh, pruneDagObjects=True) or []
+    )
+    deformer_types = {
+        "skinCluster", "blendShape", "nonLinear", "ffd",
+        "cluster", "sculpt", "wire", "wrap", "jiggle",
+        "deltaMush", "softMod", "morph",
+    }
+    return [
+        n for n in history
+        if cmds.nodeType(n) in deformer_types
+    ]
+
+
+def _get_mesh_deformers_by_type(mesh, deformer_type):
+    """Get deformer nodes of a specific type from mesh history.
+
+    Args:
+        mesh (str): The mesh transform name.
+        deformer_type (str): The Maya deformer type name.
+
+    Returns:
+        list: List of deformer node names matching the type.
+    """
+    history = (
+        cmds.listHistory(mesh, pruneDagObjects=True) or []
+    )
+    return [
+        n for n in history
+        if cmds.nodeType(n) == deformer_type
+    ]
+
+
+def _disable_deformers(mesh, exclude_types=None):
+    """Disable all deformer envelopes on a mesh.
+
+    Stores original envelope values for later restoration.
+    Uses cmds.mute for envelopes that have input connections.
+
+    Args:
+        mesh (str): The mesh transform name.
+        exclude_types (set): Deformer types to skip.
+
+    Returns:
+        dict: Mapping of deformer name to original state.
+    """
+    exclude_types = exclude_types or set()
+    deformers = _get_mesh_deformers(mesh)
+    original_envelopes = {}
+
+    for d in deformers:
+        if cmds.nodeType(d) in exclude_types:
+            continue
+        envelope_attr = f"{d}.envelope"
+        try:
+            original_envelopes[d] = cmds.getAttr(envelope_attr)
+            cmds.setAttr(envelope_attr, 0)
+        except RuntimeError:
+            # Envelope has connections, use mute
+            mute_nodes = cmds.mute(
+                envelope_attr, force=True
+            )
+            if mute_nodes:
+                cmds.setAttr(f"{mute_nodes[0]}.hold", 0)
+            original_envelopes[d] = "muted"
+
+    return original_envelopes
+
+
+def _restore_deformers(original_envelopes):
+    """Restore deformer envelopes to their original values.
+
+    Args:
+        original_envelopes (dict): From _disable_deformers.
+    """
+    for d, val in original_envelopes.items():
+        if not cmds.objExists(d):
+            continue
+        envelope_attr = f"{d}.envelope"
+        if val == "muted":
+            cmds.mute(
+                envelope_attr, disable=True, force=True
+            )
+        else:
+            try:
+                cmds.setAttr(envelope_attr, val)
+            except RuntimeError:
+                pass
+
+
+def _create_temp_wrap(target_mesh, driver_mesh):
+    """Create a temporary wrap deformer for BS transfer.
+
+    Maps target mesh vertices to follow the driver mesh
+    surface deformation. Creates a separate base mesh
+    duplicate instead of connecting to the driver's
+    intermediate shape (which can corrupt the driver's
+    deformation chain on cleanup).
+
+    Pattern from flex.update_utils.create_wrap().
+
+    Args:
+        target_mesh (str): Target mesh transform.
+        driver_mesh (str): Driver mesh transform.
+
+    Returns:
+        tuple: (wrap_node, base_dup) where wrap_node is the
+            wrap deformer name and base_dup is the static
+            base mesh to clean up later. Returns (None, None)
+            if failed.
+    """
+    # Get visible shape on driver
+    driver_shapes = cmds.listRelatives(
+        driver_mesh, shapes=True, type="mesh",
+        noIntermediate=True, fullPath=True,
+    ) or []
+
+    if not driver_shapes:
+        return None, None
+
+    driver_shape = driver_shapes[0]
+
+    # Create a static base mesh duplicate for the wrap
+    # reference. This avoids connecting to the driver's
+    # intermediate shape which can corrupt its deformation
+    # chain when the wrap is later deleted.
+    base_name = "{}_wrapBase".format(
+        get_short_name(target_mesh)
+    )
+    base_dup = cmds.duplicate(
+        driver_mesh, rr=True, ic=False,
+        name=base_name,
+    )[0]
+
+    # Unlock transforms on base duplicate
+    for attr in (
+        "translateX", "translateY", "translateZ",
+        "rotateX", "rotateY", "rotateZ",
+        "scaleX", "scaleY", "scaleZ",
+    ):
+        try:
+            cmds.setAttr(
+                f"{base_dup}.{attr}", lock=False
+            )
+        except RuntimeError:
+            pass
+
+    cmds.delete(base_dup, ch=True)
+    cmds.setAttr(f"{base_dup}.visibility", 0)
+
+    base_shapes = cmds.listRelatives(
+        base_dup, shapes=True, type="mesh",
+        fullPath=True,
+    ) or []
+    if not base_shapes:
+        cmds.delete(base_dup)
+        return None, None
+
+    base_shape = base_shapes[0]
+
+    # Create wrap deformer
+    wrap = cmds.deformer(target_mesh, type="wrap")[0]
+    cmds.setAttr(f"{wrap}.exclusiveBind", 1)
+    cmds.setAttr(f"{wrap}.autoWeightThreshold", 1)
+    cmds.setAttr(f"{wrap}.dropoff[0]", 4.0)
+    cmds.setAttr(f"{wrap}.inflType[0]", 2)
+
+    # Connect base (static duplicate, not orig shape)
+    cmds.connectAttr(
+        f"{base_shape}.worldMesh[0]",
+        f"{wrap}.basePoints[0]",
+        force=True,
+    )
+
+    # Connect driver (visible/deformed shape)
+    cmds.connectAttr(
+        f"{driver_shape}.outMesh",
+        f"{wrap}.driverPoints[0]",
+        force=True,
+    )
+
+    # Connect geom matrix
+    cmds.connectAttr(
+        f"{target_mesh}.worldMatrix[0]",
+        f"{wrap}.geomMatrix",
+        force=True,
+    )
+
+    return wrap, base_dup
+
+
+def _get_vertex_positions(mesh):
+    """Get all vertex world positions as a flat list.
+
+    Args:
+        mesh (str): Mesh transform name.
+
+    Returns:
+        list: Flat list of [x, y, z, x, y, z, ...].
+    """
+    return cmds.xform(
+        f"{mesh}.vtx[*]", query=True,
+        worldSpace=True, translation=True,
+    )
+
+
+# =====================================================
+# PIPELINE STEP 1: SPLIT POLYGON GROUPS
+# =====================================================
+
+
+def split_polygon_groups(manager):
+    """Split the mesh into separate parts based on polygon groups.
+
+    Creates a duplicate of the mesh for each group in bind pose,
+    deleting faces that don't belong to that group. Original
+    shading is preserved on each partition. The source mesh is
+    not modified.
+
+    Deformers on the source are temporarily disabled so split
+    parts contain bind-pose geometry suitable for deformer
+    transfer.
+
+    Args:
+        manager (PolygonGroupManager): The manager with groups.
+
+    Returns:
+        tuple: (group_node, partition_meshes) where group_node
+            is the parent transform and partition_meshes is a
+            list of mesh names. Returns (None, []) if failed.
+    """
+    if not manager or not manager.groups:
+        cmds.warning("No groups defined.")
+        return None, []
+
+    mesh = manager.mesh
+    mesh_short = get_short_name(mesh)
+
+    # Temporarily restore original shaders so duplicates
+    # inherit them
+    was_showing_partitions = manager.showing_partitions
+    if was_showing_partitions and manager.original_shading:
+        show_original_shaders(manager)
+
+    # Disable all deformers for bind-pose duplicates
+    saved_envelopes = _disable_deformers(mesh)
+
+    partition_meshes = []
+
+    try:
+        for group in manager.groups:
+            if not group.face_indices:
+                continue
+
+            safe_name = group.name.replace(" ", "_")
+            partition_name = f"{mesh_short}_{safe_name}"
+
+            dup = cmds.duplicate(
+                mesh, rr=True, ic=False,
+                name=partition_name,
+            )
+            new_obj = dup[0]
+
+            # Unlock transform attributes
+            for attr in (
+                "translateX", "translateY",
+                "translateZ",
+                "rotateX", "rotateY", "rotateZ",
+                "scaleX", "scaleY", "scaleZ",
+            ):
+                cmds.setAttr(
+                    f"{new_obj}.{attr}", lock=False
+                )
+
+            new_faces = cmds.ls(
+                f"{new_obj}.f[*]", flatten=True
+            )
+
+            # Build faces to delete by removing kept faces
+            faces_to_del = list(new_faces)
+            for face_idx in sorted(
+                group.face_indices, reverse=True
+            ):
+                if face_idx < len(faces_to_del):
+                    faces_to_del.pop(face_idx)
+
+            if faces_to_del:
+                cmds.delete(faces_to_del)
+
+            cmds.delete(new_obj, ch=True)
+            partition_meshes.append(new_obj)
+
+    finally:
+        _restore_deformers(saved_envelopes)
+
+    # Restore previous shader state on source mesh
+    if was_showing_partitions:
+        show_partition_shaders(manager)
+
+    if not partition_meshes:
+        cmds.warning("No partitions created.")
+        return None, []
+
+    grp_name = f"{mesh_short}_partitions"
+    grp = cmds.group(partition_meshes, name=grp_name)
+
+    return grp, partition_meshes
+
+
+# Backward compatibility alias
+execute_partition = split_polygon_groups
+
+
+# =====================================================
+# PIPELINE STEP 2: TRANSFER BLENDSHAPES
+# =====================================================
+
+
+def transfer_blendshapes(source_mesh, partition_meshes):
+    """Transfer blendshapes from source to each partition.
+
+    Uses a wrap-based approach: for each partition, a temporary
+    wrap deformer maps it to follow the source mesh. Blendshape
+    targets are triggered one at a time and captured via the
+    connect/disconnect pattern.
+
+    Pattern from flex.update_utils.create_blendshapes_backup().
+
+    Args:
+        source_mesh (str): The original source mesh transform.
+        partition_meshes (list): List of partition mesh names.
+
+    Returns:
+        dict: Mapping of partition mesh name to BS node name.
+            Empty dict if source has no blendshapes.
+    """
+    bs_nodes = _get_mesh_deformers_by_type(
+        source_mesh, "blendShape"
+    )
+    if not bs_nodes:
+        return {}
+
+    # Disable all deformers except blendshapes on source
+    saved_envelopes = _disable_deformers(
+        source_mesh, exclude_types={"blendShape"}
+    )
+
+    result = {}
+
+    try:
+        for part_mesh in partition_meshes:
+            new_bs = _transfer_bs_to_partition(
+                source_mesh, part_mesh, bs_nodes
+            )
+            if new_bs:
+                result[part_mesh] = new_bs
+
+    finally:
+        _restore_deformers(saved_envelopes)
+
+    return result
+
+
+def _transfer_bs_to_partition(
+    source_mesh, part_mesh, bs_nodes
+):
+    """Transfer blendshape targets to a single partition.
+
+    Args:
+        source_mesh (str): Source mesh transform.
+        part_mesh (str): Partition mesh transform.
+        bs_nodes (list): Source blendshape node names.
+
+    Returns:
+        str: New blendshape node name, or None if no targets.
+    """
+    # Create temp duplicate for wrap target
+    temp_name = f"{part_mesh}_bs_transfer_temp"
+    temp_dup = cmds.duplicate(
+        part_mesh, rr=True, name=temp_name
+    )[0]
+
+    # Create wrap: temp dup follows source.
+    # Returns (wrap_node, base_dup) -- base_dup is a static
+    # mesh used for wrap reference that must be cleaned up.
+    wrap_node, base_dup = _create_temp_wrap(
+        temp_dup, source_mesh
+    )
+    if not wrap_node:
+        cmds.delete(temp_dup)
+        if base_dup and cmds.objExists(base_dup):
+            cmds.delete(base_dup)
+        return None
+
+    # Get temp dup shape for connection
+    temp_shapes = cmds.listRelatives(
+        temp_dup, shapes=True, type="mesh"
+    )
+    if not temp_shapes:
+        cmds.delete(temp_dup)
+        return None
+    temp_shape = temp_shapes[0]
+
+    # Create empty blendShape node on partition
+    part_short = get_short_name(part_mesh)
+    new_bs = cmds.deformer(
+        part_mesh, type="blendShape",
+        name=f"{part_short}_BS",
+    )[0]
+
+    has_targets = False
+
+    for src_bs in bs_nodes:
+        targets_idx = cmds.getAttr(
+            f"{src_bs}.weight", multiIndices=True
+        )
+        if not targets_idx:
+            continue
+
+        for idx in targets_idx:
+            target_name = cmds.aliasAttr(
+                f"{src_bs}.weight[{idx}]", query=True
+            )
+
+            attr_name = BS_TARGET_ATTR.format(
+                src_bs, idx
+            )
+            target_items = cmds.getAttr(
+                attr_name, multiIndices=True
+            )
+            if not target_items:
+                continue
+
+            # Check for live connected targets
+            if _has_live_target(attr_name, target_items):
+                cmds.warning(
+                    f"Skipping live target: {target_name}"
+                )
+                continue
+
+            # Unlock/disconnect weight so we can set it
+            weight_attr = f"{src_bs}.weight[{idx}]"
+            saved_state = _unlock_and_disconnect_attr(
+                weight_attr
+            )
+
+            try:
+                for t_item in target_items:
+                    weight = float(
+                        (t_item - 5000) / 1000.0
+                    )
+
+                    # Trigger source BS
+                    cmds.setAttr(weight_attr, weight)
+
+                    # Capture via connect/disconnect
+                    dest_attr = (
+                        f"{new_bs}.inputTarget[0]"
+                        f".inputTargetGroup[{idx}]"
+                        f".inputTargetItem[{t_item}]"
+                        ".inputGeomTarget"
+                    )
+                    cmds.connectAttr(
+                        f"{temp_shape}.outMesh",
+                        dest_attr,
+                        force=True,
+                    )
+                    cmds.disconnectAttr(
+                        f"{temp_shape}.outMesh",
+                        dest_attr,
+                    )
+
+                # Reset weight before restoring
+                cmds.setAttr(weight_attr, 0)
+
+            finally:
+                _restore_attr(weight_attr, saved_state)
+
+            # Show weight attr and set alias
+            cmds.setAttr(
+                f"{new_bs}.weight[{idx}]", 0
+            )
+            if target_name:
+                cmds.aliasAttr(
+                    target_name,
+                    f"{new_bs}.weight[{idx}]",
+                )
+
+            has_targets = True
+
+    # Clean up temp objects. Delete wrap first to break
+    # connections cleanly before removing the meshes.
+    if cmds.objExists(wrap_node):
+        cmds.delete(wrap_node)
+    if base_dup and cmds.objExists(base_dup):
+        cmds.delete(base_dup)
+    if cmds.objExists(temp_dup):
+        cmds.delete(temp_dup)
+
+    if has_targets:
+        return new_bs
+    else:
+        cmds.delete(new_bs)
+        return None
+
+
+def _has_live_target(attr_name, target_items):
+    """Check if any target item has a live geometry input.
+
+    Args:
+        attr_name (str): The inputTargetItem base attr.
+        target_items (list): List of target item indices.
+
+    Returns:
+        bool: True if any target has live connection.
+    """
+    for t_item in target_items:
+        geom_attr = (
+            f"{attr_name}[{t_item}].inputGeomTarget"
+        )
+        conns = cmds.listConnections(
+            geom_attr, destination=False
+        )
+        if conns:
+            return True
+    return False
+
+
+def _unlock_and_disconnect_attr(attr):
+    """Temporarily unlock and disconnect an attribute.
+
+    Returns state needed to restore via _restore_attr.
+
+    Args:
+        attr (str): Full attribute path (e.g. "node.weight[0]").
+
+    Returns:
+        dict: Saved state with keys "locked", "connection".
+    """
+    state = {"locked": False, "connection": None}
+
+    if cmds.getAttr(attr, lock=True):
+        state["locked"] = True
+        cmds.setAttr(attr, lock=False)
+
+    conns = cmds.listConnections(
+        attr, source=True, destination=False,
+        plugs=True,
+    )
+    if conns:
+        state["connection"] = conns[0]
+        cmds.disconnectAttr(conns[0], attr)
+
+    return state
+
+
+def _restore_attr(attr, state):
+    """Restore attribute lock/connection from saved state.
+
+    Args:
+        attr (str): Full attribute path.
+        state (dict): From _unlock_and_disconnect_attr.
+    """
+    if state["connection"]:
+        try:
+            cmds.connectAttr(
+                state["connection"], attr, force=True
+            )
+        except RuntimeError:
+            pass
+
+    if state["locked"]:
+        cmds.setAttr(attr, lock=True)
+
+
+# =====================================================
+# PIPELINE STEP 3: CLEAN UNUSED BS TARGETS
+# =====================================================
+
+
+def clean_unused_bs_targets(
+    partition_meshes, threshold=0.0001
+):
+    """Remove blendshape targets with no visible effect.
+
+    For each partition's blendShape node, tests each target by
+    setting its weight to 1 and comparing vertex positions to
+    base. Targets with max delta below threshold are removed.
+
+    Args:
+        partition_meshes (list): List of partition mesh names.
+        threshold (float): Max delta to consider as no effect.
+    """
+    for part_mesh in partition_meshes:
+        bs_nodes = _get_mesh_deformers_by_type(
+            part_mesh, "blendShape"
+        )
+        if not bs_nodes:
+            continue
+
+        for bs_node in bs_nodes:
+            _clean_bs_node_targets(
+                part_mesh, bs_node, threshold
+            )
+
+
+def _clean_bs_node_targets(mesh, bs_node, threshold):
+    """Clean unused targets from a single BS node.
+
+    Args:
+        mesh (str): Mesh transform name.
+        bs_node (str): BlendShape node name.
+        threshold (float): Max delta threshold.
+    """
+    targets_idx = cmds.getAttr(
+        f"{bs_node}.weight", multiIndices=True
+    )
+    if not targets_idx:
+        cmds.delete(bs_node)
+        return
+
+    # Ensure all weights at 0 for base reference
+    for idx in targets_idx:
+        cmds.setAttr(f"{bs_node}.weight[{idx}]", 0)
+
+    base_positions = _get_vertex_positions(mesh)
+
+    targets_to_remove = []
+
+    for idx in targets_idx:
+        cmds.setAttr(f"{bs_node}.weight[{idx}]", 1)
+        deformed_positions = _get_vertex_positions(mesh)
+        cmds.setAttr(f"{bs_node}.weight[{idx}]", 0)
+
+        # Compute max delta from flat position lists
+        max_delta = 0.0
+        for i in range(0, len(base_positions), 3):
+            dx = deformed_positions[i] - base_positions[i]
+            dy = (
+                deformed_positions[i + 1]
+                - base_positions[i + 1]
+            )
+            dz = (
+                deformed_positions[i + 2]
+                - base_positions[i + 2]
+            )
+            delta = (
+                (dx * dx + dy * dy + dz * dz) ** 0.5
+            )
+            if delta > max_delta:
+                max_delta = delta
+
+        if max_delta < threshold:
+            targets_to_remove.append(idx)
+
+    # Remove unused targets (reverse order)
+    for idx in reversed(targets_to_remove):
+        alias = cmds.aliasAttr(
+            f"{bs_node}.weight[{idx}]", query=True
+        )
+        if alias:
+            cmds.aliasAttr(
+                f"{bs_node}.weight[{idx}]",
+                remove=True,
+            )
+
+        tgt_grp = (
+            f"{bs_node}.inputTarget[0]"
+            f".inputTargetGroup[{idx}]"
+        )
+        cmds.removeMultiInstance(tgt_grp, b=True)
+
+        cmds.removeMultiInstance(
+            f"{bs_node}.weight[{idx}]", b=True
+        )
+
+    # Delete BS node if no targets remain
+    remaining = cmds.getAttr(
+        f"{bs_node}.weight", multiIndices=True
+    )
+    if not remaining:
+        cmds.delete(bs_node)
+
+
+# =====================================================
+# PIPELINE STEP 4: RECONNECT BS INPUTS
+# =====================================================
+
+
+def reconnect_bs_inputs(source_mesh, partition_meshes):
+    """Replicate blendshape input connections on partitions.
+
+    For each weight driven by an external connection on the
+    source blendshape, connects the same driver to the
+    corresponding weight on each partition's blendshape node.
+
+    Args:
+        source_mesh (str): The original source mesh transform.
+        partition_meshes (list): List of partition mesh names.
+    """
+    src_bs_nodes = _get_mesh_deformers_by_type(
+        source_mesh, "blendShape"
+    )
+    if not src_bs_nodes:
+        return
+
+    for part_mesh in partition_meshes:
+        part_bs_nodes = _get_mesh_deformers_by_type(
+            part_mesh, "blendShape"
+        )
+        if not part_bs_nodes:
+            continue
+
+        part_bs = part_bs_nodes[0]
+        part_targets = cmds.getAttr(
+            f"{part_bs}.weight", multiIndices=True
+        ) or []
+
+        for src_bs in src_bs_nodes:
+            src_targets = cmds.getAttr(
+                f"{src_bs}.weight", multiIndices=True
+            ) or []
+
+            for idx in src_targets:
+                if idx not in part_targets:
+                    continue
+
+                # Check input connections on source weight
+                src_attr = f"{src_bs}.weight[{idx}]"
+                connections = cmds.listConnections(
+                    src_attr,
+                    source=True,
+                    destination=False,
+                    plugs=True,
+                )
+
+                dst_attr = f"{part_bs}.weight[{idx}]"
+
+                if connections:
+                    try:
+                        cmds.connectAttr(
+                            connections[0],
+                            dst_attr,
+                            force=True,
+                        )
+                    except RuntimeError:
+                        pass
+                else:
+                    val = cmds.getAttr(src_attr)
+                    cmds.setAttr(dst_attr, val)
+
+            # Replicate envelope connection
+            env_conns = cmds.listConnections(
+                f"{src_bs}.envelope",
+                source=True,
+                destination=False,
+                plugs=True,
+            )
+            if env_conns:
+                try:
+                    cmds.connectAttr(
+                        env_conns[0],
+                        f"{part_bs}.envelope",
+                        force=True,
+                    )
+                except RuntimeError:
+                    pass
+
+
+# =====================================================
+# PIPELINE STEP 5: COPY SKIN CLUSTERS
+# =====================================================
+
+
+def copy_skin_clusters(source_mesh, partition_meshes):
+    """Copy skin cluster from source to each partition.
+
+    Creates a new skinCluster on each partition with the same
+    influences as the source, then copies weights using
+    closestPoint surface association.
+
+    Pattern from flex.update_utils.copy_skin_weights().
+
+    Args:
+        source_mesh (str): The original source mesh transform.
+        partition_meshes (list): List of partition mesh names.
+
+    Returns:
+        dict: Mapping of partition mesh to skinCluster name.
+            Empty dict if source has no skinCluster.
+    """
+    src_skins = _get_mesh_deformers_by_type(
+        source_mesh, "skinCluster"
+    )
+    if not src_skins:
+        return {}
+
+    src_skin = src_skins[0]
+    influences = cmds.skinCluster(
+        src_skin, query=True, influence=True
+    )
+    if not influences:
+        return {}
+
+    result = {}
+
+    for part_mesh in partition_meshes:
+        part_short = get_short_name(part_mesh)
+
+        new_skin = cmds.skinCluster(
+            influences,
+            part_mesh,
+            bindMethod=0,
+            obeyMaxInfluences=False,
+            skinMethod=0,
+            normalizeWeights=1,
+            removeUnusedInfluence=False,
+            name=f"{part_short}_skinCluster",
+        )[0]
+
+        cmds.copySkinWeights(
+            sourceSkin=src_skin,
+            destinationSkin=new_skin,
+            surfaceAssociation="closestPoint",
+            influenceAssociation=[
+                "label", "closestJoint", "oneToOne",
+            ],
+            noMirror=True,
+        )
+
+        result[part_mesh] = new_skin
+
+    return result
+
+
+# =====================================================
+# PIPELINE STEP 6: REMOVE UNUSED INFLUENCES
+# =====================================================
+
+
+def remove_unused_influences(partition_meshes):
+    """Remove zero-weight influences from each partition.
+
+    For each partition mesh, queries the skinCluster for
+    influences that have no weight contribution and removes
+    them.
+
+    Args:
+        partition_meshes (list): List of partition mesh names.
+    """
+    for part_mesh in partition_meshes:
+        skin_nodes = _get_mesh_deformers_by_type(
+            part_mesh, "skinCluster"
+        )
+        if not skin_nodes:
+            continue
+
+        skin = skin_nodes[0]
+
+        weighted = cmds.skinCluster(
+            skin, query=True, weightedInfluence=True
+        ) or []
+        weighted_set = set(weighted)
+
+        all_infs = cmds.skinCluster(
+            skin, query=True, influence=True
+        ) or []
+
+        for inf in all_infs:
+            if inf not in weighted_set:
+                try:
+                    cmds.skinCluster(
+                        skin, edit=True,
+                        removeInfluence=inf,
+                    )
+                except RuntimeError:
+                    pass
+
+
+# =====================================================
+# PIPELINE STEP 7: COPY SKIN CONFIGURATION
+# =====================================================
+
+
+def copy_skin_configuration(
+    source_mesh, partition_meshes
+):
+    """Copy skinCluster settings and prebind connections.
+
+    Copies skinCluster attributes (skinningMethod, etc.) and
+    replicates any prebind matrix input connections from the
+    source skinCluster to each partition's skinCluster.
+
+    Args:
+        source_mesh (str): The original source mesh transform.
+        partition_meshes (list): List of partition mesh names.
+    """
+    src_skins = _get_mesh_deformers_by_type(
+        source_mesh, "skinCluster"
+    )
+    if not src_skins:
+        return
+
+    src_skin = src_skins[0]
+
+    skin_attrs = [
+        "skinningMethod",
+        "normalizeWeights",
+        "deformUserNormals",
+    ]
+
+    for part_mesh in partition_meshes:
+        part_skins = _get_mesh_deformers_by_type(
+            part_mesh, "skinCluster"
+        )
+        if not part_skins:
+            continue
+
+        part_skin = part_skins[0]
+
+        # Copy skinCluster attributes
+        for attr in skin_attrs:
+            try:
+                val = cmds.getAttr(f"{src_skin}.{attr}")
+                cmds.setAttr(
+                    f"{part_skin}.{attr}", val
+                )
+            except RuntimeError:
+                pass
+
+        # Copy prebind matrix connections
+        _copy_prebind_connections(src_skin, part_skin)
+
+
+def _copy_prebind_connections(src_skin, part_skin):
+    """Copy prebind matrix connections between skins.
+
+    Maps by influence name since matrix indices may differ
+    between source and partition skinClusters.
+
+    Args:
+        src_skin (str): Source skinCluster node.
+        part_skin (str): Partition skinCluster node.
+    """
+    src_matrix_indices = cmds.getAttr(
+        f"{src_skin}.matrix", multiIndices=True
+    ) or []
+
+    for src_idx in src_matrix_indices:
+        prebind_attr = (
+            f"{src_skin}.bindPreMatrix[{src_idx}]"
+        )
+        connections = cmds.listConnections(
+            prebind_attr,
+            source=True,
+            destination=False,
+            plugs=True,
+        )
+        if not connections:
+            continue
+
+        # Find which influence is at this index
+        matrix_attr = f"{src_skin}.matrix[{src_idx}]"
+        inf_conns = cmds.listConnections(
+            matrix_attr,
+            source=True,
+            destination=False,
+        )
+        if not inf_conns:
+            continue
+        inf_name = inf_conns[0]
+
+        # Find matching index in partition skin
+        part_matrix_indices = cmds.getAttr(
+            f"{part_skin}.matrix", multiIndices=True
+        ) or []
+
+        for p_idx in part_matrix_indices:
+            p_matrix_attr = (
+                f"{part_skin}.matrix[{p_idx}]"
+            )
+            p_inf_conns = cmds.listConnections(
+                p_matrix_attr,
+                source=True,
+                destination=False,
+            )
+            if (
+                p_inf_conns
+                and p_inf_conns[0] == inf_name
+            ):
+                p_prebind = (
+                    f"{part_skin}"
+                    f".bindPreMatrix[{p_idx}]"
+                )
+                try:
+                    cmds.connectAttr(
+                        connections[0],
+                        p_prebind,
+                        force=True,
+                    )
+                except RuntimeError:
+                    pass
+                break
+
+
+# =====================================================
+# PIPELINE STEP 8: PROXIMITY WRAP PROXY
+# =====================================================
+
+
+def create_proximity_wrap_proxy(
+    source_mesh, partition_meshes, group_node,
+    manager=None,
+):
+    """Create a proxy mesh driven by proximity wrap.
+
+    Duplicates the source mesh in bind pose and applies a
+    proximity wrap deformer driven by all partition meshes.
+    This reassembly mesh follows the combined deformation
+    of all partitions.
+
+    Args:
+        source_mesh (str): The original source mesh transform.
+        partition_meshes (list): List of partition mesh names.
+        group_node (str): Partitions group for parenting.
+        manager (PolygonGroupManager): Optional manager for
+            shader state management.
+
+    Returns:
+        str: The proxy mesh transform name, or None if failed.
+    """
+    if not partition_meshes:
+        return None
+
+    mesh_short = get_short_name(source_mesh)
+
+    # Temporarily restore original shaders
+    was_showing = False
+    if manager and manager.showing_partitions:
+        was_showing = True
+        if manager.original_shading:
+            show_original_shaders(manager)
+
+    # Disable deformers for bind-pose duplicate
+    saved_envelopes = _disable_deformers(source_mesh)
+
+    try:
+        proxy_name = f"{mesh_short}_proxy"
+        proxy = cmds.duplicate(
+            source_mesh, rr=True, name=proxy_name
+        )[0]
+
+        for attr in (
+            "translateX", "translateY",
+            "translateZ",
+            "rotateX", "rotateY", "rotateZ",
+            "scaleX", "scaleY", "scaleZ",
+        ):
+            cmds.setAttr(
+                f"{proxy}.{attr}", lock=False
+            )
+
+        cmds.delete(proxy, ch=True)
+
+    finally:
+        _restore_deformers(saved_envelopes)
+
+    # Restore shader state
+    if was_showing and manager:
+        show_partition_shaders(manager)
+
+    # Apply proximity wrap using mgear utility
+    from mgear.core.deformer import (
+        create_proximity_wrap,
+    )
+
+    create_proximity_wrap(
+        target_geos=[proxy],
+        driver_geos=partition_meshes,
+        deformer_name=f"{mesh_short}_proximityWrap",
+    )
+
+    # Parent proxy under partitions group
+    if cmds.objExists(group_node):
+        cmds.parent(proxy, group_node)
+
+    return proxy
+
+
+# =====================================================
+# EXECUTION PIPELINE
+# =====================================================
+
+
+def execute_full_pipeline(manager):
+    """Run the complete evaluation partition pipeline.
+
+    Orchestrates all 8 steps: split groups, transfer
+    blendshapes, clean unused targets, reconnect inputs,
+    copy skin, remove unused influences, copy skin config,
+    and create proximity wrap proxy.
+
+    Only transfers deformers that exist on the source mesh.
+    Blendshape steps (2-4) and skin steps (5-7) are skipped
+    if the source has no corresponding deformer.
+
+    Args:
+        manager (PolygonGroupManager): The manager with
+            groups defined.
+
+    Returns:
+        tuple: (group_node, partition_meshes, proxy_mesh).
+            Returns (None, [], None) if execution failed.
+    """
+    if not manager or not manager.groups:
+        cmds.warning("No groups defined.")
+        return None, [], None
+
+    source = manager.mesh
+
+    # Step 1: Split polygon groups
+    grp, partitions = split_polygon_groups(manager)
+    if not grp:
+        return None, [], None
+
+    # Re-resolve source mesh path in case DAG changed
+    # during split (e.g. hierarchy reparenting).
+    if not cmds.objExists(source):
+        short = get_short_name(source)
+        resolved = cmds.ls(short, long=True)
+        if resolved:
+            source = resolved[0]
+        else:
+            cmds.warning(
+                "Source mesh no longer exists after split."
+            )
+            return grp, partitions, None
+
+    # Steps 2-4: Blendshape transfer
+    bs_nodes = _get_mesh_deformers_by_type(
+        source, "blendShape"
+    )
+    if bs_nodes:
+        transfer_blendshapes(source, partitions)
+        clean_unused_bs_targets(partitions)
+        reconnect_bs_inputs(source, partitions)
+
+    # Steps 5-7: Skin cluster transfer
+    skin_nodes = _get_mesh_deformers_by_type(
+        source, "skinCluster"
+    )
+    if skin_nodes:
+        copy_skin_clusters(source, partitions)
+        remove_unused_influences(partitions)
+        copy_skin_configuration(source, partitions)
+
+    # Step 8: Proximity wrap proxy
+    proxy = create_proximity_wrap_proxy(
+        source, partitions, grp, manager
+    )
+
+    return grp, partitions, proxy
+
+
+# =====================================================
 # CONFIGURATION EXPORT/IMPORT
 # =====================================================
 

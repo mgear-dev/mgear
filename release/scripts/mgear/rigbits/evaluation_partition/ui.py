@@ -102,6 +102,26 @@ class EvaluationPartitionUI(
         self.group_list = GroupListWidget()
 
         # Action buttons
+        self.execute_btn = QtWidgets.QPushButton("Execute Partition")
+        self.execute_btn.setMinimumHeight(30)
+        self.execute_btn.setToolTip(
+            "Split mesh into separate parts per group"
+        )
+        self.execute_btn.setStyleSheet(
+            "QPushButton {"
+            "    background-color: #4a7c4e;"
+            "    color: white;"
+            "    font-weight: bold;"
+            "    border-radius: 4px;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: #5a8c5e;"
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: #3a6c3e;"
+            "}"
+        )
+
         self.apply_shaders_btn = QtWidgets.QPushButton("Apply Shaders")
         self.apply_shaders_btn.setToolTip(
             "Re-apply all shaders to visualize current groups"
@@ -153,10 +173,14 @@ class EvaluationPartitionUI(
 
         # Action buttons
         actions_group = QtWidgets.QGroupBox("Actions")
-        actions_layout = QtWidgets.QHBoxLayout(actions_group)
-        actions_layout.addWidget(self.apply_shaders_btn)
-        actions_layout.addWidget(self.toggle_shaders_btn)
-        actions_layout.addWidget(self.reset_btn)
+        actions_layout = QtWidgets.QVBoxLayout(actions_group)
+        actions_layout.addWidget(self.execute_btn)
+
+        actions_row = QtWidgets.QHBoxLayout()
+        actions_row.addWidget(self.apply_shaders_btn)
+        actions_row.addWidget(self.toggle_shaders_btn)
+        actions_row.addWidget(self.reset_btn)
+        actions_layout.addLayout(actions_row)
 
         main_layout.addWidget(actions_group)
 
@@ -181,6 +205,7 @@ class EvaluationPartitionUI(
         self.group_list.name_changed.connect(self.on_name_changed)
 
         # Actions
+        self.execute_btn.clicked.connect(self.execute_partition)
         self.apply_shaders_btn.clicked.connect(self.apply_all_shaders)
         self.toggle_shaders_btn.clicked.connect(self.toggle_shaders)
         self.reset_btn.clicked.connect(self.reset_all_groups)
@@ -188,6 +213,7 @@ class EvaluationPartitionUI(
     def set_initial_state(self):
         """Set initial widget states after UI is built."""
         self.export_action.setEnabled(False)
+        self.execute_btn.setEnabled(False)
         self.apply_shaders_btn.setEnabled(False)
         self.toggle_shaders_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
@@ -267,6 +293,7 @@ class EvaluationPartitionUI(
 
         # Enable buttons
         self.export_action.setEnabled(True)
+        self.execute_btn.setEnabled(True)
         self.apply_shaders_btn.setEnabled(True)
         self.toggle_shaders_btn.setEnabled(True)
         self.toggle_shaders_btn.setChecked(False)
@@ -557,6 +584,7 @@ class EvaluationPartitionUI(
 
             # Enable buttons
             self.export_action.setEnabled(True)
+            self.execute_btn.setEnabled(True)
             self.apply_shaders_btn.setEnabled(True)
             self.toggle_shaders_btn.setEnabled(True)
             self.toggle_shaders_btn.setChecked(False)
@@ -584,6 +612,46 @@ class EvaluationPartitionUI(
     # =========================================================
     # ACTION OPERATIONS
     # =========================================================
+
+    def execute_partition(self):
+        """Run the full evaluation partition pipeline."""
+        if not self.group_manager:
+            self.set_status(
+                "Please load a mesh first", error=True
+            )
+            return
+
+        if len(self.group_manager.groups) < 2:
+            self.set_status(
+                "Need at least 2 groups to partition",
+                error=True,
+            )
+            return
+
+        cmds.undoInfo(openChunk=True)
+
+        try:
+            self.set_status("Splitting polygon groups...")
+            grp, partitions, proxy = (
+                core.execute_full_pipeline(
+                    self.group_manager
+                )
+            )
+
+            if grp and partitions:
+                count = len(partitions)
+                msg = f"Created {count} partitions"
+                if proxy:
+                    msg += " + proxy"
+                self.set_status(msg)
+                cmds.select(grp)
+            else:
+                self.set_status(
+                    "Partition failed", error=True
+                )
+
+        finally:
+            cmds.undoInfo(closeChunk=True)
 
     def apply_all_shaders(self):
         """Re-apply all shaders to visualize current groups."""
