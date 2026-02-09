@@ -4,30 +4,9 @@ import maya.internal.nodes.proximitywrap.node_interface as ifc
 
 import mgear.pymaya as pm
 
-
-# =============================================================================
-# BLENDSHAPE CONSTANTS
-# =============================================================================
-
-BS_TARGET_ITEM_ATTR = (
-    "{}.inputTarget[0].inputTargetGroup[{}].inputTargetItem"
-)
-
-
-def bs_target_weight(item_index):
-    """Convert a blendShape target item index to a weight value.
-
-    Maya stores blendShape in-between targets using item
-    indices where 6000 = weight 1.0, 5500 = weight 0.5,
-    5000 = weight 0.0, etc.
-
-    Args:
-        item_index (int): The target item index (e.g. 6000).
-
-    Returns:
-        float: The corresponding weight value.
-    """
-    return float((item_index - 5000) / 1000.0)
+# Backward-compat re-exports (moved to mgear.core.blendshape)
+from mgear.core.blendshape import BS_TARGET_ITEM_ATTR  # noqa: F401
+from mgear.core.blendshape import bs_target_weight  # noqa: F401
 
 
 # =============================================================================

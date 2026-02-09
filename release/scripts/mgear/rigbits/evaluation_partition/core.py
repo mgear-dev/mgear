@@ -13,6 +13,7 @@ import random
 from maya import cmds
 from maya import mel
 
+from mgear.core import blendshape
 from mgear.core import deformer
 from mgear.core import skin
 from mgear.core import utils
@@ -975,7 +976,7 @@ def _transfer_bs_to_partition(
                 f"{src_bs}.weight[{idx}]", query=True
             )
 
-            attr_name = deformer.BS_TARGET_ITEM_ATTR.format(
+            attr_name = blendshape.BS_TARGET_ITEM_ATTR.format(
                 src_bs, idx
             )
             target_items = cmds.getAttr(
