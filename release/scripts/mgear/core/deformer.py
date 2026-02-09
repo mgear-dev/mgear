@@ -1,52 +1,302 @@
-import mgear.pymaya as pm
 from maya import cmds
-
+import maya.api.OpenMaya as om2
 import maya.internal.nodes.proximitywrap.node_interface as ifc
+
+import mgear.pymaya as pm
+
+
+# =============================================================================
+# BLENDSHAPE CONSTANTS
+# =============================================================================
+
+BS_TARGET_ITEM_ATTR = (
+    "{}.inputTarget[0].inputTargetGroup[{}].inputTargetItem"
+)
+
+
+def bs_target_weight(item_index):
+    """Convert a blendShape target item index to a weight value.
+
+    Maya stores blendShape in-between targets using item
+    indices where 6000 = weight 1.0, 5500 = weight 0.5,
+    5000 = weight 0.0, etc.
+
+    Args:
+        item_index (int): The target item index (e.g. 6000).
+
+    Returns:
+        float: The corresponding weight value.
+    """
+    return float((item_index - 5000) / 1000.0)
+
+
+# =============================================================================
+# DEFORMER DETECTION
+# =============================================================================
 
 
 def is_deformer(node):
-    """check if the node is from a deformer type
+    """Check if a node is a geometry deformer.
+
+    Uses Maya's API class hierarchy (MFn.kGeometryFilt)
+    to detect all deformer types, including custom and
+    plugin deformers.
 
     Args:
-        node (TYPE): node to check
+        node (str): Node name to check.
 
     Returns:
-        TYPE: bool
+        bool: True if the node is a deformer.
     """
-    deformer_types = set(
-        [
-            "skinCluster",
-            "blendShape",
-            "nonLinear",
-            "ffd",
-            "cluster",
-            "sculpt",
-            "wire",
-            "wrap",
-            "jiggle",
-            "deltaMush",
-            "softMod",
-            "morph",
-        ]
-    )
-    node_type = pm.nodeType(node)
-    return node_type in deformer_types
+    m_sel = om2.MSelectionList()
+    try:
+        m_sel.add(node)
+    except RuntimeError:
+        return False
+    return m_sel.getDependNode(0).hasFn(om2.MFn.kGeometryFilt)
 
 
 def filter_deformers(node_list):
-    """Filter the list of nodes to only return the deformers
+    """Filter a list of nodes to only return deformers.
 
     Args:
-        node_list (list): list of pyNode
+        node_list (list): List of node names or PyNodes.
 
     Returns:
-        TYPE: filtered list of pyNode
+        list: Filtered list containing only deformer nodes.
     """
-    deformer_list = []
-    for node in node_list:
-        if is_deformer(node):
-            deformer_list.append(node)
-    return deformer_list
+    return [node for node in node_list if is_deformer(node)]
+
+
+def get_deformers(mesh, deformer_type=None):
+    """Get deformer nodes from a mesh's history.
+
+    Args:
+        mesh (str): The mesh transform name.
+        deformer_type (str, optional): Filter by a specific Maya
+            deformer type name (e.g. "skinCluster", "blendShape").
+
+    Returns:
+        list: List of deformer node names.
+    """
+    history = (
+        cmds.listHistory(mesh, pruneDagObjects=True) or []
+    )
+    result = [n for n in history if is_deformer(n)]
+    if deformer_type:
+        result = [
+            n for n in result
+            if cmds.nodeType(n) == deformer_type
+        ]
+    return result
+
+
+# =============================================================================
+# DEFORMER ENVELOPE MANAGEMENT
+# =============================================================================
+
+
+def disable_deformer_envelopes(mesh, exclude_types=None):
+    """Disable all deformer envelopes on a mesh.
+
+    Stores original envelope values for later restoration
+    via ``restore_deformer_envelopes``. Uses ``cmds.mute``
+    for envelopes that have input connections.
+
+    Args:
+        mesh (str): The mesh transform name.
+        exclude_types (set, optional): Deformer type names
+            to skip (e.g. ``{"blendShape"}``).
+
+    Returns:
+        dict: Mapping of deformer name to original state.
+            Values are either a float (original envelope
+            value) or the string ``"muted"`` if the envelope
+            was muted to disable it.
+    """
+    exclude_types = exclude_types or set()
+    deformers = get_deformers(mesh)
+    original_envelopes = {}
+
+    for d in deformers:
+        if cmds.nodeType(d) in exclude_types:
+            continue
+        envelope_attr = "{}.envelope".format(d)
+        try:
+            original_envelopes[d] = cmds.getAttr(envelope_attr)
+            cmds.setAttr(envelope_attr, 0)
+        except RuntimeError:
+            mute_nodes = cmds.mute(
+                envelope_attr, force=True
+            )
+            if mute_nodes:
+                cmds.setAttr(
+                    "{}.hold".format(mute_nodes[0]), 0
+                )
+            original_envelopes[d] = "muted"
+
+    return original_envelopes
+
+
+def restore_deformer_envelopes(original_envelopes):
+    """Restore deformer envelopes to their original values.
+
+    Args:
+        original_envelopes (dict): State dict returned by
+            ``disable_deformer_envelopes``.
+    """
+    for d, val in original_envelopes.items():
+        if not cmds.objExists(d):
+            continue
+        envelope_attr = "{}.envelope".format(d)
+        if val == "muted":
+            cmds.mute(
+                envelope_attr, disable=True, force=True
+            )
+        else:
+            try:
+                cmds.setAttr(envelope_attr, val)
+            except RuntimeError:
+                pass
+
+
+# =============================================================================
+# WRAP DEFORMER
+# =============================================================================
+
+
+def create_wrap_deformer(
+    target, driver, use_base_duplicate=False, name=None
+):
+    """Create a wrap deformer on target driven by driver.
+
+    Supports two base mesh strategies:
+
+    - **Intermediate shape** (``use_base_duplicate=False``):
+      Connects to the driver's existing intermediate (orig)
+      shape. Suitable when the driver won't be modified or
+      deleted during the wrap's lifetime.
+
+    - **Base duplicate** (``use_base_duplicate=True``):
+      Creates a separate static duplicate as the base mesh.
+      Safer when the wrap will be deleted later, as it
+      avoids corrupting the driver's deformation chain.
+
+    Args:
+        target (str): Target mesh transform to deform.
+        driver (str): Driver mesh transform.
+        use_base_duplicate (bool): If True, create a
+            separate base mesh duplicate instead of using
+            the driver's intermediate shape.
+        name (str, optional): Name for the wrap deformer.
+
+    Returns:
+        tuple: ``(wrap_node, base_dup)`` where base_dup is
+            the static base mesh to clean up later (only
+            when ``use_base_duplicate=True``), or None.
+            Returns ``(None, None)`` on failure.
+    """
+    # Get visible shape on driver
+    driver_shapes = cmds.listRelatives(
+        driver, shapes=True, type="mesh",
+        noIntermediate=True, fullPath=True,
+    ) or []
+
+    if not driver_shapes:
+        return None, None
+
+    driver_shape = driver_shapes[0]
+
+    # Determine base mesh strategy
+    base_dup = None
+    if use_base_duplicate:
+        base_name = "{}_wrapBase".format(
+            driver.split("|")[-1]
+        )
+        base_dup = cmds.duplicate(
+            driver, returnRootsOnly=True,
+            inputConnections=False, name=base_name,
+        )[0]
+
+        # Unlock transforms on base duplicate
+        for attr in (
+            "translateX", "translateY", "translateZ",
+            "rotateX", "rotateY", "rotateZ",
+            "scaleX", "scaleY", "scaleZ",
+        ):
+            try:
+                cmds.setAttr(
+                    "{}.{}".format(base_dup, attr),
+                    lock=False,
+                )
+            except RuntimeError:
+                pass
+
+        cmds.delete(base_dup, constructionHistory=True)
+        cmds.setAttr(
+            "{}.visibility".format(base_dup), 0
+        )
+
+        base_shapes = cmds.listRelatives(
+            base_dup, shapes=True, type="mesh",
+            fullPath=True,
+        ) or []
+        if not base_shapes:
+            cmds.delete(base_dup)
+            return None, None
+
+        base_shape = base_shapes[0]
+    else:
+        # Use driver's intermediate (orig) shape
+        all_shapes = cmds.listRelatives(
+            driver, shapes=True, type="mesh",
+            fullPath=True,
+        ) or []
+        orig_shapes = [
+            s for s in all_shapes
+            if cmds.getAttr(
+                "{}.intermediateObject".format(s)
+            )
+        ]
+        if orig_shapes:
+            base_shape = orig_shapes[0]
+        else:
+            base_shape = driver_shape
+
+    # Create wrap deformer
+    wrap_name = name or "wrap"
+    wrap = cmds.deformer(
+        target, type="wrap", name=wrap_name
+    )[0]
+    cmds.setAttr("{}.exclusiveBind".format(wrap), 1)
+    cmds.setAttr(
+        "{}.autoWeightThreshold".format(wrap), 1
+    )
+    cmds.setAttr("{}.dropoff[0]".format(wrap), 4.0)
+    cmds.setAttr("{}.inflType[0]".format(wrap), 2)
+
+    # Connect base mesh
+    cmds.connectAttr(
+        "{}.worldMesh[0]".format(base_shape),
+        "{}.basePoints[0]".format(wrap),
+        force=True,
+    )
+
+    # Connect driver (visible/deformed shape)
+    cmds.connectAttr(
+        "{}.outMesh".format(driver_shape),
+        "{}.driverPoints[0]".format(wrap),
+        force=True,
+    )
+
+    # Connect geometry matrix
+    cmds.connectAttr(
+        "{}.worldMatrix[0]".format(target),
+        "{}.geomMatrix".format(wrap),
+        force=True,
+    )
+
+    return wrap, base_dup
 
 
 def create_cluster_on_curve(curve, control_points=None):

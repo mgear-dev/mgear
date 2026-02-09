@@ -122,11 +122,6 @@ class EvaluationPartitionUI(
             "}"
         )
 
-        self.apply_shaders_btn = QtWidgets.QPushButton("Apply Shaders")
-        self.apply_shaders_btn.setToolTip(
-            "Re-apply all shaders to visualize current groups"
-        )
-
         self.toggle_shaders_btn = QtWidgets.QPushButton("Show Original Shaders")
         self.toggle_shaders_btn.setCheckable(True)
         self.toggle_shaders_btn.setToolTip(
@@ -177,7 +172,6 @@ class EvaluationPartitionUI(
         actions_layout.addWidget(self.execute_btn)
 
         actions_row = QtWidgets.QHBoxLayout()
-        actions_row.addWidget(self.apply_shaders_btn)
         actions_row.addWidget(self.toggle_shaders_btn)
         actions_row.addWidget(self.reset_btn)
         actions_layout.addLayout(actions_row)
@@ -206,7 +200,6 @@ class EvaluationPartitionUI(
 
         # Actions
         self.execute_btn.clicked.connect(self.execute_partition)
-        self.apply_shaders_btn.clicked.connect(self.apply_all_shaders)
         self.toggle_shaders_btn.clicked.connect(self.toggle_shaders)
         self.reset_btn.clicked.connect(self.reset_all_groups)
 
@@ -214,7 +207,6 @@ class EvaluationPartitionUI(
         """Set initial widget states after UI is built."""
         self.export_action.setEnabled(False)
         self.execute_btn.setEnabled(False)
-        self.apply_shaders_btn.setEnabled(False)
         self.toggle_shaders_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self.group_list.add_btn.setEnabled(False)
@@ -294,7 +286,7 @@ class EvaluationPartitionUI(
         # Enable buttons
         self.export_action.setEnabled(True)
         self.execute_btn.setEnabled(True)
-        self.apply_shaders_btn.setEnabled(True)
+
         self.toggle_shaders_btn.setEnabled(True)
         self.toggle_shaders_btn.setChecked(False)
         self.toggle_shaders_btn.setText("Show Original Shaders")
@@ -585,7 +577,7 @@ class EvaluationPartitionUI(
             # Enable buttons
             self.export_action.setEnabled(True)
             self.execute_btn.setEnabled(True)
-            self.apply_shaders_btn.setEnabled(True)
+    
             self.toggle_shaders_btn.setEnabled(True)
             self.toggle_shaders_btn.setChecked(False)
             self.toggle_shaders_btn.setText("Show Original Shaders")
@@ -649,25 +641,6 @@ class EvaluationPartitionUI(
                 self.set_status(
                     "Partition failed", error=True
                 )
-
-        finally:
-            cmds.undoInfo(closeChunk=True)
-
-    def apply_all_shaders(self):
-        """Re-apply all shaders to visualize current groups."""
-        if not self.group_manager:
-            return
-
-        cmds.undoInfo(openChunk=True)
-
-        try:
-            core.show_partition_shaders(self.group_manager)
-
-            # Update toggle button state
-            self.toggle_shaders_btn.setChecked(False)
-            self.toggle_shaders_btn.setText("Show Original Shaders")
-
-            self.set_status("Applied all shaders")
 
         finally:
             cmds.undoInfo(closeChunk=True)

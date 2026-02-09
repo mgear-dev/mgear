@@ -13,9 +13,9 @@ import random
 from maya import cmds
 from maya import mel
 
-from mgear.core.skin import getSkinCluster
-from mgear.core.skin import skinCopy
-from mgear.core.deformer import create_proximity_wrap
+from mgear.core import deformer
+from mgear.core import skin
+from mgear.core import utils
 
 log = logging.getLogger("mgear.rigbits.evaluation_partition")
 
@@ -734,210 +734,6 @@ def _progress_end(bar):
 # DEFORMER UTILITIES
 # =====================================================
 
-BS_TARGET_ATTR = (
-    "{}.inputTarget[0].inputTargetGroup[{}].inputTargetItem"
-)
-
-
-def _get_mesh_deformers(mesh):
-    """Get all deformer nodes from mesh history.
-
-    Args:
-        mesh (str): The mesh transform name.
-
-    Returns:
-        list: List of deformer node names.
-    """
-    history = (
-        cmds.listHistory(mesh, pruneDagObjects=True) or []
-    )
-    deformer_types = {
-        "skinCluster", "blendShape", "nonLinear", "ffd",
-        "cluster", "sculpt", "wire", "wrap", "jiggle",
-        "deltaMush", "softMod", "morph",
-    }
-    return [
-        n for n in history
-        if cmds.nodeType(n) in deformer_types
-    ]
-
-
-def _get_mesh_deformers_by_type(mesh, deformer_type):
-    """Get deformer nodes of a specific type from mesh history.
-
-    Args:
-        mesh (str): The mesh transform name.
-        deformer_type (str): The Maya deformer type name.
-
-    Returns:
-        list: List of deformer node names matching the type.
-    """
-    history = (
-        cmds.listHistory(mesh, pruneDagObjects=True) or []
-    )
-    return [
-        n for n in history
-        if cmds.nodeType(n) == deformer_type
-    ]
-
-
-def _disable_deformers(mesh, exclude_types=None):
-    """Disable all deformer envelopes on a mesh.
-
-    Stores original envelope values for later restoration.
-    Uses cmds.mute for envelopes that have input connections.
-
-    Args:
-        mesh (str): The mesh transform name.
-        exclude_types (set): Deformer types to skip.
-
-    Returns:
-        dict: Mapping of deformer name to original state.
-    """
-    exclude_types = exclude_types or set()
-    deformers = _get_mesh_deformers(mesh)
-    original_envelopes = {}
-
-    for d in deformers:
-        if cmds.nodeType(d) in exclude_types:
-            continue
-        envelope_attr = f"{d}.envelope"
-        try:
-            original_envelopes[d] = cmds.getAttr(envelope_attr)
-            cmds.setAttr(envelope_attr, 0)
-        except RuntimeError:
-            # Envelope has connections, use mute
-            mute_nodes = cmds.mute(
-                envelope_attr, force=True
-            )
-            if mute_nodes:
-                cmds.setAttr(f"{mute_nodes[0]}.hold", 0)
-            original_envelopes[d] = "muted"
-
-    return original_envelopes
-
-
-def _restore_deformers(original_envelopes):
-    """Restore deformer envelopes to their original values.
-
-    Args:
-        original_envelopes (dict): From _disable_deformers.
-    """
-    for d, val in original_envelopes.items():
-        if not cmds.objExists(d):
-            continue
-        envelope_attr = f"{d}.envelope"
-        if val == "muted":
-            cmds.mute(
-                envelope_attr, disable=True, force=True
-            )
-        else:
-            try:
-                cmds.setAttr(envelope_attr, val)
-            except RuntimeError:
-                pass
-
-
-def _create_temp_wrap(target_mesh, driver_mesh):
-    """Create a temporary wrap deformer for BS transfer.
-
-    Maps target mesh vertices to follow the driver mesh
-    surface deformation. Creates a separate base mesh
-    duplicate instead of connecting to the driver's
-    intermediate shape (which can corrupt the driver's
-    deformation chain on cleanup).
-
-    Pattern from flex.update_utils.create_wrap().
-
-    Args:
-        target_mesh (str): Target mesh transform.
-        driver_mesh (str): Driver mesh transform.
-
-    Returns:
-        tuple: (wrap_node, base_dup) where wrap_node is the
-            wrap deformer name and base_dup is the static
-            base mesh to clean up later. Returns (None, None)
-            if failed.
-    """
-    # Get visible shape on driver
-    driver_shapes = cmds.listRelatives(
-        driver_mesh, shapes=True, type="mesh",
-        noIntermediate=True, fullPath=True,
-    ) or []
-
-    if not driver_shapes:
-        return None, None
-
-    driver_shape = driver_shapes[0]
-
-    # Create a static base mesh duplicate for the wrap
-    # reference. This avoids connecting to the driver's
-    # intermediate shape which can corrupt its deformation
-    # chain when the wrap is later deleted.
-    base_name = "{}_wrapBase".format(
-        get_short_name(target_mesh)
-    )
-    base_dup = cmds.duplicate(
-        driver_mesh, rr=True, ic=False,
-        name=base_name,
-    )[0]
-
-    # Unlock transforms on base duplicate
-    for attr in (
-        "translateX", "translateY", "translateZ",
-        "rotateX", "rotateY", "rotateZ",
-        "scaleX", "scaleY", "scaleZ",
-    ):
-        try:
-            cmds.setAttr(
-                f"{base_dup}.{attr}", lock=False
-            )
-        except RuntimeError:
-            pass
-
-    cmds.delete(base_dup, ch=True)
-    cmds.setAttr(f"{base_dup}.visibility", 0)
-
-    base_shapes = cmds.listRelatives(
-        base_dup, shapes=True, type="mesh",
-        fullPath=True,
-    ) or []
-    if not base_shapes:
-        cmds.delete(base_dup)
-        return None, None
-
-    base_shape = base_shapes[0]
-
-    # Create wrap deformer
-    wrap = cmds.deformer(target_mesh, type="wrap")[0]
-    cmds.setAttr(f"{wrap}.exclusiveBind", 1)
-    cmds.setAttr(f"{wrap}.autoWeightThreshold", 1)
-    cmds.setAttr(f"{wrap}.dropoff[0]", 4.0)
-    cmds.setAttr(f"{wrap}.inflType[0]", 2)
-
-    # Connect base (static duplicate, not orig shape)
-    cmds.connectAttr(
-        f"{base_shape}.worldMesh[0]",
-        f"{wrap}.basePoints[0]",
-        force=True,
-    )
-
-    # Connect driver (visible/deformed shape)
-    cmds.connectAttr(
-        f"{driver_shape}.outMesh",
-        f"{wrap}.driverPoints[0]",
-        force=True,
-    )
-
-    # Connect geom matrix
-    cmds.connectAttr(
-        f"{target_mesh}.worldMatrix[0]",
-        f"{wrap}.geomMatrix",
-        force=True,
-    )
-
-    return wrap, base_dup
-
 
 def _get_vertex_positions(mesh):
     """Get all vertex world positions as a flat list.
@@ -993,7 +789,7 @@ def split_polygon_groups(manager):
         show_original_shaders(manager)
 
     # Disable all deformers for bind-pose duplicates
-    saved_envelopes = _disable_deformers(mesh)
+    saved_envelopes = deformer.disable_deformer_envelopes(mesh)
 
     partition_meshes = []
 
@@ -1041,7 +837,7 @@ def split_polygon_groups(manager):
             partition_meshes.append(new_obj)
 
     finally:
-        _restore_deformers(saved_envelopes)
+        deformer.restore_deformer_envelopes(saved_envelopes)
 
     # Restore previous shader state on source mesh
     if was_showing_partitions:
@@ -1084,14 +880,14 @@ def transfer_blendshapes(source_mesh, partition_meshes):
         dict: Mapping of partition mesh name to BS node name.
             Empty dict if source has no blendshapes.
     """
-    bs_nodes = _get_mesh_deformers_by_type(
+    bs_nodes = deformer.get_deformers(
         source_mesh, "blendShape"
     )
     if not bs_nodes:
         return {}
 
     # Disable all deformers except blendshapes on source
-    saved_envelopes = _disable_deformers(
+    saved_envelopes = deformer.disable_deformer_envelopes(
         source_mesh, exclude_types={"blendShape"}
     )
 
@@ -1113,7 +909,7 @@ def transfer_blendshapes(source_mesh, partition_meshes):
                 result[part_mesh] = new_bs
 
     finally:
-        _restore_deformers(saved_envelopes)
+        deformer.restore_deformer_envelopes(saved_envelopes)
 
     return result
 
@@ -1140,8 +936,8 @@ def _transfer_bs_to_partition(
     # Create wrap: temp dup follows source.
     # Returns (wrap_node, base_dup) -- base_dup is a static
     # mesh used for wrap reference that must be cleaned up.
-    wrap_node, base_dup = _create_temp_wrap(
-        temp_dup, source_mesh
+    wrap_node, base_dup = deformer.create_wrap_deformer(
+        temp_dup, source_mesh, use_base_duplicate=True
     )
     if not wrap_node:
         cmds.delete(temp_dup)
@@ -1179,7 +975,7 @@ def _transfer_bs_to_partition(
                 f"{src_bs}.weight[{idx}]", query=True
             )
 
-            attr_name = BS_TARGET_ATTR.format(
+            attr_name = deformer.BS_TARGET_ITEM_ATTR.format(
                 src_bs, idx
             )
             target_items = cmds.getAttr(
@@ -1349,7 +1145,7 @@ def clean_unused_bs_targets(
         threshold (float): Max delta to consider as no effect.
     """
     for part_mesh in partition_meshes:
-        bs_nodes = _get_mesh_deformers_by_type(
+        bs_nodes = deformer.get_deformers(
             part_mesh, "blendShape"
         )
         if not bs_nodes:
@@ -1467,14 +1263,14 @@ def reconnect_bs_inputs(source_mesh, partition_meshes):
         source_mesh (str): The original source mesh transform.
         partition_meshes (list): List of partition mesh names.
     """
-    src_bs_nodes = _get_mesh_deformers_by_type(
+    src_bs_nodes = deformer.get_deformers(
         source_mesh, "blendShape"
     )
     if not src_bs_nodes:
         return
 
     for part_mesh in partition_meshes:
-        part_bs_nodes = _get_mesh_deformers_by_type(
+        part_bs_nodes = deformer.get_deformers(
             part_mesh, "blendShape"
         )
         if not part_bs_nodes:
@@ -1553,7 +1349,7 @@ def copy_skin_clusters(source_mesh, partition_meshes):
             Empty dict if source has no skinCluster.
     """
 
-    src_skin_node = getSkinCluster(source_mesh)
+    src_skin_node = skin.getSkinCluster(source_mesh)
     if not src_skin_node:
         log.warning(
             "No skinCluster found on %s", source_mesh
@@ -1570,9 +1366,11 @@ def copy_skin_clusters(source_mesh, partition_meshes):
             "Copying skin to %s", part_short
         )
 
-        skinCopy(source_mesh, part_mesh, name=skin_name)
+        skin.skinCopy(
+            source_mesh, part_mesh, name=skin_name
+        )
 
-        dst_skin_node = getSkinCluster(part_mesh)
+        dst_skin_node = skin.getSkinCluster(part_mesh)
         if dst_skin_node:
             result[part_mesh] = dst_skin_node.name()
         else:
@@ -1598,7 +1396,7 @@ def remove_unused_influences(partition_meshes):
         partition_meshes (list): List of partition mesh names.
     """
     for part_mesh in partition_meshes:
-        skin_nodes = _get_mesh_deformers_by_type(
+        skin_nodes = deformer.get_deformers(
             part_mesh, "skinCluster"
         )
         if not skin_nodes:
@@ -1640,7 +1438,7 @@ def copy_skin_configuration(
         source_mesh (str): The original source mesh transform.
         partition_meshes (list): List of partition mesh names.
     """
-    src_skins = _get_mesh_deformers_by_type(
+    src_skins = deformer.get_deformers(
         source_mesh, "skinCluster"
     )
     if not src_skins:
@@ -1664,7 +1462,7 @@ def copy_skin_configuration(
     ]
 
     for part_mesh in partition_meshes:
-        part_skins = _get_mesh_deformers_by_type(
+        part_skins = deformer.get_deformers(
             part_mesh, "skinCluster"
         )
         if not part_skins:
@@ -1844,7 +1642,7 @@ def create_proximity_wrap_proxy(
             show_original_shaders(manager)
 
     # Disable deformers for bind-pose duplicate
-    saved_envelopes = _disable_deformers(source_mesh)
+    saved_envelopes = deformer.disable_deformer_envelopes(source_mesh)
 
     try:
         proxy_name = f"{mesh_short}_proxy"
@@ -1865,16 +1663,18 @@ def create_proximity_wrap_proxy(
         cmds.delete(proxy, ch=True)
 
     finally:
-        _restore_deformers(saved_envelopes)
+        deformer.restore_deformer_envelopes(saved_envelopes)
 
     # Restore shader state
     if was_showing and manager:
         show_partition_shaders(manager)
 
-    create_proximity_wrap(
+    deformer.create_proximity_wrap(
         target_geos=[proxy],
         driver_geos=partition_meshes,
-        deformer_name=f"{mesh_short}_proximityWrap",
+        deformer_name="{}_proximityWrap".format(
+            mesh_short
+        ),
     )
 
     # Parent proxy under partitions group
@@ -1889,6 +1689,7 @@ def create_proximity_wrap_proxy(
 # =====================================================
 
 
+@utils.one_undo
 def execute_full_pipeline(manager):
     """Run the complete evaluation partition pipeline.
 
@@ -1959,12 +1760,12 @@ def execute_full_pipeline(manager):
 
         # Detect which deformers exist on source
         has_bs = bool(
-            _get_mesh_deformers_by_type(
+            deformer.get_deformers(
                 source, "blendShape"
             )
         )
         has_skin = bool(
-            _get_mesh_deformers_by_type(
+            deformer.get_deformers(
                 source, "skinCluster"
             )
         )
