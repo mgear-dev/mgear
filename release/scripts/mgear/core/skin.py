@@ -1375,7 +1375,7 @@ def skinCopy(sourceMesh=None, targetMesh=None, *args, **kwargs):
 
     for targetMesh in targetMeshes:
         if isinstance(targetMesh, string_types):
-            sourceMesh = pm.PyNode(targetMesh)
+            targetMesh = pm.PyNode(targetMesh)
 
         ss = getSkinCluster(sourceMesh)
 

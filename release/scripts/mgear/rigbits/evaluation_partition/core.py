@@ -7,9 +7,17 @@ and configuration import/export.
 
 import colorsys
 import json
+import logging
 import random
 
 from maya import cmds
+from maya import mel
+
+from mgear.core.skin import getSkinCluster
+from mgear.core.skin import skinCopy
+from mgear.core.deformer import create_proximity_wrap
+
+log = logging.getLogger("mgear.rigbits.evaluation_partition")
 
 
 # =====================================================
@@ -675,6 +683,54 @@ def toggle_shaders(manager):
 
 
 # =====================================================
+# PROGRESS BAR UTILITIES
+# =====================================================
+
+
+def _progress_start(title, max_value):
+    """Start the Maya main progress bar.
+
+    Args:
+        title (str): Initial status text.
+        max_value (int): Total number of steps.
+
+    Returns:
+        str: Progress bar UI element name.
+    """
+    bar = mel.eval("$tmp = $gMainProgressBar")
+    cmds.progressBar(
+        bar,
+        edit=True,
+        beginProgress=True,
+        isInterruptable=False,
+        status=title,
+        maxValue=max_value,
+    )
+    return bar
+
+
+def _progress_update(bar, status):
+    """Advance progress bar by one step.
+
+    Args:
+        bar (str): Progress bar UI element name.
+        status (str): New status text.
+    """
+    cmds.progressBar(
+        bar, edit=True, step=1, status=status
+    )
+
+
+def _progress_end(bar):
+    """Close the Maya main progress bar.
+
+    Args:
+        bar (str): Progress bar UI element name.
+    """
+    cmds.progressBar(bar, edit=True, endProgress=True)
+
+
+# =====================================================
 # DEFORMER UTILITIES
 # =====================================================
 
@@ -1042,7 +1098,14 @@ def transfer_blendshapes(source_mesh, partition_meshes):
     result = {}
 
     try:
-        for part_mesh in partition_meshes:
+        for i, part_mesh in enumerate(partition_meshes):
+            part_short = get_short_name(part_mesh)
+            log.info(
+                "  Transferring BS to %s (%d/%d)",
+                part_short,
+                i + 1,
+                len(partition_meshes),
+            )
             new_bs = _transfer_bs_to_partition(
                 source_mesh, part_mesh, bs_nodes
             )
@@ -1368,12 +1431,24 @@ def _clean_bs_node_targets(mesh, bs_node, threshold):
             f"{bs_node}.weight[{idx}]", b=True
         )
 
+    if targets_to_remove:
+        log.info(
+            "  %s: removed %d/%d unused targets",
+            get_short_name(mesh),
+            len(targets_to_remove),
+            len(targets_idx),
+        )
+
     # Delete BS node if no targets remain
     remaining = cmds.getAttr(
         f"{bs_node}.weight", multiIndices=True
     )
     if not remaining:
         cmds.delete(bs_node)
+        log.info(
+            "  %s: deleted empty BS node",
+            get_short_name(mesh),
+        )
 
 
 # =====================================================
@@ -1469,12 +1544,6 @@ def reconnect_bs_inputs(source_mesh, partition_meshes):
 def copy_skin_clusters(source_mesh, partition_meshes):
     """Copy skin cluster from source to each partition.
 
-    Creates a new skinCluster on each partition with the same
-    influences as the source, then copies weights using
-    closestPoint surface association.
-
-    Pattern from flex.update_utils.copy_skin_weights().
-
     Args:
         source_mesh (str): The original source mesh transform.
         partition_meshes (list): List of partition mesh names.
@@ -1483,46 +1552,34 @@ def copy_skin_clusters(source_mesh, partition_meshes):
         dict: Mapping of partition mesh to skinCluster name.
             Empty dict if source has no skinCluster.
     """
-    src_skins = _get_mesh_deformers_by_type(
-        source_mesh, "skinCluster"
-    )
-    if not src_skins:
-        return {}
 
-    src_skin = src_skins[0]
-    influences = cmds.skinCluster(
-        src_skin, query=True, influence=True
-    )
-    if not influences:
+    src_skin_node = getSkinCluster(source_mesh)
+    if not src_skin_node:
+        log.warning(
+            "No skinCluster found on %s", source_mesh
+        )
         return {}
 
     result = {}
 
     for part_mesh in partition_meshes:
         part_short = get_short_name(part_mesh)
+        skin_name = "{}_skinCluster".format(part_short)
 
-        new_skin = cmds.skinCluster(
-            influences,
-            part_mesh,
-            bindMethod=0,
-            obeyMaxInfluences=False,
-            skinMethod=0,
-            normalizeWeights=1,
-            removeUnusedInfluence=False,
-            name=f"{part_short}_skinCluster",
-        )[0]
-
-        cmds.copySkinWeights(
-            sourceSkin=src_skin,
-            destinationSkin=new_skin,
-            surfaceAssociation="closestPoint",
-            influenceAssociation=[
-                "label", "closestJoint", "oneToOne",
-            ],
-            noMirror=True,
+        log.info(
+            "Copying skin to %s", part_short
         )
 
-        result[part_mesh] = new_skin
+        skinCopy(source_mesh, part_mesh, name=skin_name)
+
+        dst_skin_node = getSkinCluster(part_mesh)
+        if dst_skin_node:
+            result[part_mesh] = dst_skin_node.name()
+        else:
+            log.warning(
+                "skinCopy did not create skinCluster on %s",
+                part_short,
+            )
 
     return result
 
@@ -1531,7 +1588,7 @@ def copy_skin_clusters(source_mesh, partition_meshes):
 # PIPELINE STEP 6: REMOVE UNUSED INFLUENCES
 # =====================================================
 
-
+# TODO: revisde this with removeUnusedInfluences MEL command
 def remove_unused_influences(partition_meshes):
     """Remove zero-weight influences from each partition.
 
@@ -1560,6 +1617,7 @@ def remove_unused_influences(partition_meshes):
             skin, query=True, influence=True
         ) or []
 
+        removed = 0
         for inf in all_infs:
             if inf not in weighted_set:
                 try:
@@ -1567,8 +1625,17 @@ def remove_unused_influences(partition_meshes):
                         skin, edit=True,
                         removeInfluence=inf,
                     )
+                    removed += 1
                 except RuntimeError:
                     pass
+
+        part_short = get_short_name(part_mesh)
+        log.info(
+            "  %s: removed %d/%d unused influences",
+            part_short,
+            removed,
+            len(all_infs),
+        )
 
 
 # =====================================================
@@ -1581,9 +1648,15 @@ def copy_skin_configuration(
 ):
     """Copy skinCluster settings and prebind connections.
 
-    Copies skinCluster attributes (skinningMethod, etc.) and
-    replicates any prebind matrix input connections from the
-    source skinCluster to each partition's skinCluster.
+    Copies skinCluster attributes (skinningMethod,
+    normalizeWeights, deformUserNormals, DQS scale/support
+    attributes) and replicates any prebind matrix input
+    connections from the source skinCluster to each
+    partition's skinCluster.
+
+    DQS attributes (dqsScaleX/Y/Z, dqsSupportNonRigid)
+    are copied as values. If they have input connections,
+    those connections are replicated on the partition.
 
     Args:
         source_mesh (str): The original source mesh transform.
@@ -1597,10 +1670,19 @@ def copy_skin_configuration(
 
     src_skin = src_skins[0]
 
+    # Attributes that are simple value copies
     skin_attrs = [
         "skinningMethod",
         "normalizeWeights",
         "deformUserNormals",
+    ]
+
+    # Attributes that may have values OR input connections
+    connectable_attrs = [
+        "dqsScaleX",
+        "dqsScaleY",
+        "dqsScaleZ",
+        "dqsSupportNonRigid",
     ]
 
     for part_mesh in partition_meshes:
@@ -1612,7 +1694,7 @@ def copy_skin_configuration(
 
         part_skin = part_skins[0]
 
-        # Copy skinCluster attributes
+        # Copy simple skinCluster attributes
         for attr in skin_attrs:
             try:
                 val = cmds.getAttr(f"{src_skin}.{attr}")
@@ -1622,8 +1704,56 @@ def copy_skin_configuration(
             except RuntimeError:
                 pass
 
+        # Copy connectable attributes (value or connection)
+        for attr in connectable_attrs:
+            _copy_attr_or_connection(
+                src_skin, part_skin, attr
+            )
+
         # Copy prebind matrix connections
         _copy_prebind_connections(src_skin, part_skin)
+
+
+def _copy_attr_or_connection(src_node, dst_node, attr):
+    """Copy an attribute value or replicate its connection.
+
+    If the attribute on src_node has an input connection,
+    the same driver is connected to the dst_node attribute.
+    Otherwise, the current value is copied.
+
+    Args:
+        src_node (str): Source node name.
+        dst_node (str): Destination node name.
+        attr (str): Attribute name.
+    """
+    src_attr = f"{src_node}.{attr}"
+    dst_attr = f"{dst_node}.{attr}"
+
+    if not cmds.objExists(src_attr):
+        return
+    if not cmds.objExists(dst_attr):
+        return
+
+    # Check for input connection
+    conns = cmds.listConnections(
+        src_attr,
+        source=True,
+        destination=False,
+        plugs=True,
+    )
+    if conns:
+        try:
+            cmds.connectAttr(
+                conns[0], dst_attr, force=True
+            )
+        except RuntimeError:
+            pass
+    else:
+        try:
+            val = cmds.getAttr(src_attr)
+            cmds.setAttr(dst_attr, val)
+        except RuntimeError:
+            pass
 
 
 def _copy_prebind_connections(src_skin, part_skin):
@@ -1763,11 +1893,6 @@ def create_proximity_wrap_proxy(
     if was_showing and manager:
         show_partition_shaders(manager)
 
-    # Apply proximity wrap using mgear utility
-    from mgear.core.deformer import (
-        create_proximity_wrap,
-    )
-
     create_proximity_wrap(
         target_geos=[proxy],
         driver_geos=partition_meshes,
@@ -1798,6 +1923,8 @@ def execute_full_pipeline(manager):
     Blendshape steps (2-4) and skin steps (5-7) are skipped
     if the source has no corresponding deformer.
 
+    Shows a Maya progress bar and logs each step.
+
     Args:
         manager (PolygonGroupManager): The manager with
             groups defined.
@@ -1811,49 +1938,162 @@ def execute_full_pipeline(manager):
         return None, [], None
 
     source = manager.mesh
+    source_short = get_short_name(source)
 
-    # Step 1: Split polygon groups
-    grp, partitions = split_polygon_groups(manager)
-    if not grp:
-        return None, [], None
+    # Count total steps for progress bar
+    total_steps = 8
+    bar = _progress_start(
+        "Evaluation Partition: starting...",
+        total_steps,
+    )
 
-    # Re-resolve source mesh path in case DAG changed
-    # during split (e.g. hierarchy reparenting).
-    if not cmds.objExists(source):
-        short = get_short_name(source)
-        resolved = cmds.ls(short, long=True)
-        if resolved:
-            source = resolved[0]
-        else:
-            cmds.warning(
-                "Source mesh no longer exists after split."
+    try:
+        # Step 1: Split polygon groups
+        _progress_update(
+            bar, "Step 1/8: Splitting polygon groups..."
+        )
+        log.info(
+            "Step 1/8: Splitting polygon groups on %s",
+            source_short,
+        )
+
+        grp, partitions = split_polygon_groups(manager)
+        if not grp:
+            return None, [], None
+
+        log.info(
+            "  Created %d partitions", len(partitions)
+        )
+
+        # Re-resolve source mesh path in case DAG
+        # changed during split.
+        if not cmds.objExists(source):
+            short = get_short_name(source)
+            resolved = cmds.ls(short, long=True)
+            if resolved:
+                source = resolved[0]
+            else:
+                cmds.warning(
+                    "Source mesh no longer exists "
+                    "after split."
+                )
+                return grp, partitions, None
+
+        # Detect which deformers exist on source
+        has_bs = bool(
+            _get_mesh_deformers_by_type(
+                source, "blendShape"
             )
-            return grp, partitions, None
+        )
+        has_skin = bool(
+            _get_mesh_deformers_by_type(
+                source, "skinCluster"
+            )
+        )
 
-    # Steps 2-4: Blendshape transfer
-    bs_nodes = _get_mesh_deformers_by_type(
-        source, "blendShape"
-    )
-    if bs_nodes:
-        transfer_blendshapes(source, partitions)
-        clean_unused_bs_targets(partitions)
-        reconnect_bs_inputs(source, partitions)
+        # Step 2: Transfer blendshapes
+        _progress_update(
+            bar, "Step 2/8: Transferring blendshapes..."
+        )
+        if has_bs:
+            log.info(
+                "Step 2/8: Transferring blendshapes"
+            )
+            transfer_blendshapes(source, partitions)
+        else:
+            log.info(
+                "Step 2/8: Skipped (no blendshapes)"
+            )
 
-    # Steps 5-7: Skin cluster transfer
-    skin_nodes = _get_mesh_deformers_by_type(
-        source, "skinCluster"
-    )
-    if skin_nodes:
-        copy_skin_clusters(source, partitions)
-        remove_unused_influences(partitions)
-        copy_skin_configuration(source, partitions)
+        # Step 3: Clean unused BS targets
+        _progress_update(
+            bar,
+            "Step 3/8: Cleaning unused BS targets...",
+        )
+        if has_bs:
+            log.info(
+                "Step 3/8: Cleaning unused BS targets"
+            )
+            clean_unused_bs_targets(partitions)
+        else:
+            log.info("Step 3/8: Skipped")
 
-    # Step 8: Proximity wrap proxy
-    proxy = create_proximity_wrap_proxy(
-        source, partitions, grp, manager
-    )
+        # Step 4: Reconnect BS inputs
+        _progress_update(
+            bar,
+            "Step 4/8: Reconnecting BS inputs...",
+        )
+        if has_bs:
+            log.info(
+                "Step 4/8: Reconnecting BS inputs"
+            )
+            reconnect_bs_inputs(source, partitions)
+        else:
+            log.info("Step 4/8: Skipped")
 
-    return grp, partitions, proxy
+        # Step 5: Copy skin clusters
+        _progress_update(
+            bar,
+            "Step 5/8: Copying skin clusters...",
+        )
+        if has_skin:
+            log.info(
+                "Step 5/8: Copying skin clusters"
+            )
+            copy_skin_clusters(source, partitions)
+        else:
+            log.info(
+                "Step 5/8: Skipped (no skinCluster)"
+            )
+
+        # Step 6: Remove unused influences
+        _progress_update(
+            bar,
+            "Step 6/8: Removing unused influences...",
+        )
+        if has_skin:
+            log.info(
+                "Step 6/8: Removing unused influences"
+            )
+            remove_unused_influences(partitions)
+        else:
+            log.info("Step 6/8: Skipped")
+
+        # Step 7: Copy skin configuration
+        _progress_update(
+            bar,
+            "Step 7/8: Copying skin configuration...",
+        )
+        if has_skin:
+            log.info(
+                "Step 7/8: Copying skin configuration"
+            )
+            copy_skin_configuration(source, partitions)
+        else:
+            log.info("Step 7/8: Skipped")
+
+        # Step 8: Proximity wrap proxy
+        _progress_update(
+            bar,
+            "Step 8/8: Creating proximity wrap proxy...",
+        )
+        log.info(
+            "Step 8/8: Creating proximity wrap proxy"
+        )
+        proxy = create_proximity_wrap_proxy(
+            source, partitions, grp, manager
+        )
+
+        log.info(
+            "Pipeline complete: %d partitions%s",
+            len(partitions),
+            " + proxy" if proxy else "",
+        )
+
+        return grp, partitions, proxy
+
+    finally:
+        _progress_end(bar)
 
 
 # =====================================================
