@@ -1588,13 +1588,11 @@ def copy_skin_clusters(source_mesh, partition_meshes):
 # PIPELINE STEP 6: REMOVE UNUSED INFLUENCES
 # =====================================================
 
-# TODO: revisde this with removeUnusedInfluences MEL command
 def remove_unused_influences(partition_meshes):
     """Remove zero-weight influences from each partition.
 
-    For each partition mesh, queries the skinCluster for
-    influences that have no weight contribution and removes
-    them.
+    Uses Maya's built-in removeUnusedInfluences command
+    on each partition mesh's skinCluster.
 
     Args:
         partition_meshes (list): List of partition mesh names.
@@ -1607,34 +1605,14 @@ def remove_unused_influences(partition_meshes):
             continue
 
         skin = skin_nodes[0]
-
-        weighted = cmds.skinCluster(
-            skin, query=True, weightedInfluence=True
-        ) or []
-        weighted_set = set(weighted)
-
-        all_infs = cmds.skinCluster(
-            skin, query=True, influence=True
-        ) or []
-
-        removed = 0
-        for inf in all_infs:
-            if inf not in weighted_set:
-                try:
-                    cmds.skinCluster(
-                        skin, edit=True,
-                        removeInfluence=inf,
-                    )
-                    removed += 1
-                except RuntimeError:
-                    pass
+        cmds.skinCluster(
+            skin, edit=True, removeUnusedInfluence=True
+        )
 
         part_short = get_short_name(part_mesh)
         log.info(
-            "  %s: removed %d/%d unused influences",
+            "  %s: removed unused influences",
             part_short,
-            removed,
-            len(all_infs),
         )
 
 
