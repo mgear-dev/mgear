@@ -1157,7 +1157,8 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
             - "auto": Index-based first, fallback to closestPoint (default)
 
     Returns:
-        None
+        list: Object names that were imported using the volume method.
+            Empty list if all objects used standard index-based import.
     """
     if not filePath:
         f1 = "mGear Skin (*{0} *{1})".format(FILE_EXT, FILE_JSON_EXT)
@@ -1168,7 +1169,7 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
         fileFilters = f1 + f2 + f3
         filePath = pm.fileDialog2(fileMode=1, fileFilter=fileFilters)
     if not filePath:
-        return
+        return []
     if not isinstance(filePath, string_types):
         filePath = filePath[0]
 
@@ -1179,6 +1180,8 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
     else:
         with open(filePath, "r") as fp:
             dataPack = json.load(fp)
+
+    volumeImported = []
 
     for data in dataPack["objDDic"]:
         # This checks if the jSkin file has the new style compressed format.
@@ -1282,6 +1285,7 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
                         objNode, skinCluster, data, compressed
                     )
                     if success:
+                        volumeImported.append(objName)
                         print(
                             "Imported skin (volume method) for: {}".format(objName)
                         )
@@ -1329,23 +1333,38 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
             warningMsg = "Object: {} Skipped. Can NOT be found in the scene"
             pm.displayWarning(warningMsg.format(objName))
 
+    return volumeImported
+
 
 @utils.timeFunc
 def importSkinPack(filePath=None, *args):
+    """Import skin data from a skin pack file.
+
+    Args:
+        filePath (str, optional): File path for import. If None, opens dialog.
+
+    Returns:
+        list: Object names that were imported using the volume method.
+            Empty list if all objects used standard index-based import.
+    """
     if not filePath:
         filePath = pm.fileDialog2(
             fileMode=1, fileFilter="mGear skinPack (*%s)" % PACK_EXT
         )
     if not filePath:
-        return
+        return []
     if not isinstance(filePath, string_types):
         filePath = filePath[0]
 
+    volumeImported = []
     with open(filePath) as fp:
         packDic = json.load(fp)
         for pFile in packDic["packFiles"]:
-            filePath = os.path.join(os.path.split(filePath)[0], pFile)
-            importSkin(filePath)
+            skinFilePath = os.path.join(os.path.split(filePath)[0], pFile)
+            result = importSkin(skinFilePath)
+            volumeImported.extend(result)
+
+    return volumeImported
 
 
 ######################################
