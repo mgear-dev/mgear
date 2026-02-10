@@ -157,7 +157,7 @@ def export_guide_template(filePath=None, meta=None, conf=None, *args):
         if selection:
             rig = shifter.Rig()
             rig.guide.setFromHierarchy(selection[0])
-            rig.guide.refresh_metadata()
+            rig.guide.refresh_user_metadata()
         conf = get_template_from_selection(meta)
     if conf:
         data_string = json.dumps(conf, indent=4, sort_keys=True)

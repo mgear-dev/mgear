@@ -1,6 +1,5 @@
 # Built-in
 import datetime
-import getpass
 import json
 import os
 import sys
@@ -628,17 +627,17 @@ class Rig(Main):
         # --------------------------------------------------
         # Comments
         self.pComments = self.addParam("comments", "string", "")
-        self.pUser = self.addParam("user", "string", getpass.getuser())
-        self.pDate = self.addParam(
-            "date", "string", str(datetime.datetime.now())
-        )
+
+        user_metadata = utils.get_user_metadata()
+        self.pUser = self.addParam("user", "string", user_metadata["user"])
+        self.pDate = self.addParam("date", "string", user_metadata["date"])
         self.pMayaVersion = self.addParam(
             "maya_version",
             "string",
-            str(pm.mel.eval("getApplicationVersionAsFloat")),
+            user_metadata["maya_version"],
         )
         self.pGearVersion = self.addParam(
-            "gear_version", "string", mgear.getVersion()
+            "gear_version", "string", user_metadata["gear_version"]
         )
 
         # --------------------------------------------------
@@ -1073,22 +1072,10 @@ class Rig(Main):
 
         return self.guide_template_dict
 
-    def refresh_metadata(self):
-        attr = self.model.attr("user")
-        newvalue = getpass.getuser()
-        attr.set(newvalue)
-
-        attr = self.model.attr("date")
-        newvalue = str(datetime.datetime.now())
-        attr.set(newvalue)
-
-        attr = self.model.attr("maya_version")
-        newvalue = str(mel.eval("getApplicationVersionAsFloat"))
-        attr.set(newvalue)
-
-        attr = self.model.attr("gear_version")
-        newvalue = mgear.getVersion()
-        attr.set(newvalue)
+    def refresh_user_metadata(self):
+        for k, v in utils.get_user_metadata().items():
+            attr = self.model.attr(k)
+            attr.set(v)
 
     def addOptionsValues(self):
         """Gather or change some options values according to some others.
@@ -3825,7 +3812,6 @@ class GuideSettings(MayaQWidgetDockableMixin, csw.CustomStepMixin, GuideMainSett
             pm.displayWarning(
                 "Nothing selected or selection is not joint or Transform type"
             )
-
 
 
 # Backwards compatibility aliases
