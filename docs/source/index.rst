@@ -32,6 +32,7 @@ Welcome to mGear: Rigging Framework for Autodesk Maya
    utilbitsUserDocumentation
    ueGearUserDocumentation
    crankUserDocumentation
+   flexUserDocumentation
    shifterComponentReference
    framework
    solvers
