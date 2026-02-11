@@ -10,8 +10,6 @@ from maya import cmds
 import mgear.pymaya as pm
 from mgear.core import deformer
 
-from mgear.vendor.Qt.six import string_types
-
 # =============================================================================
 # BLENDSHAPE TARGET CONSTANTS
 # =============================================================================
@@ -53,7 +51,7 @@ def getDeformerNode(obj, lv=2, dtype="blendShape"):
     Returns:
         PyNode: The deformer node, or None if not found.
     """
-    if isinstance(obj, string_types):
+    if isinstance(obj, str):
         obj = pm.PyNode(obj)
 
     try:
@@ -116,9 +114,9 @@ def connectWithBlendshape(mesh, bst, wgt=1.0, ffoc=False):
     Returns:
         PyNode: The blendshape node.
     """
-    if isinstance(mesh, string_types):
+    if isinstance(mesh, str):
         mesh = pm.PyNode(mesh)
-    if isinstance(bst, string_types):
+    if isinstance(bst, str):
         bst = pm.PyNode(bst)
     bsnode = getBlendShape(mesh)
     if bsnode:
@@ -159,9 +157,9 @@ def connectWithMorph(mesh, bst, wgt=1.0, ffoc=True):
     Returns:
         PyNode: The morph deformer node.
     """
-    if isinstance(mesh, string_types):
+    if isinstance(mesh, str):
         mesh = pm.PyNode(mesh)
-    if isinstance(bst, string_types):
+    if isinstance(bst, str):
         bst = pm.PyNode(bst)
     morph_deformer = pm.deformer(mesh, type="morph")[0]
     pm.rename(morph_deformer, mesh.name() + "_morph")
