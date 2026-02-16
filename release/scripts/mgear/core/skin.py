@@ -122,7 +122,9 @@ def get_mesh_components_from_tag_expression(skinCls, tag="*"):
     sel = OpenMaya.MSelectionList()
     sel.add(geo)
     dep = OpenMaya.MObject()
+    dagPath = OpenMaya.MDagPath()
     sel.getDependNode(0, dep)
+    sel.getDagPath(0, dagPath)
     fn_dep = OpenMaya.MFnDependencyNode(dep)
     plug = fn_dep.findPlug(out_attr, True)
     obj = plug.asMObject()
@@ -134,7 +136,22 @@ def get_mesh_components_from_tag_expression(skinCls, tag="*"):
     # Components MObject
     components = fn_geodata.resolveComponentTagExpression(tag)
 
-    dagPath = OpenMaya.MDagPath.getAPathTo(dep)
+    dagPath.pop()
+    fn_parent = OpenMaya.MFnDagNode(dagPath)
+    for i in range(fn_parent.childCount()):
+        child = fn_parent.child(i)
+        fn_child = OpenMaya.MFnDependencyNode(child)
+        if (child.hasFn(OpenMaya.MFn.kMesh) or
+            child.hasFn(OpenMaya.MFn.kNurbsSurface) or
+            child.hasFn(OpenMaya.MFn.kNurbsCurve)):
+            try:
+                if not fn_child.findPlug("intermediateObject", True).asBool():
+                    dagPath = OpenMaya.MDagPath.getAPathTo(child)
+                    break
+            except RuntimeError:
+                dagPath = OpenMaya.MDagPath.getAPathTo(child)
+                break
+
     return dagPath, components
 
 
