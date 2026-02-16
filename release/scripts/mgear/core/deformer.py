@@ -22,15 +22,15 @@ def is_deformer(node):
     plugin deformers.
 
     Args:
-        node (str): Node name to check.
+        node (str or PyNode): Node name to check.
 
     Returns:
         bool: True if the node is a deformer.
     """
     m_sel = om2.MSelectionList()
     try:
-        m_sel.add(node)
-    except RuntimeError:
+        m_sel.add(str(node))
+    except (RuntimeError, ValueError):
         return False
     return m_sel.getDependNode(0).hasFn(om2.MFn.kGeometryFilt)
 
