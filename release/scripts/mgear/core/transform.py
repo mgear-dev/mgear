@@ -169,12 +169,12 @@ def getChainTransform(positions, normal, negate=False, axis="xz"):
     """Get a tranformation list from a positions list and normal.
 
     Arguments:
-        positions(list of vector): List with the chain positions.
-        normal (vector): Normal direction.
+        positions (list[om2.MVector | datatypes.Vector]): List with the chain positions.
+        normal (om2.MVector | datatypes.Vector): Normal direction.
         negate (bool): If true invert the chain orientation.
 
-    returns:
-        list of matrix: The list containing the transformation matrix
+    Returns:
+        list[datatypes.Matrix]: The list containing the transformation matrix
             for the chain.
 
     >>> tra.getChainTransform(self.guide.apos, self.normal, self.negate)
@@ -204,12 +204,12 @@ def getChainTransform2(positions, normal, negate=False, axis="xz"):
         getChainTransform2 is using the latest position on the chain
 
     Arguments:
-        positions(list of vector): List with the chain positions.
-        normal (vector): Normal direction.
+        positions (list[om2.MVector | datatypes.Vector]): List with the chain positions.
+        normal (om2.MVector | datatypes.Vector): Normal direction.
         negate (bool): If true invert the chain orientation.
 
-    returns:
-        list of matrix: The list containing the transformation matrix
+    Returns:
+        list[datatypes.Matrix]: The list containing the transformation matrix
             for the chain.
 
     >>> tra.getChainTransform2(self.guide.apos,
@@ -249,10 +249,10 @@ def getTransformFromPos(pos):
     """Create a transformation Matrix from a given position.
 
     Arguments:
-        pos (vector): Position for the transformation matrix
+        pos (om2.MVector | datatypes.Vector): Position for the transformation matrix
 
     Returns:
-        matrix: The newly created transformation matrix
+        datatypes.Matrix: The newly created transformation matrix
 
     >>>  t = tra.getTransformFromPos(self.guide.pos["root"])
 
@@ -266,18 +266,19 @@ def getTransformFromPos(pos):
     return m
 
 
-def getOffsetPosition(node, offset=[0, 0, 0]):
+def getOffsetPosition(node, offset=(0, 0, 0)):
     """Get an offset position from dagNode
 
     Arguments:
         node (dagNode): The dagNode with the original position.
-        offset (list of float): Ofsset values for xyz.
-            exp : [1.2, 4.6, 32.78]
+        offset (list[float] | tuple[float]): Offset values for xyz.
+            Example: [1.2, 4.6, 32.78]
 
     Returns:
-        list of float: the new offset position.
+        datatypes.Vector: the new offset position.
 
     Example:
+
         .. code-block:: python
 
             self.root = self.addRoot()

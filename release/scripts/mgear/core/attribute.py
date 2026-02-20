@@ -53,7 +53,7 @@ def addAttribute(
             when the attribute is not keyable. (optional)
 
     Returns:
-        pm.Attribute: A pymaya `Attribute` wrapper of the new attribute.
+        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
     """
     if isinstance(node, str):
         try:
@@ -245,7 +245,7 @@ def addEnumAttribute(
         writable (bool): Set if the attribute is writable or not. (optional)
 
     Returns:
-        str: The long name of the new attribute
+        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
     """
 
     if node.hasAttr(longName):
@@ -1709,7 +1709,7 @@ def get_alias_for_attr(full_attr_name):
 ##########################################################
 
 
-def add_mirror_config_channels(ctl, conf=[0, 0, 0, 0, 0, 0, 0, 0, 0]):
+def add_mirror_config_channels(ctl, conf=(0, 0, 0, 0, 0, 0, 0, 0, 0)):
     """Add channels to configure the mirror posing
 
     Args:

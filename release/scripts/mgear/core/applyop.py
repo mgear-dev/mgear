@@ -146,7 +146,7 @@ def oriCns(driver, driven, maintainOffset=False):
         maintainOffset (bool): Keep the offset.
 
     Returns:
-        pyNode: Orientation constraintn node.
+        pm.node._Node: Orientation constraintn node.
 
     Example:
         .. code-block:: python
@@ -182,7 +182,7 @@ def pathCns(obj, curve, cnsType=False, u=0, tangent=False):
         tangent (bool): Keep tangent orientation option.
 
     Returns:
-        pyNode: The newly created constraint.
+        pm.node._Node: The newly created constraint.
     """
     node = pm.PyNode(pm.createNode("motionPath"))
     node.setAttr("uValue", u)
@@ -223,7 +223,7 @@ def aimCns(
         maintainOffset (bool): Maintain offset.
 
     Returns:
-        pyNode: Newly created constraint.
+        pm.node._Node: Newly created constraint.
 
     """
     node = pm.aimConstraint(
@@ -320,7 +320,7 @@ def gear_raycast(
         connect_srt (str, optional): scale rotation traanslation flag
 
     Returns:
-        PyNode: The raycast node
+        pm.node._Node: The raycast node
     """
     node = pm.createNode("mgear_rayCastPosition")
     pm.connectAttr(
@@ -357,7 +357,7 @@ def gear_matrix_cns(
         scl_mult (list, optional): scale multiplier for XYZ
 
     Returns:
-        PyNode: The matrix constraint node
+        pm.node._Node: The matrix constraint node
     """
     node = pm.createNode("mgear_matrixConstraint")
     if isinstance(in_obj, pm.node._NodeTypes) and in_obj.type() == "matrix":
@@ -421,7 +421,7 @@ def gear_spring_op(in_obj, goal=False, solver="mgear_springNode"):
         solver (str, optional): Spring solver
 
     Returns:
-        pyNode: Newly created node
+        pm.node._Node: Newly created node
     """
     if not goal:
         goal = in_obj
@@ -459,7 +459,7 @@ def gear_spring_gravity_op(in_obj, goal=False):
         goal (dagNode): By default is False.
 
     Returns:
-        pyNode: Newly created node
+        pm.node._Node: Newly created node
     """
 
     return gear_spring_op(in_obj, goal=goal, solver="mgear_springGravityNode")
@@ -480,7 +480,7 @@ def gear_mulmatrix_op(mA, mB, target=False, transform="srt"):
             value s r t
 
     Returns:
-        pyNode: Newly created mGear_multMatrix node
+        pm.node._Node: Newly created mGear_multMatrix node
 
     """
     node = pm.createNode("mgear_mulMatrix")
@@ -520,7 +520,7 @@ def gear_intmatrix_op(mA, mB, blend=0):
         blend (float or connection): Blending value.
 
     Returns:
-        pyNode: Newly created mGear_intMatrix node
+        pm.node._Node: Newly created mGear_intMatrix node
     """
     node = pm.createNode("mgear_intMatrix")
 
@@ -546,7 +546,7 @@ def gear_curvecns_op(crv, inputs=[]):
             Also the order should be the same as the points
 
     Returns:
-        pyNode: The curvecns node.
+        pm.node._Node: The curvecns node.
     """
     pm.select(crv)
     node = pm.deformer(type="mgear_curveCns")[0]
@@ -571,7 +571,7 @@ def gear_curveslide2_op(
         softness (float): Default softness value (from 0 to 1).
 
     Returns:
-        pyNode: The newly created operator.
+        pm.node._Node: The newly created operator.
     """
     pm.select(outcrv)
     node = pm.deformer(type="mgear_slideCurve2")[0]
@@ -602,7 +602,7 @@ def gear_spinePointAtOp(cns, startobj, endobj, blend=0.5, axis="-Z"):
         axis (string): Axis direction.
 
     Returns:
-        pyNode: The newly created operator.
+        pm.node._Node: The newly created operator.
     """
     node = pm.createNode("mgear_spinePointAt")
 
@@ -634,7 +634,7 @@ def gear_spinePointAtOpWM(cns, startobj, endobj, blend=0.5, axis="-Z"):
         axis (str): Axis direction.
 
     Returns:
-        pyNode: The newly created operator.
+        pm.node._Node: The newly created operator.
     """
     node = pm.createNode("mgear_spinePointAt")
 
@@ -692,7 +692,7 @@ def gear_ikfk2bone_op(
         blend (float): Default blend value (0 for full ik, 1 for full fk).
 
     Returns:
-        pyNode: The newly created operator.
+        pm.node._Node: The newly created operator.
 
     """
     node = pm.createNode("mgear_ikfk2Bone")
@@ -764,7 +764,7 @@ def gear_rollsplinekine_op(out, controlers=[], u=0.5, subdiv=10):
         subdiv (int): spline subdivision precision.
 
     Returns:
-        pyNode: The newly created operator.
+        pm.node._Node: The newly created operator.
     """
     node = pm.createNode("mgear_rollSplineKine")
 
@@ -800,11 +800,11 @@ def gear_squashstretch2_op(
         sclref (dagNode): Global scaling reference object.
         length (float): Rest Length of the S&S.
         axis (str): 'x' for scale all except x axis...
-        scaleComp (list of float): extra scale compensation to avoid double
+        scaleComp (str | pm.Attribute): extra scale compensation to avoid double
             scale in some situations.
 
     Returns:
-        pyNode: The newly created operator.
+        pm.node._Node: The newly created operator.
     """
     node = pm.createNode("mgear_squashStretch2")
 
@@ -843,7 +843,7 @@ def gear_inverseRotorder_op(out_obj, in_obj):
         in_obj (dagNode): Input object.
 
     Returns:
-        pyNode: The newly created operator.
+        pm.node._Node: The newly created operator.
     """
     node = pm.createNode("mgear_inverseRotOrder")
 
@@ -869,7 +869,7 @@ def create_proximity_constraint(shape,
         out_trans (str, optional): Output transform node.
 
     Returns:
-        tuple: (output transform, proximityPin node)
+        tuple[pm.node._Node, pm.node._Node]: (output transform, proximityPin node)
     """
 
     if not cmds.objExists(shape):
@@ -957,7 +957,7 @@ def create_proximity_constraints(shape, in_trans_list):
         in_trans_list (List[PyNode] or List[str]): List of in transforms
 
     Returns:
-        List[PyNode]: List of output transforms
+        list[pm.node._Node]: List of output transforms
     """
     # Convert shape to PyNode if necessary
     if isinstance(shape, str):
@@ -1022,7 +1022,7 @@ def create_uv_pin_constraint(shape,
         out_trans (str, optional): Output transform node.
 
     Returns:
-        tuple: (output transform, uvPin node)
+        tuple[str, str]: (output transform, uvPin node)
     """
     if not cmds.objExists(shape):
         raise RuntimeError("Shape '{}' does not exist.".format(shape))
