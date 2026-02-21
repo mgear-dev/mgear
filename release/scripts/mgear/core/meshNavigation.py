@@ -482,6 +482,50 @@ def getClosestVertexFromTransform(geo, loc):
     return closestVert
 
 
+def getClosestNVerticesFromTransform(geo, loc, count=32):
+    """Get the N closest vertices to a transform position.
+
+    Uses a flood-fill from the closest polygon to efficiently
+    gather nearby vertices sorted by distance.
+
+    Args:
+        geo (dagNode or str): Mesh object.
+        loc (matrix): Location transform or position.
+        count (int, optional): Number of vertices to return.
+
+    Returns:
+        list: Of vertex PyNodes sorted by distance to loc.
+    """
+    geo = utils.as_pynode(geo)
+    polygon, pos = getClosestPolygonFromTransform(geo, loc)
+
+    seed_verts = set(polygon.getVertices())
+    visited = set(seed_verts)
+    frontier = list(seed_verts)
+    collected = []
+
+    for vtx_id in frontier:
+        v = geo.vtx[vtx_id]
+        d = (pos - v.getPosition(space="world")).length()
+        collected.append((d, vtx_id, v))
+
+    while len(collected) < count and frontier:
+        next_frontier = []
+        for vtx_id in frontier:
+            v = geo.vtx[vtx_id]
+            for neighbor in v.connectedVertices():
+                n_id = neighbor.index()
+                if n_id not in visited:
+                    visited.add(n_id)
+                    next_frontier.append(n_id)
+                    d = (pos - neighbor.getPosition(space="world")).length()
+                    collected.append((d, n_id, neighbor))
+        frontier = next_frontier
+
+    collected.sort(key=lambda x: x[0])
+    return [item[2] for item in collected[:count]]
+
+
 def find_mirror_edge(obj, edgeIndx):
     """Return the mirror edge of an edge
 

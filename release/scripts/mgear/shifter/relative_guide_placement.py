@@ -87,6 +87,9 @@ SKIP_NODETYPES = ["aimConstraint", "pointConstraint", "parentConstraint"]
 
 UNIVERSAL_MESH_NAME = "skin_geo_setup"
 
+# Number of nearby vertices to sample per guide node for multi-vertex mode
+DEFAULT_SAMPLE_COUNT = 32
+
 
 # general functions -----------------------------------------------------------
 
@@ -162,6 +165,65 @@ def getVertMatrix(closestVert):
     return orig_ref_matrix
 
 
+def getMultiVertexReferenceMatrix(vertices):
+    """Build a reference matrix from multiple vertices.
+
+    Computes centroid position and averaged face normal from all
+    sampled vertices to create a more stable reference frame than
+    the single-vertex approach.
+
+    Args:
+        vertices (list): Of vertex PyNodes.
+
+    Returns:
+        pm.dt.TransformationMatrix: Reference matrix with centroid
+            position and averaged normal orientation.
+    """
+    centroid = pm.dt.Vector(0, 0, 0)
+    avg_normal = pm.dt.Vector(0, 0, 0)
+    face_set = set()
+
+    for vtx in vertices:
+        centroid += vtx.getPosition(space="world")
+        for face in vtx.connectedFaces():
+            face_idx = face.index()
+            if face_idx not in face_set:
+                face_set.add(face_idx)
+                avg_normal += face.getNormal(space="world")
+
+    count = len(vertices)
+    centroid /= count
+    avg_normal.normalize()
+
+    normal_rot = getOrient(
+        [avg_normal.x, avg_normal.y, avg_normal.z],
+        [0, 1, 0],
+        ro=0,
+    )
+    ref_matrix = pm.dt.TransformationMatrix()
+    ref_matrix.setTranslation(centroid, pm.dt.Space.kWorld)
+    ref_matrix.setRotation(normal_rot)
+
+    return ref_matrix
+
+
+def getCentroidFromVertexNames(vertex_names):
+    """Compute centroid position from a list of vertex name strings.
+
+    Args:
+        vertex_names (list): Of vertex name strings (e.g. "meshShape.vtx[5]").
+
+    Returns:
+        pm.dt.Vector: World-space centroid position.
+    """
+    centroid = pm.dt.Vector(0, 0, 0)
+    for name in vertex_names:
+        vtx = pm.PyNode(name)
+        centroid += vtx.getPosition(space="world")
+    centroid /= len(vertex_names)
+    return centroid
+
+
 def getOrient(normal, tangent, ro=0):
     """convert normal direction into euler rotations
 
@@ -192,42 +254,54 @@ def getOrient(normal, tangent, ro=0):
 def getRepositionMatrix(node_matrix,
                         orig_ref_matrix,
                         mr_orig_ref_matrix,
-                        closestVerts):
+                        closestVerts,
+                        mr_closestVerts=None):
     """Get the delta matrix from the original position and multiply by the
     new vert position. Add the rotations from the face normals.
 
+    Supports both legacy single-vertex format (closestVerts is a list of
+    two vertex name strings) and multi-vertex format (closestVerts is a
+    list of N vertex names with separate mr_closestVerts).
+
     Args:
-        node_matrix (pm.dt.Matrix): matrix of the guide
-        orig_ref_matrix (pm.dt.Matrix): matrix from the original vert position
-        closestVerts (str): name of the closest vert
+        node_matrix (pm.dt.Matrix): Matrix of the guide.
+        orig_ref_matrix (pm.dt.Matrix): Matrix from the original vert
+            position.
+        mr_orig_ref_matrix (pm.dt.Matrix): Mirror reference matrix.
+        closestVerts (list): Vertex name strings for the primary
+            reference. In legacy mode, index 0 is primary and index 1
+            is mirror.
+        mr_closestVerts (list, optional): Mirror vertex name strings.
+            When provided, enables multi-vertex centroid mode.
 
     Returns:
-        mmatrix: matrix of the new offset position, worldSpace
+        pm.dt.Matrix: Matrix of the new offset position, worldSpace.
     """
-    current_vert = pm.PyNode(closestVerts[0])
-    mr_current_vert = pm.PyNode(closestVerts[1])
-    current_length = vector.getDistance(current_vert.getPosition("world"),
-                                        mr_current_vert.getPosition("world"))
+    if mr_closestVerts is not None:
+        # Multi-vertex path: compute centroids from vertex lists
+        current_pos = getCentroidFromVertexNames(closestVerts)
+        mr_current_pos = getCentroidFromVertexNames(mr_closestVerts)
+    else:
+        # Legacy single-vertex path
+        current_pos = pm.PyNode(closestVerts[0]).getPosition("world")
+        mr_current_pos = pm.PyNode(closestVerts[1]).getPosition("world")
+
+    current_length = vector.getDistance(current_pos, mr_current_pos)
 
     orig_length = vector.getDistance(orig_ref_matrix.translate,
                                      mr_orig_ref_matrix.translate)
     orig_center = vector.linearlyInterpolate(orig_ref_matrix.translate,
                                              mr_orig_ref_matrix.translate)
     orig_center_matrix = pm.dt.Matrix()
-    # orig_center_matrix.setTranslation(orig_center, pm.dt.Space.kWorld)
     orig_center_matrix = transform.setMatrixPosition(
         orig_center_matrix, orig_center)
 
-    current_center = vector.linearlyInterpolate(
-        current_vert.getPosition("world"),
-        mr_current_vert.getPosition("world"))
+    current_center = vector.linearlyInterpolate(current_pos, mr_current_pos)
 
     length_percentage = 1
     if current_length != 0 or orig_length != 0:
         length_percentage = current_length / orig_length
-    # refPosition_matrix = pm.dt.TransformationMatrix()
     refPosition_matrix = pm.dt.Matrix()
-    # refPosition_matrix.setTranslation(current_center, pm.dt.Space.kWorld)
     refPosition_matrix = transform.setMatrixPosition(
         refPosition_matrix, current_center)
     deltaMatrix = node_matrix * orig_center_matrix.inverse()
@@ -315,57 +389,101 @@ def getGuideRelativeDictionaryLegacy(mesh, guideOrder):
 
 @utils.viewport_off
 @utils.one_undo
-def yieldGuideRelativeDictionary(mesh, guideOrder, relativeGuide_dict):
-    """create a dictionary of guide:[[shape.vtx[int]], relativeMatrix]
+def yieldGuideRelativeDictionary(mesh, guideOrder, relativeGuide_dict,
+                                  sample_count=None):
+    """Create a dictionary of guide:[[shape.vtx[int]], relativeMatrix].
+
+    When sample_count > 1, uses multi-vertex sampling for more stable
+    reference positions. Falls back to single-vertex when sample_count
+    is 1 or None.
 
     Args:
-        mesh (string): name of the mesh
-        guideOrder (list): the order to query the guide hierarchy
+        mesh (string): Name of the mesh.
+        guideOrder (list): The order to query the guide hierarchy.
+        relativeGuide_dict (dict): Dictionary to populate with results.
+        sample_count (int, optional): Number of vertices to sample per
+            guide. Defaults to DEFAULT_SAMPLE_COUNT.
 
     Returns:
-        dictionary: create a dictionary of guide:[[edgeIDs], relativeMatrix]
+        dictionary: guide:[[vertexIDs], matrices] via yield.
     """
+    if sample_count is None:
+        sample_count = DEFAULT_SAMPLE_COUNT
+
     for guide in guideOrder:
         guide = pm.PyNode(guide)
-        # slow function A
-        clst_vert = meshNavigation.getClosestVertexFromTransform(mesh, guide)
-        vertexIds = [clst_vert.name()]
-        # slow function B
-        orig_ref_matrix = getVertMatrix(clst_vert.name())
-        #  --------------------------------------------------------------------
-        a_mat = guide.getMatrix(worldSpace=True)
 
-        mm = ((orig_ref_matrix - a_mat) * -1) + a_mat
-        pos = mm[3][:3]
+        if sample_count > 1:
+            # Multi-vertex sampling path
+            vertices = meshNavigation.getClosestNVerticesFromTransform(
+                mesh, guide, count=sample_count
+            )
+            vertexIds = [v.name() for v in vertices]
+            orig_ref_matrix = getMultiVertexReferenceMatrix(vertices)
+            # Mirror reference: reflect guide through ref matrix
+            a_mat = guide.getMatrix(worldSpace=True)
+            ref_mat = pm.dt.Matrix(orig_ref_matrix)
+            mm = pm.dt.Matrix(((ref_mat - a_mat) * -1) + a_mat)
+            mr_pos = mm[3][:3]
+            mr_vertices = meshNavigation.getClosestNVerticesFromTransform(
+                mesh, mr_pos, count=sample_count
+            )
+            mr_vertexIds = [v.name() for v in mr_vertices]
+            mr_orig_ref_matrix = getMultiVertexReferenceMatrix(mr_vertices)
 
-        mr_vert = meshNavigation.getClosestVertexFromTransform(mesh, pos)
-        mr_orig_ref_matrix = getVertMatrix(mr_vert.name())
-        vertexIds.append(mr_vert.name())
+            node_matrix = guide.getMatrix(worldSpace=True)
+            relativeGuide_dict[guide.name()] = [
+                vertexIds,
+                node_matrix.get(),
+                orig_ref_matrix.get(),
+                mr_orig_ref_matrix.get(),
+                mr_vertexIds,
+            ]
+        else:
+            # Legacy single-vertex path
+            clst_vert = meshNavigation.getClosestVertexFromTransform(
+                mesh, guide
+            )
+            vertexIds = [clst_vert.name()]
+            orig_ref_matrix = getVertMatrix(clst_vert.name())
+            a_mat = guide.getMatrix(worldSpace=True)
+            mm = ((orig_ref_matrix - a_mat) * -1) + a_mat
+            pos = mm[3][:3]
+            mr_vert = meshNavigation.getClosestVertexFromTransform(
+                mesh, pos
+            )
+            mr_orig_ref_matrix = getVertMatrix(mr_vert.name())
+            vertexIds.append(mr_vert.name())
 
-        node_matrix = guide.getMatrix(worldSpace=True)
-        relativeGuide_dict[guide.name()] = [vertexIds,
-                                            node_matrix.get(),
-                                            orig_ref_matrix.get(),
-                                            mr_orig_ref_matrix.get()]
+            node_matrix = guide.getMatrix(worldSpace=True)
+            relativeGuide_dict[guide.name()] = [
+                vertexIds,
+                node_matrix.get(),
+                orig_ref_matrix.get(),
+                mr_orig_ref_matrix.get(),
+            ]
         yield relativeGuide_dict
 
 
 @utils.viewport_off
 @utils.one_undo
-def getGuideRelativeDictionary(mesh, guideOrder):
-    """create a dictionary of guide:[[shape.vtx[int]], relativeMatrix]
+def getGuideRelativeDictionary(mesh, guideOrder, sample_count=None):
+    """Create a dictionary of guide:[[shape.vtx[int]], relativeMatrix].
 
     Args:
-        mesh (string): name of the mesh
-        guideOrder (list): the order to query the guide hierarchy
+        mesh (string): Name of the mesh.
+        guideOrder (list): The order to query the guide hierarchy.
+        sample_count (int, optional): Number of vertices to sample per
+            guide. Defaults to DEFAULT_SAMPLE_COUNT.
 
     Returns:
-        dictionary: create a dictionary of guide:[[edgeIDs], relativeMatrix]
+        dict: guide:[[vertexIDs], matrices].
     """
     relativeGuide_dict = {}
     mesh = pm.PyNode(mesh)
     for result in yieldGuideRelativeDictionary(
-            mesh, guideOrder, relativeGuide_dict):
+            mesh, guideOrder, relativeGuide_dict,
+            sample_count=sample_count):
         pass
     return relativeGuide_dict
 
@@ -400,26 +518,48 @@ def updateGuidePlacementLegacy(guideOrder, guideDictionary):
 @utils.viewport_off
 @utils.one_undo
 def yieldUpdateGuidePlacement(guideOrder, guideDictionary):
-    """update the guides based on new universal mesh, in the provided order
+    """Update the guides based on new universal mesh, in the provided order.
+
+    Automatically detects legacy (4-element) vs multi-vertex (5-element)
+    data entries per guide.
 
     Args:
-        guideOrder (list): of the hierarchy to crawl
-        guideDictionary (dictionary): dict of the guide:edge, matrix position
+        guideOrder (list): Of the hierarchy to crawl.
+        guideDictionary (dict): Dict of the guide:edge, matrix position.
     """
     for guide in guideOrder:
         if guide not in guideDictionary or not mc.objExists(guide):
             continue
         elif guide in SKIP_PLACEMENT_NODES:
             continue
-        (vertexIds,
-         node_matrix,
-         orig_ref_matrix,
-         mr_orig_ref_matrix) = guideDictionary[guide]
 
-        repoMatrix = getRepositionMatrix(pm.dt.Matrix(node_matrix),
-                                         pm.dt.Matrix(orig_ref_matrix),
-                                         pm.dt.Matrix(mr_orig_ref_matrix),
-                                         vertexIds)
+        entry = guideDictionary[guide]
+        if len(entry) == 5:
+            # Multi-vertex format
+            (vertexIds,
+             node_matrix,
+             orig_ref_matrix,
+             mr_orig_ref_matrix,
+             mr_vertexIds) = entry
+            repoMatrix = getRepositionMatrix(
+                pm.dt.Matrix(node_matrix),
+                pm.dt.Matrix(orig_ref_matrix),
+                pm.dt.Matrix(mr_orig_ref_matrix),
+                vertexIds,
+                mr_closestVerts=mr_vertexIds,
+            )
+        else:
+            # Legacy single-vertex format
+            (vertexIds,
+             node_matrix,
+             orig_ref_matrix,
+             mr_orig_ref_matrix) = entry
+            repoMatrix = getRepositionMatrix(
+                pm.dt.Matrix(node_matrix),
+                pm.dt.Matrix(orig_ref_matrix),
+                pm.dt.Matrix(mr_orig_ref_matrix),
+                vertexIds,
+            )
         yield repoMatrix
 
 
@@ -473,19 +613,26 @@ def exportGuidePlacement(filepath=None,
                          reference_mesh=UNIVERSAL_MESH_NAME,
                          root_node=GUIDE_ROOT,
                          skip_crawl_nodes=SKIP_CRAWL_NODES,
-                         skip_strings=[]):
+                         skip_strings=None,
+                         sample_count=None):
     """Export the position of the supplied root node to a file.
 
     Args:
-        filepath (str, optional): path to export too
-        reference_mesh (str, optional): mesh to query verts
-        root_node (str, optional): name of node to query against
-        skip_crawl_nodes (list, optional): of nodes not to crawl
-        skip_strings (list, optional): strings to check to skip node
+        filepath (str, optional): Path to export to.
+        reference_mesh (str, optional): Mesh to query verts.
+        root_node (str, optional): Name of node to query against.
+        skip_crawl_nodes (list, optional): Nodes not to crawl.
+        skip_strings (list, optional): Strings to check to skip node.
+        sample_count (int, optional): Number of vertices to sample per
+            guide. Defaults to DEFAULT_SAMPLE_COUNT.
 
     Returns:
-        list: dict, list, str
+        tuple: relativeGuide_dict, ordered_hierarchy, filepath.
     """
+    if skip_strings is None:
+        skip_strings = []
+    if sample_count is None:
+        sample_count = DEFAULT_SAMPLE_COUNT
     if filepath is None:
         filepath = pm.fileDialog2(fileMode=0,
                                   startingDirectory="/",
@@ -497,8 +644,11 @@ def exportGuidePlacement(filepath=None,
         reference_mesh=reference_mesh,
         root_node=root_node,
         skip_crawl_nodes=skip_crawl_nodes,
-        skip_strings=skip_strings)
+        skip_strings=skip_strings,
+        sample_count=sample_count)
     data = {}
+    data["version"] = 2
+    data["sample_count"] = sample_count
     data["relativeGuide_dict"] = relativeGuide_dict
     data["ordered_hierarchy"] = ordered_hierarchy
     _exportData(data, filepath)
@@ -508,31 +658,49 @@ def exportGuidePlacement(filepath=None,
 
 @utils.one_undo
 def importGuidePlacement(filepath):
-    """import the position from the provided file
+    """Import the position from the provided file.
+
+    Automatically detects legacy (v1) vs multi-vertex (v2) format
+    and routes to the appropriate update path.
 
     Args:
-        filepath (str): file to the json
-        referenceMesh (str, optional): name of mesh to compare against
+        filepath (str): Path to the json file.
+
+    Returns:
+        tuple: relativeGuide_dict, ordered_hierarchy.
     """
     data = _importData(filepath)
-    updateGuidePlacement(data["ordered_hierarchy"], data["relativeGuide_dict"])
+    version = data.get("version", 1)
+    if version >= 2:
+        # Consume the generator to apply all guide updates
+        for _ in updateGuidePlacement(
+                data["ordered_hierarchy"], data["relativeGuide_dict"]):
+            pass
+    else:
+        # Legacy format: use the legacy update path
+        updateGuidePlacementLegacy(
+            data["ordered_hierarchy"], data["relativeGuide_dict"]
+        )
     return data["relativeGuide_dict"], data["ordered_hierarchy"]
 
 
 def recordInitialGuidePlacement(reference_mesh=UNIVERSAL_MESH_NAME,
                                 root_node=GUIDE_ROOT,
                                 skip_crawl_nodes=SKIP_CRAWL_NODES,
-                                skip_strings=None):
-    """convenience function for retrieving a dict of position
+                                skip_strings=None,
+                                sample_count=None):
+    """Record the relative guide placement against a reference mesh.
 
     Args:
-        reference_mesh (str, optional): the mesh to query against
-        root_node (str, optional): root node to crawl
-        skip_crawl_nodes (list, optional): of nodes to avoid
-        skip_strings (list, optional): of strings to check if skip
+        reference_mesh (str, optional): The mesh to query against.
+        root_node (str, optional): Root node to crawl.
+        skip_crawl_nodes (list, optional): Nodes to avoid.
+        skip_strings (list, optional): Strings to check if skip.
+        sample_count (int, optional): Number of vertices to sample per
+            guide. Defaults to DEFAULT_SAMPLE_COUNT.
 
     Returns:
-        dict, list: dict of positions, list of ordered nodes
+        tuple: relativeGuide_dict, ordered_hierarchy.
     """
     ordered_hierarchy = []
     relativeGuide_dict = {}
@@ -540,6 +708,7 @@ def recordInitialGuidePlacement(reference_mesh=UNIVERSAL_MESH_NAME,
                    ordered_hierarchy,
                    skip_crawl_nodes,
                    skip_strings=skip_strings)
-    relativeGuide_dict = getGuideRelativeDictionary(reference_mesh,
-                                                    ordered_hierarchy)
+    relativeGuide_dict = getGuideRelativeDictionary(
+        reference_mesh, ordered_hierarchy, sample_count=sample_count
+    )
     return relativeGuide_dict, ordered_hierarchy

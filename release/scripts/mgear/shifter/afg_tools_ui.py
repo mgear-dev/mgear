@@ -1119,10 +1119,12 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         starting_val = 0
         dance = itertools.cycle(DANCE_EMOTICON)
 
+        sample_count = self.sample_count_sb.value()
         gen = relative_guide_placement.yieldGuideRelativeDictionary(
             reference_mesh,
             ordered_hierarchy,
-            relativeGuide_dict)
+            relativeGuide_dict,
+            sample_count=sample_count)
         for result in gen:
             msg = "{}% completed... {}".format(int(starting_val), next(dance))
             self.window().statusBar().showMessage(msg)
@@ -1197,6 +1199,8 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
             raise ValueError(msg)
             return
         data = {}
+        data["version"] = 2
+        data["sample_count"] = self.sample_count_sb.value()
         data["relativeGuide_dict"] = self.relativeGuide_dict
         data["ordered_hierarchy"] = self.ordered_hierarchy
         relative_guide_placement._exportData(data, file_path)
@@ -1244,6 +1248,25 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         list_layout_03.addWidget(self.remove_skip_nodes_btn)
         list_layout_03.addWidget(self.default_skip_nodes_btn)
 
+        # Sample count spinbox
+        sample_layout = QtWidgets.QHBoxLayout()
+        sample_label = QtWidgets.QLabel("Sample Vertices:")
+        self.sample_count_sb = QtWidgets.QSpinBox()
+        self.sample_count_sb.setRange(1, 128)
+        self.sample_count_sb.setValue(
+            relative_guide_placement.DEFAULT_SAMPLE_COUNT
+        )
+        msg = (
+            "Number of nearby vertices to sample per guide node. "
+            "Higher values produce more stable placement but slower "
+            "recording. Use 1 for legacy single-vertex behavior."
+        )
+        self.sample_count_sb.setToolTip(msg)
+        self.sample_count_sb.setStatusTip(msg)
+        self.window()._toolTip_widgets.append(self.sample_count_sb)
+        sample_layout.addWidget(sample_label)
+        sample_layout.addWidget(self.sample_count_sb)
+
         io_layout = QtWidgets.QHBoxLayout()
         msg = "Record\nRelative Guide Placement"
         self.record_placement_btn = QtWidgets.QPushButton(msg)
@@ -1262,6 +1285,7 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.export_placement_btn = QtWidgets.QPushButton(msg)
 
         layout.addWidget(self.src_geo_widget)
+        layout.addLayout(sample_layout)
         layout.addLayout(list_layout_01)
         layout.addLayout(io_layout)
         layout.addWidget(self.rgp_scale_cb)
