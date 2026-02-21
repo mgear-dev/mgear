@@ -478,10 +478,8 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
             self.applyDefaultAssociation)
         self.mirror_association_btn.clicked.connect(
             self._mirrorAssociationInfo)
-        self.import_association_btn.clicked.connect(self.importAssociation)
         self.clear_association_btn.clicked.connect(self._clearUserAssociations)
         self.print_association_btn.clicked.connect(self._printUserAssociation)
-        self.export_association_btn.clicked.connect(self.exportAssociation)
 
     def importDefaultGuide(self):
         """import mgear template biped
@@ -948,7 +946,7 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         return widget
 
     def exportEmbedInfoWidget(self):
-        widget = QtWidgets.QGroupBox("Create/Export Association Info")
+        widget = QtWidgets.QGroupBox("Association Info")
         layout = QtWidgets.QVBoxLayout()
         layout.setAlignment(QtCore.Qt.AlignTop)
         widget.setLayout(layout)
@@ -978,8 +976,6 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         self.apply_default_association_btn.setStatusTip(msg)
         self.window()._toolTip_widgets.append(
             self.apply_default_association_btn)
-        msg = "Import Guide Associations"
-        self.import_association_btn = QtWidgets.QPushButton(msg)
         msg = "Clear Associations"
         self.clear_association_btn = QtWidgets.QPushButton(msg)
         msg = "Print Association info"
@@ -991,17 +987,12 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         association_btn_layout.addWidget(self.enable_association_btn)
         association_btn_layout.addWidget(self.mirror_association_btn)
         association_btn_layout.addWidget(self.apply_default_association_btn)
-        association_btn_layout.addWidget(self.import_association_btn)
         association_btn_layout.addWidget(self.clear_association_btn)
         association_btn_layout.addWidget(self.print_association_btn)
         #  -------------------------------------------------------------------
-        msg = "Export Association"
-        self.export_association_btn = QtWidgets.QPushButton(msg)
-        self.export_association_btn.setStatusTip("Export association to file")
         association_list_layout.addWidget(self.association_list_widget)
         association_list_layout.addLayout(association_btn_layout)
         layout.addLayout(association_list_layout)
-        layout.addWidget(self.export_association_btn)
         self.visualizeAssociationEntry()
         return widget
 
@@ -1029,8 +1020,6 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.add_skip_nodes_btn.clicked.connect(self.addSkipNodes)
         self.remove_skip_nodes_btn.clicked.connect(self.removeSkipNodes)
         self.default_skip_nodes_btn.clicked.connect(self.defaultSkipNodes)
-        self.import_placement_btn.clicked.connect(self._importGuidePlacement)
-        self.export_placement_btn.clicked.connect(self._exportGuidePlacement)
 
     def addSkipNodes(self, nodes=None):
         """Add remove nodes to skip hierarchy crawl during relative placement
@@ -1267,13 +1256,8 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         sample_layout.addWidget(sample_label)
         sample_layout.addWidget(self.sample_count_sb)
 
-        io_layout = QtWidgets.QHBoxLayout()
         msg = "Record\nRelative Guide Placement"
         self.record_placement_btn = QtWidgets.QPushButton(msg)
-        msg = "Import\nRelative Guide Placement"
-        self.import_placement_btn = QtWidgets.QPushButton(msg)
-        io_layout.addWidget(self.record_placement_btn)
-        io_layout.addWidget(self.import_placement_btn)
         self.rgp_scale_cb = QtWidgets.QCheckBox("Reset Default Scale")
         msg = "Apply Default scale of 1, 1, 1"
         self.rgp_scale_cb.setToolTip(msg)
@@ -1281,16 +1265,13 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.window()._toolTip_widgets.append(self.rgp_scale_cb)
         msg = "Update\nGuide Placement"
         self.update_placement_btn = QtWidgets.QPushButton(msg)
-        msg = "Export Guide Placement"
-        self.export_placement_btn = QtWidgets.QPushButton(msg)
 
         layout.addWidget(self.src_geo_widget)
         layout.addLayout(sample_layout)
         layout.addLayout(list_layout_01)
-        layout.addLayout(io_layout)
+        layout.addWidget(self.record_placement_btn)
         layout.addWidget(self.rgp_scale_cb)
         layout.addWidget(self.update_placement_btn)
-        layout.addWidget(self.export_placement_btn)
         return widget
 
 
