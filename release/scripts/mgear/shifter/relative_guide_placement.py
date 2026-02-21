@@ -73,13 +73,18 @@ DEFAULT_SKIP_PLACEMENT_NODES = ("controllers_org",
                                 "legUI_L0_root",
                                 "armUI_R0_root")
 
+# nodes that will update position only, preserving orientation
+DEFAULT_SKIP_ORIENTATION_NODES = ()
+
 
 try:
     SKIP_CRAWL_NODES
     SKIP_PLACEMENT_NODES
+    SKIP_ORIENTATION_NODES
 except NameError:
     SKIP_CRAWL_NODES = list(DEFAULT_SKIP_CRAWL_NODES)
     SKIP_PLACEMENT_NODES = list(DEFAULT_SKIP_PLACEMENT_NODES)
+    SKIP_ORIENTATION_NODES = list(DEFAULT_SKIP_ORIENTATION_NODES)
 
 
 # skip the node if it even contains the characters in the list
@@ -742,7 +747,8 @@ def getGuideRelativeDictionary(mesh, guideOrder, sample_count=None):
 @utils.viewport_off
 @utils.one_undo
 def updateGuidePlacementLegacy(guideOrder, guideDictionary,
-                               reference_mesh=None):
+                               reference_mesh=None,
+                               skip_orientation_nodes=None):
     """update the guides based on new universal mesh, in the provided order
 
     Args:
@@ -751,7 +757,12 @@ def updateGuidePlacementLegacy(guideOrder, guideDictionary,
         reference_mesh (str, optional): Override mesh to use instead of the
             one embedded in the vertex ID strings. When ``None`` the
             original mesh name is used.
+        skip_orientation_nodes (list, optional): Nodes that update position
+            only, preserving their current orientation. When ``None``
+            defaults to the module-level ``SKIP_ORIENTATION_NODES``.
     """
+    if skip_orientation_nodes is None:
+        skip_orientation_nodes = SKIP_ORIENTATION_NODES
     if reference_mesh is not None:
         _remap_mesh_in_guide_dict(guideDictionary, reference_mesh)
     for guide in guideOrder:
@@ -769,7 +780,12 @@ def updateGuidePlacementLegacy(guideOrder, guideDictionary,
                                          pm.dt.Matrix(orig_ref_matrix),
                                          pm.dt.Matrix(mr_orig_ref_matrix),
                                          vertexIds)
-        guideNode.setMatrix(repoMatrix, worldSpace=True, preserve=True)
+        if guide in skip_orientation_nodes:
+            pos = pm.dt.TransformationMatrix(
+                repoMatrix).getTranslation("world")
+            guideNode.setTranslation(pos, space="world")
+        else:
+            guideNode.setMatrix(repoMatrix, worldSpace=True, preserve=True)
 
 
 @utils.viewport_off
@@ -922,7 +938,7 @@ def _yield_update_python(valid_guides, guideDictionary):
 @utils.viewport_off
 @utils.one_undo
 def updateGuidePlacement(guideOrder, guideDictionary, reset_scale=False,
-                         reference_mesh=None):
+                         reference_mesh=None, skip_orientation_nodes=None):
     """update the guides based on new universal mesh, in the provided order
 
     Args:
@@ -932,7 +948,12 @@ def updateGuidePlacement(guideOrder, guideDictionary, reset_scale=False,
         reference_mesh (str, optional): Override mesh to use instead of the
             one embedded in the vertex ID strings. When ``None`` the
             original mesh name is used.
+        skip_orientation_nodes (list, optional): Nodes that update position
+            only, preserving their current orientation. When ``None``
+            defaults to the module-level ``SKIP_ORIENTATION_NODES``.
     """
+    if skip_orientation_nodes is None:
+        skip_orientation_nodes = SKIP_ORIENTATION_NODES
     if reference_mesh is not None:
         _remap_mesh_in_guide_dict(guideDictionary, reference_mesh)
     updateGen = yieldUpdateGuidePlacement(guideOrder, guideDictionary)
@@ -944,7 +965,12 @@ def updateGuidePlacement(guideOrder, guideDictionary, reset_scale=False,
         guideNode = pm.PyNode(guide)
         scl = guideNode.getScale()
         repoMatrix = next(updateGen)
-        guideNode.setMatrix(repoMatrix, worldSpace=True, preserve=True)
+        if guide in skip_orientation_nodes:
+            pos = pm.dt.TransformationMatrix(
+                repoMatrix).getTranslation("world")
+            guideNode.setTranslation(pos, space="world")
+        else:
+            guideNode.setMatrix(repoMatrix, worldSpace=True, preserve=True)
         if reset_scale:
             guideNode.setScale([1, 1, 1])
         else:
@@ -1014,6 +1040,9 @@ def exportGuidePlacement(filepath=None,
     data["sample_count"] = sample_count
     data["relativeGuide_dict"] = relativeGuide_dict
     data["ordered_hierarchy"] = ordered_hierarchy
+    data["skip_crawl_nodes"] = list(SKIP_CRAWL_NODES)
+    data["skip_placement_nodes"] = list(SKIP_PLACEMENT_NODES)
+    data["skip_orientation_nodes"] = list(SKIP_ORIENTATION_NODES)
     _exportData(data, filepath)
     print("Guide position exported: {}".format(filepath))
     return relativeGuide_dict, ordered_hierarchy, filepath
@@ -1051,34 +1080,53 @@ def _remap_mesh_in_guide_dict(guide_dict, new_mesh_name):
 
 
 @utils.one_undo
-def importGuidePlacement(filepath, reference_mesh=None):
+def importGuidePlacement(filepath, reference_mesh=None,
+                         skip_orientation_nodes=None):
     """Import the position from the provided file.
 
     Automatically detects legacy (v1) vs multi-vertex (v2) format
-    and routes to the appropriate update path.
+    and routes to the appropriate update path. When the file contains
+    skip configuration, the module-level ``SKIP_CRAWL_NODES``,
+    ``SKIP_PLACEMENT_NODES`` and ``SKIP_ORIENTATION_NODES`` are updated
+    from the file data.
 
     Args:
         filepath (str): Path to the json file.
         reference_mesh (str, optional): Override mesh to use instead of the
             one embedded in the file. When ``None`` the original mesh name
             stored in the vertex IDs is used.
+        skip_orientation_nodes (list, optional): Nodes that update position
+            only, preserving their current orientation. When ``None``
+            defaults to the module-level ``SKIP_ORIENTATION_NODES``.
 
     Returns:
         tuple: relativeGuide_dict, ordered_hierarchy.
     """
+    global SKIP_CRAWL_NODES, SKIP_PLACEMENT_NODES, SKIP_ORIENTATION_NODES
     data = _importData(filepath)
+    if not data:
+        return {}, []
+    # Restore skip configuration from file when present
+    if "skip_crawl_nodes" in data:
+        SKIP_CRAWL_NODES = list(data["skip_crawl_nodes"])
+    if "skip_placement_nodes" in data:
+        SKIP_PLACEMENT_NODES = list(data["skip_placement_nodes"])
+    if "skip_orientation_nodes" in data:
+        SKIP_ORIENTATION_NODES = list(data["skip_orientation_nodes"])
     if reference_mesh is not None:
         _remap_mesh_in_guide_dict(data["relativeGuide_dict"], reference_mesh)
     version = data.get("version", 1)
     if version >= 2:
         # Consume the generator to apply all guide updates
         for _ in updateGuidePlacement(
-                data["ordered_hierarchy"], data["relativeGuide_dict"]):
+                data["ordered_hierarchy"], data["relativeGuide_dict"],
+                skip_orientation_nodes=skip_orientation_nodes):
             pass
     else:
         # Legacy format: use the legacy update path
         updateGuidePlacementLegacy(
-            data["ordered_hierarchy"], data["relativeGuide_dict"]
+            data["ordered_hierarchy"], data["relativeGuide_dict"],
+            skip_orientation_nodes=skip_orientation_nodes
         )
     return data["relativeGuide_dict"], data["ordered_hierarchy"]
 
