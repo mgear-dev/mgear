@@ -5,7 +5,6 @@ bipded and other types of morphology.
 
 Attributes:
     AFB_FILE_EXTENSION (str): Auto fit biped desired extension name
-    DANCE_EMOTICON (list): emoticon for loading animation
     RELATIVE_FILE_EXTENSION (str): extension name for relative guide placement
     WINDOW_TITLE (str): Name of the ui housing both tabs
 
@@ -26,7 +25,6 @@ import json
 import os
 import copy
 import pprint
-import itertools
 
 # dcc
 import mgear.pymaya as pm
@@ -54,13 +52,6 @@ from mgear.vendor.Qt import QtWidgets
 WINDOW_TITLE = "Auto Fit Guide Tools (AFG)"
 AFB_FILE_EXTENSION = "afg"
 RELATIVE_FILE_EXTENSION = "rgp"
-DANCE_EMOTICON = ["v(._.)v",
-                  "<(*-* <)",
-                  "^(*-*)^",
-                  "(>._.)>",
-                  "<(._.)v",
-                  "^(*-*)v",
-                  "(>._.)v"]
 
 
 def get_top_level_widgets(class_name=None, object_name=None):
@@ -1100,11 +1091,13 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
     @utils.viewport_off
     @utils.one_undo
     def recordInitialGuidePlacement(self):
-        """Record te initial placement of the guides as it relates to the
-        closest point on mesh
+        """Record the initial placement of the guides as it relates to the
+        closest point on mesh.
+
+        Uses Maya's main progress bar to show recording progress.
 
         Raises:
-            ValueError: Raise error if no source mesh provided
+            ValueError: Raise error if no source mesh provided.
         """
         reference_mesh = self.src_geo_widget.text
         if reference_mesh == "" or not cmds.objExists(reference_mesh):
@@ -1117,9 +1110,7 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
                                                 ordered_hierarchy,
                                                 self.getSkipNodes())
         reference_mesh = pm.PyNode(reference_mesh)
-        increment_value = 100 / len(ordered_hierarchy)
-        starting_val = 0
-        dance = itertools.cycle(DANCE_EMOTICON)
+        total = len(ordered_hierarchy)
 
         sample_count = self.sample_count_sb.value()
         gen = relative_guide_placement.yieldGuideRelativeDictionary(
@@ -1127,47 +1118,90 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
             ordered_hierarchy,
             relativeGuide_dict,
             sample_count=sample_count)
-        for result in gen:
-            msg = "{}% completed... {}".format(int(starting_val), next(dance))
-            self.window().statusBar().showMessage(msg)
-            starting_val = starting_val + increment_value
+
+        # Maya main progress bar
+        gMainProgressBar = pm.mel.eval("$tmp = $gMainProgressBar")
+        cmds.progressBar(
+            gMainProgressBar,
+            edit=True,
+            beginProgress=True,
+            isInterruptable=False,
+            status="Recording guide placement...",
+            maxValue=max(total, 1),
+        )
+        try:
+            for i, result in enumerate(gen):
+                pct = int((i + 1) * 100 / total) if total else 100
+                guide_name = ordered_hierarchy[i] if i < total else ""
+                short = guide_name.rsplit("|", 1)[-1] if guide_name else ""
+                msg = "Recording {}/{} - {} ({}%)".format(
+                    i + 1, total, short, pct)
+                self.window().statusBar().showMessage(msg)
+                cmds.progressBar(gMainProgressBar, edit=True, step=1)
+        finally:
+            cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
 
         self.relativeGuide_dict = relativeGuide_dict
         self.ordered_hierarchy = ordered_hierarchy
-        msg = "Initial Guide Placement Recorded!"
+        msg = "Initial Guide Placement Recorded! ({} guides)".format(total)
         self.window().statusBar().showMessage(msg, 3000)
+        pm.displayInfo(msg)
 
     @utils.viewport_off
     @utils.one_undo
     def updateGuidePlacement(self):
         """Move guides into position based on the recorded info
-        while updating the UI
+        while updating the UI.
+
+        Uses Maya's main progress bar to show update progress.
 
         Raises:
-            ValueError: raise error if no guide placement is loaded
+            ValueError: raise error if no guide placement is loaded.
         """
         if not self.ordered_hierarchy:
             msg = "Record initial Placement first!"
             self.window().statusBar().showMessage(msg, 3000)
             raise ValueError(msg)
 
-        increment_value = 100 / len(self.ordered_hierarchy)
-        starting_val = 0
-        dance = itertools.cycle(DANCE_EMOTICON)
+        total = len(self.ordered_hierarchy)
         reset_scale = self.rgp_scale_cb.isChecked()
         reference_mesh = self.src_geo_widget.text
         if not reference_mesh or not cmds.objExists(reference_mesh):
             reference_mesh = None
-        for x in relative_guide_placement.updateGuidePlacement(
-                self.ordered_hierarchy,
-                self.relativeGuide_dict,
-                reset_scale=reset_scale,
-                reference_mesh=reference_mesh):
-            msg = "{}% completed... {}".format(int(starting_val), next(dance))
-            self.window().statusBar().showMessage(msg)
-            starting_val = starting_val + increment_value
 
-        self.window().statusBar().showMessage("Guides plcement updated!", 3000)
+        skip_orient = self.getSkipOrientNodes()
+
+        # Maya main progress bar
+        gMainProgressBar = pm.mel.eval("$tmp = $gMainProgressBar")
+        cmds.progressBar(
+            gMainProgressBar,
+            edit=True,
+            beginProgress=True,
+            isInterruptable=False,
+            status="Updating guide placement...",
+            maxValue=max(total, 1),
+        )
+        processed = 0
+        try:
+            for guide_name in relative_guide_placement.updateGuidePlacement(
+                    self.ordered_hierarchy,
+                    self.relativeGuide_dict,
+                    reset_scale=reset_scale,
+                    reference_mesh=reference_mesh,
+                    skip_orientation_nodes=skip_orient):
+                processed += 1
+                pct = int(processed * 100 / total) if total else 100
+                short = guide_name.rsplit("|", 1)[-1] if guide_name else ""
+                msg = "Updating {}/{} - {} ({}%)".format(
+                    processed, total, short, pct)
+                self.window().statusBar().showMessage(msg)
+                cmds.progressBar(gMainProgressBar, edit=True, step=1)
+        finally:
+            cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
+
+        msg = "Guide placement updated! ({} guides)".format(processed)
+        self.window().statusBar().showMessage(msg, 3000)
+        pm.displayInfo(msg)
 
     def _importGuidePlacement(self):
         """File dialog for importing initial guide placement files.

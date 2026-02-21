@@ -975,7 +975,7 @@ def updateGuidePlacement(guideOrder, guideDictionary, reset_scale=False,
             guideNode.setScale([1, 1, 1])
         else:
             guideNode.setScale(scl)
-        yield True
+        yield guide
 
 
 # ==============================================================================
