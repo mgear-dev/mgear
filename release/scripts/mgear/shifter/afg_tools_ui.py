@@ -49,7 +49,7 @@ from mgear.vendor.Qt import QtWidgets
 # reload(relative_guide_placement)
 
 # constants -------------------------------------------------------------------
-WINDOW_TITLE = "Auto Fit Guide Tools (AFG) (BETA)"
+WINDOW_TITLE = "Auto Fit Guide Tools (AFG)"
 AFB_FILE_EXTENSION = "afg"
 RELATIVE_FILE_EXTENSION = "rgp"
 DANCE_EMOTICON = ["v(._.)v",
@@ -1311,9 +1311,9 @@ class AutoFitGuideToolWidget(QtWidgets.QWidget):
         self.afb_widget = AutoFitBipedWidget(parent=parent)
         self.relative_placement_widget = RelativeGuidePlacementWidget(
             parent=parent)
-        self.afg_tab_widget.addTab(self.afb_widget, "Auto Fit Biped")
         self.afg_tab_widget.addTab(self.relative_placement_widget,
                                    "Relative Guide Placement")
+        self.afg_tab_widget.addTab(self.afb_widget, "Auto Fit Biped")
 
     def loadSettingsWidget(self):
         self.load_settings_widget = QtWidgets.QGroupBox("Load Model | Guide")
@@ -1362,10 +1362,47 @@ class AutoFitGuideTool(QtWidgets.QMainWindow):
         self.statusBar().showMessage("Starting up...", 3000)
         self.setCentralWidget(AutoFitGuideToolWidget(parent=self))
         self.connectToolTips()
+        self._createMenuBar()
         settings = QtCore.QSettings("mGear's", "AutoFitGuideTool")
         if settings:
             self.restoreGeometry(settings.value("geometry"))
             self.restoreState(settings.value("windowState"))
+
+    def _createMenuBar(self):
+        """Create the menu bar with File menu for import/export."""
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("File")
+
+        central = self.centralWidget()
+
+        export_rgp_action = file_menu.addAction(
+            "Export Relative Placement (.rgp)"
+        )
+        import_rgp_action = file_menu.addAction(
+            "Import Relative Placement (.rgp)"
+        )
+
+        file_menu.addSeparator()
+
+        export_afg_action = file_menu.addAction(
+            "Export AFG Association (.afg)"
+        )
+        import_afg_action = file_menu.addAction(
+            "Import AFG Association (.afg)"
+        )
+
+        export_rgp_action.triggered.connect(
+            central.relative_placement_widget._exportGuidePlacement
+        )
+        import_rgp_action.triggered.connect(
+            central.relative_placement_widget._importGuidePlacement
+        )
+        export_afg_action.triggered.connect(
+            central.afb_widget.exportAssociation
+        )
+        import_afg_action.triggered.connect(
+            central.afb_widget.importAssociation
+        )
 
     def connectToolTips(self):
         """make all widgets in the list have their tooltip show up on the

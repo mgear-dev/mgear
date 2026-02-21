@@ -52,7 +52,7 @@ def install():
             "mgear_crosshair.svg",
         ),
         ("-----", None),
-        ("Auto Fit Guide", str_auto_fit_guide),
+        ("Auto Fit Guide", str_auto_fit_guide, "mgear_afg.svg"),
         ("-----", None),
         ("Plebes...", str_plebes),
         (None, mocap_submenu),

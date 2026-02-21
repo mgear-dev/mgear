@@ -33,12 +33,19 @@ import math
 import maya.cmds as mc
 import mgear.pymaya as pm
 import maya.OpenMaya as om
+import maya.api.OpenMaya as om2
 
 # mgear
 from mgear.core import utils
 from mgear.core import vector
 from mgear.core import transform
 from mgear.core import meshNavigation
+
+from mgear.shifter._rgp_accel import HAS_ACCEL
+if HAS_ACCEL:
+    from mgear.shifter._rgp_accel import record_primary
+    from mgear.shifter._rgp_accel import record_mirror
+    from mgear.shifter._rgp_accel import reposition_all_guides
 
 
 # constants -------------------------------------------------------------------
@@ -89,6 +96,107 @@ UNIVERSAL_MESH_NAME = "skin_geo_setup"
 
 # Number of nearby vertices to sample per guide node for multi-vertex mode
 DEFAULT_SAMPLE_COUNT = 32
+
+
+# C++ acceleration helpers ---------------------------------------------------
+
+def _extract_mesh_data(mesh_name):
+    """Bulk-extract mesh data using maya.api.OpenMaya (OM2).
+
+    Extracts vertex positions, face topology, and per-face normals
+    in a single pass. Returns flat lists suitable for passing to C++.
+
+    Args:
+        mesh_name (str): Name of the mesh node or shape.
+
+    Returns:
+        tuple: (points, face_normals, face_vert_counts,
+                face_vert_indices, num_verts) where all are flat lists.
+    """
+    sel = om2.MSelectionList()
+    sel.add(mesh_name)
+    dag = sel.getDagPath(0)
+    fn_mesh = om2.MFnMesh(dag)
+
+    # Vertex positions (flat N*3)
+    raw_points = fn_mesh.getPoints(om2.MSpace.kWorld)
+    num_verts = len(raw_points)
+    points = []
+    for i in range(num_verts):
+        p = raw_points[i]
+        points.append(p.x)
+        points.append(p.y)
+        points.append(p.z)
+
+    # Face topology
+    face_vert_counts_arr, face_vert_indices_arr = fn_mesh.getVertices()
+    face_vert_counts = list(face_vert_counts_arr)
+    face_vert_indices = list(face_vert_indices_arr)
+
+    # Per-face normals (flat F*3)
+    num_faces = fn_mesh.numPolygons
+    face_normals = []
+    for f in range(num_faces):
+        n = fn_mesh.getPolygonNormal(f, om2.MSpace.kWorld)
+        face_normals.append(n.x)
+        face_normals.append(n.y)
+        face_normals.append(n.z)
+
+    return (points, face_normals, face_vert_counts,
+            face_vert_indices, num_verts)
+
+
+def _get_seed_face_verts(mesh_name, positions):
+    """Get seed polygon vertices for each position via getClosestPoint.
+
+    For each position, finds the closest polygon on the mesh and returns
+    that polygon's vertex indices as seed vertices for BFS flood-fill.
+
+    Args:
+        mesh_name (str): Name of the mesh node or shape.
+        positions (list): Flat list of N*3 world positions.
+
+    Returns:
+        tuple: (seed_vert_ids, seed_offsets) where seed_vert_ids is a
+            flat list of vertex indices and seed_offsets[i] is the start
+            index for position i (len = num_positions + 1).
+    """
+    sel = om2.MSelectionList()
+    sel.add(mesh_name)
+    dag = sel.getDagPath(0)
+    fn_mesh = om2.MFnMesh(dag)
+
+    num_positions = len(positions) // 3
+    seed_vert_ids = []
+    seed_offsets = [0]
+
+    for i in range(num_positions):
+        pt = om2.MPoint(positions[i * 3],
+                        positions[i * 3 + 1],
+                        positions[i * 3 + 2])
+        _, face_id = fn_mesh.getClosestPoint(pt, om2.MSpace.kWorld)
+        face_verts = fn_mesh.getPolygonVertices(face_id)
+        seed_vert_ids.extend(face_verts)
+        seed_offsets.append(len(seed_vert_ids))
+
+    return seed_vert_ids, seed_offsets
+
+
+def _mesh_shape_name(mesh_name):
+    """Get the shape node name from a transform or shape name.
+
+    Args:
+        mesh_name (str): Transform or shape name.
+
+    Returns:
+        str: Shape node name.
+    """
+    if mc.objectType(mesh_name) == "transform":
+        shapes = mc.listRelatives(mesh_name, shapes=True,
+                                  noIntermediate=True) or []
+        if shapes:
+            return shapes[0]
+    return mesh_name
 
 
 # general functions -----------------------------------------------------------
@@ -397,6 +505,10 @@ def yieldGuideRelativeDictionary(mesh, guideOrder, relativeGuide_dict,
     reference positions. Falls back to single-vertex when sample_count
     is 1 or None.
 
+    Uses C++ acceleration when available (HAS_ACCEL) and sample_count > 1
+    for significantly faster bulk processing. Falls back to Python
+    automatically when the C++ module is not built.
+
     Args:
         mesh (string): Name of the mesh.
         guideOrder (list): The order to query the guide hierarchy.
@@ -410,6 +522,145 @@ def yieldGuideRelativeDictionary(mesh, guideOrder, relativeGuide_dict,
     if sample_count is None:
         sample_count = DEFAULT_SAMPLE_COUNT
 
+    mesh_name = str(mesh)
+    shape_name = _mesh_shape_name(mesh_name)
+
+    if HAS_ACCEL and sample_count > 1:
+        # ---- C++ accelerated path ----
+        yield from _yield_guide_relative_accel(
+            shape_name, mesh_name, guideOrder, relativeGuide_dict,
+            sample_count)
+    else:
+        # ---- Pure Python path ----
+        yield from _yield_guide_relative_python(
+            mesh, guideOrder, relativeGuide_dict, sample_count)
+
+
+def _yield_guide_relative_accel(shape_name, mesh_name, guideOrder,
+                                 relativeGuide_dict, sample_count):
+    """C++ accelerated recording path.
+
+    Extracts mesh data once via OM2, then delegates BFS + matrix
+    construction to C++ in batch.
+
+    Args:
+        shape_name (str): Mesh shape node name.
+        mesh_name (str): Mesh transform or shape name.
+        guideOrder (list): Guide names to process.
+        relativeGuide_dict (dict): Dictionary to populate.
+        sample_count (int): Number of vertices to sample.
+    """
+    # 1. Bulk extract mesh data (single OM2 pass)
+    (points, face_normals, face_vert_counts,
+     face_vert_indices, num_verts) = _extract_mesh_data(shape_name)
+
+    # 2. Gather guide positions and matrices
+    guide_positions = []
+    guide_matrices = []
+    guide_names = []
+    for guide_name in guideOrder:
+        guide = pm.PyNode(guide_name)
+        pos = guide.getTranslation(space="world")
+        guide_positions.extend([pos.x, pos.y, pos.z])
+        mat = guide.getMatrix(worldSpace=True)
+        # Flatten nested 4x4 tuple to flat 16 doubles for C++
+        for row in mat.get():
+            guide_matrices.extend(row)
+        guide_names.append(guide.name())
+
+    # 3. Get seed polygon verts for each guide position (OM2)
+    seed_vert_ids, seed_offsets = _get_seed_face_verts(
+        shape_name, guide_positions)
+
+    # 4. C++ record_primary: BFS + ref matrices + mirror positions
+    primary_result = record_primary(
+        guide_positions,
+        guide_matrices,
+        seed_vert_ids,
+        seed_offsets,
+        sample_count,
+        points,
+        face_normals,
+        face_vert_counts,
+        face_vert_indices,
+        num_verts,
+    )
+
+    p_vert_ids = primary_result["vert_ids"]
+    p_ref_matrices = primary_result["ref_matrices"]
+    p_mirror_positions = primary_result["mirror_positions"]
+
+    # 5. Get seed polygon verts for mirror positions (OM2)
+    mr_seed_vert_ids, mr_seed_offsets = _get_seed_face_verts(
+        shape_name, p_mirror_positions)
+
+    # 6. C++ record_mirror: BFS + ref matrices for mirror side
+    mirror_result = record_mirror(
+        mr_seed_vert_ids,
+        mr_seed_offsets,
+        sample_count,
+        points,
+        face_normals,
+        face_vert_counts,
+        face_vert_indices,
+        num_verts,
+    )
+
+    mr_vert_ids = mirror_result["vert_ids"]
+    mr_ref_matrices = mirror_result["ref_matrices"]
+
+    # 7. Package results into relativeGuide_dict format
+    guide_count = len(guide_names)
+    for g in range(guide_count):
+        # Vertex IDs as name strings (e.g. "meshShape.vtx[5]")
+        vert_names = []
+        for i in range(sample_count):
+            vid = p_vert_ids[g * sample_count + i]
+            vert_names.append("{}.vtx[{}]".format(shape_name, vid))
+
+        mr_vert_names = []
+        for i in range(sample_count):
+            vid = mr_vert_ids[g * sample_count + i]
+            mr_vert_names.append("{}.vtx[{}]".format(shape_name, vid))
+
+        # Node matrix (flat 16 -> nested 4x4 list for JSON)
+        node_mat_flat = guide_matrices[g * 16:(g + 1) * 16]
+        node_mat_nested = [
+            node_mat_flat[r * 4:(r + 1) * 4] for r in range(4)
+        ]
+
+        # Reference matrix (flat 16 -> nested 4x4)
+        ref_mat_flat = p_ref_matrices[g * 16:(g + 1) * 16]
+        ref_mat_nested = [
+            ref_mat_flat[r * 4:(r + 1) * 4] for r in range(4)
+        ]
+
+        # Mirror reference matrix (flat 16 -> nested 4x4)
+        mr_mat_flat = mr_ref_matrices[g * 16:(g + 1) * 16]
+        mr_mat_nested = [
+            mr_mat_flat[r * 4:(r + 1) * 4] for r in range(4)
+        ]
+
+        relativeGuide_dict[guide_names[g]] = [
+            vert_names,
+            node_mat_nested,
+            ref_mat_nested,
+            mr_mat_nested,
+            mr_vert_names,
+        ]
+        yield relativeGuide_dict
+
+
+def _yield_guide_relative_python(mesh, guideOrder, relativeGuide_dict,
+                                  sample_count):
+    """Pure Python recording path (fallback).
+
+    Args:
+        mesh (pm.PyNode): Mesh node.
+        guideOrder (list): Guide names to process.
+        relativeGuide_dict (dict): Dictionary to populate.
+        sample_count (int): Number of vertices to sample.
+    """
     for guide in guideOrder:
         guide = pm.PyNode(guide)
 
@@ -521,18 +772,117 @@ def yieldUpdateGuidePlacement(guideOrder, guideDictionary):
     """Update the guides based on new universal mesh, in the provided order.
 
     Automatically detects legacy (4-element) vs multi-vertex (5-element)
-    data entries per guide.
+    data entries per guide. Uses C++ acceleration when available and all
+    entries are multi-vertex format.
 
     Args:
         guideOrder (list): Of the hierarchy to crawl.
         guideDictionary (dict): Dict of the guide:edge, matrix position.
     """
+    # Filter to valid guides
+    valid_guides = []
     for guide in guideOrder:
         if guide not in guideDictionary or not mc.objExists(guide):
             continue
-        elif guide in SKIP_PLACEMENT_NODES:
+        if guide in SKIP_PLACEMENT_NODES:
             continue
+        valid_guides.append(guide)
 
+    if not valid_guides:
+        return
+
+    # Check if all entries are multi-vertex (5-element)
+    all_multi = all(
+        len(guideDictionary[g]) == 5 for g in valid_guides
+    )
+
+    if HAS_ACCEL and all_multi:
+        yield from _yield_update_accel(valid_guides, guideDictionary)
+    else:
+        yield from _yield_update_python(valid_guides, guideDictionary)
+
+
+def _yield_update_accel(valid_guides, guideDictionary):
+    """C++ accelerated update/repositioning path.
+
+    Extracts new mesh data once, batches all repositioning in C++.
+
+    Args:
+        valid_guides (list): Filtered guide names.
+        guideDictionary (dict): Guide data dictionary.
+    """
+    guide_count = len(valid_guides)
+
+    # Determine mesh name and sample_count from first entry
+    first_entry = guideDictionary[valid_guides[0]]
+    first_vert_name = first_entry[0][0]  # e.g. "meshShape.vtx[5]"
+    mesh_name = first_vert_name.split(".vtx[")[0]
+    sample_count = len(first_entry[0])
+
+    shape_name = _mesh_shape_name(mesh_name)
+
+    # Extract new mesh positions (single OM2 call)
+    (new_points, _, _, _, _) = _extract_mesh_data(shape_name)
+
+    # Collect all data into flat arrays for C++
+    all_node_matrices = []
+    all_ref_matrices = []
+    all_mr_ref_matrices = []
+    all_vert_ids = []
+    all_mr_vert_ids = []
+
+    for guide in valid_guides:
+        (vertexIds, node_matrix, orig_ref_matrix,
+         mr_orig_ref_matrix, mr_vertexIds) = guideDictionary[guide]
+
+        # Flatten nested 4x4 matrix to 16 doubles
+        for row in node_matrix:
+            all_node_matrices.extend(row)
+        for row in orig_ref_matrix:
+            all_ref_matrices.extend(row)
+        for row in mr_orig_ref_matrix:
+            all_mr_ref_matrices.extend(row)
+
+        # Extract vertex indices from name strings
+        for vname in vertexIds:
+            vid = int(vname.split("[")[1].rstrip("]"))
+            all_vert_ids.append(vid)
+        for vname in mr_vertexIds:
+            vid = int(vname.split("[")[1].rstrip("]"))
+            all_mr_vert_ids.append(vid)
+
+    # C++ batch repositioning
+    result_matrices = reposition_all_guides(
+        all_node_matrices,
+        all_ref_matrices,
+        all_mr_ref_matrices,
+        all_vert_ids,
+        all_mr_vert_ids,
+        sample_count,
+        new_points,
+    )
+
+    # Yield each result matrix as pm.dt.Matrix
+    for g in range(guide_count):
+        flat_mat = result_matrices[g * 16:(g + 1) * 16]
+        # Convert flat 16 to nested 4x4 tuple for pm.dt.Matrix
+        nested = (
+            tuple(flat_mat[0:4]),
+            tuple(flat_mat[4:8]),
+            tuple(flat_mat[8:12]),
+            tuple(flat_mat[12:16]),
+        )
+        yield pm.dt.Matrix(nested)
+
+
+def _yield_update_python(valid_guides, guideDictionary):
+    """Pure Python update/repositioning path (fallback).
+
+    Args:
+        valid_guides (list): Filtered guide names.
+        guideDictionary (dict): Guide data dictionary.
+    """
+    for guide in valid_guides:
         entry = guideDictionary[guide]
         if len(entry) == 5:
             # Multi-vertex format
