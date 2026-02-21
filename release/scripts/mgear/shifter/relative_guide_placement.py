@@ -741,13 +741,19 @@ def getGuideRelativeDictionary(mesh, guideOrder, sample_count=None):
 
 @utils.viewport_off
 @utils.one_undo
-def updateGuidePlacementLegacy(guideOrder, guideDictionary):
+def updateGuidePlacementLegacy(guideOrder, guideDictionary,
+                               reference_mesh=None):
     """update the guides based on new universal mesh, in the provided order
 
     Args:
         guideOrder (list): of the hierarchy to crawl
         guideDictionary (dictionary): dict of the guide:edge, matrix position
+        reference_mesh (str, optional): Override mesh to use instead of the
+            one embedded in the vertex ID strings. When ``None`` the
+            original mesh name is used.
     """
+    if reference_mesh is not None:
+        _remap_mesh_in_guide_dict(guideDictionary, reference_mesh)
     for guide in guideOrder:
         if guide not in guideDictionary or not mc.objExists(guide):
             continue
@@ -915,13 +921,20 @@ def _yield_update_python(valid_guides, guideDictionary):
 
 @utils.viewport_off
 @utils.one_undo
-def updateGuidePlacement(guideOrder, guideDictionary, reset_scale=False):
+def updateGuidePlacement(guideOrder, guideDictionary, reset_scale=False,
+                         reference_mesh=None):
     """update the guides based on new universal mesh, in the provided order
 
     Args:
         guideOrder (list): of the hierarchy to crawl
         guideDictionary (dictionary): dict of the guide:edge, matrix position
+        reset_scale (bool): Reset guide scale to default [1, 1, 1].
+        reference_mesh (str, optional): Override mesh to use instead of the
+            one embedded in the vertex ID strings. When ``None`` the
+            original mesh name is used.
     """
+    if reference_mesh is not None:
+        _remap_mesh_in_guide_dict(guideDictionary, reference_mesh)
     updateGen = yieldUpdateGuidePlacement(guideOrder, guideDictionary)
     for guide in guideOrder:
         if guide not in guideDictionary or not mc.objExists(guide):

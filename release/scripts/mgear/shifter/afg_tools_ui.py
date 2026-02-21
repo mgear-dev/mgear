@@ -1142,10 +1142,14 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         starting_val = 0
         dance = itertools.cycle(DANCE_EMOTICON)
         reset_scale = self.rgp_scale_cb.isChecked()
+        reference_mesh = self.src_geo_widget.text
+        if not reference_mesh or not cmds.objExists(reference_mesh):
+            reference_mesh = None
         for x in relative_guide_placement.updateGuidePlacement(
                 self.ordered_hierarchy,
                 self.relativeGuide_dict,
-                reset_scale=reset_scale):
+                reset_scale=reset_scale,
+                reference_mesh=reference_mesh):
             msg = "{}% completed... {}".format(int(starting_val), next(dance))
             self.window().statusBar().showMessage(msg)
             starting_val = starting_val + increment_value
