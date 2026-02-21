@@ -1153,16 +1153,22 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.window().statusBar().showMessage("Guides plcement updated!", 3000)
 
     def _importGuidePlacement(self):
-        """Fildialog for importing initial guide placement files
+        """File dialog for importing initial guide placement files.
+
+        Uses the source mesh set in the UI when available, otherwise
+        falls back to the mesh name embedded in the file.
         """
         tmp = " ".join(["*.{}".format(x) for x in [RELATIVE_FILE_EXTENSION]])
-        # TODO Make the file extension here more verbose
         all_exts = ["Relative Placement Guides Files ({})".format(
             tmp), "All Files (*.*)"]
         all_exts = ";;".join(all_exts)
         file_path = fileDialog("/", ext=all_exts, mode=1)
+        reference_mesh = self.src_geo_widget.text
+        if not reference_mesh or not cmds.objExists(reference_mesh):
+            reference_mesh = None
         (self.relativeGuide_dict,
-         self.ordered_hierarchy) = relative_guide_placement.importGuidePlacement(file_path)
+         self.ordered_hierarchy) = relative_guide_placement.importGuidePlacement(
+            file_path, reference_mesh=reference_mesh)
         print("Relative Guide Placement Imported: {}".format(file_path))
 
     def _exportGuidePlacement(self):

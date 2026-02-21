@@ -1006,8 +1006,39 @@ def exportGuidePlacement(filepath=None,
     return relativeGuide_dict, ordered_hierarchy, filepath
 
 
+def _remap_mesh_in_guide_dict(guide_dict, new_mesh_name):
+    """Remap vertex ID strings in a guide dictionary to a different mesh.
+
+    Replaces the mesh name portion of each vertex string
+    (e.g. ``"oldMeshShape.vtx[5]"`` becomes ``"newMeshShape.vtx[5]"``).
+
+    Args:
+        guide_dict (dict): The relativeGuide_dict loaded from file.
+        new_mesh_name (str): The new mesh shape (or transform) name to use.
+
+    Returns:
+        dict: The same dictionary with vertex strings remapped in place.
+    """
+    shape_name = _mesh_shape_name(new_mesh_name)
+    for guide, entry in guide_dict.items():
+        vertex_ids = entry[0]
+        entry[0] = [
+            "{}.vtx[{}]".format(shape_name, v.split("[")[1].rstrip("]"))
+            for v in vertex_ids
+        ]
+        if len(entry) == 5:
+            mr_vertex_ids = entry[4]
+            entry[4] = [
+                "{}.vtx[{}]".format(
+                    shape_name, v.split("[")[1].rstrip("]")
+                )
+                for v in mr_vertex_ids
+            ]
+    return guide_dict
+
+
 @utils.one_undo
-def importGuidePlacement(filepath):
+def importGuidePlacement(filepath, reference_mesh=None):
     """Import the position from the provided file.
 
     Automatically detects legacy (v1) vs multi-vertex (v2) format
@@ -1015,11 +1046,16 @@ def importGuidePlacement(filepath):
 
     Args:
         filepath (str): Path to the json file.
+        reference_mesh (str, optional): Override mesh to use instead of the
+            one embedded in the file. When ``None`` the original mesh name
+            stored in the vertex IDs is used.
 
     Returns:
         tuple: relativeGuide_dict, ordered_hierarchy.
     """
     data = _importData(filepath)
+    if reference_mesh is not None:
+        _remap_mesh_in_guide_dict(data["relativeGuide_dict"], reference_mesh)
     version = data.get("version", 1)
     if version >= 2:
         # Consume the generator to apply all guide updates
