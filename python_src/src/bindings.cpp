@@ -108,6 +108,7 @@ PYBIND11_MODULE(_rgp_accel_cpp, m) {
            const std::vector<int>& face_vert_counts,
            const std::vector<int>& face_vert_indices,
            int num_verts,
+           const std::vector<double>& mirror_positions,
            py::object progress_cb) -> py::dict
         {
             auto cb = wrap_progress(progress_cb);
@@ -121,7 +122,7 @@ PYBIND11_MODULE(_rgp_accel_cpp, m) {
                     sample_count,
                     points, face_normals,
                     face_vert_counts, face_vert_indices,
-                    num_verts, cb);
+                    num_verts, mirror_positions, cb);
             }
 
             py::dict d;
@@ -137,10 +138,14 @@ PYBIND11_MODULE(_rgp_accel_cpp, m) {
         py::arg("face_vert_counts"),
         py::arg("face_vert_indices"),
         py::arg("num_verts"),
+        py::arg("mirror_positions"),
         py::arg("progress_cb") = py::none(),
         "Record mirror side for all guides (batch).\n\n"
         "Performs BFS flood-fill + reference matrix construction for\n"
-        "each mirror position. Returns dict with:\n"
+        "each mirror position. Uses mirror_positions (reflected guide\n"
+        "world positions) as the distance reference for vertex sorting,\n"
+        "matching the Python path behavior.\n\n"
+        "Returns dict with:\n"
         "  vert_ids: flat list of guide_count * sample_count ints\n"
         "  ref_matrices: flat list of guide_count * 16 doubles"
     );

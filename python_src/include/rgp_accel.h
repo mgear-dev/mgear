@@ -536,6 +536,7 @@ RecordMirrorResult record_mirror(
     const std::vector<int>& face_vert_counts,
     const std::vector<int>& face_vert_indices,
     int num_verts,
+    const std::vector<double>& mirror_positions,
     ProgressCB progress_cb = nullptr);
 
 /**

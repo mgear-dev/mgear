@@ -391,6 +391,7 @@ RecordMirrorResult record_mirror(
     const std::vector<int>& face_vert_counts,
     const std::vector<int>& face_vert_indices,
     int num_verts,
+    const std::vector<double>& mirror_positions,
     ProgressCB progress_cb)
 {
     int guide_count = static_cast<int>(seed_offsets.size()) - 1;
@@ -419,20 +420,12 @@ RecordMirrorResult record_mirror(
             seed_vert_ids.begin() + seed_start,
             seed_vert_ids.begin() + seed_end);
 
-        // We need a reference position for distance sorting.
-        // Use the centroid of the seed vertices as the reference.
-        Vec3 ref_pos;
-        for (int s : seeds) {
-            ref_pos.x += points[s * 3];
-            ref_pos.y += points[s * 3 + 1];
-            ref_pos.z += points[s * 3 + 2];
-        }
-        if (!seeds.empty()) {
-            double inv = 1.0 / static_cast<double>(seeds.size());
-            ref_pos.x *= inv;
-            ref_pos.y *= inv;
-            ref_pos.z *= inv;
-        }
+        // Use the reflected guide position for distance sorting.
+        // This matches the Python path which passes the exact mirror
+        // world-space position to getClosestNVerticesFromTransform().
+        Vec3 ref_pos(mirror_positions[g * 3],
+                     mirror_positions[g * 3 + 1],
+                     mirror_positions[g * 3 + 2]);
 
         // BFS flood-fill
         std::vector<int> closest = find_n_closest_vertices(

@@ -600,6 +600,8 @@ def _yield_guide_relative_accel(shape_name, mesh_name, guideOrder,
         shape_name, p_mirror_positions)
 
     # 6. C++ record_mirror: BFS + ref matrices for mirror side
+    #    Pass mirror_positions so C++ uses the reflected guide position
+    #    (not seed polygon centroid) as the distance reference for BFS.
     mirror_result = record_mirror(
         mr_seed_vert_ids,
         mr_seed_offsets,
@@ -609,6 +611,7 @@ def _yield_guide_relative_accel(shape_name, mesh_name, guideOrder,
         face_vert_counts,
         face_vert_indices,
         num_verts,
+        p_mirror_positions,
     )
 
     mr_vert_ids = mirror_result["vert_ids"]
