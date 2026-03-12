@@ -47,6 +47,7 @@ def get_all_tag_children(node):
             for ct in child_tags:
                 if ct in seen_tags:
                     continue
+                seen_tags.add(ct)
                 ctl = cmds.listConnections(
                     "{}.controllerObject".format(ct)
                 )
