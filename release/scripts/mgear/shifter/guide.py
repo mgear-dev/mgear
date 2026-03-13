@@ -1821,6 +1821,7 @@ class GuideSettings(MayaQWidgetDockableMixin, csw.CustomStepMixin, GuideMainSett
         self.populate_controls()
         self.create_layout()
         self.create_connections()
+        self.refreshReferencedGroups()
 
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
 
