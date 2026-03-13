@@ -990,6 +990,13 @@ class Rig(Main):
         components_dict = guide_template_dict["components_dict"]
         self.componentsIndex = guide_template_dict["components_list"]
 
+        # Blueprint settings from the guide root, forwarded to component guides
+        # so getMergedValues() works on the dict-build path (no Maya nodes).
+        model_blueprint_options = {
+            "use_blueprint": self.values.get("use_blueprint", False),
+            "blueprint_path": self.values.get("blueprint_path", ""),
+        }
+
         for comp in self.componentsIndex:
 
             c_dict = components_dict[comp]
@@ -1000,6 +1007,7 @@ class Rig(Main):
             if comp_guide:
                 self.components[comp] = comp_guide
                 comp_guide.set_from_dict(c_dict)
+                comp_guide.model_options = model_blueprint_options
 
             pName = c_dict["parent_fullName"]
             if pName:

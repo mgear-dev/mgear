@@ -66,6 +66,16 @@ class Main(object):
         self.model = self.rig.model
         # Use merged values to apply blueprint settings when enabled
         self.settings = self.guide.getMergedValues()
+        # Propagate merged FCurve values back into paramDefs. getMergedValues()
+        # may replace profile samples with the blueprint's correctly-sized list
+        # (blueprint was sampled with its own div0/div1), but paramDef.value
+        # still holds the local guide's samples at the local division count.
+        # Syncing here ensures the component's if-branch sees the right length.
+        for param_def in self.guide.paramDefs.values():
+            if isinstance(param_def, attribute.FCurveParamDef):
+                merged_val = self.settings.get(param_def.scriptName)
+                if merged_val is not None:
+                    param_def.value = merged_val
         self.setupWS = self.rig.setupWS
 
         self.WIP = self.options["mode"]

@@ -296,27 +296,33 @@ class ComponentGuide(guide.Main):
         # Start with a copy of local values
         merged = dict(self.values)
 
-        # Check if we have a model (guide root)
-        if not hasattr(self, 'model') or not self.model:
+        # Resolve blueprint settings from Maya node (live guide) or from the
+        # model_options dict injected by set_from_dict (serialized build path).
+        if hasattr(self, "model") and self.model:
+            # Live guide: read directly from the Maya guide root node.
+            if not self.model.hasAttr("use_blueprint"):
+                return merged
+            use_blueprint = self.model.attr("use_blueprint").get()
+            blueprint_path = self.model.attr("blueprint_path").get()
+            # Per-component local override stored as a Maya attribute.
+            local_override = False
+            if self.root and self.root.hasAttr("blueprint_local_override"):
+                local_override = self.root.attr("blueprint_local_override").get()
+        elif hasattr(self, "model_options"):
+            # Serialized build: values forwarded by Main.set_from_dict.
+            use_blueprint = self.model_options.get("use_blueprint", False)
+            blueprint_path = self.model_options.get("blueprint_path", "")
+            # Per-component local override is already in self.values.
+            local_override = self.values.get("blueprint_local_override", False)
+        else:
             return merged
 
-        # Check if blueprint is enabled on the main guide
-        if not self.model.hasAttr("use_blueprint"):
-            return merged
-
-        use_blueprint = self.model.attr("use_blueprint").get()
         if not use_blueprint:
             return merged
 
-        # Check if local override is enabled for this component
-        if self.root.hasAttr("blueprint_local_override"):
-            local_override = self.root.attr("blueprint_local_override").get()
-            if local_override:
-                # Use local settings
-                return merged
+        if local_override:
+            return merged
 
-        # Get blueprint path
-        blueprint_path = self.model.attr("blueprint_path").get()
         if not blueprint_path:
             return merged
 
