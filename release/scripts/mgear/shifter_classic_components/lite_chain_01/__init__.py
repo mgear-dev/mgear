@@ -63,17 +63,19 @@ class Component(component.Main):
                     transform.getPositionFromMatrix(t))
 
             dist = vector.getDistance(self.guide.apos[i], self.guide.apos[i + 1])
+            tctl = t
             if self.settings["mirrorBehaviour"] and self.negate:
                 dist = dist * -1
                 rot_offset = [180, 180, 0]
-                tnpo = transform.setMatrixScale(t, [-1, -1, -1])
+                tnpo = transform.setMatrixScale(tnpo, [-1, -1, -1])
+                tctl = transform.setMatrixScale(t, [-1, -1, -1])
 
             fk_npo = primitive.addTransform(
                 parent, self.getName("fk%s_npo" % i), tnpo)
             fk_ctl = self.addCtl(
                 fk_npo,
                 "fk%s_ctl" % i,
-                tnpo,
+                tctl,
                 self.color_fk,
                 "cube",
                 w=dist,
