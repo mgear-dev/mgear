@@ -1802,6 +1802,97 @@ def _create_visibility_attrs(group_node, partition_meshes, proxy=None):
 
 
 # =====================================================
+# PIPELINE DIAGNOSTICS
+# =====================================================
+
+SUPPORTED_DEFORMER_TYPES = {"blendShape", "skinCluster"}
+
+
+def _log_unsupported_deformers(mesh):
+    """Log any deformers on the mesh not supported by the pipeline.
+
+    Supported types are blendShape and skinCluster. All other
+    deformer types are reported as warnings so the user knows
+    they won't be transferred to the partitions.
+
+    Args:
+        mesh (str): The source mesh transform name.
+    """
+    all_deformers = deformer.get_deformers(mesh)
+    if not all_deformers:
+        return
+
+    unsupported = []
+    for dfm in all_deformers:
+        dfm_type = cmds.nodeType(dfm)
+        if dfm_type not in SUPPORTED_DEFORMER_TYPES:
+            unsupported.append((dfm, dfm_type))
+
+    if unsupported:
+        log.warning(
+            "Unsupported deformers on %s (will NOT be "
+            "transferred to partitions):",
+            get_short_name(mesh),
+        )
+        for dfm, dfm_type in unsupported:
+            log.warning("  - %s (%s)", dfm, dfm_type)
+
+
+def _log_bs_cross_connections(source_mesh, partition_meshes):
+    """Log connections between source and partition blendshape nodes.
+
+    After reconnecting BS inputs, some scenarios may leave direct
+    connections from the original blendshape node to the partition
+    blendshape nodes. This function detects and logs them as
+    warnings for the user to review.
+
+    Args:
+        source_mesh (str): The original source mesh transform.
+        partition_meshes (list): List of partition mesh names.
+    """
+    src_bs_nodes = deformer.get_deformers(
+        source_mesh, "blendShape"
+    )
+    if not src_bs_nodes:
+        return
+
+    part_bs_nodes = set()
+    for part_mesh in partition_meshes:
+        for bs in deformer.get_deformers(part_mesh, "blendShape"):
+            part_bs_nodes.add(bs)
+
+    if not part_bs_nodes:
+        return
+
+    found = []
+    for src_bs in src_bs_nodes:
+        connections = cmds.listConnections(
+            src_bs,
+            source=False,
+            destination=True,
+            plugs=True,
+            connections=True,
+        ) or []
+
+        # listConnections returns flat [src, dst, src, dst, ...]
+        for i in range(0, len(connections), 2):
+            src_plug = connections[i]
+            dst_plug = connections[i + 1]
+            dst_node = dst_plug.split(".")[0]
+            if dst_node in part_bs_nodes:
+                found.append((src_plug, dst_plug))
+
+    if found:
+        log.warning(
+            "Found %d connection(s) from source blendshape "
+            "to partition blendshape nodes:",
+            len(found),
+        )
+        for src_plug, dst_plug in found:
+            log.warning("  %s -> %s", src_plug, dst_plug)
+
+
+# =====================================================
 # EXECUTION PIPELINE
 # =====================================================
 
@@ -1887,6 +1978,9 @@ def execute_full_pipeline(manager):
             )
         )
 
+        # Report unsupported deformers
+        _log_unsupported_deformers(source)
+
         # Step 2: Transfer blendshapes
         _progress_update(
             bar, "Step 2/8: Transferring blendshapes..."
@@ -1924,6 +2018,7 @@ def execute_full_pipeline(manager):
                 "Step 4/8: Reconnecting BS inputs"
             )
             reconnect_bs_inputs(source, partitions)
+            _log_bs_cross_connections(source, partitions)
         else:
             log.info("Step 4/8: Skipped")
 

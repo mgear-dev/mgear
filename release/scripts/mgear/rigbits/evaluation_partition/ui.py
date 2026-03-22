@@ -829,6 +829,18 @@ class EvaluationPartitionUI(
 
     def close(self):
         """Clean up before closing."""
+        if self.group_manager:
+            # Restore original shaders if currently showing partitions
+            if (
+                self.group_manager.showing_partitions
+                and self.group_manager.original_shading
+            ):
+                core.show_original_shaders(self.group_manager)
+
+            # Remove all partition shaders
+            core.cleanup_all_shaders(self.group_manager)
+            self.group_manager = None
+
         self.save_settings()
         self.deleteLater()
 
