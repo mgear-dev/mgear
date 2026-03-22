@@ -103,7 +103,7 @@ class EvaluationPartitionUI(
 
         # Action buttons
         self.execute_btn = QtWidgets.QPushButton("Execute Partition")
-        self.execute_btn.setMinimumHeight(30)
+        self.execute_btn.setMinimumHeight(60)
         self.execute_btn.setToolTip(
             "Split mesh into separate parts per group"
         )

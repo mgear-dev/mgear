@@ -1757,6 +1757,51 @@ def create_proximity_wrap_proxy(
 
 
 # =====================================================
+# VISIBILITY ATTRIBUTES
+# =====================================================
+
+
+def _create_visibility_attrs(group_node, partition_meshes, proxy=None):
+    """Add per-partition visibility attributes on the group node.
+
+    Creates a boolean attribute for each partition mesh and the
+    optional proxy, connected to each transform's visibility.
+    All default to True (visible).
+
+    Args:
+        group_node (str): The partitions root group transform.
+        partition_meshes (list): List of partition mesh names.
+        proxy (str): Optional proxy mesh name.
+    """
+    if not cmds.objExists(group_node):
+        return
+
+    meshes = list(partition_meshes)
+    if proxy:
+        meshes.append(proxy)
+
+    for mesh in meshes:
+        short_name = get_short_name(mesh)
+        attr_name = f"{short_name}_vis"
+
+        if cmds.attributeQuery(attr_name, node=group_node, exists=True):
+            continue
+
+        cmds.addAttr(
+            group_node,
+            longName=attr_name,
+            attributeType="bool",
+            defaultValue=True,
+            keyable=True,
+        )
+        cmds.connectAttr(
+            f"{group_node}.{attr_name}",
+            f"{mesh}.visibility",
+            force=True,
+        )
+
+
+# =====================================================
 # EXECUTION PIPELINE
 # =====================================================
 
@@ -1934,6 +1979,9 @@ def execute_full_pipeline(manager):
         proxy = create_proximity_wrap_proxy(
             source, partitions, grp, manager
         )
+
+        # Add visibility attributes on the group node
+        _create_visibility_attrs(grp, partitions, proxy)
 
         log.info(
             "Pipeline complete: %d partitions%s",

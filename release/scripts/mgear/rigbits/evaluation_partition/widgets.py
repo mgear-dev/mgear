@@ -253,7 +253,7 @@ class GroupListWidget(QtWidgets.QWidget):
 
         # Add group button
         self.add_btn = QtWidgets.QPushButton("Add Group from Selection")
-        self.add_btn.setMinimumHeight(30)
+        self.add_btn.setMinimumHeight(60)
         self.add_btn.setStyleSheet(
             "QPushButton {"
             "    background-color: #4a7c4e;"
