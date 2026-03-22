@@ -44,58 +44,14 @@ _component_module_cache = {}
 
 
 def log_window():
-    if mgear.logMode and mgear.use_log_window:
-        log_window_name = "mgear_shifter_build_log_window"
-        log_window_field_reporter = "mgear_shifter_log_field_reporter"
+    """Show the Shifter build log window.
 
-        # call pm.window(log_window_name, exists=True) 2 times to avoid
-        # false check in Maya 2024
-        pm.window(log_window_name, exists=True)
+    Delegates to the build_log module which provides a Qt-based
+    window with color-coded severity, filtering, and log export.
+    """
+    from .build_log import log_window as _log_window
 
-        if not pm.window(log_window_name, exists=True):
-            log_win = pm.window(
-                log_window_name,
-                title="Shifter Build Log",
-                iconName="Shifter Log",
-                width=800,
-                height=500,
-            )
-            form = pm.formLayout()
-            reporter = pm.cmdScrollFieldReporter(
-                log_window_field_reporter, width=400, height=200, clr=True
-            )
-
-            btn_close = pm.button(
-                label="Close",
-                command=lambda *args: pm.deleteUI(log_win, window=True),
-            )
-
-            margin_v = 5
-            margin_h = 5
-            pm.formLayout(
-                form,
-                e=True,
-                attachForm=[
-                    (reporter, "top", margin_v),
-                    (reporter, "right", margin_h),
-                    (reporter, "left", margin_h),
-                    (btn_close, "bottom", margin_v),
-                    (btn_close, "right", margin_h),
-                    (btn_close, "left", margin_h),
-                ],
-                attachControl=[
-                    (reporter, "bottom", margin_v, btn_close),
-                ],
-            )
-
-            pm.setParent("..")
-            pm.showWindow(log_win)
-        else:
-            pm.cmdScrollFieldReporter(
-                log_window_field_reporter, e=True, clr=True
-            )
-            pm.showWindow(log_window_name)
-        mgear.logInfos()
+    _log_window()
 
 
 def getComponentDirectories():

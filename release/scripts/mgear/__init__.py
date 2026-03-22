@@ -24,6 +24,29 @@ sev_info = 8
 sev_verbose = 16
 sev_comment = 32
 
+# Log handler registry for external consumers (e.g. build log window)
+_log_handlers = []
+
+
+def register_log_handler(handler):
+    """Register a callback to receive log messages with severity.
+
+    Args:
+        handler (callable): Function accepting (message, severity).
+    """
+    if handler not in _log_handlers:
+        _log_handlers.append(handler)
+
+
+def unregister_log_handler(handler):
+    """Unregister a previously registered log handler.
+
+    Args:
+        handler (callable): The handler to remove.
+    """
+    if handler in _log_handlers:
+        _log_handlers.remove(handler)
+
 # gear version
 VERSION = [5, 3, 0]
 
@@ -136,6 +159,12 @@ def log(message, severity=sev_comment, infos=False):
             message = getInfos(1) + "\n" + message
 
         sys.stdout.write(message + "\n")
+
+        for handler in _log_handlers:
+            try:
+                handler(message, severity)
+            except Exception:
+                pass
 
 # ========================================================
 # Exception
