@@ -492,6 +492,77 @@ def remove_group(manager, group):
     return True
 
 
+def add_faces_to_group(manager, group, face_indices):
+    """Add faces to an existing group, removing them from other groups.
+
+    Faces belong to exactly one group. Any faces already in the target
+    group are ignored.
+
+    Args:
+        manager (PolygonGroupManager): The PolygonGroupManager instance.
+        group (PolygonGroup): The group to add faces to.
+        face_indices (set): Set of face indices to add.
+
+    Returns:
+        bool: True if faces were added, False otherwise.
+    """
+    if not face_indices:
+        return False
+
+    # Remove from all other groups
+    for other in manager.groups:
+        if other is not group:
+            other.face_indices -= face_indices
+
+    # Add to target group
+    group.face_indices |= face_indices
+
+    # Re-assign shaders for affected groups
+    for g in manager.groups:
+        if g.face_indices and g.shading_group:
+            assign_faces_to_shader(
+                manager.mesh, g.face_indices, g.shading_group
+            )
+
+    return True
+
+
+def remove_faces_from_group(manager, group, face_indices):
+    """Remove faces from a group, returning them to the default group.
+
+    Args:
+        manager (PolygonGroupManager): The PolygonGroupManager instance.
+        group (PolygonGroup): The group to remove faces from.
+        face_indices (set): Set of face indices to remove.
+
+    Returns:
+        bool: True if faces were removed, False otherwise.
+    """
+    if not face_indices:
+        return False
+
+    # Only remove faces that actually belong to this group
+    actual = group.face_indices & face_indices
+    if not actual:
+        return False
+
+    group.face_indices -= actual
+
+    # Return removed faces to the default group
+    default_group = manager.get_default_group()
+    if default_group and default_group is not group:
+        default_group.face_indices |= actual
+
+    # Re-assign shaders for affected groups
+    for g in (group, default_group):
+        if g and g.face_indices and g.shading_group:
+            assign_faces_to_shader(
+                manager.mesh, g.face_indices, g.shading_group
+            )
+
+    return True
+
+
 def update_group_color(group, new_color):
     """Update the shader color for a group.
 

@@ -56,6 +56,8 @@ from .core import (
     # Group management functions
     create_default_group,
     create_group_from_selection,
+    add_faces_to_group,
+    remove_faces_from_group,
     remove_group,
     update_group_color,
     rename_group,

@@ -35,6 +35,8 @@ class GroupListItem(QtWidgets.QWidget):
     color_changed = QtCore.Signal(str, object)
     name_changed = QtCore.Signal(str, str)
     select_clicked = QtCore.Signal(str)
+    add_faces_clicked = QtCore.Signal(str)
+    remove_faces_clicked = QtCore.Signal(str)
     removed = QtCore.Signal(str)
 
     def __init__(self, group, is_default=False, parent=None):
@@ -70,9 +72,19 @@ class GroupListItem(QtWidgets.QWidget):
         self.face_count_label.setStyleSheet("color: #888;")
         self.face_count_label.setFixedWidth(60)
 
+        # Add faces button
+        self.add_faces_btn = QtWidgets.QPushButton("+")
+        self.add_faces_btn.setFixedWidth(25)
+        self.add_faces_btn.setToolTip("Add selected faces to this group")
+
+        # Remove faces button
+        self.remove_faces_btn = QtWidgets.QPushButton("-")
+        self.remove_faces_btn.setFixedWidth(25)
+        self.remove_faces_btn.setToolTip("Remove selected faces from this group")
+
         # Select button
-        self.select_btn = QtWidgets.QPushButton("Select")
-        self.select_btn.setFixedWidth(50)
+        self.select_btn = QtWidgets.QPushButton("Sel")
+        self.select_btn.setFixedWidth(30)
         self.select_btn.setToolTip("Select faces in Maya viewport")
 
         # Remove button
@@ -95,6 +107,8 @@ class GroupListItem(QtWidgets.QWidget):
         layout.addWidget(self.name_edit)
         layout.addWidget(self.face_count_label)
         layout.addStretch()
+        layout.addWidget(self.add_faces_btn)
+        layout.addWidget(self.remove_faces_btn)
         layout.addWidget(self.select_btn)
         layout.addWidget(self.remove_btn)
 
@@ -102,6 +116,8 @@ class GroupListItem(QtWidgets.QWidget):
         """Connect signals to slots."""
         self.color_btn.clicked.connect(self._on_color_clicked)
         self.name_edit.editingFinished.connect(self._on_name_edited)
+        self.add_faces_btn.clicked.connect(self._on_add_faces_clicked)
+        self.remove_faces_btn.clicked.connect(self._on_remove_faces_clicked)
         self.select_btn.clicked.connect(self._on_select_clicked)
         self.remove_btn.clicked.connect(self._on_remove_clicked)
 
@@ -152,6 +168,14 @@ class GroupListItem(QtWidgets.QWidget):
             self._original_name = new_name
             self.name_changed.emit(old_name, new_name)
 
+    def _on_add_faces_clicked(self):
+        """Handle add faces button click."""
+        self.add_faces_clicked.emit(self.group.name)
+
+    def _on_remove_faces_clicked(self):
+        """Handle remove faces button click."""
+        self.remove_faces_clicked.emit(self.group.name)
+
     def _on_select_clicked(self):
         """Handle select button click."""
         self.select_clicked.emit(self.group.name)
@@ -185,6 +209,8 @@ class GroupListWidget(QtWidgets.QWidget):
     group_added = QtCore.Signal()
     group_removed = QtCore.Signal(str)
     group_selected = QtCore.Signal(str)
+    faces_added = QtCore.Signal(str)
+    faces_removed = QtCore.Signal(str)
     color_changed = QtCore.Signal(str, object)
     name_changed = QtCore.Signal(str, str)
 
@@ -266,6 +292,8 @@ class GroupListWidget(QtWidgets.QWidget):
         # Connect item signals
         item.color_changed.connect(self._on_item_color_changed)
         item.name_changed.connect(self._on_item_name_changed)
+        item.add_faces_clicked.connect(self._on_item_add_faces)
+        item.remove_faces_clicked.connect(self._on_item_remove_faces)
         item.select_clicked.connect(self._on_item_select_clicked)
         item.removed.connect(self._on_item_removed)
 
@@ -320,6 +348,14 @@ class GroupListWidget(QtWidgets.QWidget):
             item = self._items.pop(old_name)
             self._items[new_name] = item
         self.name_changed.emit(old_name, new_name)
+
+    def _on_item_add_faces(self, group_name):
+        """Handle item add faces click."""
+        self.faces_added.emit(group_name)
+
+    def _on_item_remove_faces(self, group_name):
+        """Handle item remove faces click."""
+        self.faces_removed.emit(group_name)
 
     def _on_item_select_clicked(self, group_name):
         """Handle item select click."""

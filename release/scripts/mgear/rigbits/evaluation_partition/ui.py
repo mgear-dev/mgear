@@ -195,6 +195,8 @@ class EvaluationPartitionUI(
         self.group_list.group_added.connect(self.add_group_from_selection)
         self.group_list.group_removed.connect(self.on_group_removed)
         self.group_list.group_selected.connect(self.on_group_selected)
+        self.group_list.faces_added.connect(self.on_faces_added)
+        self.group_list.faces_removed.connect(self.on_faces_removed)
         self.group_list.color_changed.connect(self.on_color_changed)
         self.group_list.name_changed.connect(self.on_name_changed)
 
@@ -401,6 +403,100 @@ class EvaluationPartitionUI(
         cmds.select(faces, replace=True)
 
         self.set_status(f"Selected {len(faces)} faces")
+
+    def on_faces_added(self, group_name):
+        """Handle adding selected faces to a group.
+
+        Args:
+            group_name: Name of the group to add faces to.
+        """
+        if not self.group_manager:
+            return
+
+        group = self.group_manager.get_group_by_name(group_name)
+        if not group:
+            return
+
+        mesh_from_sel, selected_faces = core.get_selected_faces(
+            self.group_manager.mesh
+        )
+
+        if not selected_faces:
+            self.set_status("Please select some faces on the mesh", error=True)
+            return
+
+        if mesh_from_sel and not core.names_match(
+            mesh_from_sel, self.group_manager.mesh
+        ):
+            self.set_status(
+                "Selected faces are not from the target mesh", error=True
+            )
+            return
+
+        cmds.undoInfo(openChunk=True)
+
+        try:
+            if core.add_faces_to_group(
+                self.group_manager, group, selected_faces
+            ):
+                self.group_list.update_all_face_counts()
+                self.update_face_count()
+                self.set_status(
+                    f"Added {len(selected_faces)} faces to: {group_name}"
+                )
+            else:
+                self.set_status("No faces to add", error=True)
+
+        finally:
+            cmds.undoInfo(closeChunk=True)
+
+    def on_faces_removed(self, group_name):
+        """Handle removing selected faces from a group.
+
+        Args:
+            group_name: Name of the group to remove faces from.
+        """
+        if not self.group_manager:
+            return
+
+        group = self.group_manager.get_group_by_name(group_name)
+        if not group:
+            return
+
+        mesh_from_sel, selected_faces = core.get_selected_faces(
+            self.group_manager.mesh
+        )
+
+        if not selected_faces:
+            self.set_status("Please select some faces on the mesh", error=True)
+            return
+
+        if mesh_from_sel and not core.names_match(
+            mesh_from_sel, self.group_manager.mesh
+        ):
+            self.set_status(
+                "Selected faces are not from the target mesh", error=True
+            )
+            return
+
+        cmds.undoInfo(openChunk=True)
+
+        try:
+            if core.remove_faces_from_group(
+                self.group_manager, group, selected_faces
+            ):
+                self.group_list.update_all_face_counts()
+                self.update_face_count()
+                self.set_status(
+                    f"Removed faces from: {group_name}"
+                )
+            else:
+                self.set_status(
+                    "Selected faces don't belong to this group", error=True
+                )
+
+        finally:
+            cmds.undoInfo(closeChunk=True)
 
     def on_color_changed(self, group_name, new_color):
         """Handle group color change.
