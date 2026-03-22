@@ -3,6 +3,8 @@
 This module contains reusable Qt widgets for the Evaluation Partition tool UI.
 """
 
+from mgear.core import pyqt
+
 from mgear.vendor.Qt import QtWidgets, QtCore, QtGui
 
 from maya import cmds
@@ -72,30 +74,37 @@ class GroupListItem(QtWidgets.QWidget):
         self.face_count_label.setStyleSheet("color: #888;")
         self.face_count_label.setFixedWidth(60)
 
+        icon_size = 16
+
         # Add faces button
-        self.add_faces_btn = QtWidgets.QPushButton("+")
-        self.add_faces_btn.setFixedWidth(25)
+        self.add_faces_btn = QtWidgets.QPushButton()
+        self.add_faces_btn.setIcon(pyqt.get_icon("mgear_plus-circle", icon_size))
+        self.add_faces_btn.setFixedSize(28, 28)
         self.add_faces_btn.setToolTip("Add selected faces to this group")
 
         # Remove faces button
-        self.remove_faces_btn = QtWidgets.QPushButton("-")
-        self.remove_faces_btn.setFixedWidth(25)
+        self.remove_faces_btn = QtWidgets.QPushButton()
+        self.remove_faces_btn.setIcon(
+            pyqt.get_icon("mgear_minus-circle", icon_size)
+        )
+        self.remove_faces_btn.setFixedSize(28, 28)
         self.remove_faces_btn.setToolTip("Remove selected faces from this group")
 
         # Select button
-        self.select_btn = QtWidgets.QPushButton("Sel")
-        self.select_btn.setFixedWidth(30)
+        self.select_btn = QtWidgets.QPushButton()
+        self.select_btn.setIcon(
+            pyqt.get_icon("mgear_mouse-pointer", icon_size)
+        )
+        self.select_btn.setFixedSize(28, 28)
         self.select_btn.setToolTip("Select faces in Maya viewport")
 
-        # Remove button
-        self.remove_btn = QtWidgets.QPushButton("X")
-        self.remove_btn.setFixedWidth(25)
+        # Remove group button
+        self.remove_btn = QtWidgets.QPushButton()
+        self.remove_btn.setIcon(pyqt.get_icon("mgear_trash-2", icon_size))
+        self.remove_btn.setFixedSize(28, 28)
         self.remove_btn.setToolTip("Remove this group")
         if self.is_default:
             self.remove_btn.setEnabled(False)
-            self.remove_btn.setStyleSheet("background-color: #555;")
-        else:
-            self.remove_btn.setStyleSheet("background-color: #aa4444;")
 
     def _create_layout(self):
         """Arrange widgets in layout."""

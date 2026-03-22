@@ -28,7 +28,7 @@ log = logging.getLogger("mgear.rigbits.evaluation_partition")
 DEFAULT_SATURATION_RANGE = (0.25, 0.55)
 DEFAULT_VALUE_RANGE = (0.55, 0.85)
 SHADER_PREFIX = "evalPartition"
-DEFAULT_GROUP_NAME = "All Faces"
+DEFAULT_GROUP_NAME = "Default Group"
 CONFIG_FILE_EXT = ".evp"
 CONFIG_VERSION = "1.0"
 
@@ -93,7 +93,7 @@ class PolygonGroupManager:
         return None
 
     def get_default_group(self):
-        """Get the default 'All Faces' group.
+        """Get the default group.
 
         Returns:
             PolygonGroup: The default PolygonGroup if it exists, None otherwise.
@@ -366,7 +366,7 @@ def get_selected_faces(mesh=None):
 
 
 def create_default_group(manager):
-    """Create the initial 'All Faces' group containing all polygons.
+    """Create the initial default group containing all polygons.
 
     Args:
         manager (PolygonGroupManager): The PolygonGroupManager instance.
@@ -2065,7 +2065,7 @@ def apply_configuration(config, mesh=None, create_shaders=True):
         ...     "version": "1.0",
         ...     "mesh": "pCube1",
         ...     "groups": [
-        ...         {"name": "All Faces", "color": [0.5, 0.6, 0.7], "face_indices": [0, 1, 2]},
+        ...         {"name": "Default Group", "color": [0.5, 0.6, 0.7], "face_indices": [0, 1, 2]},
         ...         {"name": "Head", "color": [0.8, 0.5, 0.5], "face_indices": [3, 4, 5]},
         ...     ]
         ... }
@@ -2138,7 +2138,7 @@ def execute_from_config(config, mesh=None):
         ...     "version": "1.0",
         ...     "mesh": "pSphere1",
         ...     "groups": [
-        ...         {"name": "All Faces", "color": [0.6, 0.7, 0.6], "face_indices": list(range(100))},
+        ...         {"name": "Default Group", "color": [0.6, 0.7, 0.6], "face_indices": list(range(100))},
         ...         {"name": "Top", "color": [0.8, 0.5, 0.5], "face_indices": list(range(100, 200))},
         ...     ]
         ... }
