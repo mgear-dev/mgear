@@ -4,6 +4,8 @@ This module contains reusable Qt widgets for the Wire to Skinning tool UI.
 """
 
 # mGear
+from mgear.core import pyqt
+
 from mgear.vendor.Qt import QtWidgets, QtCore
 
 # Maya
@@ -12,13 +14,22 @@ from maya import cmds
 # Relative imports
 from . import core
 
+ICON_SIZE = 16
+
 
 class WireListItem(QtWidgets.QWidget):
     """Custom widget for wire deformer list items.
 
-    Displays a wire deformer name with Select and Remove buttons.
+    Displays a wire deformer name with reorder, select and remove buttons.
+
+    Signals:
+        move_up(str): Emitted to move this wire up in the list.
+        move_down(str): Emitted to move this wire down in the list.
+        removed(str): Emitted when remove button clicked.
     """
 
+    move_up = QtCore.Signal(str)
+    move_down = QtCore.Signal(str)
     removed = QtCore.Signal(str)
 
     def __init__(self, wire_name, parent=None):
@@ -29,22 +40,50 @@ class WireListItem(QtWidgets.QWidget):
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(5, 2, 5, 2)
 
+        # Reorder buttons
+        self.up_btn = QtWidgets.QPushButton()
+        self.up_btn.setIcon(pyqt.get_icon("mgear_arrow-up", ICON_SIZE))
+        self.up_btn.setFixedSize(24, 24)
+        self.up_btn.setToolTip("Move up in processing order")
+        self.up_btn.clicked.connect(self._on_move_up)
+        layout.addWidget(self.up_btn)
+
+        self.down_btn = QtWidgets.QPushButton()
+        self.down_btn.setIcon(pyqt.get_icon("mgear_arrow-down", ICON_SIZE))
+        self.down_btn.setFixedSize(24, 24)
+        self.down_btn.setToolTip("Move down in processing order")
+        self.down_btn.clicked.connect(self._on_move_down)
+        layout.addWidget(self.down_btn)
+
         self.label = QtWidgets.QLabel(wire_name)
-        self.label.setMinimumWidth(150)
+        self.label.setMinimumWidth(120)
         layout.addWidget(self.label)
 
         layout.addStretch()
 
-        self.select_btn = QtWidgets.QPushButton("Select")
-        self.select_btn.setFixedWidth(60)
+        self.select_btn = QtWidgets.QPushButton()
+        self.select_btn.setIcon(
+            pyqt.get_icon("mgear_mouse-pointer", ICON_SIZE)
+        )
+        self.select_btn.setFixedSize(28, 28)
+        self.select_btn.setToolTip("Select wire curve")
         self.select_btn.clicked.connect(self._select_wire)
         layout.addWidget(self.select_btn)
 
-        self.remove_btn = QtWidgets.QPushButton("X")
-        self.remove_btn.setFixedWidth(25)
-        self.remove_btn.setStyleSheet("background-color: #aa4444;")
+        self.remove_btn = QtWidgets.QPushButton()
+        self.remove_btn.setIcon(pyqt.get_icon("mgear_trash-2", ICON_SIZE))
+        self.remove_btn.setFixedSize(28, 28)
+        self.remove_btn.setToolTip("Delete wire deformer")
         self.remove_btn.clicked.connect(self._remove_wire)
         layout.addWidget(self.remove_btn)
+
+    def _on_move_up(self):
+        """Emit move up signal."""
+        self.move_up.emit(self.wire_name)
+
+    def _on_move_down(self):
+        """Emit move down signal."""
+        self.move_down.emit(self.wire_name)
 
     def _select_wire(self):
         """Select the wire curve in Maya."""

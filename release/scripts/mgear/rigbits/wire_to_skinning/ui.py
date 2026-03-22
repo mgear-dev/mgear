@@ -33,6 +33,9 @@ class WireToSkinningUI(
         super(WireToSkinningUI, self).__init__(parent)
         pyqt.SettingsMixin.__init__(self)
 
+        # State
+        self._wire_order = []
+
         # Window setup
         self.setObjectName(self.TOOL_NAME)
         self.setWindowTitle(self.TOOL_TITLE)
@@ -460,8 +463,13 @@ class WireToSkinningUI(
         self.joint_list.setEnabled(not use_auto)
 
     def refresh_wire_list(self):
-        """Refresh the list of wire deformers on the mesh."""
-        # Clear existing items
+        """Refresh the list of wire deformers on the mesh.
+
+        Merges the deformation stack order with any existing custom
+        order: wires already in ``_wire_order`` keep their position,
+        new wires are appended, and removed wires are dropped.
+        """
+        # Clear existing UI items
         while self.wire_list_layout.count():
             item = self.wire_list_layout.takeAt(0)
             if item.widget():
@@ -475,21 +483,73 @@ class WireToSkinningUI(
             no_mesh_label = QtWidgets.QLabel("No mesh specified")
             no_mesh_label.setStyleSheet("color: #888888; font-style: italic;")
             self.wire_list_layout.addWidget(no_mesh_label)
+            self._wire_order = []
             return
 
-        wires = core.get_mesh_wire_deformers(mesh)
+        mesh_wires = core.get_mesh_wire_deformers(mesh)
 
-        if not wires:
+        if not mesh_wires:
             no_wire_label = QtWidgets.QLabel("No wire deformers found")
             no_wire_label.setStyleSheet("color: #888888; font-style: italic;")
             self.wire_list_layout.addWidget(no_wire_label)
+            self._wire_order = []
             return
 
-        for wire in wires:
+        # Merge custom order with actual wires on mesh
+        mesh_wire_set = set(mesh_wires)
+        new_order = [w for w in self._wire_order if w in mesh_wire_set]
+        for w in mesh_wires:
+            if w not in new_order:
+                new_order.append(w)
+        self._wire_order = new_order
+
+        self._rebuild_wire_list_ui()
+
+    def _rebuild_wire_list_ui(self):
+        """Rebuild the wire list UI from the current ``_wire_order``."""
+        # Clear existing UI items
+        while self.wire_list_layout.count():
+            item = self.wire_list_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        self.wire_combo.clear()
+
+        for wire in self._wire_order:
             item = WireListItem(wire)
+            item.move_up.connect(self._move_wire_up)
+            item.move_down.connect(self._move_wire_down)
             item.removed.connect(self.remove_wire_deformer)
             self.wire_list_layout.addWidget(item)
             self.wire_combo.addItem(wire)
+
+    def _move_wire_up(self, wire_name):
+        """Move a wire deformer up in the processing order.
+
+        Args:
+            wire_name (str): Name of the wire to move.
+        """
+        idx = self._wire_order.index(wire_name)
+        if idx > 0:
+            self._wire_order[idx - 1], self._wire_order[idx] = (
+                self._wire_order[idx],
+                self._wire_order[idx - 1],
+            )
+            self._rebuild_wire_list_ui()
+
+    def _move_wire_down(self, wire_name):
+        """Move a wire deformer down in the processing order.
+
+        Args:
+            wire_name (str): Name of the wire to move.
+        """
+        idx = self._wire_order.index(wire_name)
+        if idx < len(self._wire_order) - 1:
+            self._wire_order[idx], self._wire_order[idx + 1] = (
+                self._wire_order[idx + 1],
+                self._wire_order[idx],
+            )
+            self._rebuild_wire_list_ui()
 
     def set_status(self, message, error=False):
         """Set status message.
@@ -722,7 +782,7 @@ class WireToSkinningUI(
         static_joint_name = self.static_joint_input.text() or "static_jnt"
 
         if convert_all:
-            wires = core.get_mesh_wire_deformers(mesh)
+            wires = list(self._wire_order)
         else:
             selected_wire = self.wire_combo.currentText()
             wires = [selected_wire] if selected_wire else []
@@ -985,7 +1045,10 @@ class WireToSkinningUI(
             # Get current conversion settings
             conversion_settings = self._get_conversion_settings()
 
-            if core.export_configuration(mesh, filepath, conversion_settings):
+            if core.export_configuration(
+                mesh, filepath, conversion_settings,
+                wire_order=self._wire_order,
+            ):
                 self.set_status(
                     "Configuration exported to: {}".format(filepath)
                 )
@@ -1014,6 +1077,11 @@ class WireToSkinningUI(
                     self._apply_conversion_settings(result["conversion_settings"])
 
                 wires = result.get("wires", [])
+
+                # Use the imported order as custom order
+                if wires:
+                    self._wire_order = list(wires)
+
                 self.set_status(
                     "Imported {} wire deformer(s)".format(len(wires))
                 )

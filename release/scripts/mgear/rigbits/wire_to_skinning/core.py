@@ -957,7 +957,9 @@ def create_skin_cluster(
 # =============================================================================
 
 
-def export_configuration(mesh, filepath, conversion_settings=None):
+def export_configuration(
+    mesh, filepath, conversion_settings=None, wire_order=None
+):
     """Export wire deformer configuration to file.
 
     Exports wire deformer settings to a .wts (Wire To Skinning) file,
@@ -975,11 +977,19 @@ def export_configuration(mesh, filepath, conversion_settings=None):
                 - parent_joint (str): Parent joint name for auto-created joints.
                 - custom_joints (list): List of custom joint names.
                 - delete_wire (bool): Delete wire after conversion.
+        wire_order (list, optional): Custom processing order for wire
+            deformers. If provided, wires are exported in this order.
+            Falls back to deformation stack order.
 
     Returns:
         bool: True if successful, False otherwise.
     """
-    wires = get_mesh_wire_deformers(mesh)
+    if wire_order:
+        # Use custom order, filtering to wires that exist on mesh
+        mesh_wires = set(get_mesh_wire_deformers(mesh))
+        wires = [w for w in wire_order if w in mesh_wires]
+    else:
+        wires = get_mesh_wire_deformers(mesh)
 
     if not wires:
         cmds.warning("No wire deformers found on {}".format(mesh))
