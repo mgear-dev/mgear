@@ -1322,6 +1322,7 @@ class Rig(Main):
         )
         for name in self.componentsIndex:
             pm.progressWindow(e=True, step=1, status="\nDrawing: %s" % name)
+            pm.refresh()
             comp_guide = self.components[name]
 
             if comp_guide.parentComponent:
