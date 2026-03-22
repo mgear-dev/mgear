@@ -28,7 +28,7 @@ LAYOUT_GRID = 2
 class BookmarksUI(
     MayaQWidgetDockableMixin, QtWidgets.QDialog, pyqt.SettingsMixin
 ):
-    """Main UI for Selection Bookmarks Tool.
+    """Main UI for Bookmarks Tool.
 
     Args:
         parent (QWidget, optional): Parent widget.
@@ -76,17 +76,14 @@ class BookmarksUI(
         self.menu_bar.setNativeMenuBar(False)
         self.menu_bar.setContextMenuPolicy(QtCore.Qt.PreventContextMenu)
 
-        # File menu
         file_menu = self.menu_bar.addMenu("File")
         self.export_action = file_menu.addAction("Export...")
         self.import_action = file_menu.addAction("Import...")
 
-        # Edit menu
         edit_menu = self.menu_bar.addMenu("Edit")
         self.add_sel_action = edit_menu.addAction("+ Selection Bookmark")
         self.add_iso_action = edit_menu.addAction("+ Isolate Bookmark")
 
-        # View menu
         view_menu = self.menu_bar.addMenu("View")
         self._layout_action_group = QtWidgets.QActionGroup(self)
         self._layout_action_group.setExclusive(True)
@@ -142,16 +139,22 @@ class BookmarksUI(
         """
         return self._layout_index
 
+    def _get_layout_name(self):
+        """Get current layout name string.
+
+        Returns:
+            str: Layout name for serialization.
+        """
+        return core.LAYOUT_NAMES[self._layout_index]
+
     def _apply_layout(self):
         """Apply the current layout mode to the chip container."""
         layout_index = self._get_layout_index()
 
-        # Reparent existing chips to keep them alive
         chips_to_readd = list(self._chip_widgets)
         for chip in chips_to_readd:
             chip.setParent(None)
 
-        # Replace the container widget entirely
         new_container = QtWidgets.QWidget()
         new_container.setAcceptDrops(True)
         new_container.setContextMenuPolicy(
@@ -196,14 +199,9 @@ class BookmarksUI(
         Args:
             action (QAction): The triggered layout action.
         """
-        text = action.text()
-        layout_map = {
-            "Horizontal": LAYOUT_HORIZONTAL,
-            "Vertical": LAYOUT_VERTICAL,
-            "Grid": LAYOUT_GRID,
-        }
-        if text in layout_map:
-            self._layout_index = layout_map[text]
+        key = action.text().lower()
+        if key in core.LAYOUT_MAP:
+            self._layout_index = core.LAYOUT_MAP[key]
         self._apply_layout()
         self._auto_save()
 
@@ -222,23 +220,20 @@ class BookmarksUI(
 
     def _on_add_selection(self):
         """Create a selection bookmark from current Maya selection."""
-        bookmark = core.bookmark_from_selection(
-            self._next_name(),
-            core.BOOKMARK_SELECTION,
-            color=core.random_pastel_color(),
-        )
-        if not bookmark:
-            cmds.warning("Nothing selected")
-            return
-        self._add_chip(bookmark)
-        self._auto_save()
+        self._add_bookmark(core.BOOKMARK_SELECTION)
 
     def _on_add_isolate(self):
         """Create an isolate bookmark from current Maya selection."""
+        self._add_bookmark(core.BOOKMARK_ISOLATE)
+
+    def _add_bookmark(self, bookmark_type):
+        """Create a bookmark of the given type from current selection.
+
+        Args:
+            bookmark_type (str): BOOKMARK_SELECTION or BOOKMARK_ISOLATE.
+        """
         bookmark = core.bookmark_from_selection(
-            self._next_name(),
-            core.BOOKMARK_ISOLATE,
-            color=core.random_pastel_color(),
+            self._next_name(), bookmark_type
         )
         if not bookmark:
             cmds.warning("Nothing selected")
@@ -357,7 +352,6 @@ class BookmarksUI(
         if not isinstance(source, ChipButton):
             return
 
-        # Find source index
         src_idx = None
         for i, chip in enumerate(self._chip_widgets):
             if chip is source:
@@ -366,7 +360,6 @@ class BookmarksUI(
         if src_idx is None:
             return
 
-        # Find drop target index by position
         drop_pos = event.pos()
         dst_idx = len(self._chip_widgets)
         for i, chip in enumerate(self._chip_widgets):
@@ -387,19 +380,15 @@ class BookmarksUI(
         if dst_idx == src_idx:
             return
 
-        # Adjust index after removal
         if dst_idx > src_idx:
             dst_idx -= 1
 
-        # Reorder data
         bm = self._bookmarks.pop(src_idx)
         self._bookmarks.insert(dst_idx, bm)
         chip = self._chip_widgets.pop(src_idx)
         self._chip_widgets.insert(dst_idx, chip)
 
-        # Rebuild layout
         self._apply_layout()
-        self._rebuild_chips()
         self._auto_save()
         event.acceptProposedAction()
 
@@ -585,11 +574,8 @@ class BookmarksUI(
 
     def _auto_save(self):
         """Auto-save bookmarks to the scene node."""
-        layout_name = ("horizontal", "vertical", "grid")[
-            self._get_layout_index()
-        ]
         self._save_layout_setting()
-        core.save_to_scene(self._bookmarks, layout_name)
+        core.save_to_scene(self._bookmarks, self._get_layout_name())
 
     def _load_from_scene(self):
         """Load bookmarks from scene on startup."""
@@ -598,8 +584,7 @@ class BookmarksUI(
             return
         bookmarks, layout = core.config_to_bookmarks(config)
         self._bookmarks = bookmarks
-        layout_map = {"horizontal": 0, "vertical": 1, "grid": 2}
-        self._layout_index = layout_map.get(layout, 0)
+        self._layout_index = core.LAYOUT_MAP.get(layout, 0)
         self._apply_layout()
         self._bookmark_counter = len(bookmarks)
         self._rebuild_chips()
@@ -610,24 +595,19 @@ class BookmarksUI(
 
     def _on_export(self):
         """Export bookmarks to a .sbk file."""
-        file_filter = "Selection Bookmarks (*{})".format(
-            core.CONFIG_FILE_EXT
-        )
+        file_filter = "Bookmarks (*{})".format(core.CONFIG_FILE_EXT)
         file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Export Bookmarks", "", file_filter
         )
         if not file_path:
             return
-        layout_name = ("horizontal", "vertical", "grid")[
-            self._get_layout_index()
-        ]
-        core.export_bookmarks(file_path, self._bookmarks, layout_name)
+        core.export_bookmarks(
+            file_path, self._bookmarks, self._get_layout_name()
+        )
 
     def _on_import(self):
         """Import bookmarks from a .sbk file."""
-        file_filter = "Selection Bookmarks (*{})".format(
-            core.CONFIG_FILE_EXT
-        )
+        file_filter = "Bookmarks (*{})".format(core.CONFIG_FILE_EXT)
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Import Bookmarks", "", file_filter
         )
@@ -638,6 +618,7 @@ class BookmarksUI(
             return
 
         bookmarks, layout = core.config_to_bookmarks(config)
+        append = False
         if self._bookmarks:
             result = QtWidgets.QMessageBox.question(
                 self,
@@ -647,19 +628,14 @@ class BookmarksUI(
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                 QtWidgets.QMessageBox.Yes,
             )
-            if result == QtWidgets.QMessageBox.Yes:
-                self._bookmarks = bookmarks
-                layout_map = {"horizontal": 0, "vertical": 1, "grid": 2}
-                self._layout_index = layout_map.get(layout, 0)
-                self._apply_layout()
-                self._rebuild_chips()
-            else:
-                for bm in bookmarks:
-                    self._add_chip(bm)
+            append = result == QtWidgets.QMessageBox.No
+
+        if append:
+            for bm in bookmarks:
+                self._add_chip(bm)
         else:
             self._bookmarks = bookmarks
-            layout_map = {"horizontal": 0, "vertical": 1, "grid": 2}
-            self._layout_index = layout_map.get(layout, 0)
+            self._layout_index = core.LAYOUT_MAP.get(layout, 0)
             self._apply_layout()
             self._rebuild_chips()
 

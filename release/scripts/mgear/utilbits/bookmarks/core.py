@@ -8,7 +8,6 @@ import colorsys
 import json
 import logging
 import random
-import re
 
 import maya.mel as mel
 from maya import cmds
@@ -29,8 +28,8 @@ SCENE_NODE_NAME = "mgear_selection_bookmarks"
 SCENE_NODE_TYPE_ATTR = "is_selection_bookmarks_data"
 SCENE_NODE_DATA_ATTR = "bookmarks_data"
 
-# Regex to strip component suffixes like .f[0:5], .vtx[3], .e[2]
-_COMPONENT_RE = re.compile(r"\.[a-zA-Z]+\[.*\]$")
+LAYOUT_NAMES = ("horizontal", "vertical", "grid")
+LAYOUT_MAP = {name: i for i, name in enumerate(LAYOUT_NAMES)}
 
 
 #############################################
@@ -101,7 +100,10 @@ def validate_bookmark_items(bookmark):
     Returns:
         list: Valid item names that exist in the current scene.
     """
-    return [i for i in bookmark["items"] if cmds.objExists(i)]
+    items = bookmark["items"]
+    if not items:
+        return []
+    return cmds.ls(items, long=True) or []
 
 
 def build_tooltip(bookmark):
@@ -286,26 +288,6 @@ def toggle_isolate(bookmark):
                 cmds.select(clear=True)
 
 
-def get_isolated_objects():
-    """Get the currently isolated objects from the active viewport.
-
-    Returns:
-        list: Long names of isolated objects, or empty list.
-    """
-    panel = _get_active_model_panel()
-    if not panel:
-        return []
-    if not cmds.isolateSelect(panel, query=True, state=True):
-        return []
-    iso_set = cmds.isolateSelect(
-        panel, query=True, viewObjects=True
-    )
-    if not iso_set:
-        return []
-    members = cmds.sets(iso_set, query=True) or []
-    return cmds.ls(members, long=True)
-
-
 def _get_active_model_panel():
     """Get the active model panel name.
 
@@ -317,28 +299,6 @@ def _get_active_model_panel():
         return panel
     panels = cmds.getPanel(type="modelPanel") or []
     return panels[0] if panels else None
-
-
-def _extract_transforms(items):
-    """Extract unique transform nodes from a list of objects/components.
-
-    Strips component suffixes like .f[0:5], .vtx[3], .e[2] to get
-    the parent transform.
-
-    Args:
-        items (list): Maya object or component names.
-
-    Returns:
-        list: Deduplicated transform node names.
-    """
-    seen = set()
-    result = []
-    for item in items:
-        transform = _COMPONENT_RE.sub("", item)
-        if transform not in seen:
-            seen.add(transform)
-            result.append(transform)
-    return result
 
 
 #############################################
@@ -359,7 +319,15 @@ def bookmarks_to_config(bookmarks, layout="horizontal"):
     return {
         "version": CONFIG_VERSION,
         "layout": layout,
-        "bookmarks": [dict(bm) for bm in bookmarks],
+        "bookmarks": [
+            {
+                "name": bm["name"],
+                "color": list(bm["color"]),
+                "type": bm["type"],
+                "items": list(bm["items"]),
+            }
+            for bm in bookmarks
+        ],
     }
 
 
@@ -429,6 +397,9 @@ def import_bookmarks(file_path):
 # SCENE STORAGE
 #############################################
 
+# Cache to avoid scanning all network nodes on every save
+_scene_node_cache = None
+
 
 def save_to_scene(bookmarks, layout="horizontal"):
     """Save bookmarks to a network node in the Maya scene.
@@ -462,10 +433,9 @@ def load_from_scene():
     Returns:
         dict: Configuration dictionary, or None if no node exists.
     """
-    nodes = _find_scene_nodes()
-    if not nodes:
+    node = _find_scene_node()
+    if not node:
         return None
-    node = nodes[0]
     try:
         data = cmds.getAttr("{}.{}".format(node, SCENE_NODE_DATA_ATTR))
         if not data:
@@ -482,9 +452,9 @@ def _get_or_create_scene_node():
     Returns:
         str: The network node name.
     """
-    nodes = _find_scene_nodes()
-    if nodes:
-        return nodes[0]
+    node = _find_scene_node()
+    if node:
+        return node
     node = cmds.createNode("network", name=SCENE_NODE_NAME)
     cmds.addAttr(
         node,
@@ -493,22 +463,39 @@ def _get_or_create_scene_node():
         defaultValue=True,
     )
     cmds.addAttr(node, longName=SCENE_NODE_DATA_ATTR, dataType="string")
+    global _scene_node_cache
+    _scene_node_cache = node
     return node
 
 
-def _find_scene_nodes():
-    """Find all selection bookmarks network nodes in the scene.
+def _find_scene_node():
+    """Find the bookmarks network node in the scene.
+
+    Uses cached name first, falls back to scanning network nodes.
 
     Returns:
-        list: Node names with the type marker attribute.
+        str: Node name, or None if not found.
     """
-    result = []
+    global _scene_node_cache
+    if _scene_node_cache and cmds.objExists(_scene_node_cache):
+        return _scene_node_cache
+
+    # Fast path: check well-known name
+    if cmds.objExists(SCENE_NODE_NAME):
+        if cmds.attributeQuery(
+            SCENE_NODE_TYPE_ATTR, node=SCENE_NODE_NAME, exists=True
+        ):
+            _scene_node_cache = SCENE_NODE_NAME
+            return SCENE_NODE_NAME
+
+    # Slow path: scan all network nodes (handles renamed nodes)
     for node in cmds.ls(type="network") or []:
         if cmds.attributeQuery(
             SCENE_NODE_TYPE_ATTR, node=node, exists=True
         ):
-            result.append(node)
-    return result
+            _scene_node_cache = node
+            return node
+    return None
 
 
 #############################################
@@ -519,8 +506,8 @@ def _find_scene_nodes():
 def add_bookmark_to_shelf(bookmark):
     """Add a bookmark as a button on Maya's current shelf.
 
-    The shelf button contains a self-contained Python script that
-    works independently of the Selection Bookmarks UI.
+    The shelf button calls core functions directly via a compact
+    Python command.
 
     Args:
         bookmark (dict): The bookmark dictionary.
@@ -539,6 +526,7 @@ def add_bookmark_to_shelf(bookmark):
     name = bookmark["name"]
     r, g, b = bookmark["color"]
     bm_data = json.dumps(bookmark)
+    is_selection = bookmark["type"] == BOOKMARK_SELECTION
 
     command = (
         "from mgear.utilbits.bookmarks import core\n"
@@ -546,7 +534,7 @@ def add_bookmark_to_shelf(bookmark):
         "bm = json.loads({data!r})\n"
     ).format(data=bm_data)
 
-    if bookmark["type"] == BOOKMARK_SELECTION:
+    if is_selection:
         command += (
             "import maya.cmds as cmds\n"
             "mods = cmds.getModifiers()\n"
@@ -557,12 +545,9 @@ def add_bookmark_to_shelf(bookmark):
             "else:\n"
             "    core.recall_selection(bm, 'replace')\n"
         )
-    else:
-        command += "core.toggle_isolate(bm)\n"
-
-    if bookmark["type"] == BOOKMARK_SELECTION:
         icon = get_icon_path("mgear_mouse-pointer.svg")
     else:
+        command += "core.toggle_isolate(bm)\n"
         icon = get_icon_path("mgear_eye.svg")
 
     btn = cmds.shelfButton(
