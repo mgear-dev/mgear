@@ -28,6 +28,11 @@ log = logging.getLogger("mgear.rigbits.evaluation_partition")
 DEFAULT_SATURATION_RANGE = (0.25, 0.55)
 DEFAULT_VALUE_RANGE = (0.55, 0.85)
 SHADER_PREFIX = "evalPartition"
+_TRANSFORM_ATTRS = (
+    "translateX", "translateY", "translateZ",
+    "rotateX", "rotateY", "rotateZ",
+    "scaleX", "scaleY", "scaleZ",
+)
 DEFAULT_GROUP_NAME = "Default Group"
 CONFIG_FILE_EXT = ".evp"
 CONFIG_VERSION = "1.0"
@@ -237,6 +242,61 @@ def rename_shader(shader_node, shading_group, new_name):
 # =====================================================
 
 
+def _collapse_face_ranges(mesh, face_indices):
+    """Collapse face indices into range-notation component strings.
+
+    Converts e.g. {0,1,2,3,5,6,7,10} into
+    ["mesh.f[0:3]", "mesh.f[5:7]", "mesh.f[10]"].
+
+    Args:
+        mesh (str): The mesh transform name.
+        face_indices (set): Set of face indices.
+
+    Returns:
+        list: Face component strings with collapsed ranges.
+    """
+    if not face_indices:
+        return []
+    sorted_idx = sorted(face_indices)
+    ranges = []
+    start = prev = sorted_idx[0]
+    for idx in sorted_idx[1:]:
+        if idx == prev + 1:
+            prev = idx
+        else:
+            ranges.append((start, prev))
+            start = prev = idx
+    ranges.append((start, prev))
+    return [
+        f"{mesh}.f[{s}:{e}]" if s != e else f"{mesh}.f[{s}]"
+        for s, e in ranges
+    ]
+
+
+def _parse_face_indices(component_str):
+    """Parse face indices from a Maya face component string.
+
+    Handles both single indices (mesh.f[5]) and ranges (mesh.f[0:10]).
+
+    Args:
+        component_str (str): Maya face component like "mesh.f[5]"
+            or "mesh.f[0:10]".
+
+    Returns:
+        tuple: (mesh_name, set of face indices).
+    """
+    mesh_name = component_str.split(".f[")[0]
+    index_str = component_str.split(".f[")[1].rstrip("]")
+    indices = set()
+    try:
+        indices.add(int(index_str))
+    except ValueError:
+        if ":" in index_str:
+            start, end = index_str.split(":")
+            indices.update(range(int(start), int(end) + 1))
+    return mesh_name, indices
+
+
 def assign_faces_to_shader(mesh, face_indices, shading_group):
     """Assign specific faces to a shading group.
 
@@ -252,10 +312,7 @@ def assign_faces_to_shader(mesh, face_indices, shading_group):
         cmds.warning(f"Shading group '{shading_group}' does not exist.")
         return
 
-    # Build face component list
-    faces = [f"{mesh}.f[{i}]" for i in sorted(face_indices)]
-
-    # Assign to shading group
+    faces = _collapse_face_ranges(mesh, face_indices)
     cmds.sets(faces, edit=True, forceElement=shading_group)
 
 
@@ -331,31 +388,21 @@ def get_selected_faces(mesh=None):
     filter_short_name = get_short_name(mesh) if mesh else None
 
     for item in selection:
-        # Check if it's a face component
-        if ".f[" in item:
-            # Extract mesh name and face index
-            mesh_name = item.split(".f[")[0]
-            mesh_short_name = get_short_name(mesh_name)
+        if ".f[" not in item:
+            continue
 
-            # Filter by mesh if specified
-            if filter_short_name and mesh_short_name != filter_short_name:
-                continue
+        mesh_name, item_indices = _parse_face_indices(item)
+        mesh_short_name = get_short_name(mesh_name)
 
-            if detected_mesh is None:
-                detected_mesh = mesh_name
-            elif not names_match(detected_mesh, mesh_name):
-                # Multiple meshes selected, skip
-                continue
+        if filter_short_name and mesh_short_name != filter_short_name:
+            continue
 
-            # Extract face index
-            index_str = item.split(".f[")[1].rstrip("]")
-            try:
-                face_indices.add(int(index_str))
-            except ValueError:
-                # Handle face ranges like f[0:10]
-                if ":" in index_str:
-                    start, end = index_str.split(":")
-                    face_indices.update(range(int(start), int(end) + 1))
+        if detected_mesh is None:
+            detected_mesh = mesh_name
+        elif not names_match(detected_mesh, mesh_name):
+            continue
+
+        face_indices.update(item_indices)
 
     return detected_mesh, face_indices
 
@@ -683,17 +730,11 @@ def capture_original_shading(manager):
                     break
                 continue
 
-            member_mesh = member.split(".f[")[0]
+            member_mesh, item_indices = _parse_face_indices(member)
             if not names_match(member_mesh, mesh):
                 continue
 
-            index_str = member.split(".f[")[1].rstrip("]")
-            try:
-                face_indices.add(int(index_str))
-            except ValueError:
-                if ":" in index_str:
-                    start, end = index_str.split(":")
-                    face_indices.update(range(int(start), int(end) + 1))
+            face_indices.update(item_indices)
 
         if face_indices:
             original[sg] = face_indices
@@ -879,31 +920,20 @@ def split_polygon_groups(manager):
             )
             new_obj = dup[0]
 
-            # Unlock transform attributes
-            for attr in (
-                "translateX", "translateY",
-                "translateZ",
-                "rotateX", "rotateY", "rotateZ",
-                "scaleX", "scaleY", "scaleZ",
-            ):
+            for attr in _TRANSFORM_ATTRS:
                 cmds.setAttr(
                     f"{new_obj}.{attr}", lock=False
                 )
 
-            new_faces = cmds.ls(
-                f"{new_obj}.f[*]", flatten=True
+            total_faces = cmds.polyEvaluate(new_obj, face=True)
+            faces_to_delete = (
+                set(range(total_faces)) - group.face_indices
             )
-
-            # Build faces to delete by removing kept faces
-            faces_to_del = list(new_faces)
-            for face_idx in sorted(
-                group.face_indices, reverse=True
-            ):
-                if face_idx < len(faces_to_del):
-                    faces_to_del.pop(face_idx)
-
-            if faces_to_del:
-                cmds.delete(faces_to_del)
+            if faces_to_delete:
+                del_components = _collapse_face_ranges(
+                    new_obj, faces_to_delete
+                )
+                cmds.delete(del_components)
 
             cmds.delete(new_obj, ch=True)
             partition_meshes.append(new_obj)
@@ -1071,8 +1101,8 @@ def _transfer_bs_to_partition(
 
             try:
                 for t_item in target_items:
-                    weight = float(
-                        (t_item - 5000) / 1000.0
+                    weight = blendshape.bs_target_weight(
+                        t_item
                     )
 
                     # Trigger source BS
@@ -1257,8 +1287,9 @@ def _clean_bs_node_targets(mesh, bs_node, threshold):
         deformed_positions = _get_vertex_positions(mesh)
         cmds.setAttr(f"{bs_node}.weight[{idx}]", 0)
 
-        # Compute max delta from flat position lists
-        max_delta = 0.0
+        # Compare squared distances to avoid sqrt per vertex
+        threshold_sq = threshold * threshold
+        has_effect = False
         for i in range(0, len(base_positions), 3):
             dx = deformed_positions[i] - base_positions[i]
             dy = (
@@ -1269,13 +1300,11 @@ def _clean_bs_node_targets(mesh, bs_node, threshold):
                 deformed_positions[i + 2]
                 - base_positions[i + 2]
             )
-            delta = (
-                (dx * dx + dy * dy + dz * dz) ** 0.5
-            )
-            if delta > max_delta:
-                max_delta = delta
+            if dx * dx + dy * dy + dz * dz >= threshold_sq:
+                has_effect = True
+                break
 
-        if max_delta < threshold:
+        if not has_effect:
             targets_to_remove.append(idx)
 
     # Remove unused targets (reverse order)
@@ -1474,9 +1503,9 @@ def remove_unused_influences(partition_meshes):
         if not skin_nodes:
             continue
 
-        skin = skin_nodes[0]
+        skin_node = skin_nodes[0]
         cmds.skinCluster(
-            skin, edit=True, removeUnusedInfluence=True
+            skin_node, edit=True, removeUnusedInfluence=True
         )
 
         part_short = get_short_name(part_mesh)
@@ -1618,6 +1647,20 @@ def _copy_prebind_connections(src_skin, part_skin):
         f"{src_skin}.matrix", multiIndices=True
     ) or []
 
+    # Build influence-name-to-index map for partition skin
+    part_matrix_indices = cmds.getAttr(
+        f"{part_skin}.matrix", multiIndices=True
+    ) or []
+    part_inf_map = {}
+    for p_idx in part_matrix_indices:
+        p_inf_conns = cmds.listConnections(
+            f"{part_skin}.matrix[{p_idx}]",
+            source=True,
+            destination=False,
+        )
+        if p_inf_conns:
+            part_inf_map[p_inf_conns[0]] = p_idx
+
     for src_idx in src_matrix_indices:
         prebind_attr = (
             f"{src_skin}.bindPreMatrix[{src_idx}]"
@@ -1631,48 +1674,27 @@ def _copy_prebind_connections(src_skin, part_skin):
         if not connections:
             continue
 
-        # Find which influence is at this index
-        matrix_attr = f"{src_skin}.matrix[{src_idx}]"
         inf_conns = cmds.listConnections(
-            matrix_attr,
+            f"{src_skin}.matrix[{src_idx}]",
             source=True,
             destination=False,
         )
         if not inf_conns:
             continue
-        inf_name = inf_conns[0]
 
-        # Find matching index in partition skin
-        part_matrix_indices = cmds.getAttr(
-            f"{part_skin}.matrix", multiIndices=True
-        ) or []
-
-        for p_idx in part_matrix_indices:
-            p_matrix_attr = (
-                f"{part_skin}.matrix[{p_idx}]"
-            )
-            p_inf_conns = cmds.listConnections(
-                p_matrix_attr,
-                source=True,
-                destination=False,
-            )
-            if (
-                p_inf_conns
-                and p_inf_conns[0] == inf_name
-            ):
-                p_prebind = (
-                    f"{part_skin}"
-                    f".bindPreMatrix[{p_idx}]"
+        p_idx = part_inf_map.get(inf_conns[0])
+        if p_idx is not None:
+            try:
+                cmds.connectAttr(
+                    connections[0],
+                    f"{part_skin}.bindPreMatrix[{p_idx}]",
+                    force=True,
                 )
-                try:
-                    cmds.connectAttr(
-                        connections[0],
-                        p_prebind,
-                        force=True,
-                    )
-                except RuntimeError:
-                    pass
-                break
+            except RuntimeError:
+                log.debug(
+                    "Failed to connect prebind %s",
+                    connections[0],
+                )
 
 
 # =====================================================
@@ -1719,15 +1741,10 @@ def create_proximity_wrap_proxy(
     try:
         proxy_name = f"{mesh_short}_proxy"
         proxy = cmds.duplicate(
-            source_mesh, rr=True, name=proxy_name
+            source_mesh, rr=True, ic=False, name=proxy_name
         )[0]
 
-        for attr in (
-            "translateX", "translateY",
-            "translateZ",
-            "rotateX", "rotateY", "rotateZ",
-            "scaleX", "scaleY", "scaleZ",
-        ):
+        for attr in _TRANSFORM_ATTRS:
             cmds.setAttr(
                 f"{proxy}.{attr}", lock=False
             )

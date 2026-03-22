@@ -285,15 +285,7 @@ class EvaluationPartitionUI(
         # Update face count
         self.update_face_count()
 
-        # Enable buttons
-        self.export_action.setEnabled(True)
-        self.execute_btn.setEnabled(True)
-
-        self.toggle_shaders_btn.setEnabled(True)
-        self.toggle_shaders_btn.setChecked(False)
-        self.toggle_shaders_btn.setText("Show Original Shaders")
-        self.reset_btn.setEnabled(True)
-        self.group_list.add_btn.setEnabled(True)
+        self._enable_partition_controls()
 
         self.set_status(f"Loaded mesh: {mesh.split('|')[-1]}")
 
@@ -305,24 +297,34 @@ class EvaluationPartitionUI(
         else:
             self.face_count_label.setText("Total Faces: -")
 
-    # =========================================================
-    # GROUP OPERATIONS
-    # =========================================================
+    def _enable_partition_controls(self):
+        """Enable partition-related UI controls."""
+        self.export_action.setEnabled(True)
+        self.execute_btn.setEnabled(True)
+        self.toggle_shaders_btn.setEnabled(True)
+        self.toggle_shaders_btn.setChecked(False)
+        self.toggle_shaders_btn.setText("Show Original Shaders")
+        self.reset_btn.setEnabled(True)
+        self.group_list.add_btn.setEnabled(True)
 
-    def add_group_from_selection(self):
-        """Create new group from currently selected faces."""
+    def _get_validated_face_selection(self):
+        """Get face selection validated against the current mesh.
+
+        Returns:
+            set: Face indices, or None if invalid/empty.
+        """
         if not self.group_manager:
             self.set_status("Please load a mesh first", error=True)
-            return
+            return None
 
-        # Get selected faces
         mesh_from_sel, selected_faces = core.get_selected_faces(
             self.group_manager.mesh
         )
-
         if not selected_faces:
-            self.set_status("Please select some faces on the mesh", error=True)
-            return
+            self.set_status(
+                "Please select some faces on the mesh", error=True
+            )
+            return None
 
         if mesh_from_sel and not core.names_match(
             mesh_from_sel, self.group_manager.mesh
@@ -330,6 +332,18 @@ class EvaluationPartitionUI(
             self.set_status(
                 "Selected faces are not from the target mesh", error=True
             )
+            return None
+
+        return selected_faces
+
+    # =========================================================
+    # GROUP OPERATIONS
+    # =========================================================
+
+    def add_group_from_selection(self):
+        """Create new group from currently selected faces."""
+        selected_faces = self._get_validated_face_selection()
+        if not selected_faces:
             return
 
         # Generate unique name
@@ -410,27 +424,16 @@ class EvaluationPartitionUI(
         Args:
             group_name: Name of the group to add faces to.
         """
-        if not self.group_manager:
-            return
-
-        group = self.group_manager.get_group_by_name(group_name)
+        group = (
+            self.group_manager.get_group_by_name(group_name)
+            if self.group_manager
+            else None
+        )
         if not group:
             return
 
-        mesh_from_sel, selected_faces = core.get_selected_faces(
-            self.group_manager.mesh
-        )
-
+        selected_faces = self._get_validated_face_selection()
         if not selected_faces:
-            self.set_status("Please select some faces on the mesh", error=True)
-            return
-
-        if mesh_from_sel and not core.names_match(
-            mesh_from_sel, self.group_manager.mesh
-        ):
-            self.set_status(
-                "Selected faces are not from the target mesh", error=True
-            )
             return
 
         cmds.undoInfo(openChunk=True)
@@ -456,27 +459,16 @@ class EvaluationPartitionUI(
         Args:
             group_name: Name of the group to remove faces from.
         """
-        if not self.group_manager:
-            return
-
-        group = self.group_manager.get_group_by_name(group_name)
+        group = (
+            self.group_manager.get_group_by_name(group_name)
+            if self.group_manager
+            else None
+        )
         if not group:
             return
 
-        mesh_from_sel, selected_faces = core.get_selected_faces(
-            self.group_manager.mesh
-        )
-
+        selected_faces = self._get_validated_face_selection()
         if not selected_faces:
-            self.set_status("Please select some faces on the mesh", error=True)
-            return
-
-        if mesh_from_sel and not core.names_match(
-            mesh_from_sel, self.group_manager.mesh
-        ):
-            self.set_status(
-                "Selected faces are not from the target mesh", error=True
-            )
             return
 
         cmds.undoInfo(openChunk=True)
@@ -670,15 +662,7 @@ class EvaluationPartitionUI(
             # Update face count
             self.update_face_count()
 
-            # Enable buttons
-            self.export_action.setEnabled(True)
-            self.execute_btn.setEnabled(True)
-    
-            self.toggle_shaders_btn.setEnabled(True)
-            self.toggle_shaders_btn.setChecked(False)
-            self.toggle_shaders_btn.setText("Show Original Shaders")
-            self.reset_btn.setEnabled(True)
-            self.group_list.add_btn.setEnabled(True)
+            self._enable_partition_controls()
 
             self.set_status(f"Imported: {file_path.split('/')[-1]}")
 
