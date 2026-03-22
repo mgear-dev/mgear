@@ -23,6 +23,7 @@ from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
 from mgear.core import pyqt
+from mgear.core import applyop
 from mgear.core import utils
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
@@ -1844,6 +1845,106 @@ def rename_skin_clusters(*args):
                 print("Renamed {} to {}".format(skin_cluster_name, new_name))
         else:
             print("No skinCluster found for {}".format(obj))
+
+
+def localize_skin_clusters(
+    joints, offset_node, world_ctl=None, tweak_pattern="_tweak_"
+):
+    """Localize skinCluster connections to avoid floating-point precision loss.
+
+    When a rig is far from Maya's world origin, skinCluster evaluation can
+    suffer from floating-point precision artifacts. This function inserts
+    mgear_mulMatrix nodes between each joint's worldMatrix and its
+    skinCluster .matrix[N] inputs, making the skinning evaluate relative
+    to offset_node instead of world space.
+
+    For tweak joints (name contains tweak_pattern), a prebind mulmatrix
+    is also connected to .bindPreMatrix[N] to maintain correct deformation.
+
+    If world_ctl is provided, its worldMatrix drives offset_node transforms
+    via a mulmatrix and decomposeMatrix chain.
+
+    Args:
+        joints (list): Joint nodes to localize. Accepts strings or PyNodes.
+        offset_node (str): Reference transform for localization
+            (e.g. "geo_root"). Joint matrices are multiplied by this
+            node's worldInverseMatrix.
+        world_ctl (str, optional): If provided, drives offset_node SRT
+            from this control via mulmatrix + decomposeMatrix.
+        tweak_pattern (str, optional): Substring pattern to identify
+            tweak joints. Tweak joints get additional bindPreMatrix
+            compensation. Defaults to "_tweak_".
+
+    Returns:
+        list: Created mgear_mulMatrix PyNodes.
+
+    Example:
+        >>> from maya import cmds
+        >>> from mgear.core import skin
+        >>> joints = cmds.sets("rig_deformers_grp", query=True)
+        >>> nodes = skin.localize_skin_clusters(
+        ...     joints, "geo_root", world_ctl="world_ctl"
+        ... )
+    """
+    created_nodes = []
+
+    if isinstance(offset_node, string_types):
+        offset_node = pm.PyNode(offset_node)
+
+    if world_ctl:
+        if isinstance(world_ctl, string_types):
+            world_ctl = pm.PyNode(world_ctl)
+        node = applyop.gear_mulmatrix_op(
+            world_ctl + ".worldMatrix",
+            offset_node + ".parentInverseMatrix",
+            target=offset_node,
+            transform="srt",
+        )
+        created_nodes.append(node)
+
+    for jnt in joints:
+        if isinstance(jnt, string_types):
+            jnt = pm.PyNode(jnt)
+
+        skin_conns = pm.listConnections(
+            jnt + ".worldMatrix",
+            plugs=True,
+            type="skinCluster",
+        )
+        if not skin_conns:
+            continue
+
+        is_tweak = tweak_pattern and tweak_pattern in jnt.name()
+
+        parent_mul_mat = None
+        if is_tweak:
+            jnt_parent = jnt.getParent()
+            if jnt_parent:
+                parent_mul_mat = applyop.gear_mulmatrix_op(
+                    offset_node + ".worldMatrix",
+                    jnt_parent + ".worldInverseMatrix",
+                )
+                created_nodes.append(parent_mul_mat)
+
+        mul_mat = applyop.gear_mulmatrix_op(
+            jnt + ".worldMatrix",
+            offset_node + ".worldInverseMatrix",
+        )
+        created_nodes.append(mul_mat)
+
+        for cn in skin_conns:
+            pm.connectAttr(mul_mat + ".output", cn, force=True)
+            if parent_mul_mat:
+                prebind = pm.PyNode(
+                    str(cn).replace(".matrix[", ".bindPreMatrix[")
+                )
+                pm.connectAttr(
+                    parent_mul_mat + ".output", prebind, force=True
+                )
+
+    cmds.dgdirty(allPlugs=True)
+
+    return created_nodes
 
 
 # Skin cluster selector
