@@ -6,6 +6,7 @@ def install():
     commands = (
         ("xPlorer", str_open_xplorer, "xplorer_icon.svg"),
         ("Random Colors", str_open_random_colors, "mgear_random_colors.svg"),
+        ("Bookmarks", str_open_bookmarks, "mgear_bookmark.svg"),
     )
 
     mgear.menu.install("Utilbits", commands, image="mgear_utilbits.svg")
@@ -20,4 +21,9 @@ xplorer_win.show(dockable=True)
 str_open_random_colors = """
 from mgear.utilbits import random_colors
 random_colors.show()
+"""
+
+str_open_bookmarks = """
+from mgear.utilbits import bookmarks
+bookmarks.show()
 """
