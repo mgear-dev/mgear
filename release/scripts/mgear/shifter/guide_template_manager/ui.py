@@ -7,15 +7,14 @@ guide templates (.sgt files) with metadata and thumbnails.
 import json
 import os
 
-import mgear
+from maya import cmds
+from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
+
 import mgear.pymaya as pm
 from mgear.core import pyqt
 
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
-
-from maya import cmds
-from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 from mgear.shifter import io as shifter_io
 
@@ -24,6 +23,11 @@ from .widgets import ImportPartialDialog
 from .widgets import SourceFoldersDialog
 from .widgets import TemplateInfoPanel
 from .widgets import TemplateTreeWidget
+
+# Settings keys
+_SK_SOURCE_FOLDERS = "templateManager/source_folders"
+_SK_SPLITTER = "templateManager/splitter"
+_SK_SHOW_DEFAULTS = "templateManager/show_defaults"
 
 
 class GuideTemplateManagerUI(
@@ -43,11 +47,9 @@ class GuideTemplateManagerUI(
         super(GuideTemplateManagerUI, self).__init__(parent)
         pyqt.SettingsMixin.__init__(self)
 
-        # State
         self._source_folders = []
-        self._current_template_path = None
+        self._closing = False
 
-        # Window setup
         self.setObjectName(self.TOOL_NAME)
         self.setWindowTitle(self.TOOL_TITLE)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
@@ -62,34 +64,26 @@ class GuideTemplateManagerUI(
         elif cmds.about(macOS=True):
             self.setWindowFlags(QtCore.Qt.Tool)
 
-        # Build UI
         self.setup_ui()
 
-        # Load persisted settings
         self._source_folders = json.loads(
-            self.settings.value(
-                "templateManager/source_folders", "[]"
-            )
+            self.settings.value(_SK_SOURCE_FOLDERS, "[]")
         )
 
         self.user_settings = {
-            "templateManager/show_defaults": (
+            _SK_SHOW_DEFAULTS: (
                 self.show_defaults_action,
                 True,
             ),
         }
         self.load_settings()
 
-        # Restore splitter state
-        splitter_state = self.settings.value(
-            "templateManager/splitter"
-        )
+        splitter_state = self.settings.value(_SK_SPLITTER)
         if splitter_state:
             self.splitter.restoreState(splitter_state)
 
         self.resize(800, 500)
 
-        # Initial population
         self.refresh_templates()
 
     # =================================================================
@@ -122,7 +116,6 @@ class GuideTemplateManagerUI(
 
     def create_widgets(self):
         """Create all UI widgets."""
-        # Menu bar
         self.menu_bar = QtWidgets.QMenuBar()
         self.menu_bar.setNativeMenuBar(False)
 
@@ -136,18 +129,13 @@ class GuideTemplateManagerUI(
         self.settings_menu.addSeparator()
         self.settings_menu.addAction(self.show_defaults_action)
 
-        # Search bar
         self.search_input = QtWidgets.QLineEdit()
         self.search_input.setPlaceholderText("Search templates...")
         self.search_input.setClearButtonEnabled(True)
 
-        # Template tree (left panel)
         self.template_tree = TemplateTreeWidget()
-
-        # Info panel (right panel)
         self.info_panel = TemplateInfoPanel()
 
-        # Splitter
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         self.splitter.addWidget(self.template_tree)
         self.splitter.addWidget(self.info_panel)
@@ -166,7 +154,6 @@ class GuideTemplateManagerUI(
 
     def create_connections(self):
         """Connect signals to slots."""
-        # Menu actions
         self.export_action.triggered.connect(self.export_template)
         self.refresh_action.triggered.connect(self.refresh_templates)
         self.edit_folders_action.triggered.connect(
@@ -176,10 +163,8 @@ class GuideTemplateManagerUI(
             lambda *args: self.refresh_templates()
         )
 
-        # Search
         self.search_input.textChanged.connect(self._filter_templates)
 
-        # Tree signals
         self.template_tree.template_selected.connect(
             self._on_template_selected
         )
@@ -201,43 +186,27 @@ class GuideTemplateManagerUI(
         """Rebuild the template tree from all source folders."""
         folder_paths = []
 
-        # Default templates
         if self.show_defaults_action.isChecked():
             default_dir = core.get_default_templates_dir()
             if os.path.isdir(default_dir):
                 folder_paths.append(default_dir)
 
-        # Custom folders
         folder_paths.extend(self._source_folders)
 
-        # Scan and populate
         folder_entries = core.scan_template_folders(folder_paths)
 
-        # Set display labels
         for entry in folder_entries:
             if entry.path == core.get_default_templates_dir():
                 entry.label = "Default Templates"
 
+        # Ensure sgtInfo and cache before populating tree
+        core.ensure_all_sgt_info(folder_entries)
+
         self.template_tree.populate(folder_entries)
 
-        # Auto-generate missing .sgtInfo (best effort)
-        self._ensure_sgt_info_files(folder_entries)
-
-        # Re-apply search filter
-        self._filter_templates(self.search_input.text())
-
-    def _ensure_sgt_info_files(self, folder_entries):
-        """Generate missing .sgtInfo files for all templates.
-
-        Args:
-            folder_entries (list): List of FolderEntry objects.
-        """
-        for folder in folder_entries:
-            for template in folder.templates:
-                if not template.has_info:
-                    core.ensure_sgt_info(template.sgt_path)
-            for subfolder in folder.subfolders:
-                self._ensure_sgt_info_files([subfolder])
+        search_text = self.search_input.text()
+        if search_text:
+            self.template_tree.filter_by_text(search_text)
 
     def _filter_templates(self, text):
         """Filter the tree by search text.
@@ -253,7 +222,6 @@ class GuideTemplateManagerUI(
         Args:
             sgt_path (str): Path to the selected .sgt file.
         """
-        self._current_template_path = sgt_path
         self.info_panel.set_template(sgt_path)
 
     # =================================================================
@@ -303,14 +271,11 @@ class GuideTemplateManagerUI(
         if dialog.exec_() != QtWidgets.QDialog.Accepted:
             return
 
-        # Use root components only to preserve hierarchy.
-        # draw_guide discovers children automatically.
         roots = dialog.get_root_components()
         if not roots:
             cmds.warning("No components selected")
             return
 
-        # Check if there's a selection to use as parent
         init_parent = None
         selection = pm.selected()
         if selection:
@@ -320,7 +285,6 @@ class GuideTemplateManagerUI(
             dialog.get_action() == ImportPartialDialog.IMPORT_MATCH
         )
 
-        # Store target position before import
         target_pos = None
         if match_position and init_parent:
             target_pos = cmds.xform(
@@ -330,7 +294,6 @@ class GuideTemplateManagerUI(
                 translation=True,
             )
 
-        # Snapshot existing roots to find the newly created one
         existing_roots = set(
             cmds.ls("*_root", type="transform", long=True)
         )
@@ -341,7 +304,6 @@ class GuideTemplateManagerUI(
             initParent=init_parent,
         )
 
-        # Match position: find the first new root and move it
         if target_pos and match_position:
             current_roots = set(
                 cmds.ls("*_root", type="transform", long=True)
@@ -373,7 +335,7 @@ class GuideTemplateManagerUI(
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             self._source_folders = dialog.get_folders()
             self.settings.setValue(
-                "templateManager/source_folders",
+                _SK_SOURCE_FOLDERS,
                 json.dumps(self._source_folders),
             )
             self.refresh_templates()
@@ -382,20 +344,23 @@ class GuideTemplateManagerUI(
     # WINDOW LIFECYCLE
     # =================================================================
 
-    def close(self):
-        """Clean up before closing."""
-        # Save splitter state
+    def _save_state(self):
+        """Save window state to QSettings (guarded against double calls)."""
+        if self._closing:
+            return
+        self._closing = True
         self.settings.setValue(
-            "templateManager/splitter",
+            _SK_SPLITTER,
             self.splitter.saveState(),
         )
         self.save_settings()
-        self.deleteLater()
 
     def closeEvent(self, event):
         """Handle close event."""
-        self.close()
+        self._save_state()
+        super(GuideTemplateManagerUI, self).closeEvent(event)
 
     def dockCloseEventTriggered(self):
         """Called when docked window is closed."""
-        self.close()
+        self._save_state()
+        super(GuideTemplateManagerUI, self).dockCloseEventTriggered()

@@ -4,15 +4,16 @@ TemplateTreeWidget, TemplateInfoPanel, SourceFoldersDialog,
 and ImportPartialDialog for the guide template manager.
 """
 
+import datetime
 import os
+
+from maya import cmds
 
 from mgear.core import pyqt
 
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
-
-from maya import cmds
 
 from . import core
 
@@ -102,8 +103,9 @@ class TemplateTreeWidget(QtWidgets.QTreeWidget):
             )
             file_item.setToolTip(0, template.sgt_path)
 
-            # Store tags for search filtering
-            info = core.read_sgt_info(template.sgt_path)
+            # Use cached info for tags (populated by
+            # ensure_all_sgt_info before tree population)
+            info = template.info
             tags = ""
             if info:
                 tag_list = info.get("tags", [])
@@ -499,9 +501,7 @@ class TemplateInfoPanel(QtWidgets.QWidget):
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             updated = dialog.get_info()
             updated["date_modified"] = (
-                __import__("datetime")
-                .datetime.now()
-                .strftime("%Y-%m-%d")
+                datetime.datetime.now().strftime("%Y-%m-%d")
             )
             core.write_sgt_info(self._current_path, updated)
             self.set_template(self._current_path)
@@ -888,16 +888,21 @@ class ImportPartialDialog(QtWidgets.QDialog):
 
     def _select_all(self):
         """Check all items."""
-        self.tree.blockSignals(True)
-        for name, item in self._item_map.items():
-            item.setCheckState(0, QtCore.Qt.Checked)
-        self.tree.blockSignals(False)
+        self._set_all_check_state(QtCore.Qt.Checked)
 
     def _deselect_all(self):
         """Uncheck all items."""
+        self._set_all_check_state(QtCore.Qt.Unchecked)
+
+    def _set_all_check_state(self, state):
+        """Set check state on all items.
+
+        Args:
+            state: Qt check state constant.
+        """
         self.tree.blockSignals(True)
-        for name, item in self._item_map.items():
-            item.setCheckState(0, QtCore.Qt.Unchecked)
+        for item in self._item_map.values():
+            item.setCheckState(0, state)
         self.tree.blockSignals(False)
 
     def _accept_import(self):

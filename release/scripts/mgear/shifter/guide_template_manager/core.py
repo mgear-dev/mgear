@@ -79,7 +79,7 @@ class TemplateEntry:
         self.sgt_path = sgt_path
         self.name = os.path.splitext(os.path.basename(sgt_path))[0]
         self.has_info = os.path.isfile(get_sgt_info_path(sgt_path))
-        self.has_thumbnail = os.path.isfile(get_thumbnail_path(sgt_path))
+        self.info = None
 
 
 class FolderEntry:
@@ -145,10 +145,25 @@ def _scan_folder(folder_path, label=None):
         elif item.lower().endswith(SGT_EXT):
             entry.templates.append(TemplateEntry(full_path))
 
-    # Only return if there's content
     if entry.templates or entry.subfolders:
         return entry
     return None
+
+
+def ensure_all_sgt_info(folder_entries):
+    """Ensure .sgtInfo exists for all templates and cache the result.
+
+    Runs before tree population so cached info is available
+    for tag extraction without redundant file reads.
+
+    Args:
+        folder_entries (list): List of FolderEntry objects.
+    """
+    for folder in folder_entries:
+        for template in folder.templates:
+            template.info = ensure_sgt_info(template.sgt_path)
+        for subfolder in folder.subfolders:
+            ensure_all_sgt_info([subfolder])
 
 
 # =================================================================
@@ -166,13 +181,10 @@ def read_sgt_info(sgt_path):
         dict: Metadata dictionary, or None if not found.
     """
     info_path = get_sgt_info_path(sgt_path)
-    if not os.path.isfile(info_path):
-        return None
-
     try:
         with open(info_path, "r") as f:
             return json.load(f)
-    except (IOError, json.JSONDecodeError):
+    except (IOError, ValueError, OSError):
         return None
 
 
@@ -206,13 +218,14 @@ def generate_sgt_info(sgt_path):
     Returns:
         dict: Generated metadata dictionary.
     """
+    now = datetime.datetime.now().strftime("%Y-%m-%d")
     info = {
         "version": 1,
         "name": os.path.splitext(os.path.basename(sgt_path))[0],
         "description": "",
         "author": getpass.getuser(),
-        "date_created": datetime.datetime.now().strftime("%Y-%m-%d"),
-        "date_modified": datetime.datetime.now().strftime("%Y-%m-%d"),
+        "date_created": now,
+        "date_modified": now,
         "tags": [],
         "components_count": 0,
         "components_list": [],
@@ -225,8 +238,10 @@ def generate_sgt_info(sgt_path):
             comp_list = conf.get("components_list", [])
             info["components_count"] = len(comp_list)
             info["components_list"] = comp_list
-    except Exception:
-        pass
+    except Exception as e:
+        cmds.warning(
+            "Failed to read template {}: {}".format(sgt_path, e)
+        )
 
     return info
 
@@ -312,25 +327,15 @@ def get_components_from_template(sgt_path):
     """
     try:
         conf = shifter_io._import_guide_template(sgt_path)
-    except Exception:
+    except Exception as e:
+        cmds.warning(
+            "Failed to read template {}: {}".format(sgt_path, e)
+        )
         return []
 
     if not conf:
         return []
 
-    return _extract_components(conf)
-
-
-def get_components_from_conf(conf):
-    """Extract component information from a loaded template dict.
-
-    Args:
-        conf (dict): Template configuration dictionary.
-
-    Returns:
-        list: List of dicts with keys: name, comp_type,
-            parent, children.
-    """
     return _extract_components(conf)
 
 
