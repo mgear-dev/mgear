@@ -45,7 +45,11 @@ def install():
             "mgear_download.svg",
         ),
         ("-----", None),
-        (None, guide_template_samples_submenu),
+        (
+            "Guide Template Manager",
+            str_template_manager,
+            "mgear_users.svg",
+        ),
         (
             "Match Guide to Selected Joint Hierarchy",
             str_matchGuide,
@@ -244,37 +248,6 @@ def game_submenu(parent_menu_id):
     )
 
 
-def guide_template_samples_submenu(parent_menu_id):
-    """Create the guide sample templates submenu
-
-    Args:
-        parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
-    """
-    commands = (
-        ("Biped Template, Y-up", str_biped_template),
-        ("Quadruped Template, Y-up", str_quadruped_template),
-        ("Game Biped Template, Y-up", str_game_biped_template),
-        ("-----", None),
-        ("UE5 MetaHuman/Manny Template, Y-up", str_epic_metahuman_y_template),
-        ("UE5 MetaHuman/Manny Template, Z-up", str_epic_metahuman_z_template),
-        ("UE4 Mannequin Template, Y-up", str_epic_mannequin_y_template),
-        ("UE4 Mannequin Template, Z-up", str_epic_mannequin_z_template),
-        ("-----", None),
-        ("UE MetaHuman/Manny Snap", str_epic_metahuman_snap),
-        ("-----", None),
-        ("Spider", str_spider_template),
-        ("Giraffe", str_giraffe_template),
-        ("Mantis", str_mantis_template),
-        ("T-Rex", str_trex_template),
-    )
-
-    mgear.menu.install(
-        "Guide Template Samples",
-        commands,
-        parent_menu_id,
-        image="mgear_users.svg",
-    )
-
 
 str_show_guide_manager = """
 from mgear.shifter import guide_manager_gui
@@ -326,6 +299,11 @@ from mgear.shifter import plebes
 plebes.plebes_gui()
 """
 
+str_template_manager = """
+from mgear.shifter import guide_template_manager
+guide_template_manager.show()
+"""
+
 str_auto_fit_guide = """
 from mgear.shifter import afg_tools_ui
 afg_tools_ui.show()
@@ -361,63 +339,6 @@ from mgear import shifter
 shifter.reloadComponents()
 """
 
-str_biped_template = """
-from mgear.shifter import io
-io.import_sample_template("biped.sgt")
-"""
-
-str_quadruped_template = """
-from mgear.shifter import io
-io.import_sample_template("quadruped.sgt")
-"""
-
-str_epic_metahuman_z_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_metahuman_z_up.sgt")
-io.metahuman_snap()
-"""
-str_epic_mannequin_z_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_mannequin_z_up.sgt")
-"""
-
-str_epic_metahuman_y_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_metahuman_y_up.sgt")
-io.metahuman_snap()
-"""
-
-str_epic_mannequin_y_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_mannequin_y_up.sgt")
-"""
-
-str_epic_metahuman_snap = """
-from mgear.shifter import io
-io.metahuman_snap()
-"""
-
-str_game_biped_template = """
-from mgear.shifter import io
-io.import_sample_template("game_biped.sgt")
-"""
-
-str_spider_template = """
-from mgear.shifter import io
-io.import_sample_template("spider.sgt")
-"""
-str_mantis_template = """
-from mgear.shifter import io
-io.import_sample_template("mantis.sgt")
-"""
-str_trex_template = """
-from mgear.shifter import io
-io.import_sample_template("trex.sgt")
-"""
-str_giraffe_template = """
-from mgear.shifter import io
-io.import_sample_template("giraffe.sgt")
-"""
 
 str_mocap_importSkeletonBiped = """
 from mgear.shifter import mocap_tools
