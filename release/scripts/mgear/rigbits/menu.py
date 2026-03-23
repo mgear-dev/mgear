@@ -45,6 +45,7 @@ def install():
         ("-----", None),
         ("Wire to Skinning", str_wire_to_skinning, "mgear_wire_to_skinning.svg"),
         ("Evaluation Partition", str_evaluation_partition, "mgear_evaluation_partition.svg"),
+        ("Blendshape Transfer", str_blendshape_transfer, "mgear_copy.svg"),
         ("-----", None),
         ("Proxy Geo", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
         ("Proxy Slicer", str_proxySlicer, "mgear_proxy_slicer.svg"),
@@ -273,6 +274,11 @@ wire_to_skinning.show()
 str_evaluation_partition = """
 from mgear.rigbits import evaluation_partition
 evaluation_partition.show()
+"""
+
+str_blendshape_transfer = """
+from mgear.rigbits import blendshape_transfer
+blendshape_transfer.show()
 """
 
 # Gimmick joints str commands
