@@ -7,10 +7,10 @@ blendshape transfers with import/export of .bst configs.
 from maya import cmds
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
-from mgear.core import pyqt
-
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
+
+from mgear.core import pyqt
 
 from . import core
 
@@ -25,7 +25,7 @@ class BlendshapeTransferUI(
     """
 
     TOOL_NAME = "BlendshapeTransfer"
-    TOOL_TITLE = "Blendshape Transfer"
+    TOOL_TITLE = "Blendshape Setup Transfer"
 
     def __init__(self, parent=None):
         super(BlendshapeTransferUI, self).__init__(parent)

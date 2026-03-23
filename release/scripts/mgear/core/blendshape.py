@@ -5,6 +5,8 @@ blendShape and morph deformer nodes. Also provides constants
 and helpers for working with blendShape target attributes.
 """
 
+import re
+
 from maya import cmds
 
 import mgear.pymaya as pm
@@ -543,6 +545,9 @@ def _transfer_bs_node(
     for i in range(0, len(raw_aliases), 2):
         alias_lookup[raw_aliases[i + 1]] = raw_aliases[i]
 
+    # Pre-compute base positions once for zero-delta checks
+    base_pos = _get_base_positions(target_mesh)
+
     # Phase 1: Capture all targets via wrap bake.
     # Process one at a time — disconnect, set, capture,
     # reconnect immediately to preserve combo networks.
@@ -594,7 +599,11 @@ def _transfer_bs_node(
             try:
                 cmds.disconnectAttr(source_plug, weight_attr)
             except RuntimeError:
-                pass
+                cmds.warning(
+                    "Could not disconnect: {} -> {}".format(
+                        source_plug, weight_attr
+                    )
+                )
 
         try:
             for t_item in target_items:
@@ -637,7 +646,9 @@ def _transfer_bs_node(
         # Check if this target actually deforms the mesh.
         # If not, remove it now (avoids ghost weight entries
         # from post-cleanup removeMultiInstance).
-        if not _target_has_delta(target_mesh, new_bs, dst_idx):
+        if not _target_has_delta(
+            target_mesh, new_bs, dst_idx, base_pos
+        ):
             tgt_grp = (
                 "{}.inputTarget[0]"
                 ".inputTargetGroup[{}]"
@@ -727,13 +738,35 @@ def _resolve_alias(name, alias_set, source_short, dst_idx):
     return "{}_{}".format(prefixed, dst_idx)
 
 
-def _target_has_delta(mesh, bs_node, idx, threshold=0.0001):
+def _get_base_positions(mesh):
+    """Get the base vertex positions of a mesh.
+
+    Args:
+        mesh (str): Mesh transform name.
+
+    Returns:
+        list: Flat list of [x, y, z, x, y, z, ...] floats.
+    """
+    num_verts = cmds.polyEvaluate(mesh, vertex=True)
+    return cmds.xform(
+        "{}.vtx[0:{}]".format(mesh, num_verts - 1),
+        query=True,
+        worldSpace=True,
+        translation=True,
+    )
+
+
+def _target_has_delta(
+    mesh, bs_node, idx, base_pos, threshold=0.0001
+):
     """Check if a BS target produces visible deformation.
 
     Args:
         mesh (str): Mesh transform name.
         bs_node (str): BlendShape node name.
         idx (int): Target weight index.
+        base_pos (list): Pre-computed base vertex positions
+            from ``_get_base_positions``.
         threshold (float): Min vertex displacement.
 
     Returns:
@@ -741,16 +774,12 @@ def _target_has_delta(mesh, bs_node, idx, threshold=0.0001):
     """
     weight_attr = "{}.weight[{}]".format(bs_node, idx)
     num_verts = cmds.polyEvaluate(mesh, vertex=True)
-    vtx_range = "{}.vtx[0:{}]".format(mesh, num_verts - 1)
-
-    base_pos = cmds.xform(
-        vtx_range, query=True, worldSpace=True,
-        translation=True,
-    )
 
     cmds.setAttr(weight_attr, 1.0)
     deformed_pos = cmds.xform(
-        vtx_range, query=True, worldSpace=True,
+        "{}.vtx[0:{}]".format(mesh, num_verts - 1),
+        query=True,
+        worldSpace=True,
         translation=True,
     )
     cmds.setAttr(weight_attr, 0.0)
@@ -764,129 +793,6 @@ def _target_has_delta(mesh, bs_node, idx, threshold=0.0001):
             return True
     return False
 
-
-def _clean_zero_delta_targets(mesh, bs_node, threshold=0.0001):
-    """Remove targets with no visible effect on the mesh.
-
-    Activates each target and compares vertex positions to
-    the base pose.  Targets whose maximum vertex delta is
-    below the threshold are removed.
-
-    Args:
-        mesh (str): The mesh transform.
-        bs_node (str): The blendShape node to clean.
-        threshold (float): Minimum vertex displacement to
-            keep a target.
-    """
-    targets_idx = cmds.getAttr(
-        "{}.weight".format(bs_node), multiIndices=True
-    )
-    if not targets_idx:
-        return
-
-    # Get base vertex positions
-    num_verts = cmds.polyEvaluate(mesh, vertex=True)
-    base_pos = cmds.xform(
-        "{}.vtx[0:{}]".format(mesh, num_verts - 1),
-        query=True,
-        worldSpace=True,
-        translation=True,
-    )
-
-    threshold_sq = threshold * threshold
-    to_remove = []
-
-    for idx in targets_idx:
-        weight_attr = "{}.weight[{}]".format(bs_node, idx)
-        cmds.setAttr(weight_attr, 1.0)
-
-        deformed_pos = cmds.xform(
-            "{}.vtx[0:{}]".format(mesh, num_verts - 1),
-            query=True,
-            worldSpace=True,
-            translation=True,
-        )
-        cmds.setAttr(weight_attr, 0.0)
-
-        has_effect = False
-        for i in range(0, len(base_pos), 3):
-            dx = deformed_pos[i] - base_pos[i]
-            dy = deformed_pos[i + 1] - base_pos[i + 1]
-            dz = deformed_pos[i + 2] - base_pos[i + 2]
-            if dx * dx + dy * dy + dz * dz >= threshold_sq:
-                has_effect = True
-                break
-
-        if not has_effect:
-            to_remove.append(idx)
-
-    # Remove in reverse order to preserve indices
-    for idx in reversed(to_remove):
-        weight_attr = "{}.weight[{}]".format(bs_node, idx)
-
-        # Remove alias first
-        alias = cmds.aliasAttr(weight_attr, query=True)
-        if alias:
-            cmds.aliasAttr(weight_attr, remove=True)
-
-        # Disconnect any connections on the weight
-        conns = cmds.listConnections(
-            weight_attr,
-            source=True,
-            destination=False,
-            plugs=True,
-        )
-        if conns:
-            try:
-                cmds.disconnectAttr(conns[0], weight_attr)
-            except RuntimeError:
-                pass
-
-        # Remove target geometry data
-        tgt_grp = (
-            "{}.inputTarget[0].inputTargetGroup[{}]".format(
-                bs_node, idx
-            )
-        )
-        cmds.removeMultiInstance(tgt_grp, b=True)
-
-        # Remove weight entry
-        cmds.removeMultiInstance(weight_attr, b=True)
-
-    if to_remove:
-        # Force the BS node to recalculate its weight list
-        cmds.dgdirty(bs_node)
-        cmds.warning(
-            "Removed {} zero-delta target(s) from {}".format(
-                len(to_remove), bs_node
-            )
-        )
-
-
-def _purge_stale_bs_nodes(mesh, keep_bs):
-    """Remove stale blendShape nodes from mesh history.
-
-    The wrap-based transfer can pull source blendShape nodes
-    into the target's history.  This removes any blendShape
-    node on the mesh that is not the one we created.
-
-    Args:
-        mesh (str): The mesh transform.
-        keep_bs (str): The blendShape node to keep.
-    """
-    all_bs = deformer.get_deformers(mesh, "blendShape")
-    if not all_bs:
-        return
-
-    for bs_node in all_bs:
-        if bs_node != keep_bs:
-            # Check if this BS has any targets on the mesh
-            targets = cmds.getAttr(
-                "{}.weight".format(bs_node),
-                multiIndices=True,
-            )
-            if not targets:
-                cmds.delete(bs_node)
 
 
 def _get_mult_node_type():
@@ -1052,8 +958,6 @@ def _parse_weight_index(plug):
     Returns:
         int: The weight index, or None if not parseable.
     """
-    import re
-
     # Try indexed form first: "node.weight[5]"
     match = re.search(r"weight\[(\d+)\]", plug)
     if match:
@@ -1104,10 +1008,12 @@ def _build_combo_network(
     base_name = combo_alias or "combo_{}".format(dst_combo_idx)
 
     if len(input_dst_indices) == 1:
-        # Single input combo — just pass through
+        # Single input combo — pass through (input2=1.0
+        # so output = input1 * 1.0 = input1)
         mult = cmds.createNode(
             mult_type, name="{}_mult".format(base_name)
         )
+        cmds.setAttr("{}.input2".format(mult), 1.0)
         cmds.connectAttr(
             "{}.weight[{}]".format(
                 new_bs, input_dst_indices[0]
