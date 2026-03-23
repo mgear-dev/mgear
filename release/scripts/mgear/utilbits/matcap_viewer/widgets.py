@@ -5,6 +5,9 @@ SourceFoldersDialog for managing matcap image directories.
 """
 
 import os
+from math import cos
+from math import pi
+from math import sin
 
 from mgear.core import pyqt
 from mgear.core.pyqt import dpi_scale
@@ -58,7 +61,8 @@ class MatcapGridWidget(QtWidgets.QWidget):
         super(MatcapGridWidget, self).__init__(parent)
 
         self._entries = []
-        self._pixmap_cache = {}
+        self._entry_by_path = {}
+        self._base_pixmap_cache = {}
         self._resolution_cache = {}
         self._favorites = set()
         self._show_favorites_only = False
@@ -163,7 +167,8 @@ class MatcapGridWidget(QtWidgets.QWidget):
         """
         self.list_widget.clear()
         self._entries = entries
-        self._pixmap_cache.clear()
+        self._entry_by_path = {e["path"]: e for e in entries}
+        self._base_pixmap_cache.clear()
         self._resolution_cache.clear()
 
         for entry in entries:
@@ -181,19 +186,17 @@ class MatcapGridWidget(QtWidgets.QWidget):
 
     def _refresh_all_icons(self):
         """Rebuild all item icons (after size or state change)."""
-        self._pixmap_cache.clear()
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             path = item.data(QtCore.Qt.UserRole)
             item.setIcon(self._build_icon(path))
 
     def _refresh_icon(self, path):
-        """Rebuild the icon for a specific matcap path.
+        """Rebuild the composed icon for a specific matcap path.
 
         Args:
             path (str): Image file path.
         """
-        self._pixmap_cache.pop(path, None)
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             if item.data(QtCore.Qt.UserRole) == path:
@@ -213,15 +216,15 @@ class MatcapGridWidget(QtWidgets.QWidget):
         Returns:
             QPixmap: The loaded pixmap.
         """
-        if path not in self._pixmap_cache:
+        if path not in self._base_pixmap_cache:
             pm = QtGui.QPixmap(path)
             if not pm.isNull():
                 self._resolution_cache[path] = (
                     pm.width(),
                     pm.height(),
                 )
-            self._pixmap_cache[path] = pm
-        return self._pixmap_cache[path]
+            self._base_pixmap_cache[path] = pm
+        return self._base_pixmap_cache[path]
 
     def _build_icon(self, path):
         """Build a composed QIcon with overlays for a matcap.
@@ -287,11 +290,6 @@ class MatcapGridWidget(QtWidgets.QWidget):
         painter.save()
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(_STAR_COLOR)
-
-        # Simple 5-pointed star polygon
-        from math import cos
-        from math import pi
-        from math import sin
 
         points = []
         for i in range(10):
@@ -434,10 +432,7 @@ class MatcapGridWidget(QtWidgets.QWidget):
         Returns:
             dict: Entry dict or None.
         """
-        for entry in self._entries:
-            if entry["path"] == path:
-                return entry
-        return None
+        return self._entry_by_path.get(path)
 
     # ---------------------------------------------------------
     # Events

@@ -286,7 +286,15 @@ def store_original_assignments(meshes):
                 shape_members = []
                 short_shape = shape.rsplit("|", 1)[-1]
                 for member in members:
-                    if short_shape in member or shape in member:
+                    # Match full path, short name, or short name
+                    # with component suffix (e.g. "pCubeShape1.f[0]")
+                    if member == shape or member.startswith(
+                        shape + "."
+                    ):
+                        shape_members.append(member)
+                    elif member == short_shape or member.startswith(
+                        short_shape + "."
+                    ):
                         shape_members.append(member)
                 if shape_members:
                     assignments.append((sg, shape_members))

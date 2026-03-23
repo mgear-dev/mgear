@@ -268,6 +268,9 @@ class MatcapViewerUI(
         self.matcap_grid.icon_size_changed.connect(
             self._on_grid_size_changed
         )
+        self.matcap_grid.favorites_filter_changed.connect(
+            self._on_favorites_filter_changed
+        )
 
         # Size slider
         self.size_slider.valueChanged.connect(
@@ -308,9 +311,7 @@ class MatcapViewerUI(
         """
         if not core.is_matcap_active():
             return
-        core.set_texture(image_path)
-        self.matcap_grid.set_current(image_path)
-        self.settings.setValue(_SK_LAST_TEXTURE, image_path)
+        self._apply_texture(image_path)
 
     def _on_matcap_double_clicked(self, image_path):
         """Handle double click - apply matcap or change texture.
@@ -319,18 +320,23 @@ class MatcapViewerUI(
             image_path (str): Path to the double-clicked matcap image.
         """
         if core.is_matcap_active():
-            core.set_texture(image_path)
-            self.matcap_grid.set_current(image_path)
-            self.settings.setValue(_SK_LAST_TEXTURE, image_path)
+            self._apply_texture(image_path)
             return
 
-        # First-time apply: create graph first, then set texture
         meshes = self._get_target_meshes()
         result = core.apply_matcap(meshes=meshes)
         if result:
-            core.set_texture(image_path)
-            self.matcap_grid.set_current(image_path)
-            self.settings.setValue(_SK_LAST_TEXTURE, image_path)
+            self._apply_texture(image_path)
+
+    def _apply_texture(self, image_path):
+        """Set texture, update grid highlight, and persist last used.
+
+        Args:
+            image_path (str): Path to the matcap image.
+        """
+        core.set_texture(image_path)
+        self.matcap_grid.set_current(image_path)
+        self.settings.setValue(_SK_LAST_TEXTURE, image_path)
 
     def _get_target_meshes(self):
         """Get meshes based on apply mode setting.
@@ -429,6 +435,16 @@ class MatcapViewerUI(
         self.size_slider.setValue(size)
         self.size_slider.blockSignals(False)
 
+    def _on_favorites_filter_changed(self, show):
+        """Sync Settings menu action when context menu toggles filter.
+
+        Args:
+            show (bool): New filter state.
+        """
+        self.show_favorites_action.blockSignals(True)
+        self.show_favorites_action.setChecked(show)
+        self.show_favorites_action.blockSignals(False)
+
     # =============================================================
     # WINDOW LIFECYCLE
     # =============================================================
@@ -447,15 +463,14 @@ class MatcapViewerUI(
         self.settings.setValue(
             _SK_ICON_SIZE, self.matcap_grid.get_icon_size()
         )
+        core.cleanup()
 
     def closeEvent(self, event):
         """Handle close event."""
         self._save_state()
-        core.cleanup()
         super(MatcapViewerUI, self).closeEvent(event)
 
     def dockCloseEventTriggered(self):
         """Called when docked window is closed."""
         self._save_state()
-        core.cleanup()
         super(MatcapViewerUI, self).dockCloseEventTriggered()

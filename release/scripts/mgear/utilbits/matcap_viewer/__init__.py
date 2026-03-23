@@ -46,14 +46,13 @@ def toggle(*args):
         bool: New matcap active state.
     """
     from . import core
+    from .ui import _SK_LAST_TEXTURE
 
     if not core.shader_graph_exists():
         from mgear.core import pyqt
 
         settings = pyqt.SettingsMixin.create_qsettings_object(None)
-        last_texture = settings.value(
-            "matcapViewer/last_texture", ""
-        )
+        last_texture = settings.value(_SK_LAST_TEXTURE, "")
         if last_texture:
             core.create_shader_graph()
             core.set_texture(last_texture)
