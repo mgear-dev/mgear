@@ -770,3 +770,137 @@ The underlying functions are also available in ``mgear.core`` modules:
 * ``mgear.core.deformer.getWireWeightMap()`` - Get per-vertex wire weights
 * ``mgear.core.deformer.getMeshWireDeformers()`` - Find wire deformers on mesh
 * ``mgear.core.skin.getCompleteWeights()`` - Get skin weights by vertex
+
+.. _evaluation-partition:
+
+Evaluation Partition
+====================
+
+The Evaluation Partition tool splits a mesh into polygon group partitions to optimize Maya's parallel evaluation. By dividing a dense mesh into independent sub-meshes, each partition can be evaluated in parallel, improving playback performance for complex character rigs.
+
+Access from the menu: **mGear > Rigbits > Evaluation Partition**
+
+.. image:: images/rigbits/evaluation_partition_ui.png
+    :align: center
+
+Overview
+--------
+
+The tool works by defining polygon groups on a source mesh and then executing an 8-step pipeline that creates independent partition meshes with all deformers transferred.
+
+.. image:: images/rigbits/evaluation_partition_sample.png
+    :align: center
+
+Polygon Groups
+--------------
+
+Define which faces belong to each partition using the Polygon Groups section.
+
+- **Default Group**: Contains all faces not assigned to other groups
+- **Add Group from Selection**: Select faces in the viewport and click to create a new group
+- **Add/Remove faces**: Use the ``+`` and ``-`` buttons on each group to add or remove selected faces
+- **Select**: Click to select the group's faces in the viewport
+- **Color coding**: Each group displays with a unique color shader for visual reference
+
+Pipeline Steps
+--------------
+
+When you click **Execute Partition**, the tool runs an 8-step pipeline:
+
+1. **Split Polygon Groups**: Creates independent meshes from each polygon group
+2. **Transfer Blendshapes**: Captures blendshape targets via wrap-based baking, including in-between targets
+3. **Clean Unused BS Targets**: Removes targets with zero delta on each partition
+4. **Reconnect BS Inputs**: Replicates weight driver connections. For combo targets (multiply networks from SHAPES or similar), builds independent multiply chains per partition
+5. **Copy Skin Clusters**: Transfers skin weights from source to each partition
+6. **Remove Unused Influences**: Cleans influences with zero weight on each partition
+7. **Copy Skin Configuration**: Copies skinCluster settings (skinningMethod, normalizeWeights, dqsScale connections, prebind matrices). Reproduces localized skinCluster connections (``mgear_mulMatrix``) if the source uses ``localize_skin_clusters``
+8. **Proximity Wrap Proxy**: Creates a proxy mesh with proximity wrap for any remaining deformation
+
+Visibility Controls
+-------------------
+
+Per-partition visibility attributes are created on the partitions root group node, allowing individual partitions and the proxy geometry to be toggled on and off.
+
+Configuration
+-------------
+
+Save and load partition configurations using the **File** menu.
+
+- **Export Configuration**: Save polygon groups and settings to a ``.evp`` file
+- **Import Configuration**: Load a previously saved ``.evp`` file
+
+Scripting Access
+----------------
+
+.. code-block:: python
+
+    from mgear.rigbits import evaluation_partition
+    evaluation_partition.show()
+
+.. _blendshape-transfer:
+
+Blendshape Setup Transfer
+=========================
+
+The Blendshape Setup Transfer tool transfers blendshape targets from one or more source meshes into a single blendShape node on a target mesh. It supports combo multiply networks, in-between targets, and preserves all alias names.
+
+Access from the menu: **mGear > Rigbits > Blendshape Setup Transfer**
+
+.. image:: images/rigbits/Blendshape_setup_transfer.png
+    :align: center
+
+Features
+--------
+
+**Multi-Source Transfer**
+
+Transfer blendshape targets from multiple source meshes simultaneously. All targets are stacked into a single blendShape node on the target mesh with unique alias names. Name collisions are resolved by prefixing the source mesh name.
+
+**Combo Network Rebuild**
+
+For targets driven by SHAPES combo connections (multiply networks using ``multDL`` or ``multDoubleLinear`` nodes), the tool rebuilds an independent multiply chain on the target blendShape. The source combo network is never modified.
+
+**Zero-Delta Cleanup**
+
+Targets that produce no visible deformation on the target mesh are automatically detected and skipped during transfer, keeping the result clean.
+
+**Connection Reconnection**
+
+Simple weight drivers (animCurves, weightDrivers, etc.) are connected from the source to the corresponding target weight. Combo networks are rebuilt from scratch using the target's own weights as inputs.
+
+Usage
+-----
+
+1. Set the **Target Mesh** using the ``<<`` button to load from selection
+2. Add one or more **Source Meshes** using **Add from Selection**
+3. Optionally set a custom **BS Node Name**
+4. Enable or disable **Reconnect connections**
+5. Click **Execute Transfer**
+
+Configuration
+-------------
+
+Save and load transfer configurations using the **File** menu.
+
+- **Export Config**: Save target, sources, and options to a ``.bst`` file
+- **Import Config**: Load a previously saved ``.bst`` file and populate the UI
+
+Scripting Access
+----------------
+
+.. code-block:: python
+
+    from mgear.core import blendshape
+
+    # Transfer from multiple sources to a target
+    result = blendshape.transfer_blendshapes(
+        sources=["source_head", "source_jaw"],
+        target="target_body",
+        bs_node_name="body_BS",
+        reconnect=True,
+    )
+
+    # Run from a saved config file
+    from mgear.rigbits.blendshape_transfer import core
+    config = core.import_config("/path/to/config.bst")
+    core.run_from_config(config)

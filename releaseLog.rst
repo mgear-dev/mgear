@@ -2,6 +2,55 @@ Release Log
 ===========
 
 
+5.3.0
+------
+**New Features**
+	* Shifter: Build Log Window: New Qt-based build log with color-coded output, severity filtering, search, font size control, log export and comparison, live progress during build, and right-click to open source files
+	* Shifter: Guide Template Manager: New browsable template manager with custom source folders, thumbnails, metadata, search, import/import-add/import-partial with component selection, drag-and-drop to viewport, and .sgtInfo sidecars
+	* Rigbits: Blendshape Setup Transfer: New tool for transferring blendshapes from multiple sources into a single target node with combo network rebuild, zero-delta cleanup, and .bst config support
+	* Rigbits: Evaluation Partition: New tool to split a mesh into polygon group partitions to optimize parallel evaluation #616
+	* Utilbits: Bookmarks: New selection and isolate bookmarks tool
+	* Utilbits: Matcap Viewer: New viewport matcap material preview tool
+	* Core: Skin: Add localize_skin_clusters for floating-point precision fix when rigs are far from world origin
+
+**Enhancements**
+	* Shifter: Fix progress bar not updating during drag-and-drop guide import
+	* Rigbits: Wire to Skinning: Add custom wire processing order with drag reorder, preserved across config export/import #611
+	* Core: Blendshape: Add transfer_blendshapes and combo utilities to core for reuse across tools
+
+**Bug Fix**
+	* Shifter: Lite_chain_01: When Neutral Pose is not active, the build is not correct. This issue was introduced with the mirror option added in the last update Fixes #619
+	* Shifter: Blueprints: Fix build from serialized guide and squash and stretch sampling fix #621
+	* Shifter: Force refresh on the referenceGroups when UI is open
+
+5.2.5
+------
+**Enhancements**
+	* Shifter: Auto Fit Guide: Added C++ acceleration, progress bar, skip orientation option, reference mesh support, and UI improvements #620
+
+5.2.4
+------
+**Enhancements**
+	* Core: Fix deformer is_deformer to support PyNode
+	* Core: Skin: importSkin now returns a list of objects that used volume based import skin #615
+
+5.2.3
+------
+**New Features**
+	* Rigbits: Wire to Skinning: New tool for converting wire deformers to skin clusters with UI, configuration export/import, drag-and-drop support #611
+	* Core: Skin: Add function to copy partial skin to selected vertex #614
+	* Core: Skin: Add support for volume skin weights import #615
+
+**Bug Fix**
+	* Chain_01: Fix IK FK match #610
+	* Shifter: Fix undo
+
+5.2.2
+------
+**Enhancements**
+	* Core: Added create_proximity_wrap function in core.deformer module
+	* Shifter: Custom Step Error: Update UI and improved feedback #601
+
 5.2.1
 ------
 **Enhancements**

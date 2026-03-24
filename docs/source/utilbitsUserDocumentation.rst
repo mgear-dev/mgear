@@ -152,3 +152,129 @@ RandomColor creates standardSurface shaders with configurable properties.
 **Undo Support**
 
 All operations support Maya's undo system, allowing you to easily revert changes.
+
+.. _bookmarks:
+
+Bookmarks
+=========
+
+Bookmarks is a tool for saving and restoring object selections in Maya. It allows you to create named bookmarks that store a set of selected objects, and quickly recall them later. It also provides an isolate view mode for focusing on specific objects.
+
+.. image:: images/utilbits/bookmarks.png
+    :align: center
+
+Features
+--------
+
+**Selection Bookmarks**
+
+- **Save Selection**: Store the current Maya selection as a named bookmark
+- **Restore Selection**: Click a bookmark to select those objects in the scene
+- **Rename and Delete**: Right-click on bookmarks for management options
+
+**Isolate View**
+
+- **Isolate Bookmark**: Show only the bookmarked objects in the viewport, hiding everything else
+- **Toggle**: Click again to restore full scene visibility
+
+.. _matcap-viewer:
+
+Matcap Viewer
+=============
+
+The Matcap Viewer provides a quick way to preview matcap (material capture) shaders on your meshes directly in the Maya viewport. It lets you browse and apply matcap materials for evaluating surface form, topology flow, and sculpt quality without setting up complex lighting.
+
+.. image:: images/utilbits/matcap_viewer_ui.png
+    :align: center
+
+.. image:: images/utilbits/matcap_viewer_sample.png
+    :align: center
+
+Matcap Browser
+--------------
+
+Browse matcap images as a thumbnail grid with configurable icon size.
+
+- **Single click**: Change the active matcap texture
+- **Double click**: Apply matcap shader to scene meshes and set texture
+- **Arrow keys**: Navigate the grid
+- **Ctrl+Mouse Wheel**: Resize thumbnails
+- **Search**: Filter matcaps by name in real time
+
+**Thumbnails** show a tooltip with the matcap name, image resolution, and full file path. The active matcap is highlighted with a green border. Favorited matcaps display a gold star overlay.
+
+Matcap Source Folders
+---------------------
+
+Matcaps are loaded from user-configured folders. The tool scans for image files (``.jpg``, ``.png``, ``.tif``, ``.exr``, ``.bmp``).
+
+Configure source folders from: **Edit Source Folders** (Settings menu)
+
+.. Tip::
+
+    A large community matcap library is available at https://github.com/nidorx/matcaps (accessible from Help > Matcap Library).
+
+Apply Modes
+-----------
+
+- **Apply to All Meshes** (default): Applies the matcap shader to every mesh in the scene
+- **Apply to Selected Meshes**: Applies only to the currently selected mesh transforms
+
+Select the mode from the **Settings** menu.
+
+When applied, the tool automatically enables viewport textures on all model panels (restoring the previous state when the matcap is removed).
+
+Menu Bar
+--------
+
+**Edit**
+
+- **Refresh**: Rescan source folders and repopulate the thumbnail grid
+- **Clear Matcap**: Remove the matcap shader and restore original materials
+
+**Settings**
+
+- **Edit Source Folders...**: Add, remove, and reorder matcap image directories
+- **Show Labels**: Toggle matcap names under thumbnails
+- **Show Only Favorites**: Filter grid to show only starred matcaps
+- **Apply to All Meshes / Apply to Selected Meshes**: Select apply mode
+
+**Help**
+
+- **Matcap Library (GitHub)**: Open the community matcap library in a web browser
+
+Right-Click Context Menu
+------------------------
+
+Right-click anywhere in the grid for quick access to common actions:
+
+- **Toggle Material**: Turn the matcap on or off
+- **Add to Favorites / Remove from Favorites**: Star or unstar the clicked matcap
+- **Show Only Favorites**: Toggle favorites-only filter
+- **Toggle Menu Bar**: Show or hide the menu bar
+- **Toggle Search Bar**: Show or hide the search input
+
+Favorites
+---------
+
+Star matcaps to mark them as favorites. Use **Show Only Favorites** (Settings menu or right-click) to filter the grid to only your starred matcaps. Favorites persist across sessions.
+
+Hotkey Toggle
+-------------
+
+Use the ``toggle()`` function for a keyboard shortcut to turn the matcap on and off without opening the UI. It remembers the last-used texture.
+
+.. code-block:: python
+
+    from mgear.utilbits import matcap_viewer
+    matcap_viewer.toggle()
+
+Restore Original Materials
+--------------------------
+
+When the matcap is removed (via **Clear Matcap**, closing the UI, or ``toggle()``), the tool restores the original per-shape and per-face shading group assignments. All matcap shader nodes are deleted during cleanup.
+
+Settings Persistence
+--------------------
+
+All settings persist across sessions via QSettings: source folders, favorites, icon size, last-used texture, menu/search visibility, label display, and favorites filter state.

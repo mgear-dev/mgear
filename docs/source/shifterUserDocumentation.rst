@@ -1734,46 +1734,75 @@ Features
 - **Progress Tracking**: Monitor build progress for complex operations
 - **Error Handling**: Detailed error reporting for failed builds
 
-.. _guide-template-samples:
+.. _guide-template-manager:
 
-Guide Template Samples
+Guide Template Manager
 ==============================================
 
-mGear includes several pre-built guide templates to help you get started quickly with common character types.
+The Guide Template Manager provides a browsable interface for managing, importing, and organizing Shifter guide templates (``.sgt`` files). It replaces the previous hardcoded template samples menu with a flexible, extensible system.
 
-Access from the menu: **Shifter > Guide Template Samples**
+Access from the menu: **Shifter > Guide Template Manager**
 
-Biped Templates
-----------------
+.. image:: images/shifter/guide_template_manager.png
+    :align: center
 
-**Biped Template, Y-up**
+Features
+--------
 
-A standard humanoid biped template oriented for Y-up world axis. Includes:
+**Template Browser**
 
-- Full body with spine, neck, and head
-- Arms with FK/IK and roll bones
-- Legs with FK/IK, reverse foot, and roll bones
-- Fingers and toes
+- Folder tree view with expandable folders showing ``.sgt`` files
+- Default templates included (biped, quadruped, game biped, Unreal Engine templates, creature templates)
+- Custom source folders for studio or project-specific templates
 
-**Game Biped Template, Y-up**
+**Info Panel**
 
-An optimized biped template designed specifically for game engine export with:
+- Thumbnail preview (viewport capture or custom image)
+- Template name, description, author, date, and component count
+- Tags for categorization and search filtering
+- Edit metadata and capture screenshots directly from the UI
 
-- Simplified joint hierarchy
-- Game-friendly naming conventions
-- Optimized for real-time performance
+**Import Options**
 
-Quadruped Template
--------------------
+- **Double-click or drag-and-drop**: Import guide into the scene
+- **Import**: Full guide import (right-click context menu)
+- **Import Add to Selection**: Add template as child of the selected guide element
+- **Import Partial to Selection**: Select specific components from a tree view with checkboxes, imports only the selected components and their children preserving the serialized hierarchy
+- **Import and Match Position**: Import partial and match the position to the selected guide element
 
-**Quadruped Template, Y-up**
+**Search**
 
-A four-legged creature template suitable for animals like dogs, cats, horses, etc. Features:
+- Real-time search by template name and tags
+- Filters the tree to show only matching templates
 
-- Four-leg setup with FK/IK
-- Flexible spine chain
-- Tail controls
-- Head and neck with look-at functionality
+**Settings**
+
+- **Edit Source Folders**: Add, remove, and reorder custom template folders
+- **Show Default Guides**: Toggle visibility of built-in templates
+- All settings persist via QSettings across sessions
+
+**Metadata Sidecars**
+
+Templates use ``.sgtInfo`` JSON sidecar files stored alongside each ``.sgt`` file. These contain name, description, author, date, tags, component count, and thumbnail reference. Missing sidecars are auto-generated when the template manager opens.
+
+.. _guide-template-samples:
+
+Default Templates
+-----------------
+
+mGear includes several pre-built guide templates accessible through the Guide Template Manager under the "Default Templates" folder.
+
+**Biped Template, Y-up** — Standard humanoid biped with full body, FK/IK arms and legs, roll bones, fingers, and toes.
+
+**Game Biped Template, Y-up** — Optimized biped for game engine export with simplified hierarchy and game-friendly naming.
+
+**Quadruped Template, Y-up** — Four-legged creature template with FK/IK legs, flexible spine, tail, and head look-at.
+
+**UE5 MetaHuman/Manny Template, Y-up / Z-up** — Templates matching the UE5 MetaHuman and Manny skeleton structure.
+
+**UE4 Mannequin Template, Y-up / Z-up** — Templates matching the UE4 Mannequin skeleton.
+
+**Creature Templates** — Spider, Giraffe, Mantis, and T-Rex templates for non-humanoid rigs.
 
 Unreal Engine Templates
 ------------------------
@@ -1839,17 +1868,92 @@ Bipedal dinosaur template with:
 Auto Fit Guide
 ==============================================
 
-Auto Fit Guide provides tools for automatically adjusting guide positions to match existing geometry or joint hierarchies.
+Auto Fit Guide provides tools for automatically fitting Shifter guide positions to a target character mesh. The tool has two modes accessible via tabs: **Relative Guide Placement** for recording and transferring guide positions between meshes, and **Auto Fit Biped** for automatic biped guide placement using Maya's skeletal embedding.
 
 Access from the menu: **Shifter > Auto Fit Guide**
 
-Features
----------
+.. image:: images/shifter/auto_fit_guide.png
+    :align: center
 
-- **Geometry Fitting**: Adjust guides to match mesh boundaries
-- **Joint Matching**: Snap guides to existing skeleton structures
-- **Proportional Adjustment**: Scale guide configurations to match character proportions
-- **Batch Processing**: Fit multiple guides simultaneously
+Relative Guide Placement (RGP)
+-------------------------------
+
+Records guide positions relative to a reference mesh surface, then repositions them onto a different mesh. This is the primary workflow for transferring a guide setup from one character to another.
+
+**Source Mesh**
+
+Select the reference mesh that the guides are currently fitted to.
+
+**Sample Vertices**
+
+Controls how many nearby vertices are used to compute each guide's reference position (1-128, default 32). Higher values produce more stable placement but take longer to record. Use 1 for legacy single-vertex behavior.
+
+**Skip Nodes**
+
+Two configurable lists control which guides are excluded from the placement process:
+
+- **Skip Crawl**: Guides to skip entirely during hierarchy traversal and placement (e.g., ``controllers_org``, UI components). Includes sensible defaults.
+- **Skip Orientation**: Guides that update position only, preserving their current rotation. Useful for guides where orientation is manually set and should not change.
+
+Use the Add/Remove buttons to manage each list. Nodes are mutually exclusive between lists. Click **Reset Defaults** to restore the factory configuration.
+
+**Workflow**
+
+1. Select or load a guide in the scene
+2. Set the **Source Mesh** to the mesh the guides currently match
+3. Click **Record Relative Guide Placement** — records each guide's position relative to the mesh surface (progress bar shows status)
+4. Replace or modify the mesh (e.g., swap to a new character body)
+5. Click **Update Guide Placement** — repositions all guides to match the new mesh surface
+
+**Options**
+
+- **Reset Default Scale**: When checked, resets guide scale to (1,1,1) during update
+- **Reference Mesh Override**: The update can target a different mesh than the one used during recording
+
+**File Operations (File menu)**
+
+- **Export Relative Placement (.rgp)**: Save recorded placement data as JSON
+- **Import Relative Placement (.rgp)**: Load previously recorded placement
+- **Export/Import Skip Config (.srgp)**: Save and load skip node configuration separately
+
+**C++ Acceleration**
+
+When the compiled acceleration module is available, recording and updating use optimized C++ code with BFS flood-fill and multi-vertex reference matrices. This is significantly faster for complex rigs with 100+ guides. The tool automatically falls back to pure Python if the C++ module is not installed.
+
+Auto Fit Biped (AFB)
+---------------------
+
+Automatically creates and positions biped rig guides using Maya's skeletal embedding system. This analyzes a character mesh and generates an internal skeleton that guides are matched to.
+
+**Embed Node Settings**
+
+- **Source Geometry**: The character mesh to analyze
+- **Embed Resolution**: Voxel grid resolution (64, 128, 512, 1024). Higher values are more accurate but slower
+- **Embed Type**: Segmentation method — Perfect Mesh, Watertight Mesh, Imperfect Mesh, or Polygon Repair (default). Choose based on your mesh quality
+- **Mirror Embed Nodes**: Mirror the generated skeleton left-to-right or right-to-left
+- **Smart Adjust**: When enabled, automatically adjusts the embed output — makes arm planes consistent, centers hips between legs, aligns spine, and adjusts hand positions
+
+**Action Buttons**
+
+- **Create Embed Nodes**: Generate skeleton joints from the mesh analysis
+- **Match Guides**: Position existing guides to match the embed skeleton
+- **Create and Match (Run All)**: Full pipeline — create, smart adjust, mirror, and match in one step
+- **Delete Embed Nodes**: Remove the temporary embed skeleton
+
+**Association Info**
+
+Maps embed skeleton points to Shifter guide nodes. The tool includes 18 default biped points (hips, back, shoulders, head, and left/right limbs).
+
+- **Interactive Association**: Toggle on, then select an embed node followed by guide nodes to create custom mappings
+- **Enable Match Position**: When checked, guides snap to position as you create associations interactively
+- **Mirror Left to Right**: Mirror left-side associations to the right side
+- **Apply Default Associations**: Load the standard biped template mapping
+- **Clear/Print Associations**: Manage and inspect the current mapping
+
+**File Operations (File menu)**
+
+- **Export AFG Association (.afg)**: Save custom associations as JSON
+- **Import AFG Association (.afg)**: Load previously saved associations
 
 .. _mocap-tools:
 
@@ -2110,41 +2214,56 @@ The tool creates organized folders for:
 Build Log
 ==============================================
 
-The Build Log submenu provides tools for monitoring and debugging the rig build process.
+The Build Log provides tools for monitoring and debugging the rig build process.
 
 Access from: **Shifter > Build Log**
+
+.. image:: images/shifter/build_log_window.png
+    :align: center
+
+Shifter Build Log Window
+-------------------------
+
+A Qt-based build log window that opens automatically during rig builds, providing real-time feedback with color-coded output.
+
+**Color-Coded Severity Levels**
+
+- **Fatal** (red background): Critical errors that stop the build
+- **Error** (red text): Errors that may affect build results
+- **Warning** (yellow text): Potential issues to review
+- **Info** (white text): Standard build progress messages
+- **Verbose** (gray text): Detailed build information
+- **Comment** (blue text): Custom step messages and notes
+
+**Post-Build Filtering**
+
+After the build completes, filter the log by severity level using the filter chips at the top. Click a severity chip to toggle its visibility. A search field allows text-based filtering across all log entries.
+
+**Font Size Control**
+
+- Adjustable font size via the spin box in the toolbar
+- **Ctrl+Mouse Wheel** zoom for quick resizing
+- Filter chips and log text scale together
+
+**Log Export and Comparison**
+
+- **Export**: Save the current log to a ``.log`` file
+- **Compare**: Load a previously saved log and view a side-by-side diff to identify differences between builds
+
+**Right-Click to Open Source Files**
+
+Error messages that include Python file paths (e.g., traceback lines) can be right-clicked to open the file in your system's default ``.py`` editor.
+
+**Live Progress**
+
+The log window updates in real-time during the build via ``QApplication.processEvents()``, showing each component as it is processed. Custom step messages and errors are also captured.
 
 Toggle Log
 -----------
 
 Enables or disables mGear's logging system.
 
-When enabled:
-
-- Build progress is logged to the Script Editor
-- Warnings and errors are captured
-- Performance metrics may be recorded
-
 Toggle Debug Mode
 ------------------
 
-Enables or disables debug mode for detailed build information.
-
-Debug mode provides:
-
-- Verbose output during build
-- Detailed error messages
-- Component-level build information
-- Performance profiling data
-
-Shifter Log Window
--------------------
-
-Opens a dedicated log window for monitoring Shifter operations.
-
-Features:
-
-- Real-time build progress
-- Filterable log messages
-- Error highlighting
-- Export log to file
+Enables or disables debug mode for verbose build output and detailed error messages.
