@@ -32,28 +32,34 @@ def addAttribute(
     channelBox=False,
     softMinValue=None,
     softMaxValue=None,
+    usedAsColor=None,
+    childSuffixes=None,
 ):
-    """Add attribute to a node
+    """Add attribute to a node.
 
     Arguments:
-        node (dagNode): The object to add the new attribute.
+        node (pm.node._Node | str): The object to add the new attribute.
         longName (str): The attribute name.
-        attributeType (str): The Attribute Type. Exp: 'string', 'bool',
-            'long', etc..
-        value (float or int): The default value.
+        attributeType (str): The Attribute Type. Exp: 'string', 'bool', 'long', etc...
+        value (float | int | bool | list[float] | tuple[float]): The default value.
         niceName (str): The attribute nice name. (optional)
         shortName (str): The attribute short name. (optional)
-        minValue (float or int): minimum value. (optional)
-        maxValue (float or int): maximum value. (optional)
+        minValue (float | int): minimum value. (optional)
+        maxValue (float | int): maximum value. (optional)
         keyable (bool): Set if the attribute is keyable or not. (optional)
         readable (bool): Set if the attribute is readable or not. (optional)
         storable (bool): Set if the attribute is storable or not. (optional)
         writable (bool): Set if the attribute is writable or not. (optional)
         channelBox (bool): Set if the attribute is in the channelBox or not,
             when the attribute is not keyable. (optional)
+        softMinValue (float): Lower limit of Maya Attribute Editor sliders. (optional)
+        softMaxValue (float): Upper limit of Maya Attribute Editor sliders. (optional)
+        usedAsColor (bool): Whether the added attribute is a color. (optional)
+        childSuffixes (list[str]): List of child attribute suffixes if creating a
+            compound attribute. Default is XYZ, or RGB if ``usedAsColor=True``.
 
     Returns:
-        pm.Attribute: A pymaya `Attribute` wrapper of the new attribute.
+        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
     """
     if isinstance(node, str):
         try:
@@ -85,15 +91,44 @@ def addAttribute(
     if softMaxValue is not None and softMaxValue is not False:
         data["softMaxValue"] = softMaxValue
 
+    if usedAsColor is not None:
+        data["usedAsColor"] = usedAsColor
+
     data["keyable"] = keyable
     data["readable"] = readable
     data["storable"] = storable
     data["writable"] = writable
 
-    if value is not None and attributeType not in ["string"]:
+    compoundTypes = [
+        "float2", "float3", "double2", "double3", "long2", "long3", "short2", "short3"
+    ]
+
+    if (value is not None) and (attributeType not in compoundTypes + ["string"]):
         data["defaultValue"] = value
 
+    # Pre-handle data for compound types.
+    isCompound = attributeType in compoundTypes
+    childType = None
+    childValues = value
+    if isCompound:
+        compoundSize = int(attributeType[-1])
+        childType = attributeType[:-1]
+        if value is None:
+            childValues = [None] * compoundSize
+        if childSuffixes is None:
+            childSuffixes = "RGB" if usedAsColor else "XYZ"
+            childSuffixes = list(childSuffixes[:compoundSize])
+
     node.addAttr(longName, **data)
+
+    # Add compound children.
+    if isCompound:
+        for childSuffix, childValue in zip(childSuffixes, childValues):
+            childAttr = f"{longName}{childSuffix}"
+            childData = {"attributeType": childType, "parent": longName}
+            if childValue is not None:
+                childData["defaultValue"] = childValue
+            node.addAttr(childAttr, **childData)
 
     if value is not None:
         node.setAttr(longName, value)
