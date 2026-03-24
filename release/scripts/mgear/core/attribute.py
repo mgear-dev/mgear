@@ -102,7 +102,14 @@ def addAttribute(
     data["writable"] = writable
 
     compoundTypes = [
-        "float2", "float3", "double2", "double3", "long2", "long3", "short2", "short3"
+        "float2",
+        "float3",
+        "double2",
+        "double3",
+        "long2",
+        "long3",
+        "short2",
+        "short3",
     ]
 
     if (value is not None) and (attributeType not in compoundTypes + ["string"]):
@@ -290,9 +297,7 @@ def addEnumAttribute(
     """
 
     if node.hasAttr(longName):
-        mgear.log(
-            "Attribute '" + longName + "' already exists", mgear.sev_warning
-        )
+        mgear.log("Attribute '" + longName + "' already exists", mgear.sev_warning)
         return
 
     data = {}
@@ -349,7 +354,9 @@ def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
             if target.hasAttr(base_name):
                 if duplicatedPolicy == "index":
                     # Cache existing attrs for faster lookup
-                    target_name = target.name() if hasattr(target, 'name') else str(target)
+                    target_name = (
+                        target.name() if hasattr(target, "name") else str(target)
+                    )
                     existing_attrs = set(cmds.listAttr(target_name) or [])
                     i = 0
                     while f"{base_name}{i}" in existing_attrs:
@@ -416,16 +423,18 @@ def moveChannel(
 
         newAtt = None
         attrName = attr
-        nName = pm.attributeQuery(
-            at.shortName(), node=at.node(), niceName=True
-        )
+        nName = pm.attributeQuery(at.shortName(), node=at.node(), niceName=True)
         # define duplicated attribute policy
         if sourceNode.name() != targetNode.name():
             # this policy doesn't apply for rearrange channels
             if pm.attributeQuery(attr, node=targetNode, exists=True):
                 if duplicatedPolicy == "index":
                     # Cache existing attrs for faster lookup
-                    target_name = targetNode.name() if hasattr(targetNode, 'name') else str(targetNode)
+                    target_name = (
+                        targetNode.name()
+                        if hasattr(targetNode, "name")
+                        else str(targetNode)
+                    )
                     existing_attrs = set(cmds.listAttr(target_name) or [])
                     i = 0
                     while f"{attr}{i}" in existing_attrs:
@@ -464,9 +473,7 @@ def moveChannel(
                     kwargs["max"] = max
             elif atType == "enum":
                 en = at.getEnums()
-                oEn = collections.OrderedDict(
-                    sorted(en.items(), key=lambda t: t[1])
-                )
+                oEn = collections.OrderedDict(sorted(en.items(), key=lambda t: t[1]))
                 enStr = ":".join([n for n in oEn])
 
             # delete old attr
@@ -481,7 +488,7 @@ def moveChannel(
                     at=atType,
                     dv=value,
                     k=True,
-                    **kwargs
+                    **kwargs,
                 )
             elif atType == "enum":
                 pm.addAttr(
@@ -644,7 +651,7 @@ def setNotKeyableAttributes(
 
     # Use cmds for faster attribute setting
     for node in nodes:
-        node_name = node.name() if hasattr(node, 'name') else str(node)
+        node_name = node.name() if hasattr(node, "name") else str(node)
         for attr_name in attributes:
             cmds.setAttr(f"{node_name}.{attr_name}", lock=False, keyable=False, cb=True)
 
@@ -1041,9 +1048,7 @@ class FCurveParamDef(ParamDef):
 
     """
 
-    def __init__(
-        self, scriptName, keys=None, interpolation=0, extrapolation=0
-    ):
+    def __init__(self, scriptName, keys=None, interpolation=0, extrapolation=0):
 
         self.scriptName = scriptName
         self.keys = keys
@@ -1062,14 +1067,10 @@ class FCurveParamDef(ParamDef):
         """
         attr_name = addAttribute(node, self.scriptName, "double", 0)
 
-        attrDummy_name = addAttribute(
-            node, self.scriptName + "_dummy", "double", 0
-        )
+        attrDummy_name = addAttribute(node, self.scriptName + "_dummy", "double", 0)
 
         for key in self.keys:
-            pm.setDrivenKeyframe(
-                attr_name, cd=attrDummy_name, dv=key[0], v=key[1]
-            )
+            pm.setDrivenKeyframe(attr_name, cd=attrDummy_name, dv=key[0], v=key[1])
 
         # clean dummy attr
         pm.deleteAttr(attrDummy_name)
@@ -1383,9 +1384,7 @@ def get_selected_channels_full_path():
     if node:
         node = node[0]
 
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, sma=True)
-        )
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, sma=True))
 
         # if the attr is from shape node, we need to search in all shapes
         collect_attrs(
@@ -1395,12 +1394,8 @@ def get_selected_channels_full_path():
             shapes=True,
         )
 
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, sha=True)
-        )
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, soa=True)
-        )
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, sha=True))
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, soa=True))
 
     return attrs
 
@@ -1446,8 +1441,7 @@ def getSelectedObjectChannels(oSel=None, userDefine=False, animatable=False):
         oSel = pm.selected()[0]
 
     channels = [
-        x.name().rsplit(".", 1)[1]
-        for x in oSel.listAttr(ud=userDefine, k=animatable)
+        x.name().rsplit(".", 1)[1] for x in oSel.listAttr(ud=userDefine, k=animatable)
     ]
 
     return channels
@@ -1673,9 +1667,7 @@ def connect_message(source, attr):
             raise TypeError("Source attribute is not a message attribute.")
 
         if dest_attr_type != "message":
-            raise TypeError(
-                "Destination attribute is not a message attribute."
-            )
+            raise TypeError("Destination attribute is not a message attribute.")
 
         pm.connectAttr("{}.message".format(src_str), attr_name)
 
