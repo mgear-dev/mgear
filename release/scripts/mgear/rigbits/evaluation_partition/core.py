@@ -1413,6 +1413,18 @@ def reconnect_bs_inputs(source_mesh, partition_meshes):
                     (src_bs, idx, conns[0])
                 )
 
+    # Query envelope driver once (same for all partitions)
+    envelope_plug = None
+    for src_bs in src_bs_nodes:
+        env_conns = cmds.listConnections(
+            f"{src_bs}.envelope",
+            source=True,
+            destination=False,
+            plugs=True,
+        )
+        if env_conns:
+            envelope_plug = env_conns[0]
+
     # Phase 2: Per partition — simple drivers + combo rebuild
     for part_mesh in partition_meshes:
         part_bs_nodes = deformer.get_deformers(
@@ -1440,46 +1452,48 @@ def reconnect_bs_inputs(source_mesh, partition_meshes):
                         driver_plug, dst_attr, force=True
                     )
                 except RuntimeError:
-                    pass
+                    log.warning(
+                        "Could not connect %s -> %s",
+                        driver_plug,
+                        dst_attr,
+                    )
             else:
                 val = cmds.getAttr(
                     f"{src_bs}.weight[{idx}]"
                 )
                 cmds.setAttr(dst_attr, val)
 
-        # Combo networks — independent per partition
+        # Combo networks — independent per partition.
+        # Only build if ALL input weights exist on the
+        # partition; a partial combo would fire incorrectly.
         for src_bs, combo_idx, source_indices in combo_info:
             if combo_idx not in part_targets:
                 continue
-            dst_inputs = [
-                s for s in source_indices
-                if s in part_targets
-            ]
-            if dst_inputs:
-                blendshape.build_combo_network(
-                    part_bs,
-                    combo_idx,
-                    dst_inputs,
-                    mult_type,
-                )
-
-        # Envelope
-        for src_bs in src_bs_nodes:
-            env_conns = cmds.listConnections(
-                f"{src_bs}.envelope",
-                source=True,
-                destination=False,
-                plugs=True,
+            if not all(
+                s in part_targets for s in source_indices
+            ):
+                continue
+            blendshape.build_combo_network(
+                part_bs,
+                combo_idx,
+                source_indices,
+                mult_type,
             )
-            if env_conns:
-                try:
-                    cmds.connectAttr(
-                        env_conns[0],
-                        f"{part_bs}.envelope",
-                        force=True,
-                    )
-                except RuntimeError:
-                    pass
+
+        # Envelope (driver queried once outside loop)
+        if envelope_plug:
+            try:
+                cmds.connectAttr(
+                    envelope_plug,
+                    f"{part_bs}.envelope",
+                    force=True,
+                )
+            except RuntimeError:
+                log.warning(
+                    "Could not connect envelope: %s -> %s",
+                    envelope_plug,
+                    f"{part_bs}.envelope",
+                )
 
 
 # =====================================================
