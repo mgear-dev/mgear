@@ -115,23 +115,21 @@ def addAttribute(
     if (value is not None) and (attributeType not in compoundTypes + ["string"]):
         data["defaultValue"] = value
 
-    # Pre-handle data for compound types.
-    isCompound = attributeType in compoundTypes
-    childType = None
-    childValues = value
-    if isCompound:
+    node.addAttr(longName, **data)
+
+    # Add compound children.
+    if attributeType in compoundTypes:
         compoundSize = int(attributeType[-1])
         childType = attributeType[:-1]
+        childValues = value
+
+        # Resolve defaults if not specified.
         if value is None:
             childValues = [None] * compoundSize
         if childSuffixes is None:
             childSuffixes = "RGB" if usedAsColor else "XYZ"
             childSuffixes = list(childSuffixes[:compoundSize])
 
-    node.addAttr(longName, **data)
-
-    # Add compound children.
-    if isCompound:
         for childSuffix, childValue in zip(childSuffixes, childValues):
             childAttr = f"{longName}{childSuffix}"
             childData = {"attributeType": childType, "parent": longName}
