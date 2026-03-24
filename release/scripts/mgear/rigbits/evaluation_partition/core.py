@@ -1617,18 +1617,10 @@ def copy_skin_configuration(
         "deformUserNormals",
     ]
 
-    # Attributes that may have values OR input connections.
-    # dqsScale is the compound parent — check it first
-    # since a compound connection covers X/Y/Z at once.
-    # The children are checked as fallback for individual
-    # connections.
-    connectable_attrs = [
-        "dqsScale",
-        "dqsScaleX",
-        "dqsScaleY",
-        "dqsScaleZ",
-        "dqsSupportNonRigid",
-    ]
+    connectable_attrs = ["dqsSupportNonRigid"]
+
+    # dqsScale: try compound first, fall back to children
+    dqs_children = ("dqsScaleX", "dqsScaleY", "dqsScaleZ")
 
     for part_mesh in partition_meshes:
         part_skins = deformer.get_deformers(
@@ -1655,6 +1647,15 @@ def copy_skin_configuration(
                 src_skin, part_skin, attr
             )
 
+        # dqsScale: compound first, skip children if connected
+        if not _copy_attr_or_connection(
+            src_skin, part_skin, "dqsScale"
+        ):
+            for child in dqs_children:
+                _copy_attr_or_connection(
+                    src_skin, part_skin, child
+                )
+
         # Copy prebind matrix connections
         _copy_prebind_connections(src_skin, part_skin)
 
@@ -1670,16 +1671,18 @@ def _copy_attr_or_connection(src_node, dst_node, attr):
         src_node (str): Source node name.
         dst_node (str): Destination node name.
         attr (str): Attribute name.
+
+    Returns:
+        bool: True if a connection was replicated.
     """
     src_attr = f"{src_node}.{attr}"
     dst_attr = f"{dst_node}.{attr}"
 
     if not cmds.objExists(src_attr):
-        return
+        return False
     if not cmds.objExists(dst_attr):
-        return
+        return False
 
-    # Check for input connection
     conns = cmds.listConnections(
         src_attr,
         source=True,
@@ -1691,14 +1694,25 @@ def _copy_attr_or_connection(src_node, dst_node, attr):
             cmds.connectAttr(
                 conns[0], dst_attr, force=True
             )
+            return True
         except RuntimeError:
-            pass
+            log.debug(
+                "Could not connect %s -> %s",
+                conns[0],
+                dst_attr,
+            )
+            return False
     else:
         try:
             val = cmds.getAttr(src_attr)
             cmds.setAttr(dst_attr, val)
         except RuntimeError:
-            pass
+            log.debug(
+                "Could not copy value %s -> %s",
+                src_attr,
+                dst_attr,
+            )
+        return False
 
 
 def _copy_prebind_connections(src_skin, part_skin):
@@ -1770,27 +1784,6 @@ def _copy_prebind_connections(src_skin, part_skin):
 # =====================================================
 
 
-def _is_skin_localized(skin_cluster):
-    """Check if a skinCluster has localized matrix connections.
-
-    A localized skinCluster has ``mgear_mulMatrix`` nodes
-    driving its ``.matrix`` inputs instead of direct joint
-    ``worldMatrix`` connections.
-
-    Args:
-        skin_cluster (str): SkinCluster node name.
-
-    Returns:
-        bool: True if localized.
-    """
-    conns = cmds.listConnections(
-        f"{skin_cluster}.matrix",
-        source=True,
-        destination=False,
-        type="mgear_mulMatrix",
-    )
-    return bool(conns)
-
 
 def _get_localization_offset(skin_cluster):
     """Extract the offset node from a localized skinCluster.
@@ -1844,13 +1837,9 @@ def reproduce_skin_localization(source_mesh, partition_meshes):
         return
 
     src_skin_name = str(src_skin)
-    if not _is_skin_localized(src_skin_name):
-        log.info("Source skin is not localized, skipping")
-        return
-
     offset_node = _get_localization_offset(src_skin_name)
     if not offset_node:
-        log.warning("Could not determine localization offset")
+        log.info("Source skin is not localized, skipping")
         return
 
     log.info(
