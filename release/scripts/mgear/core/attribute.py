@@ -113,18 +113,18 @@ def addVector3Attribute(
     writable=True,
     niceName=None,
     shortName=None,
-    childLabels=["X", "Y", "Z"],
+    childLabels=("X", "Y", "Z"),
     usedAsColor=False,
     attributeType="float3",
 ):
     """
-    Add a vector3 attribute to a node
+    Add a vector3 attribute to a node.
 
     Arguments:
-        node (dagNode): The object to add the new attribute.
+        node (pm.node._Node | str): The object to add the new attribute.
         longName (str): The attribute name.
-        value (list of flotat): The default value in a list for RGB.
-            exp [1.0, 0.99, 0.13].
+        value (list[float]): The default value in a list for RGB.
+            E.g. [1.0, 0.99, 0.13].
         keyable (bool): Set if the attribute is keyable or not. (optional)
         readable (bool): Set if the attribute is readable or not. (optional)
         storable (bool): Set if the attribute is storable or not. (optional)
@@ -133,9 +133,13 @@ def addVector3Attribute(
         shortName (str): The attribute short name. (optional)
 
     Returns:
-        str: The long name of the new attribute
-
+        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
     """
+    if isinstance(node, str):
+        try:
+            node = pm.PyNode(node)
+        except pm.MayaNodeError:
+            pm.displayError("{} doesn't exist or is not unique".format(node))
     if node.hasAttr(longName):
         mgear.log("Attribute already exists", mgear.sev_error)
         return
