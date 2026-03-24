@@ -1356,9 +1356,11 @@ def _clean_bs_node_targets(mesh, bs_node, threshold):
 def reconnect_bs_inputs(source_mesh, partition_meshes):
     """Replicate blendshape input connections on partitions.
 
-    For each weight driven by an external connection on the
-    source blendshape, connects the same driver to the
-    corresponding weight on each partition's blendshape node.
+    For simple drivers (animCurves, etc.), connects the same
+    driver to the partition weight.  For combo drivers (multDL
+    networks where weights multiply each other), rebuilds an
+    independent multiply network per partition so each
+    partition is self-contained.
 
     Args:
         source_mesh (str): The original source mesh transform.
@@ -1370,6 +1372,48 @@ def reconnect_bs_inputs(source_mesh, partition_meshes):
     if not src_bs_nodes:
         return
 
+    mult_type = blendshape.get_mult_node_type()
+
+    # Phase 1: Analyze source combos once (shared across
+    # all partitions to avoid re-querying the source).
+    combo_info = []
+    simple_info = []
+
+    for src_bs in src_bs_nodes:
+        src_targets = cmds.getAttr(
+            f"{src_bs}.weight", multiIndices=True
+        ) or []
+
+        for idx in src_targets:
+            src_attr = f"{src_bs}.weight[{idx}]"
+            conns = cmds.listConnections(
+                src_attr,
+                source=True,
+                destination=False,
+                plugs=True,
+            )
+            if not conns:
+                simple_info.append((src_bs, idx, None))
+                continue
+
+            src_node = conns[0].split(".")[0]
+            src_type = cmds.nodeType(src_node)
+
+            if src_type in (
+                mult_type,
+                "multDoubleLinear",
+                "multDL",
+            ):
+                sources = blendshape.trace_combo_inputs(
+                    src_node, src_bs, mult_type
+                )
+                combo_info.append((src_bs, idx, sources))
+            else:
+                simple_info.append(
+                    (src_bs, idx, conns[0])
+                )
+
+    # Phase 2: Per partition — simple drivers + combo rebuild
     for part_mesh in partition_meshes:
         part_bs_nodes = deformer.get_deformers(
             part_mesh, "blendShape"
@@ -1378,44 +1422,49 @@ def reconnect_bs_inputs(source_mesh, partition_meshes):
             continue
 
         part_bs = part_bs_nodes[0]
-        part_targets = cmds.getAttr(
-            f"{part_bs}.weight", multiIndices=True
-        ) or []
+        part_targets = set(
+            cmds.getAttr(
+                f"{part_bs}.weight", multiIndices=True
+            )
+            or []
+        )
 
-        for src_bs in src_bs_nodes:
-            src_targets = cmds.getAttr(
-                f"{src_bs}.weight", multiIndices=True
-            ) or []
+        # Simple drivers
+        for src_bs, idx, driver_plug in simple_info:
+            if idx not in part_targets:
+                continue
+            dst_attr = f"{part_bs}.weight[{idx}]"
+            if driver_plug:
+                try:
+                    cmds.connectAttr(
+                        driver_plug, dst_attr, force=True
+                    )
+                except RuntimeError:
+                    pass
+            else:
+                val = cmds.getAttr(
+                    f"{src_bs}.weight[{idx}]"
+                )
+                cmds.setAttr(dst_attr, val)
 
-            for idx in src_targets:
-                if idx not in part_targets:
-                    continue
-
-                # Check input connections on source weight
-                src_attr = f"{src_bs}.weight[{idx}]"
-                connections = cmds.listConnections(
-                    src_attr,
-                    source=True,
-                    destination=False,
-                    plugs=True,
+        # Combo networks — independent per partition
+        for src_bs, combo_idx, source_indices in combo_info:
+            if combo_idx not in part_targets:
+                continue
+            dst_inputs = [
+                s for s in source_indices
+                if s in part_targets
+            ]
+            if dst_inputs:
+                blendshape.build_combo_network(
+                    part_bs,
+                    combo_idx,
+                    dst_inputs,
+                    mult_type,
                 )
 
-                dst_attr = f"{part_bs}.weight[{idx}]"
-
-                if connections:
-                    try:
-                        cmds.connectAttr(
-                            connections[0],
-                            dst_attr,
-                            force=True,
-                        )
-                    except RuntimeError:
-                        pass
-                else:
-                    val = cmds.getAttr(src_attr)
-                    cmds.setAttr(dst_attr, val)
-
-            # Replicate envelope connection
+        # Envelope
+        for src_bs in src_bs_nodes:
             env_conns = cmds.listConnections(
                 f"{src_bs}.envelope",
                 source=True,

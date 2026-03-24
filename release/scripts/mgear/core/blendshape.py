@@ -795,7 +795,7 @@ def _target_has_delta(
 
 
 
-def _get_mult_node_type():
+def get_mult_node_type():
     """Get the correct multiply node type for this Maya version.
 
     Maya 2026+ uses ``multDL``, older versions use
@@ -824,7 +824,7 @@ def _reconnect_bs_inputs(index_map, new_bs):
             ``dst_idx`` on the new blendShape node.
         new_bs (str): The destination blendShape node.
     """
-    mult_type = _get_mult_node_type()
+    mult_type = get_mult_node_type()
 
     # Build reverse map: src_bs → {src_idx: dst_idx}
     bs_idx_map = {}
@@ -855,7 +855,7 @@ def _reconnect_bs_inputs(index_map, new_bs):
 
         if src_type in (mult_type, "multDoubleLinear", "multDL"):
             # Combo target — defer to phase 2
-            combo_sources = _trace_combo_inputs(
+            combo_sources = trace_combo_inputs(
                 src_node, src_bs, mult_type
             )
             combos.append(
@@ -884,12 +884,12 @@ def _reconnect_bs_inputs(index_map, new_bs):
                 dst_inputs.append(mapped)
 
         if dst_inputs:
-            _build_combo_network(
+            build_combo_network(
                 new_bs, dst_combo_idx, dst_inputs, mult_type
             )
 
 
-def _trace_combo_inputs(master_mult, src_bs, mult_type):
+def trace_combo_inputs(master_mult, src_bs, mult_type):
     """Trace which source BS weights feed a combo network.
 
     Walks upstream through the multDL chain to find the
@@ -931,7 +931,7 @@ def _trace_combo_inputs(master_mult, src_bs, mult_type):
 
             if src_node == src_bs:
                 # Direct connection from a BS weight
-                idx = _parse_weight_index(src_plug)
+                idx = parse_weight_index(src_plug)
                 if idx is not None:
                     source_indices.append(idx)
             elif src_node_type in (
@@ -945,7 +945,7 @@ def _trace_combo_inputs(master_mult, src_bs, mult_type):
     return source_indices
 
 
-def _parse_weight_index(plug):
+def parse_weight_index(plug):
     """Extract weight index from a blendShape weight plug.
 
     Handles both indexed form (``node.weight[5]``) and alias
@@ -983,7 +983,7 @@ def _parse_weight_index(plug):
     return None
 
 
-def _build_combo_network(
+def build_combo_network(
     new_bs, dst_combo_idx, input_dst_indices, mult_type
 ):
     """Build a multiply network for a combo target.
