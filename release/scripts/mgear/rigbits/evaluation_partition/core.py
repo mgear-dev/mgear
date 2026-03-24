@@ -1617,8 +1617,13 @@ def copy_skin_configuration(
         "deformUserNormals",
     ]
 
-    # Attributes that may have values OR input connections
+    # Attributes that may have values OR input connections.
+    # dqsScale is the compound parent — check it first
+    # since a compound connection covers X/Y/Z at once.
+    # The children are checked as fallback for individual
+    # connections.
     connectable_attrs = [
+        "dqsScale",
         "dqsScaleX",
         "dqsScaleY",
         "dqsScaleZ",
@@ -1758,6 +1763,127 @@ def _copy_prebind_connections(src_skin, part_skin):
                     "Failed to connect prebind %s",
                     connections[0],
                 )
+
+
+# =====================================================
+# PIPELINE STEP 7b: REPRODUCE SKIN LOCALIZATION
+# =====================================================
+
+
+def _is_skin_localized(skin_cluster):
+    """Check if a skinCluster has localized matrix connections.
+
+    A localized skinCluster has ``mgear_mulMatrix`` nodes
+    driving its ``.matrix`` inputs instead of direct joint
+    ``worldMatrix`` connections.
+
+    Args:
+        skin_cluster (str): SkinCluster node name.
+
+    Returns:
+        bool: True if localized.
+    """
+    conns = cmds.listConnections(
+        f"{skin_cluster}.matrix",
+        source=True,
+        destination=False,
+        type="mgear_mulMatrix",
+    )
+    return bool(conns)
+
+
+def _get_localization_offset(skin_cluster):
+    """Extract the offset node from a localized skinCluster.
+
+    Finds the first ``mgear_mulMatrix`` on ``.matrix`` and
+    reads its ``matrixB`` source to determine the offset
+    transform (connected via ``worldInverseMatrix``).
+
+    Args:
+        skin_cluster (str): SkinCluster node name.
+
+    Returns:
+        str: Offset node name, or None if not found.
+    """
+    mul_nodes = cmds.listConnections(
+        f"{skin_cluster}.matrix",
+        source=True,
+        destination=False,
+        type="mgear_mulMatrix",
+    )
+    if not mul_nodes:
+        return None
+
+    # matrixB is connected to offset_node.worldInverseMatrix
+    matB_conns = cmds.listConnections(
+        f"{mul_nodes[0]}.matrixB",
+        source=True,
+        destination=False,
+        plugs=True,
+    )
+    if not matB_conns:
+        return None
+
+    # Extract node name from "offset_node.worldInverseMatrix"
+    return matB_conns[0].split(".")[0]
+
+
+def reproduce_skin_localization(source_mesh, partition_meshes):
+    """Reproduce localized skinCluster connections on partitions.
+
+    If the source skinCluster uses ``mgear_mulMatrix`` nodes
+    for precision (via ``localize_skin_clusters``), this
+    applies the same localization to each partition's skin.
+
+    Args:
+        source_mesh (str): The original source mesh transform.
+        partition_meshes (list): List of partition mesh names.
+    """
+    src_skin = skin.getSkinCluster(source_mesh)
+    if not src_skin:
+        return
+
+    src_skin_name = str(src_skin)
+    if not _is_skin_localized(src_skin_name):
+        log.info("Source skin is not localized, skipping")
+        return
+
+    offset_node = _get_localization_offset(src_skin_name)
+    if not offset_node:
+        log.warning("Could not determine localization offset")
+        return
+
+    log.info(
+        "Reproducing skin localization with offset: %s",
+        offset_node,
+    )
+
+    # Collect ALL unique influences across all partitions
+    # and localize in a single call. This ensures shared
+    # joints create one mulMatrix that feeds all partition
+    # skinClusters, and no partition-unique joints are missed.
+    all_influences = set()
+    for part_mesh in partition_meshes:
+        part_skin = skin.getSkinCluster(part_mesh)
+        if not part_skin:
+            continue
+        influences = cmds.skinCluster(
+            str(part_skin),
+            query=True,
+            influence=True,
+        )
+        if influences:
+            all_influences.update(influences)
+
+    if all_influences:
+        skin.localize_skin_clusters(
+            list(all_influences), offset_node
+        )
+        log.info(
+            "Localized skin on %d partitions (%d influences)",
+            len(partition_meshes),
+            len(all_influences),
+        )
 
 
 # =====================================================
@@ -2140,6 +2266,7 @@ def execute_full_pipeline(manager):
                 "Step 7/8: Copying skin configuration"
             )
             copy_skin_configuration(source, partitions)
+            reproduce_skin_localization(source, partitions)
         else:
             log.info("Step 7/8: Skipped")
 
