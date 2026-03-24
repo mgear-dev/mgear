@@ -4,11 +4,13 @@
 # GLOBAL
 #############################################
 import collections
+
+import maya.cmds as cmds
+from maya.api import OpenMaya
+
 import mgear
 import mgear.pymaya as pm
-import maya.cmds as cmds
 import mgear.pymaya.datatypes as datatypes
-from maya.api import OpenMaya
 from .six import string_types
 
 #############################################
