@@ -4,11 +4,13 @@
 # GLOBAL
 #############################################
 import collections
+
+import maya.cmds as cmds
+from maya.api import OpenMaya
+
 import mgear
 import mgear.pymaya as pm
-import maya.cmds as cmds
 import mgear.pymaya.datatypes as datatypes
-from maya.api import OpenMaya
 from .six import string_types
 
 #############################################
@@ -32,28 +34,34 @@ def addAttribute(
     channelBox=False,
     softMinValue=None,
     softMaxValue=None,
+    usedAsColor=None,
+    childSuffixes=None,
 ):
-    """Add attribute to a node
+    """Add attribute to a node.
 
     Arguments:
-        node (dagNode): The object to add the new attribute.
+        node (pm.node._Node | str): The object to add the new attribute.
         longName (str): The attribute name.
-        attributeType (str): The Attribute Type. Exp: 'string', 'bool',
-            'long', etc..
-        value (float or int): The default value.
+        attributeType (str): The Attribute Type. Exp: 'string', 'bool', 'long', etc...
+        value (float | int | bool | list[float] | tuple[float]): The default value.
         niceName (str): The attribute nice name. (optional)
         shortName (str): The attribute short name. (optional)
-        minValue (float or int): minimum value. (optional)
-        maxValue (float or int): maximum value. (optional)
+        minValue (float | int): minimum value. (optional)
+        maxValue (float | int): maximum value. (optional)
         keyable (bool): Set if the attribute is keyable or not. (optional)
         readable (bool): Set if the attribute is readable or not. (optional)
         storable (bool): Set if the attribute is storable or not. (optional)
         writable (bool): Set if the attribute is writable or not. (optional)
         channelBox (bool): Set if the attribute is in the channelBox or not,
             when the attribute is not keyable. (optional)
+        softMinValue (float): Lower limit of Maya Attribute Editor sliders. (optional)
+        softMaxValue (float): Upper limit of Maya Attribute Editor sliders. (optional)
+        usedAsColor (bool): Whether the added attribute is a color. (optional)
+        childSuffixes (list[str]): List of child attribute suffixes if creating a
+            compound attribute. Default is XYZ, or RGB if ``usedAsColor=True``.
 
     Returns:
-        pm.Attribute: A pymaya `Attribute` wrapper of the new attribute.
+        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
     """
     if isinstance(node, str):
         try:
@@ -85,15 +93,49 @@ def addAttribute(
     if softMaxValue is not None and softMaxValue is not False:
         data["softMaxValue"] = softMaxValue
 
+    if usedAsColor is not None:
+        data["usedAsColor"] = usedAsColor
+
     data["keyable"] = keyable
     data["readable"] = readable
     data["storable"] = storable
     data["writable"] = writable
 
-    if value is not None and attributeType not in ["string"]:
+    compoundTypes = [
+        "float2",
+        "float3",
+        "double2",
+        "double3",
+        "long2",
+        "long3",
+        "short2",
+        "short3",
+    ]
+
+    if (value is not None) and (attributeType not in compoundTypes + ["string"]):
         data["defaultValue"] = value
 
     node.addAttr(longName, **data)
+
+    # Add compound children.
+    if attributeType in compoundTypes:
+        compoundSize = int(attributeType[-1])
+        childType = attributeType[:-1]
+        childValues = value
+
+        # Resolve defaults if not specified.
+        if value is None:
+            childValues = [None] * compoundSize
+        if childSuffixes is None:
+            childSuffixes = "RGB" if usedAsColor else "XYZ"
+            childSuffixes = list(childSuffixes[:compoundSize])
+
+        for childSuffix, childValue in zip(childSuffixes, childValues):
+            childAttr = f"{longName}{childSuffix}"
+            childData = {"attributeType": childType, "parent": longName}
+            if childValue is not None:
+                childData["defaultValue"] = childValue
+            node.addAttr(childAttr, **childData)
 
     if value is not None:
         node.setAttr(longName, value)
@@ -113,18 +155,18 @@ def addVector3Attribute(
     writable=True,
     niceName=None,
     shortName=None,
-    childLabels=["X", "Y", "Z"],
+    childLabels=("X", "Y", "Z"),
     usedAsColor=False,
     attributeType="float3",
 ):
     """
-    Add a vector3 attribute to a node
+    Add a vector3 attribute to a node.
 
     Arguments:
-        node (dagNode): The object to add the new attribute.
+        node (pm.node._Node | str): The object to add the new attribute.
         longName (str): The attribute name.
-        value (list of flotat): The default value in a list for RGB.
-            exp [1.0, 0.99, 0.13].
+        value (list[float]): The default value in a list for RGB.
+            E.g. [1.0, 0.99, 0.13].
         keyable (bool): Set if the attribute is keyable or not. (optional)
         readable (bool): Set if the attribute is readable or not. (optional)
         storable (bool): Set if the attribute is storable or not. (optional)
@@ -133,9 +175,13 @@ def addVector3Attribute(
         shortName (str): The attribute short name. (optional)
 
     Returns:
-        str: The long name of the new attribute
-
+        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
     """
+    if isinstance(node, str):
+        try:
+            node = pm.PyNode(node)
+        except pm.MayaNodeError:
+            pm.displayError("{} doesn't exist or is not unique".format(node))
     if node.hasAttr(longName):
         mgear.log("Attribute already exists", mgear.sev_error)
         return
@@ -249,9 +295,7 @@ def addEnumAttribute(
     """
 
     if node.hasAttr(longName):
-        mgear.log(
-            "Attribute '" + longName + "' already exists", mgear.sev_warning
-        )
+        mgear.log("Attribute '" + longName + "' already exists", mgear.sev_warning)
         return
 
     data = {}
@@ -308,7 +352,9 @@ def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
             if target.hasAttr(base_name):
                 if duplicatedPolicy == "index":
                     # Cache existing attrs for faster lookup
-                    target_name = target.name() if hasattr(target, 'name') else str(target)
+                    target_name = (
+                        target.name() if hasattr(target, "name") else str(target)
+                    )
                     existing_attrs = set(cmds.listAttr(target_name) or [])
                     i = 0
                     while f"{base_name}{i}" in existing_attrs:
@@ -375,16 +421,18 @@ def moveChannel(
 
         newAtt = None
         attrName = attr
-        nName = pm.attributeQuery(
-            at.shortName(), node=at.node(), niceName=True
-        )
+        nName = pm.attributeQuery(at.shortName(), node=at.node(), niceName=True)
         # define duplicated attribute policy
         if sourceNode.name() != targetNode.name():
             # this policy doesn't apply for rearrange channels
             if pm.attributeQuery(attr, node=targetNode, exists=True):
                 if duplicatedPolicy == "index":
                     # Cache existing attrs for faster lookup
-                    target_name = targetNode.name() if hasattr(targetNode, 'name') else str(targetNode)
+                    target_name = (
+                        targetNode.name()
+                        if hasattr(targetNode, "name")
+                        else str(targetNode)
+                    )
                     existing_attrs = set(cmds.listAttr(target_name) or [])
                     i = 0
                     while f"{attr}{i}" in existing_attrs:
@@ -423,9 +471,7 @@ def moveChannel(
                     kwargs["max"] = max
             elif atType == "enum":
                 en = at.getEnums()
-                oEn = collections.OrderedDict(
-                    sorted(en.items(), key=lambda t: t[1])
-                )
+                oEn = collections.OrderedDict(sorted(en.items(), key=lambda t: t[1]))
                 enStr = ":".join([n for n in oEn])
 
             # delete old attr
@@ -440,7 +486,7 @@ def moveChannel(
                     at=atType,
                     dv=value,
                     k=True,
-                    **kwargs
+                    **kwargs,
                 )
             elif atType == "enum":
                 pm.addAttr(
@@ -603,7 +649,7 @@ def setNotKeyableAttributes(
 
     # Use cmds for faster attribute setting
     for node in nodes:
-        node_name = node.name() if hasattr(node, 'name') else str(node)
+        node_name = node.name() if hasattr(node, "name") else str(node)
         for attr_name in attributes:
             cmds.setAttr(f"{node_name}.{attr_name}", lock=False, keyable=False, cb=True)
 
@@ -1000,9 +1046,7 @@ class FCurveParamDef(ParamDef):
 
     """
 
-    def __init__(
-        self, scriptName, keys=None, interpolation=0, extrapolation=0
-    ):
+    def __init__(self, scriptName, keys=None, interpolation=0, extrapolation=0):
 
         self.scriptName = scriptName
         self.keys = keys
@@ -1021,14 +1065,10 @@ class FCurveParamDef(ParamDef):
         """
         attr_name = addAttribute(node, self.scriptName, "double", 0)
 
-        attrDummy_name = addAttribute(
-            node, self.scriptName + "_dummy", "double", 0
-        )
+        attrDummy_name = addAttribute(node, self.scriptName + "_dummy", "double", 0)
 
         for key in self.keys:
-            pm.setDrivenKeyframe(
-                attr_name, cd=attrDummy_name, dv=key[0], v=key[1]
-            )
+            pm.setDrivenKeyframe(attr_name, cd=attrDummy_name, dv=key[0], v=key[1])
 
         # clean dummy attr
         pm.deleteAttr(attrDummy_name)
@@ -1342,9 +1382,7 @@ def get_selected_channels_full_path():
     if node:
         node = node[0]
 
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, sma=True)
-        )
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, sma=True))
 
         # if the attr is from shape node, we need to search in all shapes
         collect_attrs(
@@ -1354,12 +1392,8 @@ def get_selected_channels_full_path():
             shapes=True,
         )
 
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, sha=True)
-        )
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, soa=True)
-        )
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, sha=True))
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, soa=True))
 
     return attrs
 
@@ -1405,8 +1439,7 @@ def getSelectedObjectChannels(oSel=None, userDefine=False, animatable=False):
         oSel = pm.selected()[0]
 
     channels = [
-        x.name().rsplit(".", 1)[1]
-        for x in oSel.listAttr(ud=userDefine, k=animatable)
+        x.name().rsplit(".", 1)[1] for x in oSel.listAttr(ud=userDefine, k=animatable)
     ]
 
     return channels
@@ -1632,9 +1665,7 @@ def connect_message(source, attr):
             raise TypeError("Source attribute is not a message attribute.")
 
         if dest_attr_type != "message":
-            raise TypeError(
-                "Destination attribute is not a message attribute."
-            )
+            raise TypeError("Destination attribute is not a message attribute.")
 
         pm.connectAttr("{}.message".format(src_str), attr_name)
 
