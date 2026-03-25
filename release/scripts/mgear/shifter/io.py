@@ -145,14 +145,19 @@ def _get_file(write=False):
 
 
 def export_guide_template(filePath=None, meta=None, conf=None, *args):
-    """Export the guide templata to a file
+    """Export the guide template to a file.
 
     Args:
-        filePath (str, optional): Path to save the file
-        meta (dict, optional): Arbitraty metadata dictionary. This can
-            be use to store any custom information in a dictionary format.
+        filePath (str, optional): Path to save the file.
+        meta (dict, optional): Arbitrary metadata dictionary. This can
+            be used to store any custom information in a dictionary format.
     """
     if not conf:
+        selection = pm.selected()
+        if selection:
+            rig = shifter.Rig()
+            rig.guide.setFromHierarchy(selection[0])
+            rig.guide.refresh_user_metadata()
         conf = get_template_from_selection(meta)
     if conf:
         data_string = json.dumps(conf, indent=4, sort_keys=True)
