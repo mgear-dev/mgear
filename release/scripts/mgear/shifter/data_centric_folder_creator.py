@@ -40,6 +40,32 @@ DEFAULT_CONFIG = {
     "target": ["layout", "anim"],
 }
 
+DATA_SUB_DIRS = ("data", "assets")
+CUSTOM_STEP_SUB_DIRS = ("pre", "post")
+
+# Cached QBrush objects for preview tree coloring
+_BRUSH_ROOT = QtGui.QBrush(QtGui.QColor("#e0c080"))
+_BRUSH_TYPE = QtGui.QBrush(QtGui.QColor("#80c0e0"))
+_BRUSH_NAME = QtGui.QBrush(QtGui.QColor("#a0e0a0"))
+_BRUSH_VARIANT = QtGui.QBrush(QtGui.QColor("#c0a0e0"))
+_BRUSH_SHARED = QtGui.QBrush(QtGui.QColor("#888888"))
+
+
+def _iter_root_folders(config):
+    """Yield (folder_name, sub_dirs) for each root folder in the config.
+
+    Handles the case where both folder names are the same by using
+    explicit sub_dirs assignment instead of identity comparison.
+
+    Args:
+        config (dict): Configuration dictionary.
+
+    Yields:
+        tuple: (folder_name, sub_dirs) pairs.
+    """
+    yield config["custom_step_folder"], CUSTOM_STEP_SUB_DIRS
+    yield config["data_folder"], DATA_SUB_DIRS
+
 
 def normalize_multi_entry(text):
     """Normalize a multi-entry text field to comma-separated values.
@@ -122,7 +148,22 @@ class FolderStructureCreatorUI(
             "dcfc/variant": (self.variant_le, "default"),
             "dcfc/target": (self.target_le, "layout, anim"),
         }
+        # Block signals during settings load to avoid cascading
+        # save_settings and preview refreshes per field
+        all_fields = (
+            self.path_le,
+            self.custom_step_le,
+            self.data_folder_le,
+            self.type_le,
+            self.name_le,
+            self.variant_le,
+            self.target_le,
+        )
+        for le in all_fields:
+            le.blockSignals(True)
         self.load_settings()
+        for le in all_fields:
+            le.blockSignals(False)
         self._do_refresh_preview()
 
     def setup_ui(self):
@@ -306,20 +347,26 @@ class FolderStructureCreatorUI(
             dict: Configuration dictionary ready for folder creation
                 or export.
         """
+        d = DEFAULT_CONFIG
         return {
             "path": self.path_le.text().strip(),
             "custom_step_folder": (
-                self.custom_step_le.text().strip() or "custom_steps"
+                self.custom_step_le.text().strip()
+                or d["custom_step_folder"]
             ),
             "data_folder": (
-                self.data_folder_le.text().strip() or "data"
+                self.data_folder_le.text().strip() or d["data_folder"]
             ),
-            "type": self.type_le.text().strip() or "char",
-            "name": ", ".join(normalize_multi_entry(self.name_le.text())),
-            "variant": normalize_multi_entry(self.variant_le.text())
-                or ["default"],
-            "target": normalize_multi_entry(self.target_le.text())
-                or ["layout", "anim"],
+            "type": self.type_le.text().strip() or d["type"],
+            "name": normalize_multi_entry(self.name_le.text()),
+            "variant": (
+                normalize_multi_entry(self.variant_le.text())
+                or list(d["variant"])
+            ),
+            "target": (
+                normalize_multi_entry(self.target_le.text())
+                or list(d["target"])
+            ),
         }
 
     def _populate_ui_from_config(self, config):
@@ -328,27 +375,49 @@ class FolderStructureCreatorUI(
         Args:
             config (dict): Configuration dictionary.
         """
-        self.path_le.setText(config.get("path", ""))
-        self.custom_step_le.setText(
-            config.get("custom_step_folder", "custom_steps")
+        d = DEFAULT_CONFIG
+        all_fields = (
+            self.path_le,
+            self.custom_step_le,
+            self.data_folder_le,
+            self.type_le,
+            self.name_le,
+            self.variant_le,
+            self.target_le,
         )
-        self.data_folder_le.setText(config.get("data_folder", "data"))
-        self.type_le.setText(config.get("type", "char"))
+        # Block signals to avoid cascading saves and preview refreshes
+        for le in all_fields:
+            le.blockSignals(True)
 
-        name = config.get("name", "")
+        self.path_le.setText(config.get("path", d["path"]))
+        self.custom_step_le.setText(
+            config.get("custom_step_folder", d["custom_step_folder"])
+        )
+        self.data_folder_le.setText(
+            config.get("data_folder", d["data_folder"])
+        )
+        self.type_le.setText(config.get("type", d["type"]))
+
+        name = config.get("name", d["name"])
         if isinstance(name, list):
             name = ", ".join(name)
         self.name_le.setText(name)
 
-        variant = config.get("variant", ["default"])
+        variant = config.get("variant", d["variant"])
         if isinstance(variant, list):
             variant = ", ".join(variant)
         self.variant_le.setText(variant)
 
-        target = config.get("target", ["layout", "anim"])
+        target = config.get("target", d["target"])
         if isinstance(target, list):
             target = ", ".join(target)
         self.target_le.setText(target)
+
+        for le in all_fields:
+            le.blockSignals(False)
+
+        self.save_settings()
+        self._do_refresh_preview()
 
     # ------------------------------------------------------------------
     # Preview
@@ -362,53 +431,41 @@ class FolderStructureCreatorUI(
         """Rebuild the folder preview tree from current UI values."""
         self.preview_tree.clear()
         config = self._build_config_from_ui()
-        names = normalize_multi_entry(config["name"])
-        asset_type = config.get("type", "char")
-        variants = config.get("variant", ["default"])
-        targets = config.get("target", ["layout", "anim"])
-        custom_step = config.get("custom_step_folder", "custom_steps")
-        data_folder = config.get("data_folder", "data")
-
+        names = config["name"]
         if not names:
             return
 
-        for root_folder in (custom_step, data_folder):
-            is_data = root_folder == data_folder
-            sub_dirs = ("data", "assets") if is_data else ("pre", "post")
+        asset_type = config["type"]
+        variants = config["variant"]
+        targets = config["target"]
 
-            root_item = QtWidgets.QTreeWidgetItem([root_folder + "/"])
-            root_item.setForeground(
-                0, QtGui.QBrush(QtGui.QColor("#e0c080"))
-            )
+        for folder_name, sub_dirs in _iter_root_folders(config):
+            root_item = QtWidgets.QTreeWidgetItem([folder_name + "/"])
+            root_item.setForeground(0, _BRUSH_ROOT)
             self.preview_tree.addTopLevelItem(root_item)
-
             self._add_shared_item(root_item, sub_dirs)
 
             type_item = QtWidgets.QTreeWidgetItem([asset_type + "/"])
-            type_item.setForeground(
-                0, QtGui.QBrush(QtGui.QColor("#80c0e0"))
-            )
+            type_item.setForeground(0, _BRUSH_TYPE)
             root_item.addChild(type_item)
             self._add_shared_item(type_item, sub_dirs)
 
             for name in names:
                 name_item = QtWidgets.QTreeWidgetItem([name + "/"])
-                name_item.setForeground(
-                    0, QtGui.QBrush(QtGui.QColor("#a0e0a0"))
-                )
+                name_item.setForeground(0, _BRUSH_NAME)
                 type_item.addChild(name_item)
                 self._add_shared_item(name_item, sub_dirs)
 
                 for variant in variants:
                     var_item = QtWidgets.QTreeWidgetItem([variant + "/"])
-                    var_item.setForeground(
-                        0, QtGui.QBrush(QtGui.QColor("#c0a0e0"))
-                    )
+                    var_item.setForeground(0, _BRUSH_VARIANT)
                     name_item.addChild(var_item)
                     self._add_shared_item(var_item, sub_dirs)
 
                     for target in targets:
-                        tgt_item = QtWidgets.QTreeWidgetItem([target + "/"])
+                        tgt_item = QtWidgets.QTreeWidgetItem(
+                            [target + "/"]
+                        )
                         var_item.addChild(tgt_item)
                         for sd in sub_dirs:
                             tgt_item.addChild(
@@ -425,9 +482,7 @@ class FolderStructureCreatorUI(
             sub_dirs (tuple): Sub-directory names.
         """
         shared = QtWidgets.QTreeWidgetItem(["_shared/"])
-        shared.setForeground(
-            0, QtGui.QBrush(QtGui.QColor("#888888"))
-        )
+        shared.setForeground(0, _BRUSH_SHARED)
         parent.addChild(shared)
         for sd in sub_dirs:
             shared.addChild(QtWidgets.QTreeWidgetItem([sd + "/"]))
@@ -537,7 +592,7 @@ class FolderStructureCreatorUI(
             cmds.warning("Root path is required.")
             return
 
-        names = normalize_multi_entry(config["name"])
+        names = config["name"]
         if not names:
             self._set_status("At least one name is required.", error=True)
             cmds.warning("At least one name is required.")
@@ -568,17 +623,11 @@ class FolderStructureCreatorUI(
                 cmds.warning(msg)
                 return
 
-        # Create folders
         def _make_leaf(path, sub_dirs):
             for sd in sub_dirs:
-                sd_path = os.path.join(path, sd)
-                if not os.path.exists(sd_path):
-                    os.makedirs(sd_path)
+                os.makedirs(os.path.join(path, sd), exist_ok=True)
 
-        for root_folder in (custom_step, data_folder):
-            is_data = root_folder == data_folder
-            sub_dirs = ("data", "assets") if is_data else ("pre", "post")
-
+        for root_folder, sub_dirs in _iter_root_folders(config):
             root_shared = os.path.join(base_path, root_folder, "_shared")
             _make_leaf(root_shared, sub_dirs)
 
