@@ -158,7 +158,12 @@ def export_guide_template(filePath=None, meta=None, conf=None, *args):
             rig = shifter.Rig()
             rig.guide.setFromHierarchy(selection[0])
             rig.guide.refresh_user_metadata()
-        conf = get_template_from_selection(meta)
+            conf = rig.guide.get_guide_template_dict(meta)
+        else:
+            pm.displayWarning(
+                "Guide root or guide component must be selected"
+            )
+            return
     if conf:
         data_string = json.dumps(conf, indent=4, sort_keys=True)
         if not filePath:

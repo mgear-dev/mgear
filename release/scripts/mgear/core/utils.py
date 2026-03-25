@@ -1,12 +1,12 @@
 """Utility functions"""
 
 
+import datetime
+import getpass
 import os
 import sys
 import timeit
 from functools import wraps
-import datetime
-import getpass
 
 from maya import cmds
 import mgear.pymaya as pm
@@ -446,14 +446,14 @@ def get_maya_path():
 
 
 def get_user_metadata():
+    """Get current user metadata.
+
+    Returns:
+        dict: Username, date, Maya version, and mGear version.
     """
-    :return: User metadata including username, date, Maya version, and mGear version.
-    :rtype: dict[str, str]
-    """
-    data = {
+    return {
         "user": getpass.getuser(),
         "date": str(datetime.datetime.now()),
         "maya_version": str(mel.eval("getApplicationVersionAsFloat")),
         "gear_version": mgear.getVersion(),
     }
-    return data

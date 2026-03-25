@@ -1081,9 +1081,17 @@ class Rig(Main):
         return self.guide_template_dict
 
     def refresh_user_metadata(self):
+        """Update guide metadata attrs with current user info.
+
+        Refreshes user, date, maya_version, and gear_version on the
+        guide root node and internal paramDefs cache so exported
+        templates reflect the current session rather than values
+        from when the guide was created.
+        """
         for k, v in utils.get_user_metadata().items():
-            attr = self.model.attr(k)
-            attr.set(v)
+            self.model.attr(k).set(v)
+            if k in self.paramDefs:
+                self.paramDefs[k].value = v
 
     def addOptionsValues(self):
         """Gather or change some options values according to some others.
