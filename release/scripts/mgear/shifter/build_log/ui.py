@@ -794,6 +794,12 @@ def _install_display_hooks(handler):
     global _original_display_warning
     global _original_display_error
 
+    # Guard against double-install: if already hooked, the globals hold
+    # the real originals — capturing again would store the hooked
+    # versions, causing infinite recursion when they call themselves.
+    if _original_display_info is not None:
+        return
+
     import mgear.pymaya as pm
     from mgear.pymaya import cmd as pm_cmd
 

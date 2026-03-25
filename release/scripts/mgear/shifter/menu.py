@@ -7,6 +7,11 @@ def install():
     """Install Shifter submenu"""
     commands = (
         ("Guide Manager", str_show_guide_manager, "mgear_list.svg"),
+        (
+            "Guide Template Manager",
+            str_template_manager,
+            "mgear_users.svg",
+        ),
         (None, guide_utils_submenu),
         ("-----", None),
         (None, game_submenu),
@@ -45,11 +50,6 @@ def install():
             "mgear_download.svg",
         ),
         ("-----", None),
-        (
-            "Guide Template Manager",
-            str_template_manager,
-            "mgear_users.svg",
-        ),
         (
             "Match Guide to Selected Joint Hierarchy",
             str_matchGuide,
