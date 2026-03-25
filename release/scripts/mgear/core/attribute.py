@@ -39,29 +39,33 @@ def addAttribute(
 ):
     """Add attribute to a node.
 
-    Arguments:
-        node (pm.node._Node | str): The object to add the new attribute.
+    Args:
+        node (dagNode or str): The object to add the new attribute.
         longName (str): The attribute name.
-        attributeType (str): The Attribute Type. Exp: 'string', 'bool', 'long', etc...
-        value (float | int | bool | list[float] | tuple[float]): The default value.
-        niceName (str): The attribute nice name. (optional)
-        shortName (str): The attribute short name. (optional)
-        minValue (float | int): minimum value. (optional)
-        maxValue (float | int): maximum value. (optional)
-        keyable (bool): Set if the attribute is keyable or not. (optional)
-        readable (bool): Set if the attribute is readable or not. (optional)
-        storable (bool): Set if the attribute is storable or not. (optional)
-        writable (bool): Set if the attribute is writable or not. (optional)
-        channelBox (bool): Set if the attribute is in the channelBox or not,
-            when the attribute is not keyable. (optional)
-        softMinValue (float): Lower limit of Maya Attribute Editor sliders. (optional)
-        softMaxValue (float): Upper limit of Maya Attribute Editor sliders. (optional)
-        usedAsColor (bool): Whether the added attribute is a color. (optional)
-        childSuffixes (list[str]): List of child attribute suffixes if creating a
-            compound attribute. Default is XYZ, or RGB if ``usedAsColor=True``.
+        attributeType (str): The Attribute Type. Exp: 'string', 'bool',
+            'long', etc.
+        value (float or int or bool or list): The default value.
+        niceName (str, optional): The attribute nice name.
+        shortName (str, optional): The attribute short name.
+        minValue (float or int, optional): Minimum value.
+        maxValue (float or int, optional): Maximum value.
+        keyable (bool): Set if the attribute is keyable or not.
+        readable (bool): Set if the attribute is readable or not.
+        storable (bool): Set if the attribute is storable or not.
+        writable (bool): Set if the attribute is writable or not.
+        channelBox (bool): Set if the attribute is in the channelBox
+            or not, when the attribute is not keyable.
+        softMinValue (float, optional): Lower limit of Maya Attribute
+            Editor sliders.
+        softMaxValue (float, optional): Upper limit of Maya Attribute
+            Editor sliders.
+        usedAsColor (bool, optional): Whether the attribute is a color.
+        childSuffixes (list of str, optional): Child attribute suffixes
+            for compound attributes. Default is XYZ, or RGB if
+            usedAsColor is True.
 
     Returns:
-        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
+        pm.Attribute: The new attribute.
     """
     if isinstance(node, str):
         try:
@@ -159,23 +163,22 @@ def addVector3Attribute(
     usedAsColor=False,
     attributeType="float3",
 ):
-    """
-    Add a vector3 attribute to a node.
+    """Add a vector3 attribute to a node.
 
-    Arguments:
-        node (pm.node._Node | str): The object to add the new attribute.
+    Args:
+        node (dagNode or str): The object to add the new attribute.
         longName (str): The attribute name.
-        value (list[float]): The default value in a list for RGB.
-            E.g. [1.0, 0.99, 0.13].
-        keyable (bool): Set if the attribute is keyable or not. (optional)
-        readable (bool): Set if the attribute is readable or not. (optional)
-        storable (bool): Set if the attribute is storable or not. (optional)
-        writable (bool): Set if the attribute is writable or not. (optional)
-        niceName (str): The attribute nice name. (optional)
-        shortName (str): The attribute short name. (optional)
+        value (list of float): The default value in a list for RGB.
+            Exp: [1.0, 0.99, 0.13].
+        keyable (bool): Set if the attribute is keyable or not.
+        readable (bool): Set if the attribute is readable or not.
+        storable (bool): Set if the attribute is storable or not.
+        writable (bool): Set if the attribute is writable or not.
+        niceName (str, optional): The attribute nice name.
+        shortName (str, optional): The attribute short name.
 
     Returns:
-        pm.Attribute: A pymaya ``Attribute`` wrapper of the new attribute.
+        pm.Attribute: The new attribute.
     """
     if isinstance(node, str):
         try:
