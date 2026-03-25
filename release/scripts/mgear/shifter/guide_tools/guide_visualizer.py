@@ -1272,7 +1272,7 @@ def export_guide_colors_configuration():
 
     for guide in guides:
         shapes = cmds.listRelatives(
-            guide, shapes=True, noIntermediate=True
+            guide, shapes=True, fullPath=True, noIntermediate=True
         ) or []
         for shape in shapes:
             if cmds.nodeType(shape) not in ("nurbsCurve", "bezierCurve"):
@@ -1357,7 +1357,7 @@ def export_guide_curves_configuration():
         cv_scale = _get_cv_scale(guide)
 
         shapes = cmds.listRelatives(
-            guide, shapes=True, noIntermediate=True
+            guide, shapes=True, fullPath=True, noIntermediate=True
         ) or []
         for shape in shapes:
             if cmds.nodeType(shape) not in ("nurbsCurve", "bezierCurve"):
@@ -1934,7 +1934,7 @@ class GuideVisualizerUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         file_path = cmds.fileDialog2(
             caption="Export Guide Visualizer Configuration",
             fileMode=0,
-            fileFilter="JSON Files (*.json)"
+            fileFilter="Guide Visualizer Config (*.gvc)"
         )
         if not file_path:
             return
@@ -1948,7 +1948,7 @@ class GuideVisualizerUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         file_path = cmds.fileDialog2(
             caption="Import Guide Visualizer Configuration",
             fileMode=1,
-            fileFilter="JSON Files (*.json)"
+            fileFilter="Guide Visualizer Config (*.gvc)"
         )
         if not file_path:
             return
