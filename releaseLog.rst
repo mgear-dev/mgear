@@ -14,6 +14,7 @@ Release Log
 	* Core: Skin: Add localize_skin_clusters for floating-point precision fix when rigs are far from world origin
 
 **Enhancements**
+	* Shifter: Data-Centric Folder Creator: Refactored UI with unified workflow, live folder preview tree, space-to-comma input normalization, .dcf config export/import, drag-and-drop config loading, SettingsMixin persistence, HDPI scaling, and input validation
 	* Shifter: Fix progress bar not updating during drag-and-drop guide import
 	* Rigbits: Wire to Skinning: Add custom wire processing order with drag reorder, preserved across config export/import #611
 	* Core: Blendshape: Add transfer_blendshapes and combo utilities to core for reuse across tools

@@ -2189,25 +2189,63 @@ A utility tool for creating standardized folder structures for data-centric rigg
 
 Access from: **Shifter > Data-Centric Folders Creator**
 
+.. image:: images/shifter/Data_centric_folder_creator.png
+    :align: center
+
 Features
 ---------
 
-- **Template-Based Structure**: Create folder hierarchies from predefined templates
-- **Custom Configuration**: Define your own folder structure layouts
-- **Project Integration**: Set up folders that integrate with your pipeline
-- **Batch Creation**: Create multiple folder structures at once
+- **Unified Workflow**: Fill in settings directly or import a ``.dcf`` config file, then click Create
+- **Live Folder Preview**: A tree view shows the exact folder structure that will be created, updating in real-time as you type
+- **Multi-Entry Fields**: Type, Name, Variant, and Target fields accept multiple comma or space-separated values (e.g. ``hero villain`` auto-normalizes to ``hero, villain``)
+- **Config Export/Import**: Save and load configurations as ``.dcf`` files via the File menu
+- **Drag-and-Drop**: Drop a ``.dcf`` file onto the window to load it
+- **Persistent Settings**: All field values are remembered across sessions
+- **Input Validation**: Invalid folder names and missing required fields are caught before creation
 
-Standard Folder Structure
---------------------------
+Folder Settings
+----------------
 
-The tool creates organized folders for:
+The tool creates two parallel root folder hierarchies:
 
-- Guide templates
-- Custom steps
-- Control shapes
-- Skin weights
-- Build configurations
-- Export presets
+- **Custom Step Folder** (default: ``custom_steps``): Contains ``pre/`` and ``post/`` sub-directories at each level for custom step scripts
+- **Data Folder** (default: ``data``): Contains ``data/`` and ``assets/`` sub-directories at each level for rig data
+
+Both folders can use the same name. They are separated for convenience so you can use Git on the custom steps/scripts folder separately from the data folder.
+
+Settings
+---------
+
+- **Type**: Asset type category (e.g. ``char``, ``prop``, ``env``)
+- **Name**: Asset names, comma or space separated (e.g. ``hero, villain``)
+- **Variant**: Asset variants (e.g. ``default, damaged``)
+- **Target**: Target contexts (e.g. ``layout, anim``)
+
+Folder Structure
+-----------------
+
+The tool creates a nested hierarchy with ``_shared/`` folders at each level::
+
+    custom_steps/
+        _shared/ {pre/, post/}
+        char/
+            _shared/ {pre/, post/}
+            hero/
+                _shared/ {pre/, post/}
+                default/
+                    _shared/ {pre/, post/}
+                    layout/ {pre/, post/}
+                    anim/ {pre/, post/}
+    data/
+        _shared/ {data/, assets/}
+        char/
+            _shared/ {data/, assets/}
+            hero/
+                _shared/ {data/, assets/}
+                default/
+                    _shared/ {data/, assets/}
+                    layout/ {data/, assets/}
+                    anim/ {data/, assets/}
 
 .. _build-log:
 
