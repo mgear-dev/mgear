@@ -1,13 +1,9 @@
 """Guide Visualizer Tool
 """
 
-from __future__ import print_function
-
-import sys
 import json
 
 import maya.cmds as cmds
-import maya.OpenMayaUI as omui
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 import mgear.pymaya as pm
@@ -16,11 +12,6 @@ from mgear.core import pyqt
 from mgear.core.widgets import create_button, CollapsibleWidget
 
 QtGui, QtCore, QtWidgets, wrapInstance = pyqt.qt_import()
-
-if sys.version_info[0] >= 3:
-    long_type = int
-else:
-    long_type = long
 
 
 # ----------------------------------------------------------------------
@@ -96,6 +87,39 @@ def adjust_curve_thickness(increment):
         cmds.setAttr(curve + ".lineWidth", max(1.0, current + increment))
 
 
+def _scale_cvs_around_pivot(transform, scale_factor):
+    """Scale CVs of all nurbsCurve shapes under transform around its pivot.
+
+    Args:
+        transform (str): Transform node name.
+        scale_factor (float): Multiplier for scaling.
+
+    Returns:
+        bool: True if any curves were scaled.
+    """
+    shapes = cmds.listRelatives(
+        transform, shapes=True, fullPath=True
+    ) or []
+    piv = cmds.xform(transform, q=True, ws=True, rp=True)
+    scaled = False
+
+    for shp in shapes:
+        if cmds.nodeType(shp) != "nurbsCurve":
+            continue
+        scaled = True
+        cv_list = cmds.ls(shp + ".cv[*]", fl=True) or []
+        for cv in cv_list:
+            pos = cmds.pointPosition(cv, w=True)
+            new_pos = [
+                piv[0] + (pos[0] - piv[0]) * scale_factor,
+                piv[1] + (pos[1] - piv[1]) * scale_factor,
+                piv[2] + (pos[2] - piv[2]) * scale_factor,
+            ]
+            cmds.xform(cv, ws=True, t=new_pos)
+
+    return scaled
+
+
 def scale_curve_cvs(scale_factor):
     """Scale CVs of selected curves around each transform's pivot.
 
@@ -113,35 +137,7 @@ def scale_curve_cvs(scale_factor):
         raise RuntimeError("No objects selected.")
 
     for obj in sel:
-        shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or []
-        if not shapes:
-            continue
-
-        has_curve = False
-        # Get transform pivot in world space
-        piv = cmds.xform(obj, q=True, ws=True, rp=True)
-
-        for shp in shapes:
-            if cmds.nodeType(shp) != "nurbsCurve":
-                continue
-
-            has_curve = True
-            cv_list = cmds.ls(shp + ".cv[*]", fl=True) or []
-            for cv in cv_list:
-                pos = cmds.pointPosition(cv, w=True)
-                vec = [
-                    (pos[0] - piv[0]) * scale_factor,
-                    (pos[1] - piv[1]) * scale_factor,
-                    (pos[2] - piv[2]) * scale_factor
-                ]
-                new_pos = [piv[0] + vec[0],
-                           piv[1] + vec[1],
-                           piv[2] + vec[2]]
-
-                cmds.xform(cv, ws=True, t=new_pos)
-
-        # Update cumulative scale attribute on transform
-        if has_curve:
+        if _scale_cvs_around_pivot(obj, scale_factor):
             current_scale = _get_cv_scale(obj)
             _set_cv_scale(obj, current_scale * scale_factor)
 
@@ -283,6 +279,16 @@ def is_mgear_guide(node):
     if not cmds.objExists(node):
         return False
     return cmds.attributeQuery("isGearGuide", node=node, exists=True)
+
+
+def _find_all_guides():
+    """Find all mGear guide transforms in the scene.
+
+    Returns:
+        list: Transform node names that have the isGearGuide attribute.
+    """
+    plugs = cmds.ls("*.isGearGuide") or []
+    return [p.split(".", 1)[0] for p in plugs]
 
 
 def guide_label_text(node):
@@ -486,8 +492,6 @@ def list_all_labels():
     labels = []
     for plug in plugs:
         node = plug.split(".", 1)[0]
-        if not cmds.attributeQuery(LABEL_TAG_ATTR, node=node, exists=True):
-            continue
         if not cmds.getAttr(plug):
             continue
         shapes = cmds.listRelatives(
@@ -580,39 +584,7 @@ def export_labels_to_json(file_path):
     Args:
         file_path (str): Destination file path.
     """
-    labels = list_all_labels()
-    data = {"labels": []}
-
-    for lbl in labels:
-        parent = cmds.listRelatives(lbl, parent=True)
-        if not parent:
-            continue
-        guide = parent[0]
-        if not is_mgear_guide(guide):
-            continue
-
-        shapes = cmds.listRelatives(
-            lbl, shapes=True, noIntermediate=True
-        ) or []
-        if not shapes:
-            continue
-        shp = shapes[0]
-        if cmds.nodeType(shp) != "annotationShape":
-            continue
-
-        offset = compute_label_offset(guide, lbl)
-        text = cmds.getAttr(shp + ".text") or ""
-        color_data = get_label_color_data(shp)
-
-        data["labels"].append(
-            {
-                "guide": guide,
-                "label": text,
-                "offset": list(offset),
-                "color": color_data,
-            }
-        )
-
+    data = {"labels": export_labels_configuration()}
     with open(file_path, "w") as fobj:
         json.dump(data, fobj, indent=4)
 
@@ -627,50 +599,7 @@ def import_labels_from_json(file_path):
     """
     with open(file_path, "r") as fobj:
         data = json.load(fobj)
-
-    for item in data.get("labels", []):
-        guide = item.get("guide")
-        if not guide or not cmds.objExists(guide):
-            continue
-        if not is_mgear_guide(guide):
-            continue
-
-        offset = item.get("offset", list(LABEL_DEFAULT_OFFSET))
-        offset = (
-            float(offset[0]),
-            float(offset[1]),
-            float(offset[2]),
-        )
-
-        remove_label_from_guide(guide)
-        anno = cmds.annotate(guide, tx=item.get("label", ""))
-
-        if cmds.nodeType(anno) == "annotationShape":
-            label_transform = cmds.listRelatives(anno, parent=True)[0]
-            label_shape = anno
-        else:
-            label_transform = anno
-            shapes = cmds.listRelatives(
-                label_transform, shapes=True, noIntermediate=True
-            ) or []
-            if not shapes:
-                cmds.delete(label_transform)
-                continue
-            label_shape = shapes[0]
-
-        cmds.parent(label_transform, guide)
-
-        g_pos = cmds.xform(guide, q=True, ws=True, t=True)
-        target_pos = [
-            g_pos[0] + offset[0],
-            g_pos[1] + offset[1],
-            g_pos[2] + offset[2],
-        ]
-        cmds.xform(label_transform, ws=True, t=target_pos)
-
-        color_data = item.get("color", {})
-        set_label_color_from_data(label_shape, color_data)
-        tag_label(label_transform)
+    import_labels_configuration(data.get("labels", []))
 
 
 def toggle_labels_visibility():
@@ -1242,27 +1171,8 @@ def _apply_cv_scale_to_curve(curve_name, target_scale):
     if abs(current_scale - target_scale) < 0.0001:
         return
 
-    # Compute delta scale factor needed
     delta = target_scale / current_scale
-
-    shapes = cmds.listRelatives(curve_name, shapes=True, fullPath=True) or []
-    piv = cmds.xform(curve_name, q=True, ws=True, rp=True)
-
-    for shp in shapes:
-        if cmds.nodeType(shp) != "nurbsCurve":
-            continue
-
-        cv_list = cmds.ls(shp + ".cv[*]", fl=True) or []
-        for cv in cv_list:
-            pos = cmds.pointPosition(cv, w=True)
-            vec = [
-                (pos[0] - piv[0]) * delta,
-                (pos[1] - piv[1]) * delta,
-                (pos[2] - piv[2]) * delta
-            ]
-            new_pos = [piv[0] + vec[0], piv[1] + vec[1], piv[2] + vec[2]]
-            cmds.xform(cv, ws=True, t=new_pos)
-
+    _scale_cvs_around_pivot(curve_name, delta)
     _set_cv_scale(curve_name, target_scale)
 
 
@@ -1358,13 +1268,11 @@ def export_guide_colors_configuration():
         list[dict]: Color configuration entries for guide shapes.
     """
     config = []
-    # Find all transforms with isGearGuide attribute
-    guides = [n for n in cmds.ls(type="transform") or []
-              if cmds.attributeQuery("isGearGuide", node=n, exists=True)]
+    guides = _find_all_guides()
 
     for guide in guides:
         shapes = cmds.listRelatives(
-            guide, shapes=True, fullPath=True
+            guide, shapes=True, noIntermediate=True
         ) or []
         for shape in shapes:
             if cmds.nodeType(shape) not in ("nurbsCurve", "bezierCurve"):
@@ -1374,11 +1282,32 @@ def export_guide_colors_configuration():
                 continue
             config.append({
                 "guide": guide,
-                "shape": shape,
+                "shape": shape.split("|")[-1],
                 "color": [rgb[0], rgb[1], rgb[2]],
             })
 
     return config
+
+
+def _resolve_shape(guide, shape_name):
+    """Find a shape under a guide by short name.
+
+    Args:
+        guide (str): Guide transform name.
+        shape_name (str): Short shape name to find.
+
+    Returns:
+        str or None: Resolved shape name or None.
+    """
+    if cmds.objExists(shape_name):
+        return shape_name
+    shapes = cmds.listRelatives(
+        guide, shapes=True, noIntermediate=True
+    ) or []
+    for shp in shapes:
+        if shp.split("|")[-1] == shape_name:
+            return shp
+    return None
 
 
 def import_guide_colors_configuration(config):
@@ -1392,11 +1321,15 @@ def import_guide_colors_configuration(config):
 
     applied = 0
     for entry in config:
-        shape = entry.get("shape")
+        guide = entry.get("guide")
+        shape_name = entry.get("shape")
         color = entry.get("color")
-        if not shape or color is None:
+        if not shape_name or color is None:
             continue
-        if not cmds.objExists(shape):
+        if not guide or not cmds.objExists(guide):
+            continue
+        shape = _resolve_shape(guide, shape_name)
+        if not shape:
             continue
         if len(color) != 3:
             continue
@@ -1418,34 +1351,29 @@ def export_guide_curves_configuration():
             lineWidth, and cvScale.
     """
     config = []
-    # Find all transforms with isGearGuide attribute
-    guides = [n for n in cmds.ls(type="transform") or []
-              if cmds.attributeQuery("isGearGuide", node=n, exists=True)]
+    guides = _find_all_guides()
 
     for guide in guides:
-        # Get CV scale from the guide transform itself
         cv_scale = _get_cv_scale(guide)
 
         shapes = cmds.listRelatives(
-            guide, shapes=True, fullPath=True
+            guide, shapes=True, noIntermediate=True
         ) or []
         for shape in shapes:
             if cmds.nodeType(shape) not in ("nurbsCurve", "bezierCurve"):
                 continue
 
-            # Get lineWidth from shape
             try:
                 line_width = cmds.getAttr(shape + ".lineWidth")
             except Exception:
                 line_width = -1.0
 
-            # Only export if there's something to store
             if cv_scale == 1.0 and line_width <= 0:
                 continue
 
             config.append({
                 "guide": guide,
-                "shape": shape,
+                "shape": shape.split("|")[-1],
                 "lineWidth": line_width,
                 "cvScale": cv_scale,
             })
@@ -1475,16 +1403,15 @@ def import_guide_curves_configuration(config):
         if not guide or not cmds.objExists(guide):
             continue
 
-        # Apply lineWidth to shape if it exists
-        if shape and cmds.objExists(shape):
-            if line_width is not None and line_width > 0:
+        if shape:
+            resolved = _resolve_shape(guide, shape)
+            if resolved and line_width is not None and line_width > 0:
                 try:
-                    cmds.setAttr(shape + ".lineWidth", line_width)
+                    cmds.setAttr(resolved + ".lineWidth", line_width)
                     applied_width += 1
                 except Exception:
                     pass
 
-        # Apply CV scale to guide (only once per guide)
         if guide not in processed_guides and cv_scale is not None:
             _apply_cv_scale_to_curve(guide, cv_scale)
             processed_guides.add(guide)
@@ -1633,22 +1560,18 @@ def import_full_configuration(file_path):
     with open(file_path, "r") as fobj:
         data = json.load(fobj)
 
-    # Import display curves
     disp_curves = data.get("display_curves")
     if disp_curves:
         import_display_curve_configuration(disp_curves)
 
-    # Import guide colors
     guide_colors = data.get("guide_colors")
     if guide_colors:
         import_guide_colors_configuration(guide_colors)
 
-    # Import guide curves (lineWidth, CV scale)
     guide_curves = data.get("guide_curves")
     if guide_curves:
         import_guide_curves_configuration(guide_curves)
 
-    # Import labels
     labels = data.get("labels")
     if labels:
         import_labels_configuration(labels)
@@ -1688,8 +1611,8 @@ class GuideVisualizerUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self._color_history = []
 
         self._build_ui()
-        self._create_connections()
         self._load_settings()
+        self._create_connections()
         self._update_color_preview()
         self._refresh_history_buttons()
 
