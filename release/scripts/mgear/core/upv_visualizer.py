@@ -1,221 +1,126 @@
-"""
-UPV Visualization Module.
+"""UPV Visualization Module.
 
-This module is used to create and set up a pole vector (UPV) visualization system in Maya, specifically for the guide stage.
-
+Creates a pole vector (UPV) visualization node network for Maya's
+guide stage. Uses only nodes available in Maya 2022+ for backwards
+compatibility (plusMinusAverage, multiplyDivide, etc.).
 """
 
 import mgear.pymaya as pm
+from mgear.core import node as nod
 
 
 def upv_vis_decompose_nodes(root, elbow, wrist, eff):
-    """
-    Create decompose matrix nodes for guide nodes.
+    """Create decompose matrix nodes for guide nodes.
 
-    Creates a decomposeMatrix node for each guide node to extract world space transformation information.
-
-    Arguments:
+    Args:
         root (PyNode): Root guide node.
         elbow (PyNode): Elbow guide node.
         wrist (PyNode): Wrist guide node.
         eff (PyNode): End effector guide node.
 
     Returns:
-        list: A list containing four decomposeMatrix nodes, in the order
-            [root, elbow, wrist, eff].
+        list: Four decomposeMatrix nodes [root, elbow, wrist, eff].
     """
     guide_nodes = [root, elbow, wrist, eff]
-    decompose_nodes = [
-        pm.createNode("decomposeMatrix", name=f"{guide}_decomposeMatrix")
+    return [
+        nod.createDecomposeMatrixNode(f"{guide}.worldMatrix[0]")
         for guide in guide_nodes
     ]
-    for guide, decompose_node in zip(guide_nodes, decompose_nodes):
-        guide.worldMatrix[0] >> decompose_node.inputMatrix
-
-    return decompose_nodes
-
-
-def create_vector_nodes(name, node_type="subtract"):
-    """
-    Create vector operation node groups.
-
-    Creates a set of three nodes of the same type for processing the X, Y, Z components of a vector.
-
-    Arguments:
-        name (str): Node name prefix.
-        node_type (str, optional): Node type, supports 'subtract', 'sum',
-            'multiply'.
-
-    Returns:
-        list: A list containing three specified type nodes, corresponding to
-            the X, Y, Z axes respectively.
-
-    Raises:
-        ValueError: When the node_type is not supported.
-    """
-    node_creators = {
-        "subtract": ("subtract", "subtract"),
-        "sum": ("sum", "sum"),
-        "multiply": ("multiply", "multiply"),
-    }
-    if node_type not in node_creators:
-        raise ValueError(f"Unsupported node type: {node_type}")
-    node_class, suffix = node_creators[node_type]
-    nodes = [
-        pm.createNode(node_class, name=f"{name}_{axis}_{suffix}")
-        for axis in ["x", "y", "z"]
-    ]
-
-    return nodes
-
-
-def connect_vector_components(
-    source_node, target_nodes, target_attribute="input1", axes=["X", "Y", "Z"]
-):
-    """
-    Connect vector components to target nodes.
-
-    Connects the output components of the source node to the specified attributes of the target nodes.
-
-    Arguments:
-        source_node (PyNode): Source node, containing outputTranslateX/Y/Z
-            attributes.
-        target_nodes (list): Target node list.
-        target_attribute (str, optional): Target attribute name.
-        axes (list, optional): List of axes to connect.
-
-    """
-    for i, component in enumerate(axes):
-        source_component = getattr(source_node, f"outputTranslate{component}")
-        if hasattr(target_nodes[i], target_attribute):
-            target_attr = getattr(target_nodes[i], target_attribute)
-            source_component >> target_attr
-        elif target_attribute.startswith("input["):
-            index = int(target_attribute.split("[")[1].split("]")[0])
-            target_nodes[i].input[index] << source_component
-        else:
-            pm.displayError(
-                f"Target node {target_nodes[i]} has no attribute {target_attribute}"
-            )
 
 
 def create_vector_subtraction_nodes(elbow, wrist, root, eff):
-    """
-    Create vector subtraction node network.
+    """Create vector subtraction node network.
 
-    Creates all necessary vector subtraction nodes for pole vector calculation.
+    Uses plusMinusAverage (operation=2) instead of subtract nodes
+    for Maya 2022+ compatibility.
 
-    Arguments:
+    Args:
         elbow (PyNode): Elbow guide node.
         wrist (PyNode): Wrist guide node.
         root (PyNode): Root guide node.
         eff (PyNode): End effector guide node.
 
     Returns:
-        dict: A dictionary containing various vector subtraction nodes, keys
-            include: 'crossProduct_elbow', 'crossProduct_wrist',
-            'crossProduct_root', 'sub_elbow', 'sub_wrist', 'sub_eff'.
+        dict: PMA nodes keyed by role.
     """
-    vector_nodes = {}
-    node_type = "subtract"
-    vector_nodes["crossProduct_elbow"] = create_vector_nodes(
-        f"{elbow}_crossProduct", node_type
-    )
-    vector_nodes["crossProduct_wrist"] = create_vector_nodes(
-        f"{wrist}_crossProduct", node_type
-    )
-    vector_nodes["crossProduct_root"] = create_vector_nodes(
-        f"{root}_crossProduct", node_type
-    )
-
-    vector_nodes["sub_elbow"] = create_vector_nodes(f"{elbow}", node_type)
-    vector_nodes["sub_wrist"] = create_vector_nodes(f"{wrist}", node_type)
-    vector_nodes["sub_eff"] = create_vector_nodes(f"{eff}", node_type)
-
-    return vector_nodes
+    names = {
+        "crossProduct_elbow": f"{elbow}_crossProduct",
+        "crossProduct_wrist": f"{wrist}_crossProduct",
+        "crossProduct_root": f"{root}_crossProduct",
+        "sub_elbow": str(elbow),
+        "sub_wrist": str(wrist),
+        "sub_eff": str(eff),
+    }
+    nodes = {}
+    for key, name in names.items():
+        n = nod.createPlusMinusAverage3D([], operation=2)
+        pm.rename(n, f"{name}_pma")
+        nodes[key] = n
+    return nodes
 
 
 def connect_decompose_to_vector_nodes(decompose_nodes, vector_nodes):
-    """
-    Connect decompose matrix nodes to vector nodes.
+    """Connect decompose matrix nodes to vector subtraction nodes.
 
-    Connects the outputs of decomposeMatrix nodes to the inputs of vector subtraction nodes.
-
-    Arguments:
-        decompose_nodes (list): decomposeMatrix node list.
-        vector_nodes (dict): Vector subtraction node dictionary.
-
-    Note:
-        Node order convention: decompose_nodes = [root, elbow, wrist, eff].
+    Args:
+        decompose_nodes (list): DecomposeMatrix nodes
+            [root, elbow, wrist, eff].
+        vector_nodes (dict): PMA subtraction node dictionary.
     """
     decm = decompose_nodes
-    # Connect crossProduct_root (wrist - root)
-    connect_vector_components(decm[2], vector_nodes["crossProduct_root"], "input1")
-    connect_vector_components(decm[0], vector_nodes["crossProduct_root"], "input2")
-    # Connect crossProduct_elbow (elbow - root)
-    connect_vector_components(decm[1], vector_nodes["crossProduct_elbow"], "input1")
-    connect_vector_components(decm[0], vector_nodes["crossProduct_elbow"], "input2")
-    # Connect crossProduct_wrist_sub (wrist - root)
-    connect_vector_components(decm[2], vector_nodes["crossProduct_wrist"], "input1")
-    connect_vector_components(decm[0], vector_nodes["crossProduct_wrist"], "input2")
-    # elbow - root
-    connect_vector_components(decm[1], vector_nodes["sub_elbow"], "input1")
-    connect_vector_components(decm[0], vector_nodes["sub_elbow"], "input2")
-    # wrist - root
-    connect_vector_components(decm[2], vector_nodes["sub_wrist"], "input1")
-    connect_vector_components(decm[0], vector_nodes["sub_wrist"], "input2")
-    # eff - root
-    connect_vector_components(decm[3], vector_nodes["sub_eff"], "input1")
-    connect_vector_components(decm[0], vector_nodes["sub_eff"], "input2")
+    connections = (
+        # (source_for_input3D[0], source_for_input3D[1], target_key)
+        (decm[2], decm[0], "crossProduct_root"),   # wrist - root
+        (decm[1], decm[0], "crossProduct_elbow"),   # elbow - root
+        (decm[2], decm[0], "crossProduct_wrist"),   # wrist - root
+        (decm[1], decm[0], "sub_elbow"),             # elbow - root
+        (decm[2], decm[0], "sub_wrist"),             # wrist - root
+        (decm[3], decm[0], "sub_eff"),               # eff - root
+    )
+    for src_a, src_b, key in connections:
+        pma = vector_nodes[key]
+        pm.connectAttr(
+            f"{src_a}.outputTranslate", f"{pma}.input3D[0]"
+        )
+        pm.connectAttr(
+            f"{src_b}.outputTranslate", f"{pma}.input3D[1]"
+        )
 
 
 def calculate_vector_lengths(vector_nodes):
-    """
-    Calculate vector lengths.
+    """Calculate vector lengths from PMA subtraction outputs.
 
-    Creates length nodes for eff, elbow, wrist vectors to calculate their lengths.
-
-    Arguments:
-        vector_nodes (dict): Dictionary containing vector subtraction nodes.
+    Args:
+        vector_nodes (dict): PMA subtraction node dictionary.
 
     Returns:
-        dict: Dictionary containing length nodes, keys are 'eff', 'elbow',
-            'wrist'.
+        dict: Length nodes keyed by 'eff', 'elbow', 'wrist'.
     """
     length_nodes = {}
-    for joint_name in ["eff", "elbow", "wrist"]:
-        length_node = pm.createNode("length", name=f"{joint_name}_length")
-        sub_nodes = vector_nodes[f"sub_{joint_name}"]
-        sub_nodes[0].output >> length_node.inputX
-        sub_nodes[1].output >> length_node.inputY
-        sub_nodes[2].output >> length_node.inputZ
+    for joint_name in ("eff", "elbow", "wrist"):
+        length_node = pm.createNode(
+            "length", name=f"{joint_name}_length"
+        )
+        pma = vector_nodes[f"sub_{joint_name}"]
+        pma.output3D >> length_node.input
         length_nodes[joint_name] = length_node
 
     return length_nodes
 
 
 def setup_math_operations(root, length_nodes, float_value=0.5):
-    """
-    Set up mathematical operation nodes.
+    """Set up math operation nodes for pole vector length.
 
-    Creates a chain of mathematical operation nodes for pole vector
-    calculation.
-
-    Arguments:
+    Args:
         root (PyNode): Root guide node.
-        length_nodes (dict): Dictionary containing length nodes.
-        float_value (float, optional): Multiplication coefficient,
-            defaults to 0.5.
+        length_nodes (dict): Length nodes dictionary.
+        float_value (float, optional): Multiplication coefficient.
 
     Returns:
-        tuple: A tuple containing two elements: half_one_float_node (final
-            multiplication node) and math_nodes (dict containing 'max' and
-            'half_multiply' nodes).
+        tuple: (half_one_float_node, math_nodes dict).
     """
-    # Equivalent of floatMath (multiply)
-    max_float_node = pm.createNode("multiplyDivide", name=f"{root}_max_md")
-    max_float_node.input1X.set(0.010)
-    max_float_node.operation.set(1)  # 1 = multiply
+    max_float_node = nod.createMulNode(0.010, 1.0)
+    pm.rename(max_float_node, f"{root}_max_md")
 
     max_node = pm.createNode("max", name=f"{root.name()}_max")
     max_float_node.outputX >> max_node.input[0]
@@ -224,11 +129,10 @@ def setup_math_operations(root, length_nodes, float_value=0.5):
     length_nodes["elbow"].output >> max_node.input[2]
     length_nodes["wrist"].output >> max_node.input[3]
 
-    # Equivalent of floatMath (multiply)
-    half_one_float_node = pm.createNode("multiplyDivide", name=f"{root}_half_one_md")
-    half_one_float_node.input2X.set(float_value)
-    half_one_float_node.operation.set(1)  # 1 = multiply
-    max_node.output >> half_one_float_node.input1X
+    half_one_float_node = nod.createMulNode(
+        f"{max_node}.output", float_value
+    )
+    pm.rename(half_one_float_node, f"{root}_half_one_md")
 
     math_nodes = {"max": max_node, "half_multiply": half_one_float_node}
 
@@ -236,37 +140,32 @@ def setup_math_operations(root, length_nodes, float_value=0.5):
 
 
 def setup_cross_product_chain(root, elbow, wrist, vector_nodes, float_value):
-    """
-    Set up cross product calculation chain.
+    """Set up cross product calculation chain.
 
-    Creates a complete cross product calculation node network to determine the pole vector direction.
-
-    Arguments:
+    Args:
         root (PyNode): Root guide node.
         elbow (PyNode): Elbow guide node.
         wrist (PyNode): Wrist guide node.
-        vector_nodes (dict): Vector node dictionary.
-        float_value (float): Coefficient used for length calculation.
+        vector_nodes (dict): PMA vector node dictionary.
+        float_value (float): Length calculation coefficient.
 
     Returns:
-        tuple: A tuple containing three elements:
-            crossProduct_root_normalize_node, half_multiply_node, math_nodes.
+        tuple: (normalize_node, half_multiply_node, math_nodes).
     """
     length_nodes = calculate_vector_lengths(vector_nodes)
     half_multiply_node, math_nodes = setup_math_operations(
         root, length_nodes, float_value
     )
 
-    normalize_elbow = pm.createNode("normalize", name=f"{elbow}_normalize")
-    normalize_wrist = pm.createNode("normalize", name=f"{wrist}_normalize")
+    normalize_elbow = pm.createNode(
+        "normalize", name=f"{elbow}_normalize"
+    )
+    normalize_wrist = pm.createNode(
+        "normalize", name=f"{wrist}_normalize"
+    )
 
-    for i, axis in enumerate(["X", "Y", "Z"]):
-        getattr(vector_nodes["crossProduct_elbow"][i], "output") >> getattr(
-            normalize_elbow, f"input{axis}"
-        )
-        getattr(vector_nodes["crossProduct_wrist"][i], "output") >> getattr(
-            normalize_wrist, f"input{axis}"
-        )
+    vector_nodes["crossProduct_elbow"].output3D >> normalize_elbow.input
+    vector_nodes["crossProduct_wrist"].output3D >> normalize_wrist.input
 
     crossProduct_wrist_elbow = pm.createNode(
         "crossProduct", name=f"{root}_crossProduct_wrist_elbow"
@@ -280,18 +179,23 @@ def setup_cross_product_chain(root, elbow, wrist, vector_nodes, float_value):
     normalize_elbow.output >> crossProduct_wrist_elbow.input2
     normalize_elbow.output >> crossProduct_default.input1
 
-    crossProduct_wrist_elbow_sum_node = pm.createNode(
-        "sum", name=f"{root}_crossProduct_wrist_elbow_sum"
+    # Sum cross product components to check if zero
+    cp_sum_node = nod.createPlusMinusAverage1D(
+        [
+            f"{crossProduct_wrist_elbow}.outputX",
+            f"{crossProduct_wrist_elbow}.outputY",
+            f"{crossProduct_wrist_elbow}.outputZ",
+        ],
+        operation=1,
     )
+    pm.rename(cp_sum_node, f"{root}_crossProduct_wrist_elbow_sum")
 
-    crossProduct_wrist_elbow.outputX >> crossProduct_wrist_elbow_sum_node.input[0]
-    crossProduct_wrist_elbow.outputY >> crossProduct_wrist_elbow_sum_node.input[1]
-    crossProduct_wrist_elbow.outputZ >> crossProduct_wrist_elbow_sum_node.input[2]
-
-    condition_node = pm.createNode("condition", name=f"{root}_condition")
+    condition_node = pm.createNode(
+        "condition", name=f"{root}_condition"
+    )
     condition_node.secondTerm.set(0.000)
 
-    crossProduct_wrist_elbow_sum_node.output >> condition_node.firstTerm
+    cp_sum_node.output1D >> condition_node.firstTerm
     crossProduct_default.output >> condition_node.colorIfTrue
     crossProduct_wrist_elbow.output >> condition_node.colorIfFalse
 
@@ -300,13 +204,11 @@ def setup_cross_product_chain(root, elbow, wrist, vector_nodes, float_value):
     )
     condition_node.outColor >> normalize_condition_node.input
 
-    crossProduct_root = pm.createNode("crossProduct", name=f"{root}_crossProduct_root")
+    crossProduct_root = pm.createNode(
+        "crossProduct", name=f"{root}_crossProduct_root"
+    )
     normalize_condition_node.output >> crossProduct_root.input1
-
-    for i, axis in enumerate(["X", "Y", "Z"]):
-        getattr(vector_nodes["crossProduct_root"][i], "output") >> getattr(
-            crossProduct_root, f"input2{axis}"
-        )
+    vector_nodes["crossProduct_root"].output3D >> crossProduct_root.input2
 
     crossProduct_root_normalize_node = pm.createNode(
         "normalize", name=f"{root}_crossProduct_root_normalize"
@@ -319,41 +221,47 @@ def setup_cross_product_chain(root, elbow, wrist, vector_nodes, float_value):
 def setup_upv_position_calculation(
     elbow, upv, normalize_node, half_multiply_node, decompose_nodes
 ):
-    """
-    Calculate the final position of the UPV node.
+    """Calculate the final UPV position.
 
-    Determines the final position of the pole vector guide node based on cross product direction and length calculation.
-
-    Arguments:
+    Args:
         elbow (PyNode): Elbow guide node.
         upv (PyNode): Pole vector guide node.
-        normalize_node (PyNode): Normalized cross product direction node.
+        normalize_node (PyNode): Normalized cross product node.
         half_multiply_node (PyNode): Length multiplication node.
-        decompose_nodes (list): decomposeMatrix node list.
+        decompose_nodes (list): DecomposeMatrix node list.
     """
-    upv_pos_mul = create_vector_nodes(f"{elbow}_upv_pos", "multiply")
-    upv_pos_sum = create_vector_nodes(f"{elbow}_upv_pos", "sum")
-    if upv_pos_mul and upv_pos_sum:
-        for i, axis in enumerate(["X", "Y", "Z"]):
-            getattr(normalize_node, f"output{axis}") >> upv_pos_mul[i].input[0]
-            half_multiply_node.outputX >> upv_pos_mul[i].input[1]
+    upv_mul = nod.createMulNode(
+        [
+            f"{normalize_node}.outputX",
+            f"{normalize_node}.outputY",
+            f"{normalize_node}.outputZ",
+        ],
+        [
+            f"{half_multiply_node}.outputX",
+            f"{half_multiply_node}.outputX",
+            f"{half_multiply_node}.outputX",
+        ],
+    )
+    pm.rename(upv_mul, f"{elbow}_upv_pos_multiply")
 
-            upv_pos_mul[i].output >> upv_pos_sum[i].input[0]
-            (
-                getattr(decompose_nodes[1], f"outputTranslate{axis}")
-                >> upv_pos_sum[i].input[1]
-            )
+    upv_sum = nod.createPlusMinusAverage3D(
+        [
+            f"{upv_mul}.output",
+            f"{decompose_nodes[1]}.outputTranslate",
+        ],
+        operation=1,
+    )
+    pm.rename(upv_sum, f"{elbow}_upv_pos_pma")
 
-            upv_pos_sum[i].output >> getattr(upv, f"translate{axis}")
+    upv_sum.output3Dx >> upv.translateX
+    upv_sum.output3Dy >> upv.translateY
+    upv_sum.output3Dz >> upv.translateZ
 
 
 def setup_visibility_and_matrix(root, root_decompose, upv, upvcrv):
-    """
-    Set up visibility and matrix connections.
+    """Set up visibility and matrix connections.
 
-    Ensures the UPV node and curve correctly inherit the root node's transformation.
-
-    Arguments:
+    Args:
         root (PyNode): Root guide node.
         root_decompose (PyNode): Decompose matrix node from root.
         upv (PyNode): Pole vector guide node.
@@ -365,36 +273,32 @@ def setup_visibility_and_matrix(root, root_decompose, upv, upvcrv):
 
 
 def create_upv_system(root, elbow, wrist, eff, upvcrv, upv, float_value=0.5):
-    """
-    Create a complete UPV visualization system.
+    """Create a complete UPV visualization system.
 
-    Main function that coordinates all sub-functions to create a complete pole vector visualization system.
-
-    Arguments:
+    Args:
         root (PyNode): Root guide node.
         elbow (PyNode): Elbow guide node.
         wrist (PyNode): Wrist guide node.
         eff (PyNode): End effector guide node.
         upvcrv (PyNode): Pole vector display curve node.
         upv (PyNode): Pole vector guide node.
-        float_value (float, optional): Pole vector length coefficient,
-            defaults to 0.5.
-
-    Example:
-        >>> create_upv_system('root_guide', 'elbow_guide', 'wrist_guide',
-        ...                   'eff_guide', upv_curve, upv_node, 0.5)
+        float_value (float, optional): Pole vector length coefficient.
     """
     decompose_nodes = upv_vis_decompose_nodes(root, elbow, wrist, eff)
-    if decompose_nodes:
-        vector_nodes = create_vector_subtraction_nodes(elbow, wrist, root, eff)
-        connect_decompose_to_vector_nodes(decompose_nodes, vector_nodes)
+    if not decompose_nodes:
+        return
 
-        normalize_node, half_multiply_node, math_nodes = setup_cross_product_chain(
+    vector_nodes = create_vector_subtraction_nodes(elbow, wrist, root, eff)
+    connect_decompose_to_vector_nodes(decompose_nodes, vector_nodes)
+
+    normalize_node, half_multiply_node, math_nodes = (
+        setup_cross_product_chain(
             root, elbow, wrist, vector_nodes, float_value
         )
+    )
 
-        setup_upv_position_calculation(
-            elbow, upv, normalize_node, half_multiply_node, decompose_nodes
-        )
+    setup_upv_position_calculation(
+        elbow, upv, normalize_node, half_multiply_node, decompose_nodes
+    )
 
-        setup_visibility_and_matrix(root, decompose_nodes[0], upv, upvcrv)
+    setup_visibility_and_matrix(root, decompose_nodes[0], upv, upvcrv)

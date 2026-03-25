@@ -675,6 +675,44 @@ def createPlusMinusAverage1D(input, operation=1, output=None):
     return node
 
 
+def createPlusMinusAverage3D(input, operation=1, output=None):
+    """Create a plusMinusAverage node with 3D inputs.
+
+    Args:
+        input (attr or list): The input 3D attributes. Each element
+            is connected to input3D[i].
+        operation (int): Node operation. 0=None, 1=sum, 2=subtract,
+            3=average.
+        output (attr): The attribute to connect output3D to.
+
+    Returns:
+        pyNode: the newly created node.
+    """
+    if not isinstance(input, list):
+        input = [input]
+
+    node = pm.createNode("plusMinusAverage")
+    node.attr("operation").set(operation)
+
+    for i, x in enumerate(input):
+        try:
+            pm.connectAttr(x, f"{node}.input3D[{i}]")
+        except RuntimeError:
+            if isinstance(x, (list, tuple)) and len(x) == 3:
+                pm.setAttr(
+                    f"{node}.input3D[{i}]", *x, type="double3"
+                )
+            else:
+                pm.setAttr(
+                    f"{node}.input3D[{i}]", x, x, x, type="double3"
+                )
+
+    if output:
+        pm.connectAttr(f"{node}.output3D", output)
+
+    return node
+
+
 def createVertexPositionNode(
     inShape, vId=0, output=None, name="mgear_vertexPosition"
 ):
