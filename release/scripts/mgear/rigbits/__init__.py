@@ -412,19 +412,33 @@ def replaceShape(source=None, targets=None, *args):
         shape = target.getShapes()
         cnx = []
         if shape:
-            cnx = shape[0].listConnections(plugs=True, c=True)
-            cnx = [[c[1], c[0].shortName()] for c in cnx]
+            raw_cnx = shape[0].listConnections(plugs=True, c=True)
+            # Store (is_destination, other_plug, shape_attr_short_name)
+            # so we can restore the correct connection direction later.
+            cnx = [
+                [c[0].plug().isDestination, c[1], c[0].shortName()]
+                for c in raw_cnx
+            ]
             # Disconnect the conexion before delete the old shape
             for s in shape:
                 for c in s.listConnections(plugs=True, c=True):
-                    pm.disconnectAttr(c[0])
+                    if c[0].plug().isDestination:
+                        pm.disconnectAttr(c[1], c[0])
+                    else:
+                        pm.disconnectAttr(c[0], c[1])
         pm.delete(shape)
         pm.parent(source2.getShapes(), target, r=True, s=True)
 
         for i, sh in enumerate(target.getShapes()):
-            # Restore shapes connections
-            for c in cnx:
-                pm.connectAttr(c[0], sh.attr(c[1]))
+            # Restore shapes connections respecting original direction.
+            for is_dst, other_plug, shape_attr in cnx:
+                try:
+                    if is_dst:
+                        pm.connectAttr(other_plug, sh.attr(shape_attr))
+                    else:
+                        pm.connectAttr(sh.attr(shape_attr), other_plug)
+                except RuntimeError:
+                    pass
             pm.rename(sh, target.name() + "_%s_Shape" % str(i))
 
         pm.delete(source2)
