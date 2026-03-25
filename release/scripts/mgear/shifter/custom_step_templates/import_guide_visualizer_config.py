@@ -1,6 +1,6 @@
 """Import Guide Visualizer Configuration custom step template.
 
-Template for importing guide visualizer settings from a JSON file.
+Template for importing guide visualizer settings from a .gvc file.
 """
 
 TEMPLATE = r'''import mgear.shifter.custom_step as cstp
@@ -18,7 +18,7 @@ class CustomShifterStep(cstp.customShifterMainStep):
     - Guide curves (lineWidth, CV scale)
     - Labels
 
-    The configuration is imported from a JSON file exported by the
+    The configuration is imported from a .gvc file exported by the
     Guide Visualizer tool.
     """
 
@@ -28,12 +28,12 @@ class CustomShifterStep(cstp.customShifterMainStep):
 
         # Configure the configuration file path
         # Option 1: Hardcode the path
-        # self.config_path = "path/to/your/guide_visualizer_config.json"
+        # self.config_path = "path/to/your/guide_visualizer_config.gvc"
 
         # Option 2: Use a path relative to this script
         # import os
         # script_dir = os.path.dirname(__file__)
-        # self.config_path = os.path.join(script_dir, "guide_vis_config.json")
+        # self.config_path = os.path.join(script_dir, "guide_vis_config.gvc")
 
         # Option 3: Leave as None to show file dialog at runtime
         self.config_path = None
@@ -58,7 +58,7 @@ class CustomShifterStep(cstp.customShifterMainStep):
             file_path = cmds.fileDialog2(
                 caption="Import Guide Visualizer Configuration",
                 fileMode=1,
-                fileFilter="JSON Files (*.json)",
+                fileFilter="Guide Visualizer Config (*.gvc)",
             )
             if not file_path:
                 self.log("Import cancelled.", level="warning")
