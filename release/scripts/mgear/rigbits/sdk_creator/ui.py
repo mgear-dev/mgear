@@ -13,7 +13,6 @@ from mgear.core import pyqt
 
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
-from mgear.vendor.Qt import QtGui
 
 from . import core
 
@@ -310,8 +309,12 @@ class SDKCreatorUI(
         self.detect_btn.clicked.connect(self._detect_poses)
         self.refresh_btn.clicked.connect(self._detect_poses)
         self.remove_pose_btn.clicked.connect(self._remove_pose)
-        self.pose_up_btn.clicked.connect(self._move_pose_up)
-        self.pose_down_btn.clicked.connect(self._move_pose_down)
+        self.pose_up_btn.clicked.connect(
+            lambda: self._move_pose(-1)
+        )
+        self.pose_down_btn.clicked.connect(
+            lambda: self._move_pose(1)
+        )
         self.apply_btn.clicked.connect(self._apply_setup)
 
         # Selection sync
@@ -386,26 +389,20 @@ class SDKCreatorUI(
             idx = self.poses_tree.indexOfTopLevelItem(item)
             self.poses_tree.takeTopLevelItem(idx)
 
-    def _move_pose_up(self):
-        """Move selected pose up in the list."""
-        item = self.poses_tree.currentItem()
-        if not item:
-            return
-        idx = self.poses_tree.indexOfTopLevelItem(item)
-        if idx > 0:
-            self.poses_tree.takeTopLevelItem(idx)
-            self.poses_tree.insertTopLevelItem(idx - 1, item)
-            self.poses_tree.setCurrentItem(item)
+    def _move_pose(self, direction):
+        """Move selected pose up or down.
 
-    def _move_pose_down(self):
-        """Move selected pose down in the list."""
+        Args:
+            direction (int): -1 for up, +1 for down.
+        """
         item = self.poses_tree.currentItem()
         if not item:
             return
         idx = self.poses_tree.indexOfTopLevelItem(item)
-        if idx < self.poses_tree.topLevelItemCount() - 1:
+        new_idx = idx + direction
+        if 0 <= new_idx < self.poses_tree.topLevelItemCount():
             self.poses_tree.takeTopLevelItem(idx)
-            self.poses_tree.insertTopLevelItem(idx + 1, item)
+            self.poses_tree.insertTopLevelItem(new_idx, item)
             self.poses_tree.setCurrentItem(item)
 
     def _detect_poses(self):

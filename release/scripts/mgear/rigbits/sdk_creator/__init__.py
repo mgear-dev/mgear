@@ -13,8 +13,8 @@ from maya import cmds
 from mgear.core import pyqt
 
 from .ui import SDKCreatorUI
-from .core import apply_from_config
 from .core import apply_from_file
+from .core import create_sdk_setup
 from .core import export_config
 from .core import import_config
 from .core import mirror_config

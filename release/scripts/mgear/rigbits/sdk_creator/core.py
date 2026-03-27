@@ -6,13 +6,15 @@ Supports export/import of ``.sdkc`` configurations and mirroring.
 """
 
 import json
-import os
 
 import mgear
 from maya import cmds
 
 from mgear.core import attribute
 from mgear.core import utils as core_utils
+
+# Pre/post infinity mode constant
+_INFINITY_LINEAR = 1
 
 # Config format
 CONFIG_VERSION = "1.0"
@@ -43,6 +45,12 @@ CHANNEL_CURVE_TYPE = {
 
 # Default channels to negate when mirroring (empty = none checked)
 DEFAULT_MIRROR_CHANNELS = ()
+
+# Node types to clean up during delete
+_SDK_NODE_TYPES = (
+    "animCurveUA", "animCurveUL", "animCurveUU",
+    "blendWeighted", "addDoubleLinear",
+)
 
 # Tolerance for comparing to rest value
 _EPSILON = 1e-6
@@ -127,6 +135,7 @@ def collect_pose_data(controls, frames, pose_names):
     """Collect delta values for all controls across all poses.
 
     Reads values at each frame and computes deltas from rest.
+    Channel detection is inlined to avoid double-reading values.
 
     Args:
         controls (list): Control names.
@@ -140,15 +149,12 @@ def collect_pose_data(controls, frames, pose_names):
     for frame, pose_name in zip(frames, pose_names):
         pose_data = {}
         for ctl in controls:
-            channels = get_keyed_channels(ctl, [frame])
-            if not channels:
-                continue
             ch_data = {}
-            for ch in channels:
-                attr_path = "{}.{}".format(ctl, ch)
-                val = cmds.getAttr(attr_path, time=frame)
-                rest = REST_VALUES[ch]
-                delta = val - rest
+            for ch in TRANSFORM_CHANNELS:
+                val = cmds.getAttr(
+                    "{}.{}".format(ctl, ch), time=frame
+                )
+                delta = val - REST_VALUES[ch]
                 if abs(delta) > _EPSILON:
                     ch_data[ch] = delta
             if ch_data:
@@ -199,7 +205,6 @@ def insert_sdk_transform(control, suffix="_sdk"):
         str: The created SDK transform node name, or None if
             one already exists.
     """
-    # Check if _sdk parent already exists
     parent = cmds.listRelatives(control, parent=True, fullPath=True)
     if parent:
         short_parent = parent[0].split("|")[-1]
@@ -210,12 +215,10 @@ def insert_sdk_transform(control, suffix="_sdk"):
             )
             return None
 
-    # Get control's world matrix
     matrix = cmds.xform(
         control, query=True, matrix=True, worldSpace=True
     )
 
-    # Create SDK transform
     short_name = control.split("|")[-1].split(":")[-1]
     sdk_name = short_name + suffix
 
@@ -313,7 +316,6 @@ def create_sdk_curve(
         curve_type, name=curve_name, skipSelect=True
     )
 
-    # Key at driver=0 → value=0 (rest delta)
     cmds.setKeyframe(
         curve_node,
         float=0.0,
@@ -321,8 +323,6 @@ def create_sdk_curve(
         inTangentType="clamped",
         outTangentType="clamped",
     )
-
-    # Key at driver=1 → value=delta
     cmds.setKeyframe(
         curve_node,
         float=1.0,
@@ -331,12 +331,10 @@ def create_sdk_curve(
         outTangentType="clamped",
     )
 
-    # Linear pre/post infinity for overshooting beyond 0-1
-    # preInfinity=1 and postInfinity=1 = linear
-    cmds.setAttr(curve_node + ".preInfinity", 1)
-    cmds.setAttr(curve_node + ".postInfinity", 1)
+    # Linear infinity for overshooting beyond 0-1
+    cmds.setAttr(curve_node + ".preInfinity", _INFINITY_LINEAR)
+    cmds.setAttr(curve_node + ".postInfinity", _INFINITY_LINEAR)
 
-    # Connect driver
     cmds.connectAttr(driver_attr, curve_node + ".input")
 
     return curve_node
@@ -394,13 +392,7 @@ def lock_sdk_transform(sdk_node):
     Args:
         sdk_node (str): SDK transform node name.
     """
-    for ch in TRANSFORM_CHANNELS:
-        attr_path = "{}.{}".format(sdk_node, ch)
-        cmds.setAttr(attr_path, lock=True, keyable=False)
-    # Also lock visibility
-    cmds.setAttr(
-        "{}.visibility".format(sdk_node), lock=True, keyable=False
-    )
+    attribute.setKeyableAttributes(sdk_node, params=[])
 
 
 @core_utils.one_undo
@@ -442,43 +434,31 @@ def delete_sdk_setup(controls, ui_host=None, suffix="_sdk"):
 
         sdk_node = parent[0]
 
-        # Collect upstream utility nodes to delete
-        to_delete = []
+        to_delete = set()
         for ch in TRANSFORM_CHANNELS:
             attr_path = "{}.{}".format(sdk_node, ch)
-            # Unlock so we can disconnect
             cmds.setAttr(attr_path, lock=False)
             conns = cmds.listConnections(
                 attr_path, source=True, destination=False,
                 skipConversionNodes=False,
             )
-            if conns:
-                for node in conns:
-                    if cmds.objExists(node):
-                        to_delete.append(node)
-                    # Also check upstream of blendWeighted/adl
-                    upstream = cmds.listConnections(
-                        node, source=True, destination=False,
-                        skipConversionNodes=False,
-                    ) or []
-                    for up in upstream:
-                        if cmds.objExists(up):
-                            node_type = cmds.nodeType(up)
-                            if node_type in (
-                                "animCurveUA",
-                                "animCurveUL",
-                                "animCurveUU",
-                                "blendWeighted",
-                                "addDoubleLinear",
-                            ):
-                                to_delete.append(up)
+            if not conns:
+                continue
+            for node in conns:
+                to_delete.add(node)
+                upstream = cmds.listConnections(
+                    node, source=True, destination=False,
+                    skipConversionNodes=False,
+                ) or []
+                for up in upstream:
+                    if cmds.nodeType(up) in _SDK_NODE_TYPES:
+                        to_delete.add(up)
 
         mgear.log(
             "  Removing SDK node: {} from {}".format(sdk_node, ctl),
             mgear.sev_info,
         )
 
-        # Reparent control out of sdk_node
         grandparent = cmds.listRelatives(
             sdk_node, parent=True, fullPath=True
         )
@@ -487,18 +467,14 @@ def delete_sdk_setup(controls, ui_host=None, suffix="_sdk"):
         else:
             cmds.parent(ctl, world=True)
 
-        # Delete utility nodes then sdk_node
-        to_delete.append(sdk_node)
+        to_delete.add(sdk_node)
         for node in to_delete:
             if cmds.objExists(node):
-                try:
-                    cmds.delete(node)
-                except RuntimeError:
-                    pass
+                cmds.delete(node)
 
         count += 1
 
-    # Remove UIHost pose attributes if they have no remaining outputs
+    # Remove UIHost pose attributes that have no outputs
     if ui_host and cmds.objExists(ui_host):
         user_attrs = cmds.listAttr(ui_host, userDefined=True) or []
         for attr_name in user_attrs:
@@ -520,11 +496,34 @@ def delete_sdk_setup(controls, ui_host=None, suffix="_sdk"):
                 except RuntimeError:
                     pass
 
-        # Remove separator if no pose attrs remain
+        # Remove separator only if no SDK-connected attrs remain
         if cmds.attributeQuery(
             "sdk_poses", node=ui_host, exists=True
         ):
-            cmds.deleteAttr("{}.sdk_poses".format(ui_host))
+            remaining = cmds.listAttr(
+                ui_host, userDefined=True
+            ) or []
+            has_sdk_attrs = False
+            for a in remaining:
+                if a == "sdk_poses":
+                    continue
+                full = "{}.{}".format(ui_host, a)
+                # An SDK pose attr drives animCurve nodes
+                out = cmds.listConnections(
+                    full, source=False, destination=True,
+                    type="animCurveUU",
+                ) or cmds.listConnections(
+                    full, source=False, destination=True,
+                    type="animCurveUA",
+                ) or cmds.listConnections(
+                    full, source=False, destination=True,
+                    type="animCurveUL",
+                )
+                if out:
+                    has_sdk_attrs = True
+                    break
+            if not has_sdk_attrs:
+                cmds.deleteAttr("{}.sdk_poses".format(ui_host))
 
     mgear.log(
         "SDK Creator: Deleted setup from {} control(s)".format(
@@ -556,14 +555,14 @@ def create_sdk_setup(config):
 
     # Validate
     if not cmds.objExists(ui_host):
-        cmds.error(
+        cmds.warning(
             "SDK Creator: UIHost '{}' not found".format(ui_host)
         )
         return []
 
     for ctl in controls:
         if not cmds.objExists(ctl):
-            cmds.error(
+            cmds.warning(
                 "SDK Creator: Control '{}' not found".format(ctl)
             )
             return []
@@ -711,20 +710,6 @@ def import_config(file_path):
             "SDK Creator: Failed to import: {}".format(e)
         )
         return None
-
-
-def apply_from_config(config):
-    """Apply SDK setup directly from a config dictionary.
-
-    Entry point for Python scripting and Shifter custom steps.
-
-    Args:
-        config (dict): Configuration dictionary.
-
-    Returns:
-        list: Created SDK transform node names.
-    """
-    return create_sdk_setup(config)
 
 
 def apply_from_file(file_path):
