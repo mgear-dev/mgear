@@ -18,11 +18,21 @@ Release Log
 	* Shifter: Fix progress bar not updating during drag-and-drop guide import
 	* Rigbits: Wire to Skinning: Add custom wire processing order with drag reorder, preserved across config export/import #611
 	* Core: Blendshape: Add transfer_blendshapes and combo utilities to core for reuse across tools
+	* Core: Attribute: Add float2/float3 compound attribute support and str node input #628
+	* Core: Node: Add createPlusMinusAverage3D for 3D vector operations
 
 **Bug Fix**
+	* Core: Anim Utils: Fix IK/FK match for 3jnt leg and roll control #626
+	* Core: UPV Visualizer: Replace subtract nodes with plusMinusAverage for Maya 2022+ compatibility Closes #617
+	* Core: Attribute: Fix docstrings to use Google-style conventions
+	* Shifter: Build Log: Fix recursion when display hooks installed twice
+	* Shifter: Guide Visualizer: Fix export storing full DAG paths and use .gvc extension
+	* Shifter: Guide Export: Fix metadata not refreshing on .sgt export and speed up export
+	* Shifter: Data-Centric Folder Creator: Fix same-name folder bug
 	* Shifter: Lite_chain_01: When Neutral Pose is not active, the build is not correct. This issue was introduced with the mirror option added in the last update Fixes #619
 	* Shifter: Blueprints: Fix build from serialized guide and squash and stretch sampling fix #621
 	* Shifter: Force refresh on the referenceGroups when UI is open
+	* Rigbits: Replace Shape: Fix connection direction when replacing control shapes #627
 
 5.2.5
 ------

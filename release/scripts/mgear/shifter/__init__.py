@@ -773,19 +773,31 @@ class Rig(object):
             guide_ = self.guides[comp]
             mgear.log("Init : " + guide_.fullName + " (" + guide_.type + ")")
 
-            module = importComponent(guide_.type)
-            Component = getattr(module, "Component")
+            try:
+                module = importComponent(guide_.type)
+                Component = getattr(module, "Component")
 
-            comp = Component(self, guide_)
-            if comp.fullName not in self.componentsIndex:
-                self.components[comp.fullName] = comp
-                self.componentsIndex.append(comp.fullName)
+                comp = Component(self, guide_)
+                if comp.fullName not in self.componentsIndex:
+                    self.components[comp.fullName] = comp
+                    self.componentsIndex.append(comp.fullName)
 
-                self.components_infos[comp.fullName] = [
-                    guide_.compType,
-                    guide_.getVersion(),
-                    guide_.author,
-                ]
+                    self.components_infos[comp.fullName] = [
+                        guide_.compType,
+                        guide_.getVersion(),
+                        guide_.author,
+                    ]
+            except Exception as e:
+                import traceback
+
+                mgear.log(
+                    "Error initializing {} ({})\n{}".format(
+                        guide_.fullName,
+                        guide_.type,
+                        traceback.format_exc(),
+                    ),
+                    mgear.sev_error,
+                )
 
         # Creation steps
         self.steps = component.Main.steps
@@ -798,7 +810,20 @@ class Rig(object):
                 mgear.log(
                     name + " : " + comp.fullName + " (" + comp.type + ")"
                 )
-                comp.stepMethods[i]()
+                try:
+                    comp.stepMethods[i]()
+                except Exception as e:
+                    import traceback
+
+                    mgear.log(
+                        "Error in {} : {} ({})\n{}".format(
+                            name,
+                            comp.fullName,
+                            comp.type,
+                            traceback.format_exc(),
+                        ),
+                        mgear.sev_error,
+                    )
 
             if self.options["step"] >= 1 and i >= self.options["step"] - 1:
                 break
