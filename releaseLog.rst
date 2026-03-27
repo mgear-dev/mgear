@@ -9,6 +9,7 @@ Release Log
 	* Shifter: Guide Template Manager: New browsable template manager with custom source folders, thumbnails, metadata, search, import/import-add/import-partial with component selection, drag-and-drop to viewport, and .sgtInfo sidecars
 	* Rigbits: Blendshape Setup Transfer: New tool for transferring blendshapes from multiple sources into a single target node with combo network rebuild, zero-delta cleanup, and .bst config support
 	* Rigbits: Evaluation Partition: New tool to split a mesh into polygon group partitions to optimize parallel evaluation #616
+	* Rigbits: SDK Creator: New tool for creating Set Driven Key setups from timeline poses with mirror support, .sdkc config export/import, and scripting API
 	* Utilbits: Bookmarks: New selection and isolate bookmarks tool
 	* Utilbits: Matcap Viewer: New viewport matcap material preview tool
 	* Core: Skin: Add localize_skin_clusters for floating-point precision fix when rigs are far from world origin

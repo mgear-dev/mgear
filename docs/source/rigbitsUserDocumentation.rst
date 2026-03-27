@@ -904,3 +904,70 @@ Scripting Access
     from mgear.rigbits.blendshape_transfer import core
     config = core.import_config("/path/to/config.bst")
     core.run_from_config(config)
+
+
+SDK Creator
+===========
+
+Reads keyframed poses from the timeline and creates **Set Driven Key** setups. It converts animation data into SDK transform nodes with animCurve graphs driven by attributes on a UIHost control.
+
+.. image:: images/rigbits/SDK_Creator_UI.png
+    :align: center
+    :scale: 80%
+
+Workflow
+--------
+
+1. Select a **UIHost** control (the node that will hold the driver attributes)
+2. Add the **controls** that have keyframed poses on the timeline
+3. Click **Detect Poses** to read keyframes — the tool finds all keyed frames and lists them with editable pose names
+4. Adjust the **Min/Max** range for the driver attributes (default 0–1)
+5. Click **Apply** to generate the SDK setup
+
+The tool creates:
+
+- An ``_sdk`` transform above each control (like an NPO but for SDK offsets)
+- A driver attribute per pose on the UIHost control
+- ``animCurve`` and ``blendWeighted`` nodes connecting the poses to control channels
+
+Mirror
+------
+
+The **Mirror** tab creates a symmetrical copy of the SDK setup by applying search/replace naming and optional channel negation.
+
+.. image:: images/rigbits/SDK_creator_Mirror.png
+    :align: center
+    :scale: 80%
+
+- **Search/Replace**: Renames controls and UIHost (e.g. ``_L`` → ``_R``)
+- **Negate Channels**: Flips the specified transform channels (tx, ty, tz, rx, ry, rz, sx, sy, sz) to achieve mirror behavior
+
+Configuration
+-------------
+
+Save and load SDK setups using the **File** menu.
+
+- **Export Config**: Save the SDK setup to a ``.sdkc`` file
+- **Export Mirror Config**: Export a mirrored version directly
+- **Import Config**: Load a ``.sdkc`` file into the UI
+- **Apply from File**: Apply an SDK setup directly from a file without loading the UI
+
+The **Edit** menu provides **Delete SDK Setup from Controls** to cleanly remove SDK transforms and orphaned driver attributes.
+
+Scripting Access
+----------------
+
+.. code-block:: python
+
+    from mgear.rigbits.sdk_creator import core
+
+    # Apply from a saved config file
+    core.apply_from_file("/path/to/config.sdkc")
+
+    # Mirror an existing config
+    config = core.import_config("/path/to/config.sdkc")
+    mirrored = core.mirror_config(
+        config, search="_L", replace="_R",
+        negate_channels=["tx", "rz", "ry"],
+    )
+    core.apply_from_config(mirrored)

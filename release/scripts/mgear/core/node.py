@@ -235,6 +235,42 @@ def createBlendNode(inputA, inputB, blender=0.5):
     return node
 
 
+def createBlendWeightedNode(inputs=None, output=None, name=None):
+    """Create a blendWeighted node and optionally connect inputs/output.
+
+    Args:
+        inputs (list, optional): List of source plugs (str or
+            PyNode attributes) to connect to sequential
+            ``input[N]`` slots.
+        output (str, optional): Destination plug to connect
+            the ``output`` attribute to.
+        name (str, optional): Node name. Auto-generated if
+            omitted.
+
+    Returns:
+        PyNode: The blendWeighted node.
+    """
+    kwargs = {}
+    if name:
+        kwargs["name"] = name
+    node = pm.createNode("blendWeighted", **kwargs)
+
+    if inputs:
+        for i, src in enumerate(inputs):
+            dest = "{}.input[{}]".format(node.name(), i)
+            if isinstance(src, (str, pm.Attribute)):
+                pm.connectAttr(src, dest, force=True)
+            else:
+                pm.setAttr(dest, src)
+
+    if output:
+        pm.connectAttr(
+            node.attr("output"), output, force=True
+        )
+
+    return node
+
+
 def createPairBlend(
     inputA=None,
     inputB=None,

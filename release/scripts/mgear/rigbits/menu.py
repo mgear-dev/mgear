@@ -31,6 +31,7 @@ def install():
         ("-----", None),
         ("RBF Manager 2.1", str_rbf_manager2_ui, "mgear_rbf_manager.svg"),
         ("SDK Manager", str_SDK_manager_ui, "mgear_sdk_manager.svg"),
+        ("SDK Creator", str_sdk_creator, "mgear_sdk_creator.svg"),
         ("-----", None),
         ("Space Manager", str_space_manager, "mgear_space_manager.svg"),
         ("-----", None),
@@ -196,6 +197,12 @@ str_SDK_manager_ui = """
 from mgear.rigbits.sdk_manager import SDK_manager_ui
 SDK_manager_ui.show()
 """
+
+str_sdk_creator = """
+from mgear.rigbits import sdk_creator
+sdk_creator.show()
+"""
+
 str_space_manager = """
 from mgear.rigbits.space_manager import spaceManagerUtils
 spacemanager = spaceManagerUtils.SpaceManager()
