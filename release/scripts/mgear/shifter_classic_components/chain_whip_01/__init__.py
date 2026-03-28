@@ -141,7 +141,7 @@ class Component(component.Main):
 
                 tangents.append(tang_ctl)
 
-            tangents_npo[0].attr("tx").set(self.dist * .3333)
+            tangents_npo[0].attr("tx").set(self.dist * .3333 * self.n_factor)
 
             # delete the first B tangent
             if not i:
@@ -156,7 +156,7 @@ class Component(component.Main):
                 self.upv_curv_pos.append(tangents_upv[1])
                 self.upv_curv_pos.append(upv_curv_lvl)
                 self.upv_curv_pos.append(tangents_upv[0])
-                tangents_npo[1].attr("tx").set(self.dist * -.3333)
+                tangents_npo[1].attr("tx").set(self.dist * -.3333 * self.n_factor)
 
             self.tangentsCtl.extend(tangents)
 
