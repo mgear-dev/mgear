@@ -45,7 +45,6 @@ from .widgets import overlay_widgets
 
 from .handlers import __EDIT_MODE__
 from .handlers import __SELECTION__
-from mgear.core.six.moves import range
 
 # constants -------------------------------------------------------------------
 try:

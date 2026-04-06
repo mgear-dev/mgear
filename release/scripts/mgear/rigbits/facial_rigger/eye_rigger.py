@@ -3,7 +3,7 @@
 import json
 import traceback
 from functools import partial
-from mgear.core.six import string_types
+string_types = str
 from maya import cmds
 import mgear
 import mgear.core.pyqt as gqt

@@ -1,7 +1,7 @@
 import json
 import traceback
 
-from mgear.core.six import string_types
+string_types = str
 
 import mgear
 import mgear.pymaya as pm

@@ -2,7 +2,7 @@ import mgear.pymaya as pm
 from mgear.core import meshNavigation, curve, applyop, primitive, icon
 from mgear.core import transform, attribute, skin, vector, pickWalk, utils
 from mgear.pymaya import datatypes
-from mgear.core.six import string_types
+string_types = str
 
 
 ##################

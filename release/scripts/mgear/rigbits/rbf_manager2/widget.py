@@ -7,7 +7,6 @@ import mgear
 from mgear.core import pyqt
 from mgear.vendor.Qt import QtWidgets, QtCore, QtCompat, QtGui
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
-from mgear.rigbits.six import PY2
 
 __version__ = "2.1.1"
 TOOL_NAME = "RBF Manager"
@@ -529,7 +528,7 @@ def getControlAttrWidget(nodeAttr, label=""):
 
     # Wrap the Maya control into a Qt widget, considering Python version
     controlWidget = QtCompat.wrapInstance(
-        long(ptr) if PY2 else int(ptr), base=QtWidgets.QWidget
+        int(ptr), base=QtWidgets.QWidget
     )
     controlWidget.setContentsMargins(0, 0, 0, 0)
     controlWidget.setMinimumWidth(0)

@@ -10,12 +10,8 @@ from __future__ import print_function, division, absolute_import
 import json
 import pprint
 
-from mgear.core.six.moves import urllib
-
-# from urllib.request import urlopen, Request
-
-Request = urllib.request.Request
-urlopen = urllib.request.urlopen
+from urllib.request import urlopen
+from urllib.request import Request
 
 from mgear.uegear import log
 

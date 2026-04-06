@@ -2,7 +2,7 @@
 
 import json
 from functools import partial
-from mgear.core.six import string_types
+string_types = str
 
 import mgear.core.pyqt as gqt
 import mgear.pymaya as pm

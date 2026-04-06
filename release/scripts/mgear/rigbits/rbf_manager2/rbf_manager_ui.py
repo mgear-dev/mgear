@@ -79,7 +79,6 @@ from mgear.vendor.Qt import QtWidgets, QtCore, QtCompat
 from mgear.core import pyqt
 
 # from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
-# from mgear.rigbits.six import PY2
 
 
 # rbf

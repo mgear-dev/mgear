@@ -117,7 +117,7 @@ def replaceSharpWithPadding(string, index):
 def convertRLName(name):
     """Convert a string with underscore
 
-    i.e: "_\L", "_L0\_", "L\_", "_L" to "R". And vice and versa.
+    i.e: "_L", "_L0_", "L_", "_L" to "R". And vice and versa.
 
     :param string name: string to convert
     :return: Tuple of Integer
@@ -159,7 +159,7 @@ def convertRLName(name):
 def convertRLName_old(name):
     """Convert a string with underscore
 
-    i.e: "_\L", "_L0\_", "L\_", "_L" to "R". And vice and versa.
+    i.e: "_L", "_L0_", "L_", "_L" to "R". And vice and versa.
 
     :param string name: string to convert
     :return: Tuple of Integer

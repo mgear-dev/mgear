@@ -31,7 +31,6 @@ from mgear.anim_picker.handlers import (
     python_handlers,
     maya_handlers,
 )
-from mgear.core.six.moves import range
 
 # constants -------------------------------------------------------------------
 SCRIPT_DOC_HEADER = """
