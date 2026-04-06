@@ -19,7 +19,7 @@ BUILD_DIR="${CPP_DIR}/build"
 MAYA_VER=""
 DO_CLEAN=0
 
-if [[ "${1,,}" == "clean" ]]; then
+if [[ "$(echo "$1" | tr '[:upper:]' '[:lower:]')" == "clean" ]]; then
     DO_CLEAN=1
     [[ -n "$2" ]] && MAYA_VER="$2"
 elif [[ -n "$1" ]]; then

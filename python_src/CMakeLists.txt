@@ -40,17 +40,33 @@ if(NOT MAYA_ROOT)
 endif()
 
 # Auto-detect the Python version Maya ships (3.9, 3.10, 3.11 ...)
+# Try standard layout first: include/Python3XX/Python/Python.h (Windows/Linux)
 file(GLOB _maya_pyinc_dirs "${MAYA_ROOT}/include/Python3*")
 list(LENGTH _maya_pyinc_dirs _n_pyinc)
-if(_n_pyinc EQUAL 0)
-    message(FATAL_ERROR "No Python include dir found under ${MAYA_ROOT}/include/Python3*")
-endif()
-# Pick the first (usually only one)
-list(GET _maya_pyinc_dirs 0 _maya_pyinc_dir)
-get_filename_component(_pyver_tag "${_maya_pyinc_dir}" NAME)   # e.g. "Python311"
-string(REGEX REPLACE "Python([0-9]+)" "\\1" _pyver_digits "${_pyver_tag}")  # "311"
 
-set(MAYA_PYTHON_INCLUDE "${_maya_pyinc_dir}/Python")
+if(_n_pyinc EQUAL 0 AND APPLE)
+    # macOS Framework layout: Frameworks/Python.framework/Versions/3.XX/include/python3.XX/Python.h
+    file(GLOB _maya_fw_dirs "${MAYA_ROOT}/Frameworks/Python.framework/Versions/3.*")
+    list(LENGTH _maya_fw_dirs _n_fw)
+    if(_n_fw EQUAL 0)
+        message(FATAL_ERROR "No Python found under ${MAYA_ROOT}/include/Python3* or ${MAYA_ROOT}/Frameworks/Python.framework/")
+    endif()
+    list(GET _maya_fw_dirs 0 _maya_fw_dir)
+    get_filename_component(_pyver_dotted "${_maya_fw_dir}" NAME)  # e.g. "3.11"
+    string(REPLACE "." "" _pyver_digits "${_pyver_dotted}")       # e.g. "311"
+    set(MAYA_PYTHON_INCLUDE "${_maya_fw_dir}/include/python${_pyver_dotted}")
+    set(_USE_FRAMEWORK_LAYOUT TRUE)
+else()
+    if(_n_pyinc EQUAL 0)
+        message(FATAL_ERROR "No Python include dir found under ${MAYA_ROOT}/include/Python3*")
+    endif()
+    # Pick the first (usually only one)
+    list(GET _maya_pyinc_dirs 0 _maya_pyinc_dir)
+    get_filename_component(_pyver_tag "${_maya_pyinc_dir}" NAME)   # e.g. "Python311"
+    string(REGEX REPLACE "Python([0-9]+)" "\\1" _pyver_digits "${_pyver_tag}")  # "311"
+    set(MAYA_PYTHON_INCLUDE "${_maya_pyinc_dir}/Python")
+    set(_USE_FRAMEWORK_LAYOUT FALSE)
+endif()
 
 # Derive version string (e.g. "311" -> "3.11")
 string(SUBSTRING "${_pyver_digits}" 0 1 _py_major)
