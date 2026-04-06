@@ -108,17 +108,12 @@ echo.
 
 set "FOUND_PLUGINS=0"
 
-for %%F in ("%BUILD_DIR%\Release\*.mll") do (
-    copy /y "%%F" "%PLUGIN_DIR%\" >nul
-    echo    Copied: %%~nxF
-    set /a FOUND_PLUGINS+=1
-)
-
-:: Also check root build dir (some CMake configs output there)
-for %%F in ("%BUILD_DIR%\*.mll") do (
-    copy /y "%%F" "%PLUGIN_DIR%\" >nul
-    echo    Copied: %%~nxF
-    set /a FOUND_PLUGINS+=1
+for %%D in ("%BUILD_DIR%\src\Release" "%BUILD_DIR%\Release" "%BUILD_DIR%") do (
+    for %%F in ("%%~D\*.mll") do (
+        copy /y "%%F" "%PLUGIN_DIR%\" >nul
+        echo    Copied: %%~nxF
+        set /a FOUND_PLUGINS+=1
+    )
 )
 
 if %FOUND_PLUGINS%==0 (

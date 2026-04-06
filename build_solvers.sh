@@ -123,7 +123,7 @@ echo "  [3/3] Copying plugins to $PLUGIN_DIR..."
 echo ""
 
 FOUND=0
-for f in "$BUILD_DIR"/*"$PLUGIN_EXT" "$BUILD_DIR"/Release/*"$PLUGIN_EXT"; do
+for f in "$BUILD_DIR"/src/Release/*"$PLUGIN_EXT" "$BUILD_DIR"/Release/*"$PLUGIN_EXT" "$BUILD_DIR"/*"$PLUGIN_EXT"; do
     if [[ -f "$f" ]]; then
         cp "$f" "$PLUGIN_DIR/"
         echo "    Copied: $(basename "$f")"
