@@ -6,7 +6,7 @@
 .pydevproject
 
 # File extension
-*.py[cod]
+*.py[co]
 
 # Unit tests & coverage reports
 .pytest_cache
