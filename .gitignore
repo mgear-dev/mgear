@@ -58,5 +58,27 @@ excons.cache
 /.claude
 pyproject.toml
 
+# CMake build artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+**/build/
+**/build_*/
+
+# Compiled objects and libraries (local builds)
+*.obj
+*.o
+*.lib
+*.exp
+*.ilk
+*.pdb
+
+# Visual Studio
+*.suo
+*.user
+*.sdf
+*.opensdf
+*.opendb
+
 # mac os
 .DS_Store

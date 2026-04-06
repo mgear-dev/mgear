@@ -3,7 +3,7 @@
 # build_accel.sh  --  Build the C++ acceleration module for mGear RGP
 #
 # Usage:
-#   ./build_accel.sh              (auto-detect Maya 2024/2025/2026)
+#   ./build_accel.sh              (auto-detect Maya 2023-2027)
 #   ./build_accel.sh 2026         (target a specific Maya version)
 #   ./build_accel.sh clean        (delete build folder and rebuild)
 #   ./build_accel.sh clean 2026   (clean + specific version)
@@ -50,7 +50,7 @@ esac
 
 # ----- Auto-detect Maya version if not specified ----------------------------
 if [[ -z "${MAYA_VER}" ]]; then
-    for VER in 2026 2025 2024; do
+    for VER in 2027 2026 2025 2024 2023; do
         if [[ "${PLATFORM}" == "Darwin"* ]]; then
             CANDIDATE="${MAYA_BASE}/maya${VER}/${MAYAPY_REL}"
         else

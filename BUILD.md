@@ -20,6 +20,7 @@ To generate the build solution for Visual Studio, run the following commands:
 cmake -G "Visual Studio 16 2019" -A x64 -DMAYA_VERSION=2024 ../
 cmake -G "Visual Studio 17 2022" -A x64 -DMAYA_VERSION=2025 ../
 cmake -G "Visual Studio 17 2022" -A x64 -DMAYA_VERSION=2026 ../
+cmake -G "Visual Studio 17 2022" -A x64 -DMAYA_VERSION=2027 ../
 ```
 
 To compile the solution:
@@ -57,6 +58,10 @@ cmake -G "Xcode" -DMAYA_VERSION=2024 \
 cmake -G "Xcode" -DMAYA_VERSION=2025 \
   -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
   -DMaya_DIR=/Applications/Autodesk/maya2025/Maya.app/Contents/ ../
+
+cmake -G "Xcode" -DMAYA_VERSION=2027 \
+  -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+  -DMaya_DIR=/Applications/Autodesk/maya2027/Maya.app/Contents/ ../
 ```
 
 ### Checking Architecture

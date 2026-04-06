@@ -5,7 +5,7 @@ setlocal
 :: build_accel.bat  --  Build the C++ acceleration module for mGear RGP
 ::
 :: Usage:
-::   build_accel.bat              (auto-detect Maya 2024/2025/2026)
+::   build_accel.bat              (auto-detect Maya 2023-2027)
 ::   build_accel.bat 2026         (target a specific Maya version)
 ::   build_accel.bat clean        (delete build folder and rebuild)
 ::   build_accel.bat clean 2026   (clean + specific version)
@@ -28,7 +28,7 @@ if /i "%~1"=="clean" (
 
 :: ----- Auto-detect Maya version if not specified ---------------------------
 if "%MAYA_VER%"=="" (
-    for %%V in (2026 2025 2024) do (
+    for %%V in (2027 2026 2025 2024 2023) do (
         if exist "C:\Program Files\Autodesk\Maya%%V\bin\mayapy.exe" (
             set "MAYA_VER=%%V"
             goto :found_maya
