@@ -37,7 +37,7 @@ from mgear.pymaya import attr as pm_attr
 from mgear.core import attribute
 
 import mgear.core.utils as mUtils
-from .six import string_types
+string_types = str
 
 SDK_UTILITY_TYPE = ("blendWeighted",)
 SDK_ANIMCURVES_TYPE = ("animCurveUA", "animCurveUL", "animCurveUU")

@@ -39,7 +39,7 @@ from mgear.shifter import guide_manager_gui
 from mgear.shifter import io
 from mgear.shifter import guide_template
 
-from .six import string_types
+string_types = str
 
 from mgear.vendor.Qt import QtWidgets
 from mgear.compatible import compatible_comp_dagmenu

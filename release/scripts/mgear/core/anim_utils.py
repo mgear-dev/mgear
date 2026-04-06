@@ -3,7 +3,7 @@ import re
 import traceback
 from functools import partial
 
-from .six import PY2
+PY2 = False
 
 # Maya imports
 from maya import cmds

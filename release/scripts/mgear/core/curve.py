@@ -19,7 +19,7 @@ from mgear.core import applyop
 from mgear.core import utils
 from mgear.core import transform
 
-from .six import string_types
+string_types = str
 
 #############################################
 # CURVE

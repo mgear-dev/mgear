@@ -17,7 +17,7 @@ from maya import cmds
 from mgear.pymaya import datatypes
 
 import maya.api.OpenMaya as om
-from .six import string_types
+string_types = str
 
 from mgear.core import attribute
 from mgear.core import surface

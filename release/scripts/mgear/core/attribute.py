@@ -11,7 +11,7 @@ from maya.api import OpenMaya
 import mgear
 import mgear.pymaya as pm
 import mgear.pymaya.datatypes as datatypes
-from .six import string_types
+string_types = str
 
 #############################################
 # NODE

@@ -6,7 +6,8 @@ from mgear.pymaya import versions
 import mgear.pymaya.datatypes as datatypes
 from mgear.core import attribute
 
-from .six import PY2, string_types
+PY2 = False
+string_types = str
 
 # Type tuple for faster isinstance checks (used frequently in node creation)
 _CONNECTABLE_TYPES = None

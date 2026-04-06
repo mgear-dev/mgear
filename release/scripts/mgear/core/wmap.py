@@ -5,7 +5,7 @@ import json
 from maya import cmds
 import mgear.pymaya as pm
 import maya.OpenMaya as OpenMaya
-from .six import string_types
+string_types = str
 
 FILE_EXT = ".wmap"
 

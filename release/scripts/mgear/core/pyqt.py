@@ -16,7 +16,7 @@ from mgear.vendor.Qt import QtCompat
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtSvg
 from mgear.vendor.Qt import QtCore
-from .six import PY2
+PY2 = False
 
 # Try importing PySide6, fall back to PySide2 if not available
 try:

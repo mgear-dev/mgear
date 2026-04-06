@@ -18,7 +18,7 @@ import mgear.pymaya as pm
 from maya import cmds
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaAnim as OpenMayaAnim
-from .six import string_types
+string_types = str
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui

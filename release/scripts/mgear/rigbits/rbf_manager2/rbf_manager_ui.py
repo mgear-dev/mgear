@@ -58,7 +58,7 @@ __credits__ = ["Miquel Campos", "Ingo Clemens"]
 
 """
 # python
-import imp
+import importlib.util
 import os
 from functools import partial
 
@@ -180,9 +180,11 @@ def getEnvironModules():
     extraModulePath = os.environ.get(widget.MGEAR_EXTRA_ENVIRON, None)
     if extraModulePath is None or not os.path.exists(extraModulePath):
         return None
-    exModule = imp.load_source(
+    spec = importlib.util.spec_from_file_location(
         widget.MGEAR_EXTRA_ENVIRON, os.path.abspath(extraModulePath)
     )
+    exModule = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exModule)
     additionalFuncDict = getattr(exModule, widget.EXTRA_MODULE_DICT, None)
     if additionalFuncDict is None:
         mc.warning(

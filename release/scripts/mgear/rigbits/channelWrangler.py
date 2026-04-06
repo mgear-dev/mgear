@@ -8,7 +8,7 @@ from mgear.vendor.Qt import QtWidgets, QtCore
 
 import mgear.rigbits.channelWranglerUI as channelWranglerUI
 from mgear.core import attribute, pyqt
-from .six import string_types
+string_types = str
 
 ######################################################################
 # Functions

@@ -6,7 +6,7 @@ import mgear.pymaya as pm
 
 from mgear.core import node, primitive
 from mgear import rigbits
-from .six import string_types
+string_types = str
 
 
 def connect_matching_attrs(

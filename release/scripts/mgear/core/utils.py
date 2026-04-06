@@ -12,7 +12,8 @@ from maya import cmds
 import mgear.pymaya as pm
 from maya import mel
 import maya.api.OpenMaya as OpenMaya
-from .six import string_types, PY2
+string_types = str
+PY2 = False
 
 import mgear
 

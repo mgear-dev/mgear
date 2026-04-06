@@ -1,7 +1,7 @@
 """Custom Step Tab widget and mixin for Guide Settings."""
 
 import datetime
-import imp
+import importlib.util
 import inspect
 import json
 import os
@@ -4452,7 +4452,11 @@ class CustomStepMixin(object):
             with pm.UndoChunk():
                 pm.displayInfo("EXEC: Executing custom step: %s" % stepPath)
 
-                customStep = imp.load_source(fileName, runPath)
+                spec = importlib.util.spec_from_file_location(
+                    fileName, runPath
+                )
+                customStep = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(customStep)
                 if hasattr(customStep, "CustomShifterStep"):
                     argspec = inspect.getfullargspec(
                         customStep.CustomShifterStep.__init__
