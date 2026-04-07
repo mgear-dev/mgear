@@ -444,7 +444,7 @@ class CustomStepItemWidget(QtWidgets.QFrame):
     """
 
     # Signals
-    toggled = QtCore.Signal(bool)
+    activeToggled = QtCore.Signal(bool)
     editRequested = QtCore.Signal()
     runRequested = QtCore.Signal()
     clicked = QtCore.Signal(object, object)  # Emitted when clicked (self, Qt.KeyboardModifiers)
@@ -595,7 +595,7 @@ class CustomStepItemWidget(QtWidgets.QFrame):
         """Handle toggle button click."""
         self._step_data.active = self._toggle_btn.isChecked()
         self._update_appearance()
-        self.toggled.emit(self._step_data.active)
+        self.activeToggled.emit(self._step_data.active)
 
     # Public API
 
@@ -771,7 +771,7 @@ class GroupHeaderWidget(QtWidgets.QFrame):
         nameChanged: Emitted when name is edited
     """
 
-    toggled = QtCore.Signal(bool)
+    activeToggled = QtCore.Signal(bool)
     collapseToggled = QtCore.Signal(bool)
     nameChanged = QtCore.Signal(str)
     runRequested = QtCore.Signal()
@@ -938,7 +938,7 @@ class GroupHeaderWidget(QtWidgets.QFrame):
         """Handle toggle button click."""
         self._group_data.active = self._toggle_btn.isChecked()
         self._update_appearance()
-        self.toggled.emit(self._group_data.active)
+        self.activeToggled.emit(self._group_data.active)
 
     def mouseDoubleClickEvent(self, event):
         """Handle double-click for inline name editing."""
@@ -1066,7 +1066,7 @@ class GroupWidget(QtWidgets.QFrame):
         runRequested: Run all steps in group requested
     """
 
-    toggled = QtCore.Signal(bool)
+    activeToggled = QtCore.Signal(bool)
     collapsed = QtCore.Signal(bool)
     nameChanged = QtCore.Signal(str)
     dataChanged = QtCore.Signal()
@@ -1100,7 +1100,7 @@ class GroupWidget(QtWidgets.QFrame):
 
         # Header
         self._header = GroupHeaderWidget(self._group_data)
-        self._header.toggled.connect(self._on_header_toggled)
+        self._header.activeToggled.connect(self._on_header_toggled)
         self._header.collapseToggled.connect(self._on_collapse_toggled)
         self._header.nameChanged.connect(self._on_name_changed)
         self._header.runRequested.connect(self.runRequested.emit)
@@ -1168,7 +1168,7 @@ class GroupWidget(QtWidgets.QFrame):
             widget.set_edit_enabled(False)
 
         # Connect signals
-        widget.toggled.connect(self._on_step_toggled)
+        widget.activeToggled.connect(self._on_step_toggled)
         widget.editRequested.connect(
             lambda w=widget: self._on_step_edit_requested(w)
         )
@@ -1198,7 +1198,7 @@ class GroupWidget(QtWidgets.QFrame):
     def _on_header_toggled(self, active):
         """Handle header toggle."""
         self._update_step_appearances()
-        self.toggled.emit(active)
+        self.activeToggled.emit(active)
         self.dataChanged.emit()
 
     def _on_collapse_toggled(self, is_collapsed):
@@ -1380,7 +1380,7 @@ class GroupWidget(QtWidgets.QFrame):
         self._group_data.items.insert(index, step_data)
 
         # Connect signals
-        widget.toggled.connect(self._on_step_toggled)
+        widget.activeToggled.connect(self._on_step_toggled)
         widget.editRequested.connect(
             lambda w=widget: self._on_step_edit_requested(w)
         )
@@ -1631,7 +1631,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         stepRunRequested: Emitted when run is requested for a step (row)
         groupRunRequested: Emitted when run is requested for a group (row)
         orderChanged: Emitted when items are reordered
-        dataChanged: Emitted when any data changes (for JSON storage)
+        stepsDataChanged: Emitted when any data changes (for JSON storage)
     """
 
     filesDropped = QtCore.Signal(list)
@@ -1640,7 +1640,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
     stepRunRequested = QtCore.Signal(int)
     groupRunRequested = QtCore.Signal(int)
     orderChanged = QtCore.Signal()
-    dataChanged = QtCore.Signal()
+    stepsDataChanged = QtCore.Signal()
     groupStepClicked = QtCore.Signal(object, object)  # Emitted when step in group clicked (CustomStepData, GroupData)
 
     # Item type markers stored in UserRole
@@ -1972,7 +1972,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 self._insert_step_at_row(group_row + 1 + i, step_data)
 
         self._clear_group_step_selections()
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
 
     def _remove_selected_steps_from_group(self):
         """Remove all selected steps from their groups."""
@@ -1996,7 +1996,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             self._update_group_item_height(group_row)
 
         self._clear_group_step_selections()
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
 
     def _run_group_step(self, step_widget, group_widget=None, customStepDic=None):
         """Run a step from a group.
@@ -2070,7 +2070,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         self._insert_step_at_row(group_row + 1, step_data)
 
         self._clear_group_step_selections()
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
 
     def _remove_step_from_group(self, step_widget, group_widget):
         """Remove a step from a group entirely.
@@ -2091,7 +2091,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         self._update_group_item_height(group_row)
 
         self._clear_group_step_selections()
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
 
     def _find_group_row(self, group_widget):
         """Find the row index of a group widget.
@@ -2150,7 +2150,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         self._item_widgets[id(item)] = widget
 
         # Connect signals
-        widget.toggled.connect(
+        widget.activeToggled.connect(
             lambda active, it=item: self._on_step_toggled(it, active)
         )
         widget.editRequested.connect(
@@ -2276,7 +2276,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         self._item_widgets[id(item)] = widget
 
         # Connect signals
-        widget.toggled.connect(
+        widget.activeToggled.connect(
             lambda active, it=item: self._on_step_toggled(it, active)
         )
         widget.editRequested.connect(
@@ -2346,7 +2346,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 QtCore.Qt.UserRole,
                 json.dumps(widget.get_group_data().to_dict())
             )
-            self.dataChanged.emit()
+            self.stepsDataChanged.emit()
 
     def _on_group_collapsed(self, item, collapsed):
         """Handle group collapse/expand event."""
@@ -2366,7 +2366,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             # Update the stored data
             item.setData(QtCore.Qt.UserRole, widget.to_string())
             self.stepToggled.emit(self.row(item), active)
-            self.dataChanged.emit()
+            self.stepsDataChanged.emit()
 
     def _on_edit_requested(self, item):
         """Handle edit request event."""
@@ -2675,7 +2675,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         widget.stepContextMenu.connect(self._on_group_step_context_menu)
         widget.stepDragStarted.connect(self._on_group_step_drag_started)
 
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
         return insert_row
 
     def ungroupItems(self, row, keep_items=True):
@@ -2706,7 +2706,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             for i, step_data in enumerate(items):
                 self.insertStepItem(row + i, step_data)
 
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
         return items
 
     def insertStepItem(self, row, step_data):
@@ -2730,7 +2730,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
         self.setItemWidget(item, widget)
         self._item_widgets[id(item)] = widget
 
-        widget.toggled.connect(
+        widget.activeToggled.connect(
             lambda active, it=item: self._on_step_toggled(it, active)
         )
         widget.editRequested.connect(
@@ -2763,7 +2763,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                     QtCore.Qt.UserRole,
                     json.dumps(widget.get_group_data().to_dict())
                 )
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
 
     def toggleStepActive(self, row):
         """Toggle the active state of a step or group.
@@ -2862,7 +2862,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
             # Reassign widgets after move (they get detached during move)
             self._reassign_widgets()
             self.orderChanged.emit()
-            self.dataChanged.emit()
+            self.stepsDataChanged.emit()
         else:
             super(CustomStepListWidget, self).dropEvent(event)
 
@@ -2919,7 +2919,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
         event.acceptProposedAction()
         self.orderChanged.emit()
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
         return True
 
     def _handle_group_step_drop(self, event):
@@ -2989,7 +2989,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 self._update_group_item_height(target_row)
                 event.acceptProposedAction()
                 self._clear_group_step_selections()
-                self.dataChanged.emit()
+                self.stepsDataChanged.emit()
                 return
             elif target_group_widget is source_group_widget:
                 # Reorder within same group - determine position based on Y coordinate
@@ -3007,7 +3007,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                     target_group_widget.move_step(step_index, target_index)
                     event.acceptProposedAction()
                     self._clear_group_step_selections()
-                    self.dataChanged.emit()
+                    self.stepsDataChanged.emit()
                 else:
                     event.ignore()
                 return
@@ -3031,7 +3031,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
         event.acceptProposedAction()
         self._clear_group_step_selections()
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
 
     def _handle_multi_step_drop(self, event, drag_info):
         """Handle drop of multiple steps from a group.
@@ -3086,7 +3086,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 self._update_group_item_height(target_row)
                 event.acceptProposedAction()
                 self._clear_group_step_selections()
-                self.dataChanged.emit()
+                self.stepsDataChanged.emit()
                 return
             elif target_group_widget is source_group_widget:
                 # Reorder within same group
@@ -3102,7 +3102,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                 source_group_widget.move_steps(step_indices, target_index)
                 event.acceptProposedAction()
                 self._clear_group_step_selections()
-                self.dataChanged.emit()
+                self.stepsDataChanged.emit()
                 return
 
         # Dropping onto top level (not a group)
@@ -3125,7 +3125,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
 
         event.acceptProposedAction()
         self._clear_group_step_selections()
-        self.dataChanged.emit()
+        self.stepsDataChanged.emit()
 
     def _reassign_widgets(self):
         """Reassign item widgets after a drag-drop reorder.
@@ -3179,7 +3179,7 @@ class CustomStepListWidget(QtWidgets.QListWidget):
                             self.setItemWidget(item, widget)
 
                             # Reconnect signals
-                            widget.toggled.connect(
+                            widget.activeToggled.connect(
                                 lambda active, it=item: self._on_step_toggled(
                                     it, active
                                 )
@@ -3956,10 +3956,10 @@ class CustomStepMixin(object):
         )
 
         # Data changed signals (for group edits, toggles, etc.)
-        csTap.preCustomStep_listWidget.dataChanged.connect(
+        csTap.preCustomStep_listWidget.stepsDataChanged.connect(
             partial(self._onDataChanged, pre=True)
         )
-        csTap.postCustomStep_listWidget.dataChanged.connect(
+        csTap.postCustomStep_listWidget.stepsDataChanged.connect(
             partial(self._onDataChanged, pre=False)
         )
 
