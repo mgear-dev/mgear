@@ -98,12 +98,17 @@ def calculate_vector_lengths(vector_nodes):
     """
     length_nodes = {}
     for joint_name in ("eff", "elbow", "wrist"):
-        length_node = pm.createNode(
-            "length", name=f"{joint_name}_length"
+        # Use distanceBetween with point2 at origin to
+        # compute vector length. The 'length' node only
+        # exists in Maya 2024.2+.
+        dist_node = pm.createNode(
+            "distanceBetween",
+            name="{}_vectorLength".format(joint_name),
         )
-        pma = vector_nodes[f"sub_{joint_name}"]
-        pma.output3D >> length_node.input
-        length_nodes[joint_name] = length_node
+        pma = vector_nodes["sub_{}".format(joint_name)]
+        pma.output3D >> dist_node.point1
+        # point2 defaults to (0,0,0) — distance = length
+        length_nodes[joint_name] = dist_node
 
     return length_nodes
 
@@ -125,9 +130,9 @@ def setup_math_operations(root, length_nodes, float_value=0.5):
     max_node = pm.createNode("max", name=f"{root.name()}_max")
     max_float_node.outputX >> max_node.input[0]
 
-    length_nodes["eff"].output >> max_node.input[1]
-    length_nodes["elbow"].output >> max_node.input[2]
-    length_nodes["wrist"].output >> max_node.input[3]
+    length_nodes["eff"].distance >> max_node.input[1]
+    length_nodes["elbow"].distance >> max_node.input[2]
+    length_nodes["wrist"].distance >> max_node.input[3]
 
     half_one_float_node = nod.createMulNode(
         f"{max_node}.output", float_value
