@@ -611,7 +611,7 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
             item.setToolTip(0, full_name + tooltip_suffix)
         # else: keep default color - not in blueprint
 
-    def _create_attr_callbacks(self, node_name: str, short_attrs: list[str]) -> None:
+    def _create_attr_callbacks(self, node_name, short_attrs):
         """
         Register attribute change callbacks for the given node and attributes.
 
