@@ -5,35 +5,44 @@ Release Log
 5.3.0
 ------
 **New Features**
-	* Shifter: Build Log Window: New Qt-based build log with color-coded output, severity filtering, search, font size control, log export and comparison, live progress during build, and right-click to open source files
-	* Shifter: Guide Template Manager: New browsable template manager with custom source folders, thumbnails, metadata, search, import/import-add/import-partial with component selection, drag-and-drop to viewport, and .sgtInfo sidecars
+	* Core: Skin: Add localize_skin_clusters for floating-point precision fix when rigs are far from world origin
 	* Rigbits: Blendshape Setup Transfer: New tool for transferring blendshapes from multiple sources into a single target node with combo network rebuild, zero-delta cleanup, and .bst config support
 	* Rigbits: Evaluation Partition: New tool to split a mesh into polygon group partitions to optimize parallel evaluation #616
 	* Rigbits: SDK Creator: New tool for creating Set Driven Key setups from timeline poses with mirror support, .sdkc config export/import, and scripting API
+	* Shifter: Build Log Window: New Qt-based build log with color-coded output, severity filtering, search, font size control, log export and comparison, live progress during build, and right-click to open source files
+	* Shifter: Guide Template Manager: New browsable template manager with custom source folders, thumbnails, metadata, search, import/import-add/import-partial with component selection, drag-and-drop to viewport, and .sgtInfo sidecars
 	* Utilbits: Bookmarks: New selection and isolate bookmarks tool
 	* Utilbits: Matcap Viewer: New viewport matcap material preview tool
-	* Core: Skin: Add localize_skin_clusters for floating-point precision fix when rigs are far from world origin
 
 **Enhancements**
+	* Core: Attribute: Add float2/float3 compound attribute support and str node input #628
+	* Core: Blendshape: Add transfer_blendshapes and combo utilities to core for reuse across tools
+	* Core: Node: Add createPlusMinusAverage3D and createBlendWeightedNode for utility node creation
+	* Maya 2027 support: Updated solvers, C++ acceleration modules, and .mod files for Maya 2027 (Python 3.13)
+	* Rigbits: Wire to Skinning: Add custom wire processing order with drag reorder, preserved across config export/import #611
+	* Shifter: Capture component build errors (AttributeError, etc.) in build log window
 	* Shifter: Data-Centric Folder Creator: Refactored UI with unified workflow, live folder preview tree, space-to-comma input normalization, .dcf config export/import, drag-and-drop config loading, SettingsMixin persistence, HDPI scaling, and input validation
 	* Shifter: Fix progress bar not updating during drag-and-drop guide import
-	* Rigbits: Wire to Skinning: Add custom wire processing order with drag reorder, preserved across config export/import #611
-	* Core: Blendshape: Add transfer_blendshapes and combo utilities to core for reuse across tools
-	* Core: Attribute: Add float2/float3 compound attribute support and str node input #628
-	* Core: Node: Add createPlusMinusAverage3D for 3D vector operations
 
 **Bug Fix**
 	* Core: Anim Utils: Fix IK/FK match for 3jnt leg and roll control #626
-	* Core: UPV Visualizer: Replace subtract nodes with plusMinusAverage for Maya 2022+ compatibility Closes #617
 	* Core: Attribute: Fix docstrings to use Google-style conventions
-	* Shifter: Build Log: Fix recursion when display hooks installed twice
-	* Shifter: Guide Visualizer: Fix export storing full DAG paths and use .gvc extension
-	* Shifter: Guide Export: Fix metadata not refreshing on .sgt export and speed up export
-	* Shifter: Data-Centric Folder Creator: Fix same-name folder bug
-	* Shifter: Lite_chain_01: When Neutral Pose is not active, the build is not correct. This issue was introduced with the mirror option added in the last update Fixes #619
-	* Shifter: Blueprints: Fix build from serialized guide and squash and stretch sampling fix #621
-	* Shifter: Force refresh on the referenceGroups when UI is open
+	* Core: Fix invalid escape sequences in string.py docstrings causing SyntaxWarning in Python 3.12+
+	* Core: Remove six.py (Python 2/3 compat layer) and replace imp module with importlib for Python 3.12+/Maya 2027 compatibility
+	* Core: UPV Visualizer: Fix node naming using full DAG paths causing invalid character warnings
+	* Core: UPV Visualizer: Replace Maya 2024.2+ nodes with backwards-compatible equivalents for Maya 2022+ Closes #617
+	* Maya 2022/2023 backwards compatibility: Replaced Maya 2024.2+ only nodes (length, max, normalize, crossProduct) with universal equivalents (distanceBetween, condition chains, vectorProduct)
 	* Rigbits: Replace Shape: Fix connection direction when replacing control shapes #627
+	* Shifter: Blueprints: Fix build from serialized guide and squash and stretch sampling fix #621
+	* Shifter: Build Log: Fix recursion when display hooks installed twice
+	* Shifter: Component: Fix chain_whip_01
+	* Shifter: Data-Centric Folder Creator: Fix same-name folder bug
+	* Shifter: Fix native Qt signal collision (toggled, dataChanged) in custom step widgets causing TypeError in PySide2
+	* Shifter: Force refresh on the referenceGroups when UI is open
+	* Shifter: Guide Explorer: Fix Python 3.9 type hint (list[str]) compatibility for Maya 2022
+	* Shifter: Guide Export: Fix metadata not refreshing on .sgt export and speed up export
+	* Shifter: Guide Visualizer: Fix export storing full DAG paths and use .gvc extension
+	* Shifter: Lite_chain_01: When Neutral Pose is not active, the build is not correct. This issue was introduced with the mirror option added in the last update Fixes #619
 
 5.2.5
 ------
