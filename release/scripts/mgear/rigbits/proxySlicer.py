@@ -251,7 +251,7 @@ def slice(parent=False, oSel=None, *args):
         meshes = cmds.ls(selection=True, long=True)
 
     if not meshes:
-        cmds.error("No object selected.")
+        cmds.warning("No object selected.")
         return
 
     for mesh in meshes:
@@ -302,6 +302,8 @@ def _slice_single(oSel, parent=False):
     weights, num_inf, inf_names = _get_skin_weights(
         shape, skin_name
     )
+    # Convert MDoubleArray to list for faster Python indexing
+    weights = list(weights)
     vert_counts, vert_indices = _get_face_vertex_map(shape)
 
     log.info(
@@ -317,6 +319,7 @@ def _slice_single(oSel, parent=False):
     original_locks = _save_lock_state(oSel)
 
     # Create parent group for world-space mode
+    parent_grp = None
     if not parent:
         if cmds.objExists("ProxyGeo"):
             parent_grp = "ProxyGeo"
