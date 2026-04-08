@@ -451,18 +451,21 @@ Created proxies have custom attributes for identification and configuration:
 Proxy Slicer
 ============
 
-Create proxy geometry by analyzing skin cluster weights and splitting the mesh per joint influence.
+Create proxy geometry by analyzing skin cluster weights and splitting the mesh per joint influence. Uses OpenMaya2 for fast batch weight queries.
 
 **How it works:**
 
-1. Analyzes the skinCluster influence weights per face
+1. Batch-queries all skinCluster weights via OpenMaya2 (single API call)
 2. Groups faces by their dominant joint influence
 3. Creates separate proxy meshes per joint
 4. Names proxies as ``JointName_Proxy``
+5. Handles locked transforms from skinned meshes (unlocks for operations, re-locks after parenting)
 
 **Usage:**
 
-Select a skinned mesh and run Proxy Slicer. The system automatically creates proxy geometry based on skin weights, with each proxy representing the area most influenced by that joint.
+Select one or more skinned meshes and run Proxy Slicer. The system automatically creates proxy geometry based on skin weights, with each proxy representing the area most influenced by that joint. Multiple meshes are processed in sequence.
+
+Works with meshes that have additional deformers after the skinCluster (softMod, cluster, etc.) since it searches the full deformation history.
 
 Proxy Slicer Parenting
 ======================
@@ -471,8 +474,29 @@ Same as Proxy Slicer but parents the created proxies directly under their influe
 
 **Difference from Proxy Slicer:**
 
-* **Proxy Slicer** - Creates a ProxyGeo group with matrix connections
-* **Proxy Slicer Parenting** - Parents proxies directly under influence joints
+* **Proxy Slicer** - Creates a ProxyGeo group with matrix constraints to influence joints
+* **Proxy Slicer Parenting** - Parents proxies directly under influence joints, re-locks transform attributes
+
+**Python API:**
+
+.. code-block:: python
+
+    from mgear.rigbits import proxySlicer
+
+    # Slice a single mesh (world-space mode with matrix constraints)
+    proxySlicer.slice(parent=False, oSel="body_geo")
+
+    # Slice with direct parenting under influence joints
+    proxySlicer.slice(parent=True, oSel="body_geo")
+
+    # Slice multiple meshes
+    proxySlicer.slice(oSel=["body_geo", "head_geo", "hands_geo"])
+
+    # Slice current selection (supports multi-select)
+    proxySlicer.slice()
+
+    # Slice current selection with parenting
+    proxySlicer.slice(parent=True)
 
 SDK Manager
 ===========
