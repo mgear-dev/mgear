@@ -2,6 +2,17 @@ Release Log
 ===========
 
 
+5.3.1
+------
+**Enhancements**
+	* Rigbits: Proxy Slicer: Optimized with OpenMaya2 batch weight queries (5-10x faster), multi-selection support, proper transform lock handling, and deformer stack compatibility
+	* Shifter: Add progress bar during guide template export with per-component progress updates
+	* Shifter: Fix extract controls to prevent child object leaking and handle instanced/shared shapes (ghost controls)
+	* Utilbits: Matcap Viewer: Persist apply mode setting and fix toggle to track applied meshes correctly
+
+**Bug Fix**
+	* Maya 2027: mGearWeightDriver.mll fails to load with Error 127 Fixes #629
+
 5.3.0
 ------
 **New Features**
