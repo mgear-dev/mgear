@@ -106,6 +106,10 @@ class MatcapViewerUI(
                 self.show_favorites_action,
                 False,
             ),
+            "matcapViewer/apply_selected": (
+                self.apply_selected_action,
+                False,
+            ),
         }
         self.load_settings()
 
@@ -316,11 +320,25 @@ class MatcapViewerUI(
     def _on_matcap_double_clicked(self, image_path):
         """Handle double click - apply matcap or change texture.
 
+        In "Apply to Selected" mode, restores previous meshes
+        and re-applies to the current selection (or clears if
+        nothing is selected).
+
         Args:
             image_path (str): Path to the double-clicked matcap image.
         """
         if core.is_matcap_active():
-            self._apply_texture(image_path)
+            if self.apply_selected_action.isChecked():
+                # Restore old, then re-apply to new selection
+                core.restore_original_materials()
+                meshes = self._get_target_meshes()
+                if meshes:
+                    core.apply_matcap(meshes=meshes)
+                    self._apply_texture(image_path)
+                else:
+                    self.matcap_grid.set_current(None)
+            else:
+                self._apply_texture(image_path)
             return
 
         meshes = self._get_target_meshes()
@@ -365,7 +383,12 @@ class MatcapViewerUI(
     # =============================================================
 
     def _on_toggle_material(self):
-        """Toggle matcap on/off."""
+        """Toggle matcap on/off.
+
+        Toggle always uses the already-tracked meshes.  It
+        never reads the current Maya selection — mesh targets
+        only change on double-click.
+        """
         if core.is_matcap_active():
             core.restore_original_materials()
             self.matcap_grid.set_current(None)
@@ -374,8 +397,14 @@ class MatcapViewerUI(
             if last_texture and not core.get_current_texture():
                 core.create_shader_graph()
                 core.set_texture(last_texture)
-            meshes = self._get_target_meshes()
-            result = core.apply_matcap(meshes=meshes)
+            # Re-apply to previously tracked meshes, not
+            # current selection.  Pass the tracked list or
+            # None (which means all — correct for "Apply to
+            # All" mode where no specific set was tracked).
+            tracked = core.get_tracked_meshes()
+            result = core.apply_matcap(
+                meshes=tracked if tracked else None
+            )
             if result:
                 current = core.get_current_texture()
                 self.matcap_grid.set_current(current)

@@ -441,7 +441,8 @@ def restore_original_materials():
         _restore_assignments()
         restore_viewport_textures()
         _matcap_active = False
-        _tracked_meshes = []
+        # Keep _tracked_meshes so toggle re-applies to
+        # the same set instead of falling back to all meshes
     finally:
         cmds.undoInfo(closeChunk=True)
 
@@ -468,6 +469,15 @@ def is_matcap_active():
         bool: True if matcap is applied.
     """
     return _matcap_active
+
+
+def get_tracked_meshes():
+    """Get the list of meshes currently tracked for matcap.
+
+    Returns:
+        list: Tracked mesh transform names, or empty list.
+    """
+    return list(_tracked_meshes)
 
 
 # ================================================================
