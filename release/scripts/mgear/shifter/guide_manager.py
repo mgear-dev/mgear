@@ -4,6 +4,8 @@ import json
 from mgear.core import pyqt
 
 
+from maya import cmds
+
 import mgear.pymaya as pm
 from mgear.pymaya import datatypes
 from mgear.core import transform
@@ -139,13 +141,20 @@ def inspect_settings(tabIdx=0, *args):
 
 
 def extract_controls(*args):
-    """Extract the selected controls from the rig to use it in the new build
+    """Extract the selected controls from the rig to use it
+    in the new build.
 
-    The controls shapes are stored under the controller_org group.
-    The controls are renamed witht "_controlBuffer" suffix
+    The control NurbsCurve shapes are stored under the
+    controllers_org group.  The controls are renamed with
+    "_controlBuffer" suffix.
+
+    Uses ``parentOnly=True`` duplication to avoid child
+    leaking, then manually copies only NurbsCurve shapes.
+    Handles instanced/shared shapes (ghost controls) by
+    creating independent copies.
 
     Args:
-        *args: None
+        *args: Ignored (Maya menu callback compatibility).
     """
     oSel = pm.selected()
 
@@ -153,37 +162,89 @@ def extract_controls(*args):
         cGrp = pm.PyNode("controllers_org")
     except TypeError:
         cGrp = False
-        mgear.log(
-            "Not controller group in the scene or the group is not unique",
-            mgear.sev_error,
+        pm.displayWarning(
+            "No controllers_org group in the scene "
+            "or the group is not unique"
         )
+        return
+
     for x in oSel:
-        if x.hasAttr("isCtl"):
-            try:
-                old = pm.PyNode(
-                    cGrp.name()
-                    + "|"
-                    + x.name().split("|")[-1]
-                    + "_controlBuffer"
-                )
-                pm.delete(old)
-            except (TypeError, RuntimeError):
-                pass
-            new = pm.duplicate(x)[0]
-            pm.parent(new, cGrp, a=True)
-            pm.rename(new, x.name() + "_controlBuffer")
-            toDel = new.getChildren(type="transform", fullPath=True)
-            if toDel:
-                pm.delete(toDel)
-            try:
-                for s in x.instObjGroups[0].listConnections(type="objectSet"):
-                    pm.sets(s, remove=new)
-            except TypeError:
-                pass
-        else:
+        if not x.hasAttr("isCtl"):
             pm.displayWarning(
-                "{}: Is not a valid mGear control".format(x.name())
+                "{}: Is not a valid mGear control".format(
+                    x.name()
+                )
             )
+            continue
+
+        buffer_name = x.name().split("|")[-1] + "_controlBuffer"
+
+        # Delete existing buffer if present
+        try:
+            old = pm.PyNode(
+                cGrp.name() + "|" + buffer_name
+            )
+            pm.delete(old)
+        except (TypeError, RuntimeError):
+            pass
+
+        # Duplicate the control once to get all shapes
+        # (handles instanced shapes correctly)
+        temp = pm.duplicate(x)[0]
+
+        # Create clean buffer transform
+        new = pm.createNode(
+            "transform", name=buffer_name, parent=cGrp
+        )
+
+        # Check for instanced shapes on the original
+        for shape in x.getShapes():
+            all_parents = cmds.listRelatives(
+                shape.name(), allParents=True
+            ) or []
+            if len(all_parents) > 1:
+                mgear.log(
+                    "Instanced shape detected on '{}', "
+                    "creating independent copy".format(
+                        x.name()
+                    ),
+                    mgear.sev_warning,
+                )
+                break
+
+        # Move only NurbsCurve shapes to the buffer,
+        # skip intermediate objects and non-curve types
+        shape_count = 0
+        for shape in temp.getShapes():
+            if shape.type() != "nurbsCurve":
+                continue
+            if shape.intermediateObject.get():
+                continue
+            pm.parent(
+                shape, new, shape=True, relative=True
+            )
+            pm.rename(shape, buffer_name + "Shape")
+            shape_count += 1
+
+        # Delete the temp transform (children and
+        # leftover non-curve shapes)
+        pm.delete(temp)
+
+        # Validate: skip empty buffers
+        if shape_count == 0:
+            mgear.log(
+                "'{}': No NurbsCurve shapes found, "
+                "skipping extraction".format(x.name()),
+                mgear.sev_warning,
+            )
+            pm.delete(new)
+            continue
+
+        mgear.log(
+            "Extracted '{}' ({} shape(s))".format(
+                x.name(), shape_count
+            )
+        )
 
 
 # Extract guide from rigs
