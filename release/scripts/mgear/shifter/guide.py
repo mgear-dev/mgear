@@ -1018,12 +1018,16 @@ class Rig(Main):
         # More option values
         self.addOptionsValues()
 
-    def get_guide_template_dict(self, meta=None):
+    def get_guide_template_dict(self, meta=None, progress_callback=None):
         """Get the guide temaplate configuration dictionary
 
         Args:
             meta (dict, optional): Arbitraty metadata dictionary. This can
             be use to store any custom information in a dictionary format.
+            progress_callback (callable, optional): Called with
+                ``(component_name)`` after each component is
+                collected.  Used by export to update a progress
+                bar.
 
         Returns:
             dict: guide configuration dictionary
@@ -1047,11 +1051,15 @@ class Rig(Main):
             if c_dict["parent_fullName"]:
                 pn = c_dict["parent_fullName"]
                 components_dict[pn]["child_components"].append(c_name)
+            if progress_callback:
+                progress_callback(c_name)
 
         self.guide_template_dict["components_list"] = components_list
         self.guide_template_dict["components_dict"] = components_dict
 
         # controls shape buffers
+        if progress_callback:
+            progress_callback("Collecting curves...")
         co = pm.ls("controllers_org")
         # before only collected the exported components ctl buffers.
         # Now with the new naming rules will collect anything named

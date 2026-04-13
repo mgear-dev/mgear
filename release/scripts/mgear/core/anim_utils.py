@@ -857,7 +857,7 @@ def getComboKeys_with_namespace(namespace, object_name, combo_attr):
 
     oAttr = node.attr(combo_attr)
     keys = list(oAttr.getEnums().keys())
-    keys.append("++ Space Transfer ++")
+    keys.append("++ Range Transfer Options ++")
     return keys
 
 

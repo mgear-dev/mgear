@@ -7,6 +7,8 @@ import logging
 
 from typing import List, Tuple, Sequence, Optional
 
+from maya import cmds
+
 import mgear.pymaya as pm
 from mgear import shifter
 from mgear.shifter import utils as shifter_utils
@@ -158,7 +160,45 @@ def export_guide_template(filePath=None, meta=None, conf=None, *args):
             rig = shifter.Rig()
             rig.guide.setFromHierarchy(selection[0])
             rig.guide.refresh_user_metadata()
-            conf = rig.guide.get_guide_template_dict(meta)
+
+            # Progress bar for data collection
+            use_progress = not cmds.about(batch=True)
+            if use_progress:
+                num_comps = len(rig.guide.componentsIndex)
+                gMainProgressBar = pm.mel.eval(
+                    "$tmp = $gMainProgressBar"
+                )
+                cmds.progressBar(
+                    gMainProgressBar,
+                    edit=True,
+                    beginProgress=True,
+                    isInterruptable=False,
+                    status="Exporting guide template...",
+                    maxValue=num_comps + 1,
+                )
+
+                def _progress_cb(name):
+                    cmds.progressBar(
+                        gMainProgressBar,
+                        edit=True,
+                        step=1,
+                        status="Exporting: {}".format(name),
+                    )
+                    pm.refresh()
+            else:
+                _progress_cb = None
+
+            try:
+                conf = rig.guide.get_guide_template_dict(
+                    meta, progress_callback=_progress_cb
+                )
+            finally:
+                if use_progress:
+                    cmds.progressBar(
+                        gMainProgressBar,
+                        edit=True,
+                        endProgress=True,
+                    )
         else:
             pm.displayWarning(
                 "Guide root or guide component must be selected"
