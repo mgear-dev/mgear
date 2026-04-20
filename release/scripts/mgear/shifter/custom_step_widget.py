@@ -89,7 +89,7 @@ def _get_step_path_from_source_file(source_file, group_name, step_name):
     except Exception as e:
         import mgear.pymaya as pm
         pm.displayWarning(
-            "Error reading source file {}: {}".format(source_file, str(e))
+            "读取源文件时出错 {}: {}".format(source_file, str(e))
         )
         return None
 

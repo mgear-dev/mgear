@@ -60,8 +60,8 @@ def name_rule_validator(rule, valid_tokens, log=True):
     if invalid_tokens:
         if log:
             pm.displayWarning(
-                "{} not valid token".format(invalid_tokens))
-            pm.displayInfo("Valid tokens are: {}".format(NAMING_RULE_TOKENS))
+                "{} 不是有效的令牌".format(invalid_tokens))
+            pm.displayInfo("有效令牌为：{}".format(NAMING_RULE_TOKENS))
         return
     else:
         return True

@@ -160,18 +160,18 @@ class TemplateTreeWidget(QtWidgets.QTreeWidget):
 
         menu = QtWidgets.QMenu(self)
 
-        import_action = menu.addAction("Import")
+        import_action = menu.addAction("导入")
         import_action.triggered.connect(
             lambda *args: self.import_requested.emit(path)
         )
 
-        import_add_action = menu.addAction("Import Add to Selection")
+        import_add_action = menu.addAction("导入并添加到选择")
         import_add_action.triggered.connect(
             lambda *args: self.import_add_requested.emit(path)
         )
 
         import_partial_action = menu.addAction(
-            "Import Partial to Selection..."
+            "部分导入到选择..."
         )
         import_partial_action.triggered.connect(
             lambda *args: self.import_partial_requested.emit(path)
@@ -434,7 +434,7 @@ class TemplateInfoPanel(QtWidgets.QWidget):
     def clear_template(self):
         """Reset the panel to empty state."""
         self._current_path = None
-        self.name_label.setText("No template selected")
+        self.name_label.setText("未选择模板")
         self.description_label.setText("")
         self.author_label.setText("")
         self.date_label.setText("")

@@ -18,7 +18,7 @@ class GuideTreeWidgetItem(QtWidgets.QTreeWidgetItem):
         :param rig_name: Name of the rig associated with the guide.
         :return: None
         """
-        super(GuideTreeWidgetItem, self).__init__(parent, [f"guide ({rig_name})"])
+        super(GuideTreeWidgetItem, self).__init__(parent, [f"指南 ({rig_name})"])
 
         self.rig_name: str = rig_name
 
@@ -28,7 +28,7 @@ class GuideTreeWidgetItem(QtWidgets.QTreeWidgetItem):
         name_font = QtGui.QFont()
         name_font.setBold(True)
         self.setFont(0, name_font)
-        self.setToolTip(0, f"guide ({rig_name})")
+        self.setToolTip(0, f"指南 ({rig_name})")
 
 
 class ComponentTreeWidgetItem(QtWidgets.QTreeWidgetItem):
