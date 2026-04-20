@@ -23,7 +23,7 @@ def is_selected_object_nurbs(obj=None):
         selection = pm.selected()
 
         if not selection:
-            raise ValueError("No object is selected.")
+            raise ValueError("没有选择任何对象。")
 
         # Get the first item in the selection
         obj = selection[0]

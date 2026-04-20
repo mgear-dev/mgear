@@ -12,13 +12,13 @@ class pluginVersion:
         else:
             parts = version_str.split(".")
             if len(parts) != 3:
-                raise ValueError("Invalid version string format. Must be 'major.minor.patch'")
+                raise ValueError("无效的版本字符串格式。必须是 'major.minor.patch'")
             try:
                 self.major = int(parts[0])
                 self.minor = int(parts[1])
                 self.patch = int(parts[2])
             except ValueError:
-                raise ValueError("Invalid version number format. Must be integers.")
+                raise ValueError("无效的版本号格式。必须是整数。")
 
     def __str__(self):
         return "{}.{}.{}".format(self.major, self.minor, self.patch)

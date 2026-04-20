@@ -97,11 +97,11 @@ def knot_vector(kv_type, cvs, d):
         TypeError: If cvs is not a list or d is not an integer.
     """
     if kv_type not in {"open", "periodic"}:
-        raise ValueError("Invalid kv_type. Must be 'open' or 'periodic'.")
+        raise ValueError("无效的 kv_type。必须是 'open' 或 'periodic'。")
     if not isinstance(cvs, list):
-        raise TypeError("'cvs' must be a list.")
+        raise TypeError("'cvs' 必须是列表。")
     if not isinstance(d, int):
-        raise TypeError("'d' must be an integer.")
+        raise TypeError("'d' 必须是整数。")
 
     cvs_copy = cvs[:]
 

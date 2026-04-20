@@ -238,8 +238,8 @@ def viewport_off(func):
 
         except RuntimeError:
             pm.displayWarning(
-                "Turning off viewport has failed."
-                " Coninuing with active viewport"
+                "关闭视口失败。"
+                " 继续使用活动视口"
             )
             return func(*args, **kwargs)
 
