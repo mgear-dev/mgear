@@ -169,7 +169,7 @@ def remove_settings_attr(node):
             pm.deleteAttr(node.attr(attr))
             print("Removed attribute " + attr + " from " + str(node))
         else:
-            print("Attribute " + attr + " does not exist on " + str(node))
+            print("属性" + attr + " does not exist on " + str(node))
 
 
 def get_settings_attr_val(node):
@@ -195,7 +195,7 @@ def get_settings_attr_val(node):
         if pm.attributeQuery(attr, node=node, exists=True):
             attr_vals[attr] = node.attr(attr).get()
         else:
-            print("Attribute " + attr + " does not exist on " + str(node))
+            print("属性" + attr + " does not exist on " + str(node))
 
     return attr_vals
 
@@ -221,7 +221,7 @@ def set_settings_attr_val(node, attr_vals):
         if pm.attributeQuery(attr, node=node, exists=True):
             node.attr(attr).set(attr_vals[attr])
         else:
-            print("Attribute " + attr + " does not exist on " + str(node))
+            print("属性" + attr + " does not exist on " + str(node))
 
 
 # check if object has spring by checking if has attr springSetupMembers

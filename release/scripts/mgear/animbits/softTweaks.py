@@ -866,12 +866,12 @@ class softTweakManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         option = pm.confirmDialog(
             title="Delete Tweak,",
             message="Are you sure?",
-            button=["Delete", "Cancel"],
-            defaultButton="Delete",
-            cancelButton="Cancel",
-            dismissString="Cancel",
+            button=["删除", "取消"],
+            defaultButton="删除",
+            cancelButton="取消",
+            dismissString="取消",
         )
-        if option == "Delete":
+        if option == "删除":
             softMods = self._getSelectedListIndexes()
             objs = _getPluggetObj(softMods, "ctlRoot")
             pm.delete(softMods)

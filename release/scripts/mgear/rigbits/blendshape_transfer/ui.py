@@ -78,7 +78,7 @@ class BlendshapeTransferUI(
         # Menu bar
         self.menu_bar = QtWidgets.QMenuBar()
         self.menu_bar.setNativeMenuBar(False)
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.import_action)
         self.file_menu.addAction(self.export_action)
 
@@ -103,7 +103,7 @@ class BlendshapeTransferUI(
         self.add_source_btn.setStyleSheet(
             "background-color: #4a7c4e;"
         )
-        self.remove_source_btn = QtWidgets.QPushButton("Remove")
+        self.remove_source_btn = QtWidgets.QPushButton("移除")
         self.remove_source_btn.setStyleSheet(
             "background-color: #7c4a4a;"
         )
@@ -162,7 +162,7 @@ class BlendshapeTransferUI(
         main_layout.addWidget(source_group, stretch=1)
 
         # Options group
-        options_group = QtWidgets.QGroupBox("Options")
+        options_group = QtWidgets.QGroupBox("选项")
         options_layout = QtWidgets.QVBoxLayout(options_group)
         name_row = QtWidgets.QHBoxLayout()
         name_row.addWidget(self.bs_name_label)

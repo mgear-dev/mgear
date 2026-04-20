@@ -152,7 +152,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         translate_layout.setSpacing(3)
         key_layout.addLayout(translate_layout)
 
-        self.translate_checkBox = QtWidgets.QCheckBox("Translate")
+        self.translate_checkBox = QtWidgets.QCheckBox("移动")
         self.translate_checkBox.setFixedWidth(MAIN_CB_WIDTH)
         self.translate_checkBox.setChecked(True)
         translate_layout.addWidget(self.translate_checkBox)
@@ -206,7 +206,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         scale_layout.setSpacing(3)
         key_layout.addLayout(scale_layout)
 
-        self.scale_checkBox = QtWidgets.QCheckBox("Scale")
+        self.scale_checkBox = QtWidgets.QCheckBox("缩放")
         self.scale_checkBox.setFixedWidth(MAIN_CB_WIDTH)
         self.scale_checkBox.setChecked(False)
         scale_layout.addWidget(self.scale_checkBox)

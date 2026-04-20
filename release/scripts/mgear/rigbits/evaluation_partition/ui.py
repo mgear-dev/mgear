@@ -83,7 +83,7 @@ class EvaluationPartitionUI(
         """Create all UI widgets."""
         # Menu bar
         self.menu_bar = QtWidgets.QMenuBar()
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.export_action)
         self.file_menu.addAction(self.import_action)
 

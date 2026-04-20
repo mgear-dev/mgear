@@ -9,7 +9,7 @@ from mgear.pymaya import versions
 
 
 def install_skinning_menu():
-    """Install Skinning submenu"""
+    """安装蒙皮子菜单"""
     commands = (
         ("复制蒙皮", partial(skin.skinCopy, None, None), "mgear_copy.svg"),
         (
@@ -81,7 +81,7 @@ def install_skinning_menu():
 
 
 def install_utils_menu(m):
-    """Install core utils submenu"""
+    """安装核心工具子菜单"""
     if versions.current() < 20220000:
         pm.setParent(m, menu=True)
         pm.menuItem(divider=True)

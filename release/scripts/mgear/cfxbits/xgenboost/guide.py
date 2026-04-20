@@ -538,7 +538,7 @@ class DuplicateSymOptions(QtWidgets.QDialog):
         self.skip_all_btn = QtWidgets.QPushButton("Skip All")
         self.re_sym_btn = QtWidgets.QPushButton("Re Sym")
         self.re_sym_all_btn = QtWidgets.QPushButton("Re Sym All")
-        self.cancel_btn = QtWidgets.QPushButton("Cancel")
+        self.cancel_btn = QtWidgets.QPushButton("取消")
 
     def create_layout(self):
 

@@ -165,8 +165,8 @@ def create_constraints(dataSet):
                 cmds.connectAttr(attribute, weightattr)
 
 
-def create_spaces(path="None"):
-    if not path == "None":
+def create_spaces(path="无"):
+    if not path == "无":
         dataSet = import_data(path)
         patched = patch_data(dataSet)
         create_constraints(patched)

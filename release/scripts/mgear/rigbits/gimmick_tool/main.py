@@ -133,7 +133,7 @@ class GimmickSetupWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
 
         gimmickJnt = core.GimmickJoint()
         for sideStr in sideList:
-            joints.extend(gimmickJnt.select("Blend", side=sideStr))
+            joints.extend(gimmickJnt.select("混合", side=sideStr))
         pm.select(joints)
         return joints
 

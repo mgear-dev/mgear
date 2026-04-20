@@ -119,7 +119,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             "cache_manager_unload_qradialbutton")
         self.rig_unload_radial.setToolTip("Unload the rig after caching")
         self.rig_unload_radial.setChecked(True)
-        self.rig_hide_radial = QtWidgets.QRadioButton("Hide")
+        self.rig_hide_radial = QtWidgets.QRadioButton("隐藏")
         self.rig_hide_radial.setObjectName("cache_manager_hide_qradialbutton")
         self.rig_hide_radial.setToolTip("Hides the rig after caching")
 

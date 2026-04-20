@@ -28,7 +28,7 @@ class ChannelMaster(
 
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
 
-        self.setWindowTitle("Channel Master")
+        self.setWindowTitle("通道主控")
         min_w = 155
         default_w = 250
         default_h = 600
@@ -164,7 +164,7 @@ class ChannelMaster(
             "Export Current Tab", self
         )
         self.file_export_current_action.setIcon(pyqt.get_icon("mgear_log-out"))
-        self.file_import_action = QtWidgets.QAction("Import", self)
+        self.file_import_action = QtWidgets.QAction("导入", self)
         self.file_import_action.setIcon(pyqt.get_icon("mgear_log-in"))
         self.file_import_add_action = QtWidgets.QAction("Import Add", self)
         self.file_import_add_action.setIcon(pyqt.get_icon("mgear_log-in"))
@@ -226,7 +226,7 @@ class ChannelMaster(
         )
 
         # Key actions
-        self.key_all_action = QtWidgets.QAction("Keyframe", self)
+        self.key_all_action = QtWidgets.QAction("关键帧", self)
         self.key_all_action.setIcon(pyqt.get_icon("mgear_key"))
         self.key_all_action.setShortcut(QtGui.QKeySequence("S"))
         self.key_copy_action = QtWidgets.QAction("Copy Key", self)
@@ -269,7 +269,7 @@ class ChannelMaster(
     def create_widgets(self):
         # Menu bar
         self.menu_bar = QtWidgets.QMenuBar()
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.file_new_node_action)
         self.file_menu.addSeparator()
         self.file_menu.addAction(self.file_save_node_action)
@@ -285,7 +285,7 @@ class ChannelMaster(
         self.file_menu.addAction(self.use_node_namespace_action)
         self.file_menu.addAction(self.use_only_local_data_action)
 
-        self.select_menu = self.menu_bar.addMenu("Select")
+        self.select_menu = self.menu_bar.addMenu("选择")
         self.select_menu.addAction(self.select_all_hosts_action)
         self.select_menu.addAction(self.select_current_tab_all_hosts_action)
 
@@ -302,7 +302,7 @@ class ChannelMaster(
         self.order_menu.addAction(self.display_order_default_action)
         self.order_menu.addAction(self.display_order_alphabetical_action)
 
-        self.key_menu = self.menu_bar.addMenu("Keyframe")
+        self.key_menu = self.menu_bar.addMenu("关键帧")
         self.key_menu.addAction(self.key_all_action)
         self.key_menu.addSeparator()
         self.key_menu.addAction(self.key_copy_action)
@@ -315,7 +315,7 @@ class ChannelMaster(
         self.key_menu.addAction(self.key_only_behavior_action)
         self.key_menu.addAction(self.key_delete_reset_only_selected_action)
 
-        self.tab_menu = self.menu_bar.addMenu("Tab")
+        self.tab_menu = self.menu_bar.addMenu("标签页")
         self.tab_menu.addAction(self.tab_new_action)
         self.tab_menu.addAction(self.tab_dup_action)
         self.tab_menu.addAction(self.tab_rename_action)
@@ -324,7 +324,7 @@ class ChannelMaster(
 
         # Keyframe widgets
         self.key_all_button = mwgt.create_button(
-            size=34, icon="mgear_key", toolTip="Keyframe"
+            size=34, icon="mgear_key", toolTip="关键帧"
         )
         self.key_copy_button = mwgt.create_button(
             size=34, icon="mgear_copy", toolTip="Copy Keyframe"
@@ -1324,8 +1324,8 @@ class channelOrderDialog(QtWidgets.QDialog):
         self.channel_list_qlist.setDefaultDropAction(QtCore.Qt.MoveAction)
         self.channel_list_qlist.setAlternatingRowColors(True)
 
-        self.apply_btn = QtWidgets.QPushButton("Apply")
-        self.cancel_btn = QtWidgets.QPushButton("Cancel")
+        self.apply_btn = QtWidgets.QPushButton("应用")
+        self.cancel_btn = QtWidgets.QPushButton("取消")
 
     def apply_channel_order(self):
         qlist = self.channel_list_qlist

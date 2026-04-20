@@ -1102,7 +1102,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.headJnt_button = QtWidgets.QPushButton("<<")
 
         # Topological Autoskin
-        self.topoSkin_group = QtWidgets.QGroupBox("Skin")
+        self.topoSkin_group = QtWidgets.QGroupBox("蒙皮")
         self.rigidLoops_label = QtWidgets.QLabel("Rigid Loops:")
         self.rigidLoops = QtWidgets.QSpinBox()
         self.rigidLoops.setRange(0, 30)
@@ -1118,7 +1118,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.doSkin.setChecked(True)
 
         # Options
-        self.options_group = QtWidgets.QGroupBox("Options")
+        self.options_group = QtWidgets.QGroupBox("选项")
         self.parent_label = QtWidgets.QLabel("Rig Parent:")
         self.parent_node = QtWidgets.QLineEdit()
         self.parent_button = QtWidgets.QPushButton("<<")

@@ -76,7 +76,7 @@ class SpringManager(MayaQWidgetDockableMixin, QtWidgets.QDialog, pyqt.SettingsMi
         self.bake_menu.addAction(self.bake_selected_action)
         self.bake_menu.addAction(self.bake_all_action)
 
-        self.delete_menu = self.menu_bar.addMenu("Delete")
+        self.delete_menu = self.menu_bar.addMenu("删除")
         self.delete_menu.addAction(self.delete_selected_action)
         self.delete_menu.addAction(self.delete_all_action)
 
@@ -86,7 +86,7 @@ class SpringManager(MayaQWidgetDockableMixin, QtWidgets.QDialog, pyqt.SettingsMi
         self.presets_menu.addAction(self.refresh_presets_action)
         self.presets_menu.addAction(self.delete_preset_action)
 
-        self.select_menu = self.menu_bar.addMenu("Select")
+        self.select_menu = self.menu_bar.addMenu("选择")
         self.select_menu.addAction(self.select_all_targets_action)
 
         # directions

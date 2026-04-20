@@ -124,11 +124,11 @@ class JointListWidget(QtWidgets.QWidget):
         self.add_btn.clicked.connect(self._add_selected)
         btn_layout.addWidget(self.add_btn)
 
-        self.remove_btn = QtWidgets.QPushButton("Remove")
+        self.remove_btn = QtWidgets.QPushButton("移除")
         self.remove_btn.clicked.connect(self._remove_selected)
         btn_layout.addWidget(self.remove_btn)
 
-        self.clear_btn = QtWidgets.QPushButton("Clear")
+        self.clear_btn = QtWidgets.QPushButton("清除")
         self.clear_btn.clicked.connect(self._clear_list)
         btn_layout.addWidget(self.clear_btn)
 

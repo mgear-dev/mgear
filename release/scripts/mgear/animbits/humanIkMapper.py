@@ -657,8 +657,8 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         super(HumanIKMapperUI, self).adjustSize()
 
     def create_actions(self):
-        self.import_action = QtWidgets.QAction("Import")
-        self.export_action = QtWidgets.QAction("Export")
+        self.import_action = QtWidgets.QAction("导入")
+        self.export_action = QtWidgets.QAction("导出")
         self.bake_action = QtWidgets.QAction("Bake")
         self.bake_timeline_action = QtWidgets.QAction("Bake to timeline")
         self.export_batch_bake_action = QtWidgets.QAction(
@@ -670,7 +670,7 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
     def create_widgets(self):
         self.menu_bar = QtWidgets.QMenuBar()
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.import_action)
         self.file_menu.addAction(self.export_action)
         self.bake_menu = self.menu_bar.addMenu("Bake")
@@ -734,14 +734,14 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         )
         self.instructions_tb.setFixedHeight(120)
 
-        self.refresh_mapping_btn = QtWidgets.QPushButton("Refresh")
+        self.refresh_mapping_btn = QtWidgets.QPushButton("刷新")
         self.sub_ik_active_cb = QtWidgets.QCheckBox("Sub Ik Active")
         self.mapping_table = QtWidgets.QTableWidget(1, 3)
         self.mapping_table.setEditTriggers(
             QtWidgets.QAbstractItemView.NoEditTriggers
         )
         self.mapping_table.setHorizontalHeaderLabels(
-            ["Bone", "Target", "Sub IK"]
+            ["骨骼", "Target", "Sub IK"]
         )
         self.mapping_table.horizontalHeader().setSectionResizeMode(
             QtWidgets.QHeaderView.Stretch
@@ -1155,8 +1155,8 @@ class BoneListDialog(QtWidgets.QDialog):
         self.selection_lw = QtWidgets.QListWidget()
         self.selection_changed()
 
-        self.confirm_btn = QtWidgets.QPushButton("Confirm")
-        self.cancel_btn = QtWidgets.QPushButton("Cancel")
+        self.confirm_btn = QtWidgets.QPushButton("确认")
+        self.cancel_btn = QtWidgets.QPushButton("取消")
 
     def create_layout(self):
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -1232,9 +1232,9 @@ class LockedCtrlsDialog(QtWidgets.QDialog):
             QtWidgets.QAbstractScrollArea.AdjustToContents
         )
 
-        self.confirm_btn = QtWidgets.QPushButton("Confirm")
+        self.confirm_btn = QtWidgets.QPushButton("确认")
         self.confirm_btn.setDefault(True)
-        self.cancel_btn = QtWidgets.QPushButton("Cancel")
+        self.cancel_btn = QtWidgets.QPushButton("取消")
 
     def create_layout(self):
         main_layout = QtWidgets.QVBoxLayout(self)

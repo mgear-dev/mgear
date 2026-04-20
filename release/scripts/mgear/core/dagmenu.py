@@ -992,21 +992,21 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     all_rig_controls = cmds.sets(selection_set, query=True)
     cmds.menuItem(
         parent=resetOption,
-        label="Reset all",
+        label="重置全部",
         command=partial(reset_all_keyable_attributes, all_rig_controls),
     )
 
     # reset all below
     cmds.menuItem(
         parent=resetOption,
-        label="Reset all below",
+        label="重置所有下级",
         command=partial(reset_all_keyable_attributes, child_controls),
     )
 
     # bindpose
     cmds.menuItem(
         parent=resetOption,
-        label="Reset To BindPose",
+        label="重置到绑定姿势",
         command=partial(bindPose, _current_selection[0]),
     )
 
@@ -1016,7 +1016,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     # reset all SRT
     cmds.menuItem(
         parent=resetOption,
-        label="Reset All SRT",
+        label="重置所有SRT",
         command=partial(__reset_all_transforms_callback, all_rig_controls),
     )
 
@@ -1030,7 +1030,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
                 icon = "move_M.png"
             cmds.menuItem(
                 parent=resetOption,
-                label="Reset {}".format(attr),
+                label="重置 {}".format(attr),
                 command=partial(
                     __reset_attributes_callback, _current_selection, attr
                 ),
@@ -1043,7 +1043,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     # add mirror
     cmds.menuItem(
         parent=parent_menu,
-        label="Mirror",
+        label="镜像",
         command=partial(
             __mirror_flip_pose_callback, _current_selection, False
         ),
@@ -1051,20 +1051,20 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     )
     cmds.menuItem(
         parent=parent_menu,
-        label="Mirror all below",
+        label="镜像所有下级",
         command=partial(__mirror_flip_pose_callback, child_controls, False),
     )
 
     # add flip
     cmds.menuItem(
         parent=parent_menu,
-        label="Flip",
+        label="翻转",
         command=partial(__mirror_flip_pose_callback, _current_selection, True),
         image="redo.png",
     )
     cmds.menuItem(
         parent=parent_menu,
-        label="Flip all below",
+        label="翻转所有下级",
         command=partial(__mirror_flip_pose_callback, child_controls, True),
     )
 
@@ -1086,7 +1086,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
             parent=parent_menu,
             subMenu=True,
             tearOff=False,
-            label="Rotate Order switch",
+            label="旋转顺序切换",
         )
         cmds.radioMenuItemCollection(parent=_rot_men)
         orders = ("xyz", "yzx", "zxy", "xzy", "yxz", "zyx")
@@ -1175,14 +1175,14 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     all_rig_controls = cmds.sets(selection_set, query=True)
     cmds.menuItem(
         parent=parent_menu,
-        label="Select all controls",
+        label="选择所有控制器",
         command=partial(__select_nodes_callback, all_rig_controls),
     )
 
     # key all below function
     cmds.menuItem(
         parent=parent_menu,
-        label="Keyframe child controls",
+        label="关键帧子控制器",
         command=partial(__keyframe_nodes_callback, child_controls),
         image="setKeyframe.png",
     )
@@ -1195,7 +1195,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
         cmds.menuItem(parent=parent_menu, divider=True)
         cmds.menuItem(
             parent=parent_menu,
-            label="X-Ray CTL Toggle",
+            label="X射线控制器切换",
             command=__switch_xray_ctl_callback,
             image="mgear_x.svg",
         )

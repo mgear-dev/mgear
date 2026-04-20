@@ -87,7 +87,7 @@ class WireToSkinningUI(
         # Menu bar
         self.menu_bar = QtWidgets.QMenuBar()
         self.menu_bar.setNativeMenuBar(False)
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.export_action)
         self.file_menu.addAction(self.import_action)
 
@@ -243,7 +243,7 @@ class WireToSkinningUI(
         self.convert_btn.setStyleSheet("background-color: #4a6b8c;")
 
         # Status bar
-        self.status_label = QtWidgets.QLabel("Ready")
+        self.status_label = QtWidgets.QLabel("就绪")
         self.status_label.setStyleSheet("color: #888888; font-style: italic;")
 
     def create_layout(self):

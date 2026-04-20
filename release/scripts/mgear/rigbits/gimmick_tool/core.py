@@ -13,13 +13,13 @@ from mgear.core.attribute import ParamDef2, enumParamDef
 
 
 class Gimmick(object):
-    BLEND = "Blend"
+    BLEND = "混合"
     SUPPORT = "Support"
     SLIDE = "Slide"
     GIMMICK_TYPE = (BLEND, SUPPORT, SLIDE)
 
     SETS = "rig_gimmick_grp"
-    SIDE_LABEL = ("Center", "Left", "Right", "None")
+    SIDE_LABEL = ("Center", "Left", "Right", "无")
 
     ATTR = dict(type="gimmickType", side="gimmickSide", parent="parentTarget")
 
@@ -66,10 +66,10 @@ class Gimmick(object):
         sideInfo = {self.guideData["side_joint_center_name"]: "Center",
                     self.guideData["side_joint_left_name"]: "Left",
                     self.guideData["side_joint_right_name"]: "Right",
-                    "None": "None"}
+                    "无": "无"}
 
         matchResult = re.match(self.getNameRulePattern(), jnt)
-        side = matchResult.group("side") if matchResult else "None"
+        side = matchResult.group("side") if matchResult else "无"
         return sideInfo.get(side)
 
     def swapSideName(self, name, guideData=None):
@@ -110,8 +110,8 @@ class Gimmick(object):
         Returns:
             [list]: [description]
         """
-        gimmicks = {self.BLEND: {"Center": [], "Left": [], "Right": [], "None": []},
-                    self.SUPPORT: {"Center": [], "Left": [], "Right": [], "None": []}}
+        gimmicks = {self.BLEND: {"Center": [], "Left": [], "Right": [], "无": []},
+                    self.SUPPORT: {"Center": [], "Left": [], "Right": [], "无": []}}
 
         if not joint:
             nodes = pm.ls("*.{}".format(self.ATTR["type"]))
@@ -141,7 +141,7 @@ class Gimmick(object):
                 elif sideLabel == 2:
                     gimmicks[gtype]["Right"].append(nodeName)
                 elif sideLabel == 3:
-                    gimmicks[gtype]["None"].append(nodeName)
+                    gimmicks[gtype]["无"].append(nodeName)
 
         return gimmicks[gType]
 
@@ -219,7 +219,7 @@ class GimmickJoint(Gimmick):
 
 
 class GimmickBlend(GimmickJoint):
-    TYPE = "Blend"
+    TYPE = "混合"
 
     def __init__(self, joint=None, **kwargs):
         super(GimmickBlend, self).__init__(infType=self.TYPE, **kwargs)

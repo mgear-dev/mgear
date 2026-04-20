@@ -111,7 +111,7 @@ class channelWrangler(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.setObjectName(self.toolName)
         self.setWindowFlags(QtCore.Qt.Window)
-        self.setWindowTitle("Channel Wrangler")
+        self.setWindowTitle("通道管理")
         self.resize(750, 525)
 
     def create_layout(self):
@@ -377,10 +377,10 @@ class channelWrangler(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 message='Do you want to repace current configuration or'
                         ' add it?\n if add the move policy and proxy policy'
                         ' will not change',
-                button=['Replace', 'Add', 'Cancel'],
+                button=['Replace', '添加', '取消'],
                 defaultButton='Reaplace',
-                cancelButton='Cancel',
-                dismissString='Cancel')
+                cancelButton='取消',
+                dismissString='取消')
         else:
             option = "Replace"
         if option == "Replace":

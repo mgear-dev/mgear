@@ -893,7 +893,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.lower_lip_ctl_button = QtWidgets.QPushButton("<<")
 
         # Topological Autoskin
-        self.topoSkin_group = QtWidgets.QGroupBox("Skin")
+        self.topoSkin_group = QtWidgets.QGroupBox("蒙皮")
         self.rigid_loops_label = QtWidgets.QLabel("Rigid Loops:")
         self.rigid_loops = QtWidgets.QSpinBox()
         self.rigid_loops.setRange(0, 30)
@@ -910,7 +910,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.do_skin.setChecked(True)
 
         # Options
-        self.options_group = QtWidgets.QGroupBox("Options")
+        self.options_group = QtWidgets.QGroupBox("选项")
         self.thickness_label = QtWidgets.QLabel("Lips Thickness:")
         self.thickness = QtWidgets.QDoubleSpinBox()
         self.thickness.setRange(0, 10)

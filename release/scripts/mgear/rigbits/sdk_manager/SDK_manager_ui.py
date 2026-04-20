@@ -81,67 +81,67 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.<>_action = QtWidgets.QAction("<>", self)
         """
         # File
-        self.export_SDKs_action = QtWidgets.QAction("Export SDK's", self)
-        self.import_SDKs_action = QtWidgets.QAction("Import SDK's", self)
+        self.export_SDKs_action = QtWidgets.QAction("导出SDK", self)
+        self.import_SDKs_action = QtWidgets.QAction("导入SDK", self)
 
         # Select
         self.select_all_sdk_ctls = QtWidgets.QAction(
-            "Select All SDK Ctls", self
+            "选择所有SDK控制器", self
         )
         self.select_all_anim_ctls = QtWidgets.QAction(
-            "Select All Anim Ctls", self
+            "选择所有动画控制器", self
         )
         self.select_all_sdk_jnts = QtWidgets.QAction(
-            "Select All SDK Jnts", self
+            "选择所有SDK骨骼", self
         )
         self.select_all_sdk_nodes = QtWidgets.QAction(
-            "Select All SDK Nodes", self
+            "选择所有SDK节点", self
         )
 
         # Tools
-        self.tgl_pre_infinity_action = QtWidgets.QAction("Pre-infinity", self)
-        self.tgl_pst_infinity_action = QtWidgets.QAction("Post-infinity", self)
+        self.tgl_pre_infinity_action = QtWidgets.QAction("前无限", self)
+        self.tgl_pst_infinity_action = QtWidgets.QAction("后无限", self)
 
-        self.set_tgnt_in_auto_action = QtWidgets.QAction("Auto", self)
-        self.set_tgnt_in_spline_action = QtWidgets.QAction("Spline", self)
-        self.set_tgnt_in_flat_action = QtWidgets.QAction("Flat", self)
-        self.set_tgnt_in_linear_action = QtWidgets.QAction("Linear", self)
-        self.set_tgnt_in_plateau_action = QtWidgets.QAction("Plateau", self)
-        self.set_tgnt_in_stepnext_action = QtWidgets.QAction("Stepped", self)
-        self.set_tgnt_out_auto_action = QtWidgets.QAction("Auto", self)
-        self.set_tgnt_out_spline_action = QtWidgets.QAction("Spline", self)
-        self.set_tgnt_out_flat_action = QtWidgets.QAction("Flat", self)
-        self.set_tgnt_out_linear_action = QtWidgets.QAction("Linear", self)
-        self.set_tgnt_out_plateau_action = QtWidgets.QAction("Plateau", self)
-        self.set_tgnt_out_stepnext_action = QtWidgets.QAction("Stepped", self)
+        self.set_tgnt_in_auto_action = QtWidgets.QAction("自动", self)
+        self.set_tgnt_in_spline_action = QtWidgets.QAction("样条", self)
+        self.set_tgnt_in_flat_action = QtWidgets.QAction("平坦", self)
+        self.set_tgnt_in_linear_action = QtWidgets.QAction("线性", self)
+        self.set_tgnt_in_plateau_action = QtWidgets.QAction("平台", self)
+        self.set_tgnt_in_stepnext_action = QtWidgets.QAction("阶梯", self)
+        self.set_tgnt_out_auto_action = QtWidgets.QAction("自动", self)
+        self.set_tgnt_out_spline_action = QtWidgets.QAction("样条", self)
+        self.set_tgnt_out_flat_action = QtWidgets.QAction("平坦", self)
+        self.set_tgnt_out_linear_action = QtWidgets.QAction("线性", self)
+        self.set_tgnt_out_plateau_action = QtWidgets.QAction("平台", self)
+        self.set_tgnt_out_stepnext_action = QtWidgets.QAction("阶梯", self)
 
         self.set_control_limits_action = QtWidgets.QAction(
-            "Auto Set Limits On Selected Controls", self
+            "自动设置选中控制器的限制", self
         )
         self.remove_control_limits_action = QtWidgets.QAction(
-            "Auto Remove Limits On Selected Controls", self
+            "自动移除选中控制器的限制", self
         )
         self.rescale_driver_driven_action = QtWidgets.QAction(
-            "Rescale Driver range to fit Driven", self
+            "缩放驱动范围以适应被驱动", self
         )
         self.lock_unlock_anim_ctls_action = QtWidgets.QAction(
-            "Lock/Unlock Animation Ctls", self
+            "锁定/解锁动画控制器", self
         )
         self.lock_unlock_SDK_ctls_action = QtWidgets.QAction(
-            "Lock/Unlock SDK Ctls", self
+            "锁定/解锁SDK控制器", self
         )
 
         self.prune_SDK_nodes_action = QtWidgets.QAction(
-            "Prune SDKs with no input/output", self
+            "修剪没有输入/输出的SDK", self
         )
 
         # Reset
-        self.reset_all_ctls = QtWidgets.QAction("Reset All Ctls", self)
-        self.reset_sdk_ctls = QtWidgets.QAction("Reset SDK Ctls", self)
-        self.reset_anim_ctls = QtWidgets.QAction("Reset Anim Tweaks", self)
+        self.reset_all_ctls = QtWidgets.QAction("重置所有控制器", self)
+        self.reset_sdk_ctls = QtWidgets.QAction("重置SDK控制器", self)
+        self.reset_anim_ctls = QtWidgets.QAction("重置动画调整", self)
 
         # Help
-        self.about_action = QtWidgets.QAction("About", self)
+        self.about_action = QtWidgets.QAction("关于", self)
 
     def create_menu_bar(self, parent_layout):
         """
@@ -155,35 +155,35 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.menu_bar = QtWidgets.QMenuBar()
         # all menu bar tabs ===============
         # File -------------------
-        file_menu = self.menu_bar.addMenu("File")
+        file_menu = self.menu_bar.addMenu("文件")
         file_menu.setTearOffEnabled(1)
 
         # Select -------------------
-        select_menu = self.menu_bar.addMenu("Select")
+        select_menu = self.menu_bar.addMenu("选择")
         select_menu.setTearOffEnabled(1)
 
         # Tools -------------------
-        tools_menu = self.menu_bar.addMenu("Tools")
+        tools_menu = self.menu_bar.addMenu("工具")
         tools_menu.setTearOffEnabled(1)
 
         # - infinity
-        infinity_menu = tools_menu.addMenu("Toggle Infinity on SDK ctls")
+        infinity_menu = tools_menu.addMenu("切换SDK控制器的无限")
         infinity_menu.setTearOffEnabled(1)
 
         # - tangent type
-        tanget_type_menu = tools_menu.addMenu("Set Tangent Type")
+        tanget_type_menu = tools_menu.addMenu("设置切线类型")
         tanget_type_menu.setTearOffEnabled(1)
-        tanget_in_menu = tanget_type_menu.addMenu("Tangent In")
+        tanget_in_menu = tanget_type_menu.addMenu("切线入")
         tanget_in_menu.setTearOffEnabled(1)
-        tanget_out_menu = tanget_type_menu.addMenu("Tangent Out")
+        tanget_out_menu = tanget_type_menu.addMenu("切线出")
         tanget_out_menu.setTearOffEnabled(1)
 
         # Reset -------------------
-        reset_menu = self.menu_bar.addMenu("Reset")
+        reset_menu = self.menu_bar.addMenu("重置")
         reset_menu.setTearOffEnabled(1)
 
         # Help -------------------
-        help_menu = self.menu_bar.addMenu("Help")
+        help_menu = self.menu_bar.addMenu("帮助")
         help_menu.setTearOffEnabled(1)
 
         # Menu bar actions ===============

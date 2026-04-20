@@ -58,11 +58,11 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.intCorner_label = QtWidgets.QLabel("Internal Corner")
         self.intCorner = QtWidgets.QLineEdit()
         self.intCorner_button = QtWidgets.QPushButton("<< Set")
-        self.sel_intCorner_button = QtWidgets.QPushButton("Select")
+        self.sel_intCorner_button = QtWidgets.QPushButton("选择")
         self.extCorner_label = QtWidgets.QLabel("External Corner")
         self.extCorner = QtWidgets.QLineEdit()
         self.extCorner_button = QtWidgets.QPushButton("<< Set")
-        self.sel_extCorner_button = QtWidgets.QPushButton("Select")
+        self.sel_extCorner_button = QtWidgets.QPushButton("选择")
 
         # # Blink heigh slider
         # self.blinkHeight_group = QtWidgets.QGroupBox("Blink Height")
@@ -126,7 +126,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.orderFromCenter.setChecked(False)
 
         # Topological Autoskin
-        self.topoSkin_group = QtWidgets.QGroupBox("Skin")
+        self.topoSkin_group = QtWidgets.QGroupBox("蒙皮")
         self.rigidLoops_label = QtWidgets.QLabel("Rigid Loops:")
         self.rigidLoops = QtWidgets.QSpinBox()
         self.rigidLoops.setRange(0, 30)
@@ -142,7 +142,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.doSkin.setChecked(True)
 
         # Options
-        self.options_group = QtWidgets.QGroupBox("Options")
+        self.options_group = QtWidgets.QGroupBox("选项")
         self.parent_label = QtWidgets.QLabel("Rig Parent:")
         self.parent_node = QtWidgets.QLineEdit()
         self.parent_button = QtWidgets.QPushButton("<< Set")

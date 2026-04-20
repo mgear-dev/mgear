@@ -962,7 +962,7 @@ class proxyGeoUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.create_connections()
 
     def create_actions(self):
-        self.file_export_all_action = QtWidgets.QAction("Export", self)
+        self.file_export_all_action = QtWidgets.QAction("导出", self)
         self.file_export_all_action.setIcon(pyqt.get_icon("mgear_log-out"))
         self.file_export_selected_action = QtWidgets.QAction(
             "Export Selected", self
@@ -970,7 +970,7 @@ class proxyGeoUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.file_export_selected_action.setIcon(
             pyqt.get_icon("mgear_log-out")
         )
-        self.file_import_action = QtWidgets.QAction("Import", self)
+        self.file_import_action = QtWidgets.QAction("导入", self)
         self.file_import_action.setIcon(pyqt.get_icon("mgear_log-in"))
         self.file_import_selected_action = QtWidgets.QAction(
             "Import Selected", self
@@ -980,7 +980,7 @@ class proxyGeoUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
     def create_widgets(self):
         # Menu bar
         self.menu_bar = QtWidgets.QMenuBar()
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.file_export_all_action)
         self.file_menu.addAction(self.file_export_selected_action)
         self.file_menu.addSeparator()
@@ -1031,7 +1031,7 @@ class proxyGeoUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.build_mode_combobox.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
         )
-        self.build_mode_combobox.addItems(["Add", "Replace"])
+        self.build_mode_combobox.addItems(["添加", "Replace"])
         self.build_mode_combobox.setMaximumHeight(17)
 
         # duplicate buttons
@@ -1098,7 +1098,7 @@ class proxyGeoUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             options_groupbox.sizePolicy().hasHeightForWidth()
         )
         options_groupbox.setSizePolicy(sizePolicy)
-        options_groupbox.setTitle("Options")
+        options_groupbox.setTitle("选项")
 
         options_layout = QtWidgets.QVBoxLayout(options_groupbox)
 

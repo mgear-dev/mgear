@@ -679,14 +679,14 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 return
 
         response = cmds.confirmDialog(
-            title="Confirm",
-            message="Confirm Deletion",
-            button=["Yes", "No"],
-            defaultButton="Yes",
-            cancelButton="No",
-            dismissString="No",
+            title="确认",
+            message="确认删除",
+            button=["是", "否"],
+            defaultButton="是",
+            cancelButton="否",
+            dismissString="否",
         )
-        if response == "Yes":
+        if response == "是":
             for selected_partition_item in selected_partition_items:
                 selected_partition_item.delete_node()
 
@@ -697,7 +697,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             self.ue_import_cbx.isChecked()
             and self.ue_file_path_lineedit.text() == ""
         ):
-            cmds.warning("Please specify an import location.")
+            cmds.warning("请指定导入位置。")
             cmds.confirmDialog(
                 title="Export Failed",
                 message="Please specify an Unreal package path directory.",

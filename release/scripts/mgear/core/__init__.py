@@ -42,5 +42,5 @@ def aboutMgear(*args):
     OR OTHER DEALINGS IN THE SOFTWARE.
 
     """.format(version)
-    pm.confirmDialog(title='About mGear', message=note, button=["OK"],
-                     defaultButton='OK', cancelButton='OK', dismissString='OK')
+    pm.confirmDialog(title='关于 mGear', message=note, button=["确定"],
+                     defaultButton='确定', cancelButton='确定', dismissString='确定')

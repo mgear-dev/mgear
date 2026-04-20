@@ -9,7 +9,7 @@ class SpaceManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
     def __init__(self, parent=None):
         super(SpaceManagerDialog, self).__init__(parent)
 
-        self.setWindowTitle("Space Manager")
+        self.setWindowTitle("空间管理器")
         self.setMinimumWidth(1000)
         self.setWindowFlags(
             self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint
@@ -22,9 +22,9 @@ class SpaceManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.addDrivenBtn = QtWidgets.QPushButton("Add driven")
         self.addBothBtn = QtWidgets.QPushButton("Add Driven and Drivers")
         self.addUIhostBtn = QtWidgets.QPushButton("Add UIhost")
-        self.clearBtn = QtWidgets.QPushButton("Clear")
-        self.importBtn = QtWidgets.QPushButton("Import")
-        self.exportBtn = QtWidgets.QPushButton("Export")
+        self.clearBtn = QtWidgets.QPushButton("清除")
+        self.importBtn = QtWidgets.QPushButton("导入")
+        self.exportBtn = QtWidgets.QPushButton("导出")
         self.runBtn = QtWidgets.QPushButton("Run")
         self.removeRowBtn = QtWidgets.QPushButton("Remove Row")
         self.spaceTable = QtWidgets.QTableWidget()

@@ -1164,7 +1164,7 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(pyqt.fakeTranslate("Form", "Form", None, -1))
-        self.groupBox.setTitle(pyqt.fakeTranslate("Form", "Create", None, -1))
+        self.groupBox.setTitle(pyqt.fakeTranslate("Form", "创建", None, -1))
         self.xgen_description_label.setText(pyqt.fakeTranslate("Form", "Description", None, -1))
         self.xgen_description_pushButton.setText(pyqt.fakeTranslate("Form", "<<", None, -1))
         self.add_curve_pushButton.setText(pyqt.fakeTranslate("Form", "Add Curve Guide", None, -1))
@@ -1176,7 +1176,7 @@ class Ui_Form(object):
         self.move_pushButton.setToolTip(pyqt.fakeTranslate("Form", "Mode guide click session", None, -1))
         self.move_pushButton.setText(pyqt.fakeTranslate("Form", "Move", None, -1))
         self.color_groupBox.setTitle(pyqt.fakeTranslate("Form", "Color", None, -1))
-        self.groupBox_4.setTitle(pyqt.fakeTranslate("Form", "Options", None, -1))
+        self.groupBox_4.setTitle(pyqt.fakeTranslate("Form", "选项", None, -1))
         self.lock_length_checkBox.setToolTip(pyqt.fakeTranslate("Form", "Lock guides lenght", None, -1))
         self.lenght_label.setText(pyqt.fakeTranslate("Form", "Length", None, -1))
         self.sections_label.setText(pyqt.fakeTranslate("Form", "Points", None, -1))

@@ -27,7 +27,7 @@ class SDKCreatorUI(
     """
 
     TOOL_NAME = "SDKCreator"
-    TOOL_TITLE = "SDK Creator"
+    TOOL_TITLE = "SDK创建器"
 
     def __init__(self, parent=None):
         super(SDKCreatorUI, self).__init__(parent)
@@ -91,7 +91,7 @@ class SDKCreatorUI(
         self.menu_bar = QtWidgets.QMenuBar()
         self.menu_bar.setNativeMenuBar(False)
 
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.export_action)
         self.file_menu.addAction(self.export_mirror_action)
         self.file_menu.addSeparator()
@@ -99,7 +99,7 @@ class SDKCreatorUI(
         self.file_menu.addSeparator()
         self.file_menu.addAction(self.apply_file_action)
 
-        self.edit_menu = self.menu_bar.addMenu("Edit")
+        self.edit_menu = self.menu_bar.addMenu("编辑")
         self.edit_menu.addAction(self.delete_setup_action)
 
         # Tab widget
@@ -186,15 +186,15 @@ class SDKCreatorUI(
         poses_layout = QtWidgets.QVBoxLayout(poses_group)
 
         self.poses_tree = QtWidgets.QTreeWidget()
-        self.poses_tree.setHeaderLabels(["Frame", "Pose Name"])
+        self.poses_tree.setHeaderLabels(["框架", "Pose Name"])
         self.poses_tree.setColumnWidth(0, int(pyqt.dpi_scale(60)))
         self.poses_tree.setRootIsDecorated(False)
         poses_layout.addWidget(self.poses_tree)
 
         pose_btn_layout = QtWidgets.QHBoxLayout()
         self.detect_btn = QtWidgets.QPushButton("Detect Poses")
-        self.refresh_btn = QtWidgets.QPushButton("Refresh")
-        self.remove_pose_btn = QtWidgets.QPushButton("Remove")
+        self.refresh_btn = QtWidgets.QPushButton("刷新")
+        self.remove_pose_btn = QtWidgets.QPushButton("移除")
         self.pose_up_btn = QtWidgets.QPushButton("Up")
         self.pose_down_btn = QtWidgets.QPushButton("Down")
         pose_btn_layout.addWidget(self.detect_btn)
@@ -207,7 +207,7 @@ class SDKCreatorUI(
         layout.addWidget(poses_group)
 
         # Apply button
-        self.apply_btn = QtWidgets.QPushButton("Apply")
+        self.apply_btn = QtWidgets.QPushButton("应用")
         self.apply_btn.setMinimumHeight(int(pyqt.dpi_scale(40)))
         self.apply_btn.setStyleSheet(
             "QPushButton {"

@@ -79,7 +79,7 @@ class SDK_transfer(QtWidgets.QDialog):
         self.menu_bar = QtWidgets.QMenuBar()
         # all menu bar tabs ===============
         # File -------------------
-        file_menu = self.menu_bar.addMenu("File")
+        file_menu = self.menu_bar.addMenu("文件")
         file_menu.setTearOffEnabled(1)
 
         # Menu bar actions ===============

@@ -165,7 +165,7 @@ class RBFWidget(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
         addRemoveLayout.addWidget(removeAttributesButton)
         return addRemoveLayout, addAttributesButton, removeAttributesButton
 
-    def selectNodeWidget(self, label, buttonLabel="Select"):
+    def selectNodeWidget(self, label, buttonLabel="选择"):
         """create a lout with label, lineEdit, QPushbutton for user input"""
         stylesheet = (
             "QLineEdit { background-color: #404040;"
@@ -232,7 +232,7 @@ class RBFWidget(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
             controlLayout,
             controlLineEdit,
             setControlButton,
-        ) = self.selectNodeWidget("Control", buttonLabel="Set")
+        ) = self.selectNodeWidget("控制器", buttonLabel="Set")
         controlLineEdit.setToolTip("The node driving the setup. (Click me!)")
         #  --------------------------------------------------------------------
         (

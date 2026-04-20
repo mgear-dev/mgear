@@ -1243,7 +1243,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.ctl_name.setText("ctl")
 
         # Topological Autoskin
-        self.topoSkin_group = QtWidgets.QGroupBox("Skin")
+        self.topoSkin_group = QtWidgets.QGroupBox("蒙皮")
         self.rigid_loops_label = QtWidgets.QLabel("Rigid Loops:")
         self.rigid_loops = QtWidgets.QSpinBox()
         self.rigid_loops.setRange(0, 30)
@@ -1274,7 +1274,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.symmetry_mode.addItem("Off")
 
         # Options
-        self.options_group = QtWidgets.QGroupBox("Options")
+        self.options_group = QtWidgets.QGroupBox("选项")
 
         # default options
         self.thickness_label = QtWidgets.QLabel("Brow Thickness:")

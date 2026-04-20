@@ -106,19 +106,19 @@ def mgear_file_drop_action(theFile):
         int: always return 1, to accept the drop action
     """
     if theFile.endswith(".sgt"):
-        print("Import mGear Guide file: {}".format(theFile))
+        print("导入 mGear 导引文件：{}".format(theFile))
         guide_file_prompt(theFile)
     elif theFile.endswith(skin.PACK_EXT):
-        print("Import mGear Skin Pack file: {}".format(theFile))
+        print("导入 mGear 蒙皮包文件：{}".format(theFile))
         skin.importSkinPack(theFile)
     elif theFile.endswith(skin.FILE_EXT) or theFile.endswith(skin.FILE_JSON_EXT):
-        print("Import mGear Skin  file: {}".format(theFile))
+        print("导入 mGear 蒙皮文件：{}".format(theFile))
         skin.importSkin(theFile)
     elif theFile.endswith(rbf_io.RBF_FILE_EXTENSION):
-        print("Import mGear RBF config file: {}".format(theFile))
+        print("导入 mGear RBF 配置文件：{}".format(theFile))
         rbf_io.importRBFs(theFile)
     elif theFile.endswith(wire_to_skinning.CONFIG_FILE_EXT):
-        print("Import Wire to Skinning config file: {}".format(theFile))
+        print("导入线到蒙皮配置文件：{}".format(theFile))
         wire_to_skinning_file_prompt(theFile)
     else:
         mel.eval('performFileImportAction("{}");'.format(theFile))
@@ -131,15 +131,15 @@ def guide_file_prompt(guide_filePath):
     Args:
         guide_filePath (str): filepath to guide
     """
-    results = cmds.confirmDialog(title="mGear guide file",
-                                 message="Import or Build guide file?",
-                                 button=["Import", "Build", "Cancel"],
-                                 defaultButton="Import",
-                                 cancelButton="Cancel",
-                                 dismissString="Cancel")
-    if results == "Import":
+    results = cmds.confirmDialog(title="mGear 导引文件",
+                                 message="导入还是构建导引文件？",
+                                 button=["导入", "构建", "取消"],
+                                 defaultButton="导入",
+                                 cancelButton="取消",
+                                 dismissString="取消")
+    if results == "导入":
         io.import_guide_template(filePath=guide_filePath)
-    elif results == "Build":
+    elif results == "构建":
         io.build_from_file(filePath=guide_filePath)
     else:
         pass
@@ -165,29 +165,28 @@ def wire_to_skinning_file_prompt(wts_filePath):
 
     if mesh:
         message = (
-            "Import wire configuration to selected mesh?\n\n"
-            "Mesh: {}\nFile: {}".format(mesh, wts_filePath)
+            "将线配置导入到选定的网格？\\n\\n"
+            "网格：{}\\n文件：{}".format(mesh, wts_filePath)
         )
-        buttons = ["Import", "Cancel"]
+        buttons = ["导入", "取消"]
     else:
         message = (
-            "No mesh selected.\n\n"
-            "Select a mesh and try again, or import using the stored mesh "
-            "name from the configuration file.\n\n"
-            "File: {}".format(wts_filePath)
+            "未选择网格。\\n\\n"
+            "选择一个网格并重试，或者使用配置文件中存储的网格名称导入。\\n\\n"
+            "文件：{}".format(wts_filePath)
         )
-        buttons = ["Import (use stored mesh)", "Cancel"]
+        buttons = ["导入（使用存储的网格）", "取消"]
 
     results = cmds.confirmDialog(
-        title="Wire to Skinning",
+        title="线到蒙皮",
         message=message,
         button=buttons,
         defaultButton=buttons[0],
-        cancelButton="Cancel",
-        dismissString="Cancel",
+        cancelButton="取消",
+        dismissString="取消",
     )
 
-    if results != "Cancel":
+    if results != "取消":
         wire_to_skinning.import_configuration(wts_filePath, target_mesh=mesh)
 
 
@@ -206,7 +205,7 @@ def install_utils_menu(m):
     pm.setParent(m, menu=True)
     pm.menuItem(divider=True)
     cmds.menuItem("mgear_file_drop_menuitem",
-                  label="Enable mGear file drop",
+                  label="启用 mGear 文件拖放",
                   command=mgear_file_drop_toggle,
                   checkBox=state)
     cmds.menuItem(divider=True)
