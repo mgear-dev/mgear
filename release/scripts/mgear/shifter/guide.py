@@ -1868,7 +1868,7 @@ class GuideSettings(MayaQWidgetDockableMixin, csw.CustomStepMixin, GuideMainSett
         self.tabs.setObjectName("settings_tab")
 
         # Close Button
-        self.close_button = QtWidgets.QPushButton("Close")
+        self.close_button = QtWidgets.QPushButton("关闭")
 
         # Create blueprint headers for Guide Settings and Naming Rules tabs
         self._create_guide_settings_blueprint_header()
@@ -1880,10 +1880,10 @@ class GuideSettings(MayaQWidgetDockableMixin, csw.CustomStepMixin, GuideMainSett
 
         """
         # populate tab
-        self.tabs.insertTab(0, self.guideSettingsTab, "Guide Settings")
-        self.tabs.insertTab(1, self.customStepTab, "Custom Steps")
-        self.tabs.insertTab(2, self.namingRulesTab, "Naming Rules")
-        self.tabs.insertTab(3, self.blueprintTab, "Blueprint")
+        self.tabs.insertTab(0, self.guideSettingsTab, "指南设置")
+        self.tabs.insertTab(1, self.customStepTab, "自定义步骤")
+        self.tabs.insertTab(2, self.namingRulesTab, "命名规则")
+        self.tabs.insertTab(3, self.blueprintTab, "蓝图")
 
         # populate main settings
         self.guideSettingsTab.rigName_lineEdit.setText(
@@ -2528,7 +2528,7 @@ class GuideSettings(MayaQWidgetDockableMixin, csw.CustomStepMixin, GuideMainSett
 
         # Create dialog
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("Blueprint Settings - {}".format(title))
+        dialog.setWindowTitle("蓝图设置 - {}".format(title))
         dialog.resize(450, 400)
 
         layout = QtWidgets.QVBoxLayout(dialog)
