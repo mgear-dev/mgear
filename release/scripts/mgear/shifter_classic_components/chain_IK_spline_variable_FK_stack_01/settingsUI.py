@@ -171,7 +171,7 @@ class Ui_Form(object):
         self.groupBox_3.setTitle(gqt.fakeTranslate("Form", "FK Controls", None, -1))
         self.fkNb_label.setText(gqt.fakeTranslate("Form", "FK Ctl Number", None, -1))
         self.softness_label.setText(gqt.fakeTranslate("Form", "Softness", None, -1))
-        self.softness_label_2.setText(gqt.fakeTranslate("Form", "Position", None, -1))
+        self.softness_label_2.setText(gqt.fakeTranslate("Form", "位置", None, -1))
         self.maxStretch_label.setText(gqt.fakeTranslate("Form", "Max Stretch", None, -1))
         self.maxSquash_label.setText(gqt.fakeTranslate("Form", "Max Squash", None, -1))
         self.groupBox_4.setTitle(gqt.fakeTranslate("Form", "Chain Master", None, -1))

@@ -978,7 +978,7 @@ class crankTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 dismissString="No",
             )
 
-            # If user chooses 'Yes', change to DG mode
+            # If user chooses '是', change to DG mode
             if result == "Yes":
                 self.set_eval_to_parallel(False)
                 pm.displayInfo("Evaluation mode changed to DG.")

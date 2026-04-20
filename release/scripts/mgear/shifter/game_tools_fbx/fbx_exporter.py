@@ -93,7 +93,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.main_layout.setMenuBar(self.menu_bar)
 
         # file actions
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_export_preset_action = QtWidgets.QAction(
             "Export Shifter FBX Preset", self
         )

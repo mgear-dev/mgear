@@ -120,7 +120,7 @@ class MayaGUIs(object):
 runtime = MayaGUIs()
 
 
-def confirmBox(title, message, yes="Yes", no="No", *moreButtons, **kwargs):
+def confirmBox(title, message, yes="是", no="否", *moreButtons, **kwargs):
     ret = cmds.confirmDialog(
         t=title,
         m=message,

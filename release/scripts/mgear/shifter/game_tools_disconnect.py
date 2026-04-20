@@ -90,7 +90,7 @@ def delete_rig_keep_joints(confirmPop=True):
     if confirmPop:
         # Should pop up confirmation dialog
         button_pressed = QtWidgets.QMessageBox.question(
-            pyqt.maya_main_window(), "Warning", "Delete Rigs in the scene?"
+            pyqt.maya_main_window(), "警告", "Delete Rigs in the scene?"
         )
         if button_pressed == QtWidgets.QMessageBox.Yes:
             confirm = True
