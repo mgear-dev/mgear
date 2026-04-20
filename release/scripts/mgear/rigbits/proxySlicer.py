@@ -251,17 +251,15 @@ def slice(parent=False, oSel=None, *args):
         meshes = cmds.ls(selection=True, long=True)
 
     if not meshes:
-        cmds.warning("No object selected.")
+        cmds.warning("未选择任何对象。")
         return
 
     for mesh in meshes:
         _slice_single(mesh, parent)
 
     elapsed = datetime.datetime.now() - start_time
-    mgear.log(
-        "Slicing {} mesh(es) finished [ {} ]".format(
-            len(meshes), str(elapsed)
-        )
+    log.info(
+        "切片 %d 个网格完成 [ %s ]", len(meshes), str(elapsed)
     )
 
 
@@ -281,7 +279,7 @@ def _slice_single(oSel, parent=False):
     )
     if not shapes:
         cmds.warning(
-            "No mesh shape found for '{}', skipping".format(oSel)
+            "'{}' 未找到网格形状，跳过".format(oSel)
         )
         return
     shape = shapes[0]
@@ -291,7 +289,7 @@ def _slice_single(oSel, parent=False):
     )
     if not skin_clusters:
         cmds.warning(
-            "No skinCluster found on '{}', skipping".format(oSel)
+            "'{}' 未找到皮肤簇，跳过".format(oSel)
         )
         return
     skin_name = skin_clusters[0]

@@ -237,7 +237,7 @@ class FbxSdkGameToolsWrapper(object):
             casted_property = pfbx.fbx.FbxPropertyString(fbx_property)
         else:
             raise ValueError(
-                "Unknown property type: {0} {1}".format(
+                "未知属性类型: {0} {1}".format(
                     property.GetPropertyDataType().GetName(), property_type
                 )
             )
@@ -370,7 +370,7 @@ class FbxSdkGameToolsWrapper(object):
                     meshes_to_delete.append(mesh_node)
         if not meshes_to_export:
             cmds.warning(
-                'No meshes with names "{}" to export found!'.format(mesh_names)
+                '未找到名为 "{}" 的网格可供导出！'.format(mesh_names)
             )
             return None
 
@@ -389,7 +389,7 @@ class FbxSdkGameToolsWrapper(object):
                 skeleton_joints.append(scene_joint)
         if len(hierarchy) != len(skeleton_joints):
             cmds.warning(
-                "Joints does not match ({} / {})".format(
+                "关节不匹配 ({} / {})".format(
                     len(hierarchy), len(skeleton_joints)
                 )
             )

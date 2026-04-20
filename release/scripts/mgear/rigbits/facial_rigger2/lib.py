@@ -37,7 +37,7 @@ def widget_set(widget, value):
         widget.setCurrentIndex(value)
         return
 
-    raise ValueError("Widget {0} was not recognized.".format(widget))
+    raise ValueError("未识别的控件 {0}。".format(widget))
 
 
 def import_settings_from_file(file_path, widget):
@@ -92,10 +92,10 @@ def get_edge_loop_from_selection():
                     separator = ","
                 edge_list = edge_list + separator + str(edge)
         if not edge_list:
-            mgear.pymaya.displayWarning("Please select first the edge loop.")
+            mgear.pymaya.displayWarning("请先选择边循环。")
         elif len(edge_list.split(",")) < 4:
-            mgear.pymaya.displayWarning("The minimun edge count is 4")
+            mgear.pymaya.displayWarning("最少需要4条边")
         else:
             return edge_list
     else:
-        mgear.pymaya.displayWarning("Please select first the edge loop.")
+        mgear.pymaya.displayWarning("请先选择边循环。")

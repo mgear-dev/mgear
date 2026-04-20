@@ -305,7 +305,7 @@ def __getResultingMatrix(drivenNode, parentNode, absoluteWorld=True):
 
     if defaultMat.isEquivalent(drivenMat_local) and not absoluteWorld:
         totalMatrix = defaultMat
-        print("Pose recorded in local.")
+        print("姿势已在局部空间记录。")
     else:
         totalMatrix = drivenMat * nodeInverParMat
     return totalMatrix

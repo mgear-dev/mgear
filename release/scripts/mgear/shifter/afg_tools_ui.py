@@ -651,14 +651,14 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         all_exts = ";;".join(all_exts)
         filePath = fileDialog("/", ext=all_exts, mode=0)
         if not filePath:
-            msg = "No file path selected."
+            msg = "未选择文件路径。"
             self.window().statusBar().showMessage(msg)
             cmds.warning(msg)
             return
         afg_tools._exportData(afg_tools.INTERACTIVE_ASSOCIATION_INFO, filePath)
-        self.window().statusBar().showMessage("Exported! {}".format(filePath),
+        self.window().statusBar().showMessage("导出成功！{}".format(filePath),
                                               3000)
-        print("Exported! {}".format(filePath))
+        print("导出成功！{}".format(filePath))
 
     def importAssociation(self):
         """filedialog for importing associations stored in jsons
@@ -668,19 +668,19 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         all_exts = ";;".join(all_exts)
         filePath = fileDialog("/", ext=all_exts, mode=1)
         if not filePath:
-            msg = "No file path selected."
+            msg = "未选择文件路径。"
             self.window().statusBar().showMessage(msg)
             cmds.warning(msg)
             return
         self.applyAssociation(afg_tools._importData(filePath))
-        self.window().statusBar().showMessage("Imported! {}".format(filePath),
+        self.window().statusBar().showMessage("导入成功！{}".format(filePath),
                                               3000)
-        print("Exported! {}".format(filePath))
+        print("导出成功！{}".format(filePath))
 
     def _printUserAssociation(self):
         """Convenience function for the user to see association information
         """
-        print("----- Guide and Embed node association -----")
+        print("----- 指南和嵌入节点关联 -----")
         pprint.pprint(afg_tools.INTERACTIVE_ASSOCIATION_INFO)
 
     def applyDefaultAssociation(self):
@@ -1225,7 +1225,7 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         # Refresh skip lists from module-level vars updated by import
         self.refreshSkipList()
         self.refreshSkipOrientList()
-        print("Relative Guide Placement Imported: {}".format(file_path))
+        print("相对指南位置已导入：{}".format(file_path))
 
     def _exportGuidePlacement(self):
         """FileDialogue for exporting initial guide placements
@@ -1399,7 +1399,7 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         return items
 
     def ui(self):
-        widget = QtWidgets.QGroupBox("Relative Guide Placement Settings")
+        widget = QtWidgets.QGroupBox("相对指南位置设置")
         layout = QtWidgets.QVBoxLayout()
         layout.setAlignment(QtCore.Qt.AlignTop)
         widget.setLayout(layout)
@@ -1474,7 +1474,7 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.default_skip_nodes_btn = QtWidgets.QPushButton("Reset Defaults")
 
         # --- Action buttons ---
-        msg = "Record\nRelative Guide Placement"
+        msg = "记录\n相对指南位置"
         self.record_placement_btn = QtWidgets.QPushButton(msg)
         self.rgp_scale_cb = QtWidgets.QCheckBox("Reset Default Scale")
         msg = "Apply Default scale of 1, 1, 1"

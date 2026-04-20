@@ -129,9 +129,9 @@ def get_existing_skin_weights(mesh, skin_cluster):
     if not skin_cluster or not cmds.objExists(skin_cluster):
         return {}
 
-    print("Reading existing skin weights using OpenMaya API...")
+    print("使用 OpenMaya API 读取现有皮肤权重...")
     weights = core_skin.getCompleteWeights(mesh, skin_cluster)
-    print("Read weights for {} vertices with non-zero influence.".format(len(weights)))
+    print("已读取 {} 个有非零影响的顶点权重。".format(len(weights)))
     return weights
 
 
@@ -153,7 +153,7 @@ def ensure_static_joint_exists(name=DEFAULT_STATIC_JOINT_NAME):
         cmds.select(clear=True)
         cmds.joint(name=name, position=[0, 0, 0])
         cmds.select(clear=True)
-        print("Created static joint: {}".format(name))
+        print("已创建静态骨骼: {}".format(name))
 
     return name
 
@@ -211,7 +211,7 @@ def compute_skin_weights_deboor(
     # Get wire weight map if wire deformer is provided
     wire_weights = {}
     if wire_deformer:
-        print("Getting wire weight map...")
+        print("获取线变形器权重图...")
         wire_weights = get_wire_weight_map(wire_deformer, mesh)
 
     # Count affected vertices
@@ -222,7 +222,7 @@ def compute_skin_weights_deboor(
     )
     total_affected = len(affected_verts)
     print(
-        "Processing {} affected vertices out of {} total".format(
+        "正在处理 {} 个受影响的顶点，共 {} 个".format(
             total_affected, num_verts
         )
     )
@@ -234,7 +234,7 @@ def compute_skin_weights_deboor(
         dag_path = sel_list.getDagPath(0)
         curve_fn = om2.MFnNurbsCurve(dag_path)
     except Exception as e:
-        cmds.warning("Could not create MFnNurbsCurve: {}".format(str(e)))
+        cmds.warning("无法创建 MFnNurbsCurve: {}".format(str(e)))
         return {}, False
 
     weights = {}
@@ -245,7 +245,7 @@ def compute_skin_weights_deboor(
         # Progress update every 500 vertices
         if progress_idx % 500 == 0 and progress_idx > 0:
             print(
-                "  Processed {}/{} vertices...".format(progress_idx, total_affected)
+                "  已处理 {}/{} 个顶点...".format(progress_idx, total_affected)
             )
 
         # Get wire weight for this vertex
@@ -360,8 +360,8 @@ def compute_skin_weights_deboor(
         weights[v_idx] = joint_weights
 
     print(
-        "Weight computation complete. {} vertices with wire influence. "
-        "Uses static joint: {}".format(len(weights), uses_static_joint)
+        "权重计算完成。{} 个顶点受到线变形器影响。"
+        "使用静态骨骼: {}".format(len(weights), uses_static_joint)
     )
     return weights, uses_static_joint
 
@@ -471,7 +471,7 @@ def create_curve_from_positions(positions, num_cvs, name="wire_curve"):
         str: Name of created curve, or None if failed.
     """
     if len(positions) < 2:
-        cmds.warning("Not enough positions to create curve")
+        cmds.warning("位置点不足以创建曲线")
         return None
 
     # Create initial curve through points

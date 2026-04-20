@@ -622,14 +622,14 @@ class OutlinerTreeView(QtWidgets.QTreeWidget):
         if item is None:
             return
         response = cmds.confirmDialog(
-            title="Confirm",
-            message="Confirm Deletion",
-            button=["Yes", "No"],
-            defaultButton="Yes",
-            cancelButton="No",
-            dismissString="No",
+            title="确认",
+            message="确认删除",
+            button=["是", "否"],
+            defaultButton="是",
+            cancelButton="否",
+            dismissString="否",
         )
-        if response == "Yes":
+        if response == "是":
             cmds.select(clear=True)
             item.delete_node()
 
@@ -650,7 +650,7 @@ class OutlinerTreeView(QtWidgets.QTreeWidget):
                 pixmap.fill(self._get_label_color())
                 label_icon = QtGui.QIcon(pixmap)
                 prev_menu = self._context_menu.addMenu(
-                    label_icon, "Label Color"
+                    label_icon, "标签颜色"
                 )
                 for color_label in LABEL_COLORS:
                     pixmap = QtGui.QPixmap(100, 100)

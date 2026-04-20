@@ -375,7 +375,7 @@ def copySDKsToNode(
         [sourceDriven, targetDriver, targetDriven]
     )
     if sourceDriven == targetDriven:
-        pm.warning("You cannot copy SDKs to the same name.")
+        pm.warning("不能将 SDK 复制到相同名称。")
         return
     # if no attrs provided, assume all
     if not sourceAttributes:

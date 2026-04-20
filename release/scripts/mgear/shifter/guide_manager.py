@@ -34,7 +34,7 @@ def draw_comp(comp_type, parent=None, showUI=True):
     if parent:
         if not parent.hasAttr("isGearGuide") and not parent.hasAttr("ismodel"):
             pm.displayWarning(
-                "{}: is not valid Shifter guide elemenet".format(parent)
+                "{}: 不是有效的Shifter引导元素".format(parent)
             )
             return
 
@@ -57,7 +57,7 @@ def duplicate(sym, *args):
         guide.duplicate(root, sym)
     else:
         mgear.log(
-            "Select one component root to edit properties", mgear.sev_error
+            "选择一个组件根节点来编辑属性", mgear.sev_error
         )
 
 
@@ -77,7 +77,7 @@ def duplicate_multi(sym, *args):
             guide.duplicate(root, sym)
     else:
         mgear.log(
-            "Select one or more component root to edit properties",
+            "选择一个或多个组件根节点来编辑属性",
             mgear.sev_error,
         )
 
@@ -107,7 +107,7 @@ def inspect_settings(tabIdx=0, *args):
     if oSel:
         root = oSel[0]
     else:
-        pm.displayWarning("please select one object from the componenet guide")
+        pm.displayWarning("请从组件引导中选择一个对象")
         return
 
     comp_type = False
@@ -137,7 +137,7 @@ def inspect_settings(tabIdx=0, *args):
         return wind
 
     else:
-        pm.displayError("The selected object is not part of component guide")
+        pm.displayError("所选对象不是组件引导的一部分")
 
 
 def extract_controls(*args):
@@ -163,15 +163,15 @@ def extract_controls(*args):
     except TypeError:
         cGrp = False
         pm.displayWarning(
-            "No controllers_org group in the scene "
-            "or the group is not unique"
+            "场景中没有controllers_org组"
+            "或该组不唯一"
         )
         return
 
     for x in oSel:
         if not x.hasAttr("isCtl"):
             pm.displayWarning(
-                "{}: Is not a valid mGear control".format(
+                "{}: 不是有效的mGear控制器".format(
                     x.name()
                 )
             )
@@ -204,8 +204,8 @@ def extract_controls(*args):
             ) or []
             if len(all_parents) > 1:
                 mgear.log(
-                    "Instanced shape detected on '{}', "
-                    "creating independent copy".format(
+                    "检测到 '{}' 上的实例化形状，"
+                    "创建独立副本".format(
                         x.name()
                     ),
                     mgear.sev_warning,
@@ -233,15 +233,15 @@ def extract_controls(*args):
         # Validate: skip empty buffers
         if shape_count == 0:
             mgear.log(
-                "'{}': No NurbsCurve shapes found, "
-                "skipping extraction".format(x.name()),
+                "'{}': 未找到NurbsCurve形状，"
+                "跳过提取".format(x.name()),
                 mgear.sev_warning,
             )
             pm.delete(new)
             continue
 
         mgear.log(
-            "Extracted '{}' ({} shape(s))".format(
+            "已提取 '{}' ({} 个形状)".format(
                 x.name(), shape_count
             )
         )
@@ -262,7 +262,7 @@ def extract_guide_from_rig(*args):
         selection = pm.ls("rig")
         if not selection or not selection[0].hasAttr("is_rig"):
             mgear.log(
-                "Not rig root selected or found.\nSelect the rig root",
+                "未选择或找到绑定根节点。\n请选择绑定根节点",
                 mgear.sev_error,
             )
             return
@@ -286,7 +286,7 @@ def get_ordered_child(jnt):
         pm.select(jnt, hi=True, r=True)
         return pm.selected()
     else:
-        pm.displayWarning("Object: {} is not of type joint".format(jnt.name()))
+        pm.displayWarning("对象: {} 不是关节类型".format(jnt.name()))
 
 
 def match_guide_to_joint_pos_ori(jnt_list, ori=False):
@@ -298,7 +298,7 @@ def match_guide_to_joint_pos_ori(jnt_list, ori=False):
         ori (bool): Whether to match orientation. Default is True.
     """
     pm.displayInfo(
-        "Only EPIC components can be match. Other component will be skipped"
+        "只能匹配EPIC组件。其他组件将被跳过"
     )
     if jnt_list:
         for j in jnt_list:
@@ -335,4 +335,4 @@ def snap_guide_to_root_joint(root_jnt=None):
         root_jnt = root_jnt[0]
         match_guide_to_joint_pos_ori(get_ordered_child(root_jnt))
     else:
-        pm.displayWarning("Nothing selected")
+        pm.displayWarning("未选择任何对象")

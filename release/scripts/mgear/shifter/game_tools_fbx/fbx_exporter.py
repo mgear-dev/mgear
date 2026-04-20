@@ -117,7 +117,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             return button
 
         # main collapsible widget layout
-        source_collap_wgt = widgets.CollapsibleWidget("Source Elements")
+        source_collap_wgt = widgets.CollapsibleWidget("源元素")
         source_collap_wgt.setSizePolicy(
             QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum
         )
@@ -131,7 +131,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         geo_layout = QtWidgets.QVBoxLayout()
         source_layout.addLayout(geo_layout, 0, 0)
 
-        geo_label = QtWidgets.QLabel("Geo Root")
+        geo_label = QtWidgets.QLabel("几何体根")
         geo_layout.addWidget(geo_label)
         self.geo_root_list = QtWidgets.QListWidget()
         self.geo_root_list.setSelectionMode(
@@ -157,7 +157,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         joint_layout = QtWidgets.QVBoxLayout()
         source_layout.addLayout(joint_layout, 1, 0)
 
-        joint_label = QtWidgets.QLabel("Joint Root")
+        joint_label = QtWidgets.QLabel("关节根")
         joint_layout.addWidget(joint_label)
         self.joint_root_lineedit = QtWidgets.QLineEdit()
         joint_layout.addWidget(self.joint_root_lineedit)
@@ -173,7 +173,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
     def create_settings_widget(self):
         # main collapsible widget layout
-        settings_collap_wgt = widgets.CollapsibleWidget("Settings")
+        settings_collap_wgt = widgets.CollapsibleWidget("设置")
         settings_collap_wgt.setSizePolicy(
             QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum
         )
@@ -186,25 +186,25 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         settings_tab.addTab(fbx_tab, "FBX")
         settings_layout = QtWidgets.QGridLayout(fbx_tab)
 
-        up_label = QtWidgets.QLabel("Up Axis")
+        up_label = QtWidgets.QLabel("上轴")
         self.up_axis_combobox = QtWidgets.QComboBox()
         self.up_axis_combobox.addItems(["Y", "Z"])
         settings_layout.addWidget(up_label, 0, 0)
         settings_layout.addWidget(self.up_axis_combobox, 0, 1)
 
-        file_type_label = QtWidgets.QLabel("File Type")
+        file_type_label = QtWidgets.QLabel("文件类型")
         self.file_type_combobox = QtWidgets.QComboBox()
         self.file_type_combobox.addItems(["Binary", "ASCII"])
         settings_layout.addWidget(file_type_label, 0, 2)
         settings_layout.addWidget(self.file_type_combobox, 0, 3)
 
-        fbx_version_label = QtWidgets.QLabel("FBX Version")
+        fbx_version_label = QtWidgets.QLabel("FBX版本")
         self.fbx_version_combobox = QtWidgets.QComboBox()
         self.fbx_version_combobox.addItems(pfbx.get_fbx_versions())
         settings_layout.addWidget(fbx_version_label, 1, 0)
         settings_layout.addWidget(self.fbx_version_combobox, 1, 1)
 
-        fbx_preset_label = QtWidgets.QLabel("FBX Preset")
+        fbx_preset_label = QtWidgets.QLabel("FBX预设")
         self.fbx_export_presets_combobox = QtWidgets.QComboBox()
         self.populate_fbx_presets_combobox()
         settings_layout.addWidget(fbx_preset_label, 1, 2)
@@ -212,11 +212,11 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         # fbx conditioning, settings tab
         fbx_sdk_tab = QtWidgets.QWidget()
-        settings_tab.addTab(fbx_sdk_tab, "FBX Conditioning")
+        settings_tab.addTab(fbx_sdk_tab, "FBX调节")
         fbx_sdk_layout = QtWidgets.QVBoxLayout(fbx_sdk_tab)
 
         self.remove_namespace_checkbox = QtWidgets.QCheckBox(
-            "Remove Namespace"
+            "移除命名空间"
         )
         self.remove_namespace_checkbox.setChecked(True)
         self.clean_scene_checkbox = QtWidgets.QCheckBox(
@@ -699,25 +699,25 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         ):
             cmds.warning("请指定导入位置。")
             cmds.confirmDialog(
-                title="Export Failed",
-                message="Please specify an Unreal package path directory.",
+                title="导出失败",
+                message="请指定一个Unreal包路径目录。",
                 messageAlign="center",
-                button=["Okay"],
-                cancelButton="Okay",
-                dismissString="Okay",
+                button=["确定"],
+                cancelButton="确定",
+                dismissString="确定",
             )
             return False
 
-        print("----- Exporting Skeletal Meshes -----")
+        print("----- 导出骨骼网格体 -----")
         export_node = self._get_or_create_export_node()
 
         geo_roots = self._get_listwidget_item_names(self.geo_root_list)
         if not geo_roots:
-            cmds.warning("No geo roots defined!")
+            cmds.warning("未定义几何体根！")
             return False
         joint_root = self.get_root_joint()
         if not joint_root:
-            cmds.warning("No Joint Root defined!")
+            cmds.warning("未定义关节根！")
             return False
         print("\t>>> Geo Roots: {}".format(geo_roots))
         print("\t>>> Joint Root: {}".format(joint_root))
@@ -733,7 +733,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 return False
 
         if not (file_path and file_name):
-            cmds.warning("Not valid file path and name defined!")
+            cmds.warning("未定义有效的文件路径和名称！")
             return False
 
         # retrieve export config
@@ -810,7 +810,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         Recieves the export configuration from the Thread that was completed
         """
         if not success:
-            print("ERROR: Export Failed")
+            print("错误：导出失败")
             self.error_progress_bar()
             return
 
@@ -864,7 +864,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         master_partition = self.partitions_outliner.get_master_partition()
         partitions.update(master_partition)
         partitions.update(export_node.get_partitions())
-        print("\t>>> Partitions:")
+        print("\t>>> 分区：")
         
         # Loops over partitions, and removes any disabled partitions, from being exported.
         keys = list(partitions.keys())
@@ -875,7 +875,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
             if not (enabled and skeletal_meshes):
                 partitions.pop(partition_name)
-                print("\t\t[!Partition Disabled!] - {}: {}".format(partition_name, skeletal_meshes))
+                print("\t\t[!分区已禁用!] - {}: {}".format(partition_name, skeletal_meshes))
                 continue
 
             print("\t\t{}: {}".format(partition_name, skeletal_meshes))
@@ -910,24 +910,24 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             and len(self.ue_skeleton_listwgt.selectedItems()) == 0
         ):
             cmds.warning(
-                "Please select a skeleton, when importing into Unreal."
+                "导入到Unreal时，请选择一个骨架。"
             )
             cmds.confirmDialog(
-                title="Export Failed",
-                message="Please select a skeleton, when importing into Unreal.",
+                title="导出失败",
+                message="导入到Unreal时，请选择一个骨架。",
                 messageAlign="center",
-                button=["Okay"],
-                cancelButton="Okay",
-                dismissString="Okay",
+                button=["确定"],
+                cancelButton="确定",
+                dismissString="确定",
             )
             return False
 
-        print("----- Exporting Animation Clips -----")
+        print("----- 导出动画剪辑 -----")
         export_node = self._get_or_create_export_node()
 
         joint_root = self.get_root_joint()
         if not joint_root:
-            cmds.warning("No Joint Root defined!")
+            cmds.warning("未定义关节根！")
             return False
         print("\t>>> Joint Root: {}".format(joint_root))
 
@@ -935,7 +935,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         file_path = self.file_path_lineedit.text()
         file_name = self.file_name_lineedit.text()
         if not (file_path and file_name):
-            cmds.warning("Not valid file path and name defined!")
+            cmds.warning("未定义有效的文件路径和名称！")
             return False
 
         preset_file_path = self._get_preset_file_path()
@@ -953,7 +953,7 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         # then load the original scene after exporting fbx's
         file_path = export_config.get("file_path", "")
         if file_path == "":
-            print("Error no file path specified")
+            print("错误：未指定文件路径")
             return False
         os.makedirs(file_path, exist_ok=True)
 
@@ -966,9 +966,9 @@ class FBXExporter(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         cmds.file(save=True, type="mayaAscii", force=True)
 
         if self.get_remove_namespace():
-            print("Removing all namespaces..")
+            print("移除所有命名空间..")
             utils.clean_namespaces(export_config)
-            print("  [Namespace] Complete")
+            print("  [命名空间] 完成")
 
         # if self.get_scene_clean():
         #     print("Cleaning Scene..")

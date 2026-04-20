@@ -93,19 +93,19 @@ def matrixBlendConstraint(parent=None,  # should be a list
     if parent and child:
         if not isinstance(parent, (list,)):
             pm.displayWarning(
-                "matrixBlendConstraint [parent] variable should be a list.")
+                "matrixBlendConstraint [parent] 变量应为列表。")
             return
 
         if weights:
             if isinstance(parent, (list,)):
                 if len(weights) != len(parent):
                     pm.displayWarning(
-                        "weights list should be equal to parents list.")
+                        "权重列表应与父对象列表长度相同。")
                     return
             else:
                 pm.displayWarning(
                     "matrixBlendConstraint [weights] "
-                    "variable should be a list.")
+                    "变量应为列表。")
                 return
         else:
             weights = []

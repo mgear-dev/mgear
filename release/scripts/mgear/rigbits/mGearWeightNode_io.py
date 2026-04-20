@@ -131,7 +131,7 @@ def loadMGWeightPlugin(dependentFunc):
 
     except RuntimeError:
         pm.displayWarning(
-            "RBF Manager couldn't found any valid mGearWeightDriver RBF solver."
+            "RBF 管理器未找到任何有效的 mGearWeightDriver RBF 求解器。"
         )
 
     return dependentFunc

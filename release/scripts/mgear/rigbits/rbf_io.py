@@ -124,4 +124,4 @@ def exportRBFs(nodes, filePath):
         rbfType = mc.nodeType(n)
         rbfNode_Info[n] = RBF_MODULES[rbfType].getNodeInfo(n)
     __exportData(rbfNode_Info, filePath)
-    print("RBF Data exported: {}".format(filePath))
+    print("RBF 数据已导出: {}".format(filePath))

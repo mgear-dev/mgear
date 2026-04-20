@@ -25,7 +25,7 @@ from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
 
 CONFIG_FILE_EXT = ".dcf"
-CONFIG_FILTER = "Data-Centric Folders (*{})".format(CONFIG_FILE_EXT)
+CONFIG_FILTER = "数据中心文件夹 (*{})".format(CONFIG_FILE_EXT)
 
 # Characters not allowed in folder names (Windows + Unix)
 _INVALID_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -96,7 +96,7 @@ class FolderStructureCreatorUI(
 ):
 
     toolName = "mGearDataCentricFolderCreator"
-    TOOL_TITLE = "Data-Centric Folder Structure Creator"
+    TOOL_TITLE = "数据中心文件夹结构创建器"
 
     def __init__(self, parent=None):
         super(FolderStructureCreatorUI, self).__init__(parent)
@@ -175,10 +175,10 @@ class FolderStructureCreatorUI(
 
     def create_actions(self):
         """Create menu actions."""
-        self.import_action = QtWidgets.QAction("Import Config...", self)
+        self.import_action = QtWidgets.QAction("导入配置...", self)
         self.import_action.setShortcut(QtGui.QKeySequence.Open)
 
-        self.export_action = QtWidgets.QAction("Export Config...", self)
+        self.export_action = QtWidgets.QAction("导出配置...", self)
         self.export_action.setShortcut(QtGui.QKeySequence.Save)
 
     def create_widgets(self):
@@ -186,14 +186,14 @@ class FolderStructureCreatorUI(
         # Menu bar
         self.menu_bar = QtWidgets.QMenuBar()
         self.menu_bar.setNativeMenuBar(False)
-        file_menu = self.menu_bar.addMenu("File")
+        file_menu = self.menu_bar.addMenu("文件")
         file_menu.addAction(self.import_action)
         file_menu.addAction(self.export_action)
 
         # Root Path
         self.path_le = QtWidgets.QLineEdit()
         self.path_le.setPlaceholderText(
-            "Select root folder for data-centric structure..."
+            "选择数据中心结构的根文件夹..."
         )
         self.path_btn = widgets.create_button(icon="mgear_folder", width=25)
 
@@ -204,23 +204,23 @@ class FolderStructureCreatorUI(
         self.data_folder_le.setPlaceholderText("data")
 
         folder_tooltip = (
-            "Both folders can be the same name. They are separated "
-            "for convenience so you can use Git on the "
-            "custom_steps/scripts folder separately."
+            "两个文件夹可以同名。它们被分开"
+            "是为了方便，这样你可以单独在"
+            "custom_steps/scripts文件夹上使用Git。"
         )
         self.custom_step_le.setToolTip(folder_tooltip)
         self.data_folder_le.setToolTip(folder_tooltip)
 
         # Settings
         self.type_le = QtWidgets.QLineEdit()
-        self.type_le.setPlaceholderText("e.g. char, prop, env")
+        self.type_le.setPlaceholderText("例如：角色、道具、环境")
         self.name_le = QtWidgets.QLineEdit()
         self.name_le.setPlaceholderText(
-            "e.g. hero, villain (comma or space separated)"
+            "例如：英雄、反派（逗号或空格分隔）"
         )
         self.variant_le = QtWidgets.QLineEdit()
         self.variant_le.setPlaceholderText(
-            "e.g. default, damaged (comma or space separated)"
+            "例如：默认、损坏（逗号或空格分隔）"
         )
         self.target_le = QtWidgets.QLineEdit()
         self.target_le.setPlaceholderText(

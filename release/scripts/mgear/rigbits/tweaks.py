@@ -46,7 +46,7 @@ def pre_bind_matrix_connect(mesh, joint, jointBase):
             pm.skinCluster(skinCluster, e=True, ai=joint, lw=True, wt=0)
         except Exception:
             pm.displayInfo(
-                "The Joint: %s  is already in the %s."
+                "骨骼: %s 已存在于 %s 中。"
                 % (joint.name(), skinCluster.name())
             )
             pass

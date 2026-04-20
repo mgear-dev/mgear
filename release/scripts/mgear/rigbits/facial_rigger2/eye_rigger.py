@@ -120,8 +120,8 @@ def rig(
     if doSkin:
         if not headJnt:
             pm.displayWarning(
-                "Please set the Head Jnt or unCheck "
-                "Compute Topological Autoskin"
+                "请设置头部骨骼，或取消勾选"
+                "计算拓扑自动蒙皮"
             )
             return
 
@@ -164,10 +164,10 @@ def rig(
                 else:
                     inPos = pm.PyNode(intCorner)
             except RuntimeError:
-                pm.displayWarning("%s can not be found" % intCorner)
+                pm.displayWarning("%s 无法找到" % intCorner)
                 return
         else:
-            pm.displayWarning("Please set the internal eyelid corner")
+            pm.displayWarning("请设置内眼角位置")
             return
 
         if extCorner:
@@ -181,17 +181,17 @@ def rig(
                     outPos = pm.PyNode(extCorner)
                     normalVec = bboxCenter - npw
             except RuntimeError:
-                pm.displayWarning("%s can not be found" % extCorner)
+                pm.displayWarning("%s 无法找到" % extCorner)
                 return
         else:
-            pm.displayWarning("Please set the external eyelid corner")
+            pm.displayWarning("请设置外眼角位置")
             return
 
     # Check if we have prefix:
     if namePrefix:
         namePrefix = string.removeInvalidCharacter(namePrefix)
     else:
-        pm.displayWarning("Prefix is needed")
+        pm.displayWarning("需要前缀名称")
         return
 
     def setName(name, ind=None):
@@ -203,8 +203,8 @@ def rig(
 
     if pm.ls(setName("root")):
         pm.displayWarning(
-            "The object %s already exist in the scene. Please "
-            "choose another name prefix" % setName("root")
+            "对象 %s 已存在于场景中。请"
+            "选择其他名称前缀" % setName("root")
         )
         return
 
@@ -251,8 +251,8 @@ def rig(
     except UnboundLocalError:
         if customCorner:
             pm.displayWarning(
-                "This error is maybe caused because the custom "
-                "Corner vertex is not part of the edge loop"
+                "此错误可能是由于自定义"
+                "眼角顶点不属于边循环导致的"
             )
         pm.displayError(traceback.format_exc())
         return
@@ -1183,8 +1183,8 @@ def rig(
             parent_node.addChild(eye_root)
         except RuntimeError:
             pm.displayWarning(
-                "The eye rig can not be parent to: %s. Maybe "
-                "this object doesn't exist." % parent_node
+                "无法将眼部绑定设为: %s 的子对象。可能"
+                "该对象不存在。" % parent_node
             )
 
     ###########################################
@@ -1291,11 +1291,11 @@ def rig(
 
         eyelidJoints = upperEyelid_jnt + lowerEyelid_jnt
         pm.progressWindow(
-            title="Auto skinning process", progress=0, max=len(eyelidJoints)
+            title="自动蒙皮处理", progress=0, max=len(eyelidJoints)
         )
         firstBoundary = False
         for jnt in eyelidJoints:
-            pm.progressWindow(e=True, step=1, status="\nSkinning %s" % jnt)
+            pm.progressWindow(e=True, step=1, status="\n蒙皮 %s" % jnt)
             skinCluster.addInfluence(jnt, weight=0)
             v = meshNavigation.getClosestVertexFromTransform(geo, jnt)
 
@@ -1348,7 +1348,7 @@ def get_evenly_distributed_cvs(cvs, num_cvs, include_ends=True):
     total_cvs = len(cvs)
     if num_cvs > total_cvs:
         raise ValueError(
-            "Requested number of CVs is greater than total CVs available."
+            "请求的CV数量超过了可用的CV总数。"
         )
     if include_ends:
         num_cvs -= 2
@@ -1377,7 +1377,7 @@ def get_edge_loop(edgeLoop):
         edgeLoopList = [pm.PyNode(e) for e in edgeLoop.split(",")]
         return edgeLoopList
     else:
-        pm.displayWarning("Please set the edge loop first")
+        pm.displayWarning("请先设置边循环")
         return
 
 
@@ -1388,11 +1388,11 @@ def get_eye_mesh(eyeMesh):
             return eyeMesh
         except RuntimeError:
             pm.displayWarning(
-                "The object %s can not be found in the " "scene" % (eyeMesh)
+                "对象 %s 在场景中找不到" % (eyeMesh)
             )
             return
     else:
-        pm.displayWarning("Please set the eye mesh first")
+        pm.displayWarning("请先设置眼部网格")
 
 
 # Build from json file.

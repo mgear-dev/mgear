@@ -138,23 +138,23 @@ class MirrorControlsUi(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.func = MirrorController()
 
-        self.setWindowTitle("Mirror Controls")
+        self.setWindowTitle("镜像控制器")
         self.setWindowFlags(QtCore.Qt.Window)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, 1)
         self.setMinimumSize(QtCore.QSize(350, 0))
 
         layout = QtWidgets.QVBoxLayout(self)
-        self.selection_button = QtWidgets.QRadioButton("Selection")
+        self.selection_button = QtWidgets.QRadioButton("选中对象")
         self.selection_button.setChecked(True)
         layout.addWidget(self.selection_button)
 
-        self.left_to_right_button = QtWidgets.QRadioButton("Left to Right")
+        self.left_to_right_button = QtWidgets.QRadioButton("从左到右")
         layout.addWidget(self.left_to_right_button)
 
-        self.right_to_left_button = QtWidgets.QRadioButton("Right to Left")
+        self.right_to_left_button = QtWidgets.QRadioButton("从右到左")
         layout.addWidget(self.right_to_left_button)
 
-        self.mirror_button = QtWidgets.QPushButton("Mirror Controls")
+        self.mirror_button = QtWidgets.QPushButton("镜像控制器")
         layout.addWidget(self.mirror_button)
 
         self.mirror_button.clicked.connect(self.mirror_button_pressed)

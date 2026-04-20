@@ -115,7 +115,7 @@ def getPlugAttrs(nodes, attrType="keyable"):
     """
     plugAttrs = []
     if len(nodes) >= 2:
-        print("the number of node is more than two")
+        print("节点数量超过两个")
 
     for node in nodes:
         if attrType == "all":
@@ -205,7 +205,7 @@ def selectNode(name):
     if mc.objExists(name):
         mc.select(name)
     else:
-        print(name, "No longer exists for selection!")
+        print(name, "已不存在，无法选择！")
 
 
 def show(dockable=True, newSceneCallBack=True, *args):
@@ -260,8 +260,8 @@ class RBFMenuFunction:
         """
         decision = widget.promptAcceptance(
             self.rbfInstance,
-            "Delete current Setup?",
-            "This will delete all RBF nodes in setup.",
+            "删除当前设置?",
+            "这将删除设置中的所有 RBF 节点。",
         )
         if decision in [
             QtWidgets.QMessageBox.Discard,
@@ -302,7 +302,7 @@ class RBFMenuFunction:
         rbf_io.importRBFs(filePath)
         mc.select(cl=True)
         self.rbfInstance.refresh()
-        print("RBF setups imported: {}".format(filePath))
+        print("RBF 设置已导入: {}".format(filePath))
 
     def exportNodes(self, allSetups=True):
         """export all nodes or nodes from current setup
@@ -360,10 +360,10 @@ class RBFMenuFunction:
         )
 
         mc.confirmDialog(
-            title="RBF Solver Update",
-            message="Updated file saved:\n{}\n\nReplacements made: {}".format(
+            title="RBF 求解器更新",
+            message="已更新文件保存至：\\n{}\\n\\n替换次数：{}".format(
                 new_path, count),
-            button=["OK"]
+            button=["确定"]
         )
 
         return new_path
@@ -375,11 +375,11 @@ class RBFMenuFunction:
             if sel:
                 rigTopNode = sel[0]
             else:
-                pm.displayWarning("Please select the rig top node")
+                pm.displayWarning("请选择绑定顶层节点")
                 return
 
         if not pm.hasAttr(rigTopNode, "is_rig"):
-            pm.displayWarning("The selected object is not a rig top Node. It is missing the is_rig attribute")
+            pm.displayWarning("选中的对象不是绑定顶层节点，缺少 is_rig 属性")
             return
 
         def connections(rigTopNode):
@@ -394,7 +394,7 @@ class RBFMenuFunction:
                 except:
                     i += 1
                     if i > 100:
-                        pm.displayWarning("next available reached limit 100")
+                        pm.displayWarning("下一个可用索引已达到上限 100")
                         break
 
         cb_node = pm.scriptNode(st=1,

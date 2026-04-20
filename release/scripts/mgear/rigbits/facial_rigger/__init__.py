@@ -12,7 +12,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
     def __init__(self, parent=None):
         super(ui, self).__init__(parent)
 
-        self.setWindowTitle("Facial Rigger")
+        self.setWindowTitle("面部绑定工具")
         self.setWindowFlags(QtCore.Qt.Window)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, 1)
 

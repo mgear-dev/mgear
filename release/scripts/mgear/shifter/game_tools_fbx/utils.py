@@ -127,13 +127,13 @@ def export_animation_clip(config_data, clip_data):
 
     # Validate timeline range
     if start_frame > end_frame:
-        msg = "Start frame {} must be lower than the end frame {}"
+        msg = "起始帧 {} 必须小于结束帧 {}"
         cmds.error(msg.format(start_frame, end_frame))
         return False
 
     # Validate file path
     if not file_path or not file_name:
-        msg = "No valid file path or file name given for the FBX to export!"
+        msg = "未提供有效的FBX导出文件路径或文件名！"
         cmds.warning(msg)
         return False
 
@@ -142,7 +142,7 @@ def export_animation_clip(config_data, clip_data):
     if not file_name.endswith(".fbx"):
         file_name = "{}.fbx".format(file_name)
     path = string.normalize_path(os.path.join(file_path, file_name))
-    print("\t>>> Export Path: {}".format(path))
+    print("\t>>> 导出路径: {}".format(path))
 
     auto_key_state = cmds.autoKeyframe(query=True, state=True)
     cycle_check = cmds.cycleCheck(query=True, evaluation=True)
@@ -280,7 +280,7 @@ def create_mgear_playblast(
             os.makedirs(folder)
     if not os.path.isdir(folder):
         cmds.warning(
-            'Was not possible to create mgear playblasts folder: "{}"'.format(
+            '无法创建mgear playblasts文件夹: "{}"'.format(
                 folder
             )
         )
@@ -325,7 +325,7 @@ def open_mgear_playblast_folder():
     folder = get_mgear_playblasts_folder()
     if not folder or not os.path.isdir(folder):
         cmds.warning(
-            'Was not possible to open mgear playblasts folder: "{}"'.format(
+            '无法打开mgear playblasts文件夹: "{}"'.format(
                 folder
             )
         )
@@ -338,7 +338,7 @@ def open_mgear_playblast_folder():
     elif os.name == "posix":
         subprocess.Popen(["xdg-open", folder])
     else:
-        cmds.error("OS not supported: {}".format(os.name))
+        cmds.error("不支持的操作系统: {}".format(os.name))
 
     return True
 
@@ -354,7 +354,7 @@ def get_geo_grp():
     geo_groups = pm.ls("*:*_geo_grp", "*_geo_grp", type="objectSet")
     if geo_groups:
         if len(geo_groups) > 1:
-            item = select_item(geo_groups, "Select Geo Group")
+            item = select_item(geo_groups, "选择几何体组")
             if item:
                 geo_grp = pm.PyNode(item)
         else:
@@ -369,10 +369,10 @@ def get_geo_root():
         if memb:
             return memb
         else:
-            pm.displayWarning("Geo_grp is empty. Please set geo root manually")
+            pm.displayWarning("Geo_grp为空。请手动设置几何体根节点")
     else:
         pm.displayWarning(
-            "Not Geo_grp available, please set geo roots manually"
+            "没有可用的Geo_grp，请手动设置几何体根节点"
         )
 
 
@@ -381,7 +381,7 @@ def get_joint_org():
     joint_orgs = pm.ls("*:jnt_org", "*jnt_org", type="transform")
     if joint_orgs:
         if len(joint_orgs) > 1:
-            item = select_item(joint_orgs, "Select Joint Org Node")
+            item = select_item(joint_orgs, "选择关节组织节点")
             if item:
                 jnt_org = pm.PyNode(item)
         else:
@@ -395,7 +395,7 @@ def get_joint_root():
         return jnt_org.getChildren()
     else:
         pm.displayWarning(
-            "Not Joint found under jnt_org, please set joint roots manually"
+            "在jnt_org下未找到关节，请手动设置关节根节点"
         )
 
 

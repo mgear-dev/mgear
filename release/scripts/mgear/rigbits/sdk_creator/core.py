@@ -83,7 +83,7 @@ def get_keyed_frames(controls):
             frame_sets.append(set(times))
         else:
             cmds.warning(
-                "SDK Creator: No keyframes found on '{}'".format(ctl)
+                "SDK Creator: 在 '{}' 上未找到关键帧".format(ctl)
             )
             frame_sets.append(set())
 
@@ -101,9 +101,9 @@ def get_keyed_frames(controls):
     missing = all_frames - common
     if missing:
         cmds.warning(
-            "SDK Creator: Some controls have keys on "
-            "different frames. Using common frames only. "
-            "Missing frames: {}".format(sorted(missing))
+            "SDK Creator: 部分控制器在"
+            "不同帧上有关键帧。仅使用共同帧。"
+            "缺少帧: {}".format(sorted(missing))
         )
 
     return sorted(common)

@@ -107,7 +107,7 @@ class FbxExportNode(object):
         data.setdefault("partitions", {})
         if name in data["partitions"]:
             cmds.warning(
-                'Partition with name "{}" already exist!'.format(name)
+                '名为 "{}" 的分区已存在！'.format(name)
             )
             return False
 
@@ -322,7 +322,7 @@ class FbxExportNode(object):
             json_data = json.dumps(data)
         except Exception as exc:
             cmds.warning(
-                "Error while converting FbxExportNode data into a dictionary."
+                "将FbxExportNode数据转换为字典时出错。"
             )
             return False
         self.add_attribute(self.EXPORT_DATA_ATTR, json_data)
@@ -344,5 +344,5 @@ class FbxExportNode(object):
         try:
             self._export_data = json.loads(export_data)
         except Exception:
-            cmds.warning("Error while parsing FbxExportNode export data.")
+            cmds.warning("解析FbxExportNode导出数据时出错。")
         return self._export_data
