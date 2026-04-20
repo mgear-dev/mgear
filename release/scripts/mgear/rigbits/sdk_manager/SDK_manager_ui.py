@@ -742,7 +742,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             try:
                 self.driver.attr(self.driver_att).set(float(val) / 100)
             except:
-                print("update_driver_val cant be set")
+                print("update_driver_val 无法设置")
                 pass
 
     def update_slider(self, val=None):
@@ -826,7 +826,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 node=pm.PyNode(selectedItem), sourceDriverFilter=[self.driver]
             )
 
-        om.MGlobal.displayInfo("Key Deletion Complete")
+        om.MGlobal.displayInfo("关键帧删除完成")
 
     @utils.one_undo
     def delete_current_key(self):
@@ -941,7 +941,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 value = 1 if SDK.postInfinity.get() == 0 else 0
                 SDK.postInfinity.set(value)
 
-        om.MGlobal.displayInfo("infinity set")
+        om.MGlobal.displayInfo("无限设置完成")
 
     @utils.one_undo
     def set_tangent_type(self, tangent, tanType):
@@ -977,7 +977,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                     )
 
         om.MGlobal.displayInfo(
-            "{} tangents have been set to" " {}".format(tangent, tanType)
+            "{} 切线已设置为" " {}".format(tangent, tanType)
         )
 
     def rescale_driver_driven(self):
@@ -1053,7 +1053,7 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             lockMode = "unlocked"
 
         om.MGlobal.displayInfo(
-            "{} Ctl Channels have been {}".format(ctlType, lockMode)
+            "{} 控制器通道已 {}".format(ctlType, lockMode)
         )
 
     def set_limits_on_selected(self):
@@ -1080,10 +1080,10 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         if path:
             sdk_io.exportSDKs(nodes=ctls, filePath=path)
 
-            om.MGlobal.displayInfo("SDK's Have been Exported Successfully")
+            om.MGlobal.displayInfo("SDK导出成功")
             pm.select(ctls, r=True)
         else:
-            pm.warning("SDK Export Aborted.")
+            pm.warning("SDK导出已取消。")
 
     def import_SDKs(self, path=None):
         """
@@ -1098,9 +1098,9 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         if path:
             sdk_io.importSDKs(path)
 
-            om.MGlobal.displayInfo("SDK's Have been Imported Successfully")
+            om.MGlobal.displayInfo("SDK导入成功")
         else:
-            pm.warning("SDK Import Aborted.")
+            pm.warning("SDK导入已取消。")
 
     def show_file_select_dialog(self, mode=0, caption=""):
         """
@@ -1519,10 +1519,10 @@ class SDKManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             for ctl in userSel:
                 sdk_m.mirror_SDK(ctl)
 
-            om.MGlobal.displayInfo("Mirroring Complete")
+            om.MGlobal.displayInfo("镜像完成")
 
         else:
-            pm.warning("Please Select a Driver Control To Mirror SDKs on")
+            pm.warning("请选择一个驱动控制器来镜像SDK")
 
     def dummy(self):
         """
