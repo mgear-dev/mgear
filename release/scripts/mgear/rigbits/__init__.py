@@ -106,7 +106,7 @@ def createCTL(type="square", child=False, *args):
         for ico in iconList:
             pm.sets(defSet, add=ico)
     except TypeError:
-        print("No rig_controllers_grp found")
+        print("未找到 rig_controllers_grp")
         pass
 
 
@@ -200,7 +200,7 @@ def duplicateSym(*args):
             x.rename(string.convertRLName(x.name().split("|")[-1]))
         oTarget.rename(string.convertRLName(oSel.name()))
     else:
-        pm.displayWarning("Select something before duplicate symmetry.")
+        pm.displayWarning("请先选择物体再进行对称复制。")
 
 
 def matchWorldXform(*args):
@@ -208,8 +208,7 @@ def matchWorldXform(*args):
 
     if len(pm.selected()) < 2:
         mgear.log(
-            "2 objects or more must be selected. Source and Targets "
-            "transform",
+            "必须选择2个或更多物体。源物体和目标物体的变换",
             mgear.sev_warning,
         )
     else:
@@ -238,8 +237,8 @@ def alignToPointsLoop(points=None, loc=None, name=None, *args):
         checkType = "<class 'mgear.pymaya.geometry.MeshVertex'>"
         if not oSel or len(oSel) < 3 or str(type(oSel[0])) != checkType:
             pm.displayWarning(
-                "We need to select a points loop, with at "
-                "less 3 or more points"
+                "需要选择一个点循环，至少包含"
+                "3个或更多点"
             )
             return
         else:
@@ -330,7 +329,7 @@ def connectLocalTransform(objects=None, s=True, r=True, t=True, *args):
                     source + ".rotate", target + ".rotate", force=True
                 )
     else:
-        pm.displayWarning("Please at less select 2 objects. Source + target/s")
+        pm.displayWarning("请至少选择2个物体。源物体 + 目标物体")
 
 
 def connectUserDefinedChannels(source, targets):
@@ -354,7 +353,7 @@ def connectUserDefinedChannels(source, targets):
                 pm.connectAttr(c, t.attr(c.name().split(".")[-1]))
             except RuntimeError:
                 pm.displayWarning(
-                    "%s don't have contrapart channel " "on %s" % (c, t)
+                    "%s 没有对应的通道在 %s 上" % (c, t)
                 )
 
 
@@ -401,7 +400,7 @@ def replaceShape(source=None, targets=None, *args):
     if not source and not targets:
         oSel = pm.selected()
         if len(oSel) < 2:
-            pm.displayWarning("At less 2 objects must be selected")
+            pm.displayWarning("至少需要选择2个物体")
             return None
         else:
             source = oSel[0]
@@ -485,7 +484,7 @@ def spaceJump(ref=None, space=None, *args):
             space = pm.selected()[1]
         else:
             pm.displayWarning(
-                "Please select 2 objects. Reference Space  " "and Jump Space"
+                "请选择2个物体。参考空间和跳跃空间"
             )
             return
 
@@ -506,7 +505,7 @@ def spaceJump(ref=None, space=None, *args):
         spaceLocal,
     )
 
-    pm.displayInfo("Jump Space for local space: " + space.name() + "created")
+    pm.displayInfo("为局部空间创建跳跃空间: " + space.name() + "已创建")
     return spaceLocal
 
 
@@ -549,10 +548,10 @@ def createInterpolateTransform(objects=None, blend=0.5, *args):
         )
 
         pm.displayInfo(
-            "Interpolated Transform: " + intTrans.name() + " created"
+            "插值变换: " + intTrans.name() + " 已创建"
         )
     else:
-        pm.displayWarning("Please select 2 objects. ")
+        pm.displayWarning("请选择2个物体。")
         return
 
     return intTrans
@@ -627,8 +626,8 @@ def addBlendedJoint(
             pm.sets(defSet, add=jnt)
         else:
             pm.displayWarning(
-                "Blended Joint can't be added to: %s. Because "
-                "is not ot type Joint" % x.name()
+                "混合关节无法添加到: %s。因为"
+                "不是关节类型" % x.name()
             )
 
     if jnt_list and select:
@@ -683,8 +682,8 @@ def addSupportJoint(oSel=None, select=True, *args):
 
         else:
             pm.displayWarning(
-                "Support Joint can't be added to: %s. Because "
-                "is not blend joint" % x.name()
+                "支撑关节无法添加到: %s。因为"
+                "不是混合关节" % x.name()
             )
 
     if jnt_list and select:

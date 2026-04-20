@@ -98,14 +98,14 @@ def _ctl_submenu(parent_menu_id, name, cCtl=False):
                                of selected
     """
     ctls = [
-        "Square",
-        "Circle",
-        "Cube",
-        "Diamond",
-        "Sphere",
-        "Cross Arrow",
-        "Pyramid",
-        "Cube With Peak",
+        "方形",
+        "圆形",
+        "立方体",
+        "菱形",
+        "球体",
+        "十字箭头",
+        "金字塔",
+        "带顶点的立方体",
     ]
     commands = []
     for c in ctls:
