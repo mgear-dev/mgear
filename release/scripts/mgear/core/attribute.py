@@ -71,9 +71,9 @@ def addAttribute(
         try:
             node = pm.PyNode(node)
         except pm.MayaNodeError:
-            pm.displayError("{} doesn't exist or is not unique".format(node))
+            pm.displayError("{} 不存在或不唯一".format(node))
     if node.hasAttr(longName):
-        mgear.log("Attribute already exists", mgear.sev_error)
+        mgear.log("属性已存在", mgear.sev_error)
         return
 
     data = {}
@@ -184,9 +184,9 @@ def addVector3Attribute(
         try:
             node = pm.PyNode(node)
         except pm.MayaNodeError:
-            pm.displayError("{} doesn't exist or is not unique".format(node))
+            pm.displayError("{} 不存在或不唯一".format(node))
     if node.hasAttr(longName):
-        mgear.log("Attribute already exists", mgear.sev_error)
+        mgear.log("属性已存在", mgear.sev_error)
         return
 
     data = {}
@@ -298,7 +298,7 @@ def addEnumAttribute(
     """
 
     if node.hasAttr(longName):
-        mgear.log("Attribute '" + longName + "' already exists", mgear.sev_warning)
+        mgear.log("属性 '" + longName + "' 已存在", mgear.sev_warning)
         return
 
     data = {}
@@ -370,7 +370,7 @@ def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
                 target.addAttr(attrName, pxy=sourceAttr)
             else:
                 pm.displayWarning(
-                    "The proxy channel %s already exist on: %s."
+                    "代理通道 %s 已存在于: %s."
                     % (sourceAttr.longName(), target.name())
                 )
 
@@ -409,14 +409,12 @@ def moveChannel(
         at = sourceNode.attr(attr)
         if pm.addAttr(at, q=True, usedAsProxy=True):
             pm.displayWarning(
-                "{} is a proxy channel and move operation is "
-                "not yet supported.".format(attr)
+                "{} 是代理通道，移动操作尚不支持。".format(attr)
             )
             return
     except Exception:
         pm.displayWarning(
-            "Looks like the {} is not in the"
-            " source: {}".format(attr, sourceNode.name())
+            "看起来 {} 不在源中: {}".format(attr, sourceNode.name())
         )
         return
     atType = at.type()
@@ -449,10 +447,7 @@ def moveChannel(
 
                 else:
                     pm.displayWarning(
-                        "Duplicated channel policy, is not "
-                        "defined. Move channel operation will "
-                        "fail if the channel already exist on "
-                        "the target."
+                        "重复通道策略未定义。如果通道已存在于目标上，移动通道操作将失败。"
                     )
                     return False
 

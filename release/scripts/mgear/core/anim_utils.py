@@ -418,7 +418,7 @@ def getNode(nodeName):
         return pm.PyNode(nodeName)
 
     except (pm.MayaNodeError, RuntimeError):
-        print(f"Not found node:{nodeName} ")
+        print(f"未找到节点:{nodeName} ")
         return None
 
 
@@ -574,11 +574,11 @@ def keyObj(model, object_names):
 
             if not node and nameSpace:
                 mgear.log(
-                    "Can't find object : %s:%s" % (nameSpace, name),
+                    "找不到对象 : %s:%s" % (nameSpace, name),
                     mgear.sev_error,
                 )
             elif not node:
-                mgear.log("Can't find object : %s" % (name), mgear.sev_error)
+                mgear.log("找不到对象 : %s" % (name), mgear.sev_error)
             nodes.append(node)
 
         if not nodes:
@@ -902,7 +902,7 @@ def ikFkMatch_with_namespace2(
             node = getNode(name)
 
         if not node:
-            mgear.log("Can't find object : {0}".format(name), mgear.sev_error)
+            mgear.log("找不到对象 : {0}".format(name), mgear.sev_error)
 
         return node
 
@@ -1096,7 +1096,7 @@ def ikFkMatch_with_namespace(
             node = getNode(name)
 
         if not node:
-            mgear.log("Can't find object : {0}".format(name), mgear.sev_error)
+            mgear.log("找不到对象 : {0}".format(name), mgear.sev_error)
 
         return node
 
@@ -1474,11 +1474,11 @@ def mirrorPose(flip=False, nodes=None):
             applyMirror(nameSpace, dat)
 
     except Exception as e:
-        pm.displayWarning("Flip/Mirror pose fail")
+        pm.displayWarning("翻转/镜像姿态失败")
         pm.displayWarning(
-            "If you are using Custom naming rules in controls. "
-            "It is possible that the name configuration makes hard to track "
-            "the correct object to mirror for {}".format(oSel.name())
+            "如果您在控制中使用自定义命名规则。"
+            "可能命名配置使得难以跟踪"
+            "{} 的正确镜像对象".format(oSel.name())
         )
         import traceback
 
@@ -1514,7 +1514,7 @@ def applyMirror(nameSpace, mirrorEntry):
 
     except RuntimeError as e:
         mgear.log(
-            "applyMirror failed: {0} {1}: {2}".format(node.name(), attr, e),
+            "applyMirror 失败: {0} {1}: {2}".format(node.name(), attr, e),
             mgear.sev_error,
         )
 
@@ -1638,7 +1638,7 @@ def mirrorPoseOld(flip=False, nodes=False):
                         if flip:
                             oSel.attr(a).set(flipVal * inv)
     except Exception:
-        pm.displayWarning("Flip/Mirror pose fail")
+        pm.displayWarning("翻转/镜像姿态失败")
         pass
     finally:
         pm.undoInfo(cck=1)
@@ -2172,7 +2172,7 @@ class IkFkTransfer(AbstractAnimationTransfer):
         node = getNode(":".join([self.nameSpace, name]))
 
         if not node:
-            mgear.log("Can't find object : {0}".format(name), mgear.sev_error)
+            mgear.log("找不到对象 : {0}".format(name), mgear.sev_error)
 
         return node
 
