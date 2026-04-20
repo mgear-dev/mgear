@@ -29,7 +29,7 @@ if not pm.pluginInfo("mgear_solvers", q=True, loaded=True):
     try:
         pm.loadPlugin("mgear_solvers")
     except RuntimeError:
-        pm.displayError("You need the mgear_solvers plugin!")
+        pm.displayError("需要mgear_solvers插件！")
 if not pm.pluginInfo("matrixNodes", q=True, loaded=True):
     pm.loadPlugin("matrixNodes")
 
@@ -133,7 +133,7 @@ def reloadComponents(*args):
                 else:
                     importlib.reload(importComponent(com))
                     importlib.reload(importComponentGuide(com))
-                print("reload : {}.{}".format(os.path.basename(x), com))
+                print("重新加载 : {}.{}" .format(os.path.basename(x), com))
             except ImportError:
                 pass
 
@@ -246,7 +246,7 @@ class Rig(object):
                     self._gMainProgressBar, query=True, isCancelled=True
                 ):
                     self.stopBuild = True
-                    pm.displayWarning("Build cancelled by user")
+                    pm.displayWarning("用户取消构建")
                     return True
             except Exception:
                 pass
@@ -492,8 +492,8 @@ class Rig(object):
 
         if not os.path.exists(resolved_source):
             mgear.log(
-                "Source file not found for referenced group '{}': {}. "
-                "Using embedded data.".format(group_name, resolved_source),
+                "未找到引用组 '{}' 的源文件：{}。"
+                "使用嵌入数据。".format(group_name, resolved_source),
                 mgear.sev_warning
             )
             return embedded_items
@@ -508,30 +508,30 @@ class Rig(object):
                 if item_data.get("type") == "group":
                     if item_data.get("name") == group_name:
                         mgear.log(
-                            "Loading referenced group '{}' from: {}".format(
+                            "从以下位置加载引用组 '{}'：{}".format(
                                 group_name, resolved_source
                             )
                         )
                         return item_data.get("items", [])
 
             mgear.log(
-                "Group '{}' not found in source file: {}. "
-                "Using embedded data.".format(group_name, resolved_source),
+                "在源文件中未找到组 '{}'：{}。"
+                "使用嵌入数据。".format(group_name, resolved_source),
                 mgear.sev_warning
             )
             return embedded_items
 
         except json.JSONDecodeError as e:
             mgear.log(
-                "JSON error in source file {}: {}. "
-                "Using embedded data.".format(resolved_source, str(e)),
+                "源文件 {} 中JSON错误：{}。"
+                "使用嵌入数据。".format(resolved_source, str(e)),
                 mgear.sev_warning
             )
             return embedded_items
         except Exception as e:
             mgear.log(
-                "Error loading referenced group '{}': {}. "
-                "Using embedded data.".format(group_name, str(e)),
+                "加载引用组 '{}' 时出错：{}。"
+                "使用嵌入数据。".format(group_name, str(e)),
                 mgear.sev_warning
             )
             return embedded_items
@@ -579,7 +579,7 @@ class Rig(object):
                         step, self.customStepDic
                     )
                 else:
-                    pm.displayWarning("Build Stopped")
+                    pm.displayWarning("构建已停止")
                     break
 
     def preCustomStep(self, selection):
@@ -625,7 +625,7 @@ class Rig(object):
         Get the global size of the rig.
 
         """
-        mgear.log("Initial Hierarchy")
+        mgear.log("初始层级")
 
         # --------------------------------------------------
         # Model
@@ -771,7 +771,7 @@ class Rig(object):
                 return
 
             guide_ = self.guides[comp]
-            mgear.log("Init : " + guide_.fullName + " (" + guide_.type + ")")
+            mgear.log("初始化 : " + guide_.fullName + " (" + guide_.type + ")")
 
             try:
                 module = importComponent(guide_.type)
@@ -791,7 +791,7 @@ class Rig(object):
                 import traceback
 
                 mgear.log(
-                    "Error initializing {} ({})\n{}".format(
+                    "初始化 {} ({}) 时出错\\n{}".format(
                         guide_.fullName,
                         guide_.type,
                         traceback.format_exc(),
@@ -816,7 +816,7 @@ class Rig(object):
                     import traceback
 
                     mgear.log(
-                        "Error in {} : {} ({})\n{}".format(
+                        "{} 中出错 : {} ({})\\n{}".format(
                             name,
                             comp.fullName,
                             comp.type,
@@ -839,11 +839,11 @@ class Rig(object):
         groupIdx = 0
 
         # Properties --------------------------------------
-        mgear.log("Finalize")
+        mgear.log("完成")
 
         # clean jnt_org --------------------------------------
         if self.options["joint_rig"]:
-            mgear.log("Cleaning jnt org")
+            mgear.log("清理关节组织")
             jnt_org_child = dag.findChildrenPartial(self.jnt_org, "org")
             if jnt_org_child:
                 # Use cmds for faster child checks
@@ -858,7 +858,7 @@ class Rig(object):
             return
 
         # Groups ------------------------------------------
-        mgear.log("Creating groups")
+        mgear.log("创建组")
         # Retrieve group content from components
         for name in self.componentsIndex:
             component_ = self.components[name]
@@ -937,14 +937,14 @@ class Rig(object):
         # Bind skin re-apply
         if self.options["importSkin"]:
             try:
-                pm.displayInfo("Importing Skin")
+                pm.displayInfo("导入蒙皮")
                 skin.importSkin(self.options["skin"])
 
             except RuntimeError:
                 pm.displayWarning(
-                    "Skin doesn't exist or is not correct. "
+                    "蒙皮不存在或不正确。"
                     + self.options["skin"]
-                    + " Skipped!"
+                    + " 已跳过！"
                 )
 
     def collect_build_data(self):
@@ -1032,7 +1032,7 @@ class Rig(object):
                 return pm.PyNode(j_name)
             except pm.MayaNodeError:
                 pm.displayError(
-                    "{} doesn't exist or is not unique".format(j_name)
+                    "{} 不存在或不唯一".format(j_name)
                 )
 
     def addCtl(self, parent, name, m, color, iconShape, **kwargs):
