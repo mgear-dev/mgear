@@ -1,7 +1,7 @@
-"""Blendshape Transfer - Config I/O and execution wrapper.
+"""混合形状传输 - 配置 I/O 和执行包装器。
 
-Handles saving/loading .bst configuration files and provides
-a convenience wrapper to run transfer_blendshapes from a config.
+处理保存/加载 .bst 配置文件，并提供
+从配置运行 transfer_blendshapes 的便捷包装器。
 """
 
 import datetime
@@ -21,19 +21,19 @@ def export_config(
     filepath, target, sources, bs_node_name=None,
     reconnect=True, metadata=None,
 ):
-    """Save a blendshape transfer configuration to disk.
+    """将混合形状传输配置保存到磁盘。
 
-    Args:
-        filepath (str): Path to save the .bst JSON file.
-        target (str): Target mesh name.
-        sources (list): List of source mesh names.
-        bs_node_name (str, optional): BlendShape node name.
-        reconnect (bool, optional): Reconnect flag.
-        metadata (dict, optional): Extra metadata fields
-            (name, description, tags).
+    参数：
+        filepath (str): 保存 .bst JSON 文件的路径。
+        target (str): 目标网格名称。
+        sources (list): 源网格名称列表。
+        bs_node_name (str, 可选): BlendShape 节点名称。
+        reconnect (bool, 可选): 重新连接标志。
+        metadata (dict, 可选): 额外的元数据字段
+            （名称、描述、标签）。
 
-    Returns:
-        bool: True if successful.
+    返回：
+        bool: 成功时返回 True。
     """
     meta = metadata or {}
     now = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -57,19 +57,19 @@ def export_config(
         return True
     except (IOError, OSError) as e:
         cmds.warning(
-            "Failed to export config: {}".format(e)
+            "导出配置失败：{}".format(e)
         )
         return False
 
 
 def import_config(filepath):
-    """Load a blendshape transfer configuration from disk.
+    """从磁盘加载混合形状传输配置。
 
-    Args:
-        filepath (str): Path to the .bst JSON file.
+    参数：
+        filepath (str): .bst JSON 文件的路径。
 
-    Returns:
-        dict: Configuration dictionary, or None on failure.
+    返回：
+        dict: 配置字典，失败时返回 None。
     """
     try:
         with open(filepath, "r") as f:
@@ -77,28 +77,27 @@ def import_config(filepath):
         return config
     except (IOError, ValueError, OSError) as e:
         cmds.warning(
-            "Failed to import config: {}".format(e)
+            "导入配置失败：{}".format(e)
         )
         return None
 
 
 def run_from_config(config):
-    """Execute blendshape transfer from a configuration dict.
+    """从配置字典执行混合形状传输。
 
-    Args:
-        config (dict): Configuration with keys
-            ``target_mesh``, ``source_meshes``, and optionally
-            ``bs_node_name`` and ``reconnect``.
+    参数：
+        config (dict): 包含 ``target_mesh``、``source_meshes`` 以及可选的
+            ``bs_node_name`` 和 ``reconnect`` 的配置。
 
-    Returns:
-        str: The created blendShape node name, or None.
+    返回：
+        str: 创建的 blendShape 节点名称，或 None。
     """
     target = config.get("target_mesh")
     sources = config.get("source_meshes", [])
 
     if not target or not sources:
         cmds.warning(
-            "Config must have target_mesh and source_meshes"
+            "配置必须包含 target_mesh 和 source_meshes"
         )
         return None
 

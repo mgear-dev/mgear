@@ -1,7 +1,7 @@
-"""Backward-compatibility module.
+"""向后兼容模块。
 
-All blendshape utilities have moved to ``mgear.core.blendshape``.
-This module re-exports them so existing code continues to work.
+所有混合形状工具已移至 ``mgear.core.blendshape``。
+此模块重新导出它们以确保现有代码继续工作。
 """
 
 from mgear.core.blendshape import getDeformerNode  # noqa: F401

@@ -1,6 +1,6 @@
-"""Cycle Tweaks module
+"""循环调整模块
 
-This module content the tools and procedures to rig tweaks with a benigne cycle
+此模块包含用于装配具有良性循环的调整的工具和程序
 """
 import mgear.pymaya as pm
 import mgear.pymaya.datatypes as datatypes
@@ -11,10 +11,10 @@ from mgear.rigbits import rivet, blendShapes
 
 
 def inverseTranslateParent(obj):
-    """Invert the parent transformation
+    """反转父级变换
 
-    Args:
-        obj (dagNode): The source dagNode to inver parent transformation.
+    参数：
+        obj (dagNode): 要反转父级变换的源 dagNode。
     """
     if not isinstance(obj, list):
         obj = [obj]
@@ -27,17 +27,14 @@ def inverseTranslateParent(obj):
 
 
 def initCycleTweakBase(outMesh, baseMesh, rotMesh, transMesh, staticJnt=None):
-    """Initialice the cycle tweak setup structure
+    """初始化循环调整设置结构
 
-    Args:
-        outMesh (Mesh): The output mesh after the tweak deformation
-        baseMesh (Mesh): The base mesh for the cycle tweak.
-        rotMesh (Mesh): The mesh that will support the rotation
-                transformations for the cycle tweak
-        transMesh (Mesh): The mesh that will support the translation and
-                scale transformations for the cycle tweak
-        staticJnt (None or joint, optional): The static joint for the
-                static vertex.
+    参数：
+        outMesh (Mesh): 调整变形后的输出网格。
+        baseMesh (Mesh): 循环调整的基础网格。
+        rotMesh (Mesh): 将支持旋转变换的网格。
+        transMesh (Mesh): 将支持平移和缩放变换的网格。
+        staticJnt (None 或 joint, 可选): 静态顶点的静态关节。
     """
     blendShapes.connectWithBlendshape(rotMesh, baseMesh)
     blendShapes.connectWithBlendshape(transMesh, rotMesh)
@@ -70,32 +67,29 @@ def cycleTweak(name,
                size=.025,
                color=13,
                ro=datatypes.Vector(1.5708, 0, 1.5708 / 2)):
-    """The command to create a cycle tweak.
+    """创建循环调整的命令。
 
-    A cycle tweak is a tweak that cycles to the parent position but doesn't
-    create a cycle of dependency. This type of tweaks
-    are very useful to create facial tweakers.
+    循环调整是一种调整，它循环到父级位置，但不会
+    创建依赖关系循环。这种类型的调整对于创建面部调整器非常有用。
 
-    Args:
-        name (string): Name for the cycle tweak
-        edgePair (list): List of edge pair to attach the cycle tweak
-        mirrorAxis (bool): If true, will mirror the x axis behaviour.
-        baseMesh (Mesh): The base mesh for the cycle tweak.
-        rotMesh (Mesh): The mesh that will support the rotation transformations
-                for the cycle tweak
-        transMesh (Mesh): The mesh that will support the translation and scale
-                transformations for the cycle tweak
-        setupParent (dagNode): The parent for the setup objects
-        ctlParent (dagNode): The parent for the control objects
-        jntOrg (None or dagNode, optional): The parent for the joints
-        grp (None or set, optional): The set to add the controls
-        iconType (str, optional): The controls shape
-        size (float, optional): The control size
-        color (int, optional): The control color
-        ro (TYPE, optional): The control shape rotation offset
+    参数：
+        name (string): 循环调整的名称。
+        edgePair (list): 要附加循环调整的边对列表。
+        mirrorAxis (bool): 如果为 true，将镜像 x 轴行为。
+        baseMesh (Mesh): 循环调整的基础网格。
+        rotMesh (Mesh): 将支持旋转变换的网格。
+        transMesh (Mesh): 将支持平移和缩放变换的网格。
+        setupParent (dagNode): 设置对象的父级。
+        ctlParent (dagNode): 控制对象的父级。
+        jntOrg (None 或 dagNode, 可选): 关节的父级。
+        grp (None 或 set, 可选): 要添加控件的集合。
+        iconType (str, 可选): 控件形状。
+        size (float, 可选): 控件大小。
+        color (int, 可选): 控件颜色。
+        ro (TYPE, 可选): 控件形状旋转偏移。
 
-    Returns:
-        multi: the tweak control and the list of related joints.
+    返回：
+        multi: 调整控件和相关关节列表。
     """
     # rotation sctructure
     rRivet = rivet.rivet()

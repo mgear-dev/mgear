@@ -1,7 +1,7 @@
-"""Evaluation Partition Tool.
+"""评估分区工具。
 
-A tool for partitioning mesh polygons into groups for improved parallel
-evaluation performance in Maya.
+一个用于将网格多边形分区为组以改善 Maya 中并行
+评估性能的工具。
 """
 
 __version__ = "1.0.0"
