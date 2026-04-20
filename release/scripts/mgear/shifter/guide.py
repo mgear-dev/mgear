@@ -74,7 +74,7 @@ def init_guide_cancel():
                 edit=True,
                 beginProgress=True,
                 isInterruptable=True,
-                status="Validating Guide...",
+                status="验证指南中...",
                 maxValue=100,
             )
         except Exception:
@@ -104,7 +104,7 @@ def check_guide_cancelled():
         try:
             if cmds.progressBar(_gMainProgressBar, query=True, isCancelled=True):
                 _cancel_requested = True
-                pm.displayWarning("Guide validation cancelled by user")
+                pm.displayWarning("指南验证已被用户取消")
                 return True
         except Exception:
             pass
@@ -239,7 +239,7 @@ def load_blueprint_guide(path):
     resolved_path = resolve_blueprint_path(path)
     if not resolved_path:
         mgear.log(
-            "Blueprint guide file not found: {}".format(path),
+            "蓝图指南文件未找到: {}".format(path),
             mgear.sev_warning
         )
         return None
@@ -250,7 +250,7 @@ def load_blueprint_guide(path):
         return conf
     except (IOError, ValueError) as e:
         mgear.log(
-            "Error loading blueprint guide: {}".format(str(e)),
+            "加载蓝图指南时出错: {}".format(str(e)),
             mgear.sev_error
         )
         return None
@@ -311,7 +311,7 @@ class Main(object):
 
         if scriptName not in self.paramDefs.keys():
             mgear.log(
-                "Can't find parameter definition for : " + scriptName,
+                "找不到参数定义: " + scriptName,
                 mgear.sev_warning,
             )
             return False
@@ -339,7 +339,7 @@ class Main(object):
         for scriptName, paramDef in self.paramDefs.items():
             if not pm.attributeQuery(scriptName, node=node, exists=True):
                 mgear.log(
-                    "Can't find parameter '%s' in %s" % (scriptName, node),
+                    "找不到参数 '%s' 在 %s" % (scriptName, node),
                     mgear.sev_warning,
                 )
                 self.valid = False
@@ -535,17 +535,17 @@ class Rig(Main):
         # --------------------------------------------------
         # Main Tab
         self.pRigName = self.addParam("rig_name", "string", "rig")
-        self.pMode = self.addEnumParam("mode", ["Final", "WIP"], 0)
+        self.pMode = self.addEnumParam("mode", ["最终", "WIP"], 0)
         self.pStep = self.addEnumParam(
             "step",
             [
-                "All Steps",
-                "Objects",
-                "Properties",
-                "Operators",
-                "Connect",
-                "Joints",
-                "Finalize",
+                "所有步骤",
+                "对象",
+                "属性",
+                "运算器",
+                "连接",
+                "关节",
+                "完成",
             ],
             6,
         )
@@ -685,12 +685,12 @@ class Rig(Main):
 
         self.p_ctl_des_letter_case = self.addEnumParam(
             "ctl_description_letter_case",
-            ["Default", "Upper Case", "Lower Case", "Capitalization"],
+            ["默认", "大写", "小写", "首字母大写"],
             0,
         )
         self.p_joint_des_letter_case = self.addEnumParam(
             "joint_description_letter_case",
-            ["Default", "Upper Case", "Lower Case", "Capitalization"],
+            ["默认", "大写", "小写", "首字母大写"],
             0,
         )
 
@@ -745,8 +745,8 @@ class Rig(Main):
             selection = pm.ls("guide")
             if not selection:
                 mgear.log(
-                    "Not guide found or selected.\n"
-                    + "Select one or more guide root or a guide model",
+                    "未找到或未选择指南。\n"
+                    + "请选择一个或多个指南根节点或指南模型",
                     mgear.sev_error,
                 )
                 return
@@ -781,7 +781,7 @@ class Rig(Main):
         blueprint_conf = load_blueprint_guide(blueprint_path)
         if not blueprint_conf:
             mgear.log(
-                "Could not load blueprint guide, using local settings",
+                "无法加载蓝图指南，使用本地设置",
                 mgear.sev_warning
             )
             return merged
@@ -791,7 +791,7 @@ class Rig(Main):
         blueprint_values = guide_root.get("param_values", {})
         if not blueprint_values:
             mgear.log(
-                "No param_values found in blueprint guide_root",
+                "在蓝图指南根节点中未找到参数值",
                 mgear.sev_warning
             )
             return merged
