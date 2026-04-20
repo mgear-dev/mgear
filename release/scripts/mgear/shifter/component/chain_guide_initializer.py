@@ -28,7 +28,7 @@ class ChainGuideInitializer(QtWidgets.QDialog,
         self.spacing = None
 
         self.create_connections()
-        self.setWindowTitle("Chain Initializer")
+        self.setWindowTitle("链初始化器")
 
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
 
@@ -42,7 +42,7 @@ class ChainGuideInitializer(QtWidgets.QDialog,
         self.spacing = self.spacing_doubleSpinBox.value()
 
     def cancel(self):
-        pm.displayWarning("Guide Chain Drawing Cancelled")
+        pm.displayWarning("指南链绘制已取消")
 
 
 def exec_window(*args):

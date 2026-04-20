@@ -20,12 +20,12 @@ FILE_PATH_PATTERN = re.compile(
 
 # Severity to (name, hex color) mapping
 SEVERITY_MAP = {
-    mgear.sev_fatal: ("fatal", "#ff4444"),
-    mgear.sev_error: ("error", "#cc6666"),
-    mgear.sev_warning: ("warning", "#ddd87c"),
-    mgear.sev_info: ("info", "#cccccc"),
-    mgear.sev_verbose: ("verbose", "#888888"),
-    mgear.sev_comment: ("comment", "#aaaaaa"),
+    mgear.sev_fatal: ("致命", "#ff4444"),
+    mgear.sev_error: ("错误", "#cc6666"),
+    mgear.sev_warning: ("警告", "#ddd87c"),
+    mgear.sev_info: ("信息", "#cccccc"),
+    mgear.sev_verbose: ("详细", "#888888"),
+    mgear.sev_comment: ("注释", "#aaaaaa"),
 }
 
 # Reverse lookup: name -> severity int

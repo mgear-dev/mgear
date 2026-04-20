@@ -24,8 +24,7 @@ class customShifterMainStep(object):
         """Returns the resulting object of the 'mgearRun' step."""
         if "mgearRun" not in self._step_dict:
             raise Exception(
-                "Can't access the 'mgearRun' in pre steps \
-                or when running individual steps."
+                "在预步骤中或运行单独步骤时无法访问 'mgearRun'。"
             )
 
         return self._step_dict.get("mgearRun")
@@ -63,7 +62,7 @@ class customShifterMainStep(object):
             Component: The matching Component object
         """
         if name not in self.mgear_run.components:
-            raise KeyError("Could not find the '{}' component.".format(name))
+            raise KeyError("找不到 '{}' 组件。".format(name))
         return self.mgear_run.components[name]
 
     def components_by_type(self, comp_type):
@@ -112,8 +111,7 @@ class customShifterMainStep(object):
         """
         if name not in self._step_dict:
             raise KeyError(
-                "The custom step '{}' does not exist, or \
-                did not run yet.".format(
+                "自定义步骤 '{}' 不存在，或尚未运行。".format(
                     name
                 )
             )
@@ -198,7 +196,7 @@ class customShifterMainStep(object):
             - If step_path is not provided, the method will check for the
               MGEAR_SHIFTER_CUSTOMSTEP_PATH environment variable
         """
-        self.log("Running sub-step: '{}'".format(module_name))
+        self.log("运行子步骤：'{}'".format(module_name))
 
         # If no step_path provided, check for environment variable
         if step_path is None:
@@ -215,7 +213,7 @@ class customShifterMainStep(object):
             importlib.reload(module)
         except ImportError as e:
             raise ImportError(
-                "Could not import module '{}': {}".format(module_name, e)
+                "无法导入模块 '{}': {}".format(module_name, e)
             )
 
         # Find the CustomShifterStep class in the module
@@ -234,7 +232,7 @@ class customShifterMainStep(object):
 
         if not step_class:
             raise AttributeError(
-                "Module '{}' has no class that inherits from customShifterMainStep".format(
+                "模块 '{}' 中没有继承自 customShifterMainStep 的类。".format(
                     module_name
                 )
             )
@@ -252,7 +250,7 @@ class customShifterMainStep(object):
         # Run the step
         other_step.run()
 
-        self.log("Sub-step '{}' completed successfully".format(module_name))
+        self.log("子步骤 '{}' 成功完成。".format(module_name))
 
         return other_step
 

@@ -375,7 +375,7 @@ class ComponentGuide(guide.Main):
         # First check and set the settings
         if not self.root.hasAttr("comp_type"):
             mgear.log(
-                "%s is not a proper guide." % self.root.longName(), mgear.sev_error
+                "%s 不是有效的指南。" % self.root.longName(), mgear.sev_error
             )
             self.valid = False
             return
@@ -404,9 +404,8 @@ class ComponentGuide(guide.Main):
 
                 if i < self.minmax[name].min:
                     mgear.log(
-                        "Minimum of object requiered for "
-                        + name
-                        + " hasn't been reached!!",
+                        name
+                        + " 所需的最小对象数量未达到！！",
                         mgear.sev_warning,
                     )
                     self.valid = False
@@ -416,7 +415,7 @@ class ComponentGuide(guide.Main):
                 node = dag.findChild(self.model, self.getName(name))
                 if not node:
                     mgear.log(
-                        "Object missing : %s" % (self.getName(name)), mgear.sev_warning
+                        "对象缺失：%s" % (self.getName(name)), mgear.sev_warning
                     )
                     self.valid = False
                     continue
@@ -447,9 +446,8 @@ class ComponentGuide(guide.Main):
 
                 if i < self.minmax_blade[name].min:
                     mgear.log(
-                        "Minimum of object requiered for "
-                        + localName
-                        + " hasn't been reached!!",
+                        localName
+                        + " 所需的最小对象数量未达到！！",
                         mgear.sev_warning,
                     )
                     self.valid = False
@@ -458,7 +456,7 @@ class ComponentGuide(guide.Main):
                 node = dag.findChild(self.model, self.getName(name))
                 if not node:
                     mgear.log(
-                        "Object missing : %s" % (self.getName(name)), mgear.sev_warning
+                        "对象缺失：%s" % (self.getName(name)), mgear.sev_warning
                     )
                     self.valid = False
                     continue
@@ -557,7 +555,7 @@ class ComponentGuide(guide.Main):
 
         """
         if not self.modalPositions():
-            mgear.log("aborded", mgear.sev_warning)
+            mgear.log("已中止", mgear.sev_warning)
             return False
 
         self.draw(parent)
@@ -634,7 +632,7 @@ class ComponentGuide(guide.Main):
         """Inverse the transform of each element of the guide."""
 
         if self.values["comp_side"] not in ["R", "L"]:
-            mgear.log("Can't symmetrize central component", mgear.sev_error)
+            mgear.log("无法对称化中心组件", mgear.sev_error)
             return False
         for name, paramDef in self.paramDefs.items():
             if paramDef.valueType == "string":
@@ -861,7 +859,7 @@ class ComponentGuide(guide.Main):
         """
         if "#" not in name:
             mgear.log(
-                "You need to put a '#' in the name of multiple location.",
+                "您需要在多重位置名称中放入'#'。",
                 mgear.sev_error,
             )
             return False
@@ -1138,7 +1136,7 @@ class ComponentGuide(guide.Main):
         """
         if "#" not in name:
             mgear.log(
-                "Invalid definition for min/max. You should have a '#' in " "the name",
+                "min/max 定义无效。您应该在名称中放入'#'",
                 mgear.sev_error,
             )
         self.minmax[name] = MinMax(minimum, maximum)
@@ -1151,7 +1149,7 @@ class ComponentGuide(guide.Main):
         """
         if "#" not in name:
             mgear.log(
-                "Invalid definition for min/max. You should have a '#' in " "the name",
+                "min/max 定义无效。您应该在名称中放入'#'",
                 mgear.sev_error,
             )
         self.minmax_blade[name] = MinMax(minimum, maximum)
