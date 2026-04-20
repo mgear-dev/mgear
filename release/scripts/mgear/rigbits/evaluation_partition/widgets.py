@@ -59,7 +59,7 @@ class GroupListItem(QtWidgets.QWidget):
         self.color_btn = QtWidgets.QPushButton()
         self.color_btn.setFixedSize(24, 24)
         self.color_btn.setCursor(QtCore.Qt.PointingHandCursor)
-        self.color_btn.setToolTip("Click to change color")
+        self.color_btn.setToolTip("点击更改颜色")
 
         # Editable name
         self.name_edit = QtWidgets.QLineEdit(self.group.name)
@@ -80,7 +80,7 @@ class GroupListItem(QtWidgets.QWidget):
         self.add_faces_btn = QtWidgets.QPushButton()
         self.add_faces_btn.setIcon(pyqt.get_icon("mgear_plus-circle", icon_size))
         self.add_faces_btn.setFixedSize(28, 28)
-        self.add_faces_btn.setToolTip("Add selected faces to this group")
+        self.add_faces_btn.setToolTip("将选定面添加到此组")
 
         # Remove faces button
         self.remove_faces_btn = QtWidgets.QPushButton()
@@ -88,7 +88,7 @@ class GroupListItem(QtWidgets.QWidget):
             pyqt.get_icon("mgear_minus-circle", icon_size)
         )
         self.remove_faces_btn.setFixedSize(28, 28)
-        self.remove_faces_btn.setToolTip("Remove selected faces from this group")
+        self.remove_faces_btn.setToolTip("从此组中移除选定面")
 
         # Select button
         self.select_btn = QtWidgets.QPushButton()
@@ -96,13 +96,13 @@ class GroupListItem(QtWidgets.QWidget):
             pyqt.get_icon("mgear_mouse-pointer", icon_size)
         )
         self.select_btn.setFixedSize(28, 28)
-        self.select_btn.setToolTip("Select faces in Maya viewport")
+        self.select_btn.setToolTip("在Maya视口中选择面")
 
         # Remove group button
         self.remove_btn = QtWidgets.QPushButton()
         self.remove_btn.setIcon(pyqt.get_icon("mgear_trash-2", icon_size))
         self.remove_btn.setFixedSize(28, 28)
-        self.remove_btn.setToolTip("Remove this group")
+        self.remove_btn.setToolTip("移除此组")
         if self.is_default:
             self.remove_btn.setEnabled(False)
 

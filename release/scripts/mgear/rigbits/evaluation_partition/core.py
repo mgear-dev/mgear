@@ -2363,7 +2363,7 @@ def export_configuration(file_path, manager):
             json.dump(config, f, indent=2)
         return True
     except IOError as e:
-        cmds.warning(f"Failed to export configuration: {e}")
+        cmds.warning(f"导出配置失败: {e}")
         return False
 
 
@@ -2381,7 +2381,7 @@ def import_configuration(file_path):
             config = json.load(f)
         return config
     except (IOError, json.JSONDecodeError) as e:
-        cmds.warning(f"Failed to import configuration: {e}")
+        cmds.warning(f"导入配置失败: {e}")
         return None
 
 
@@ -2412,11 +2412,11 @@ def apply_configuration(config, mesh=None, create_shaders=True):
     """
     target_mesh = mesh or config.get("mesh")
     if not target_mesh:
-        cmds.warning("No mesh specified in configuration.")
+        cmds.warning("配置中未指定网格。")
         return None
 
     if not cmds.objExists(target_mesh):
-        cmds.warning(f"Mesh '{target_mesh}' does not exist.")
+        cmds.warning(f"网格 '{target_mesh}' 不存在。")
         return None
 
     # Create manager
@@ -2425,7 +2425,7 @@ def apply_configuration(config, mesh=None, create_shaders=True):
     # Process groups from config
     groups_data = config.get("groups", [])
     if not groups_data:
-        cmds.warning("No groups found in configuration.")
+        cmds.warning("配置中未找到组。")
         return None
 
     for group_data in groups_data:
