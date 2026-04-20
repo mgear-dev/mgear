@@ -37,12 +37,12 @@ class Main(object):
     """
 
     steps = [
-        "Objects",
-        "Properties",
-        "Operators",
-        "Connect",
-        "Joints",
-        "Finalize",
+        "对象",
+        "属性",
+        "运算符",
+        "连接",
+        "关节",
+        "完成",
     ]
 
     local_params = ("tx", "ty", "tz", "rx", "ry", "rz", "ro", "sx", "sy", "sz")

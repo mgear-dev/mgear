@@ -443,7 +443,7 @@ def scaleNodeAToNodeB(nodeA, nodeB, manual_scale=False):
     if manual_scale:
         scale_factor = manual_scale
     if .5 <= scale_factor <= 2:
-        print("Skipping scale...")
+        print("跳过缩放...")
         return
     cmds.setAttr("{}.sx".format(nodeA), scale_factor)
     cmds.setAttr("{}.sy".format(nodeA), scale_factor)
