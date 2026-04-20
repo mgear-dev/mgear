@@ -70,8 +70,8 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.groupBox_2.setTitle(gqt.fakeTranslate("Form", "Joint Options", None, -1))
-        self.jntNb_label.setText(gqt.fakeTranslate("Form", "Joints Number", None, -1))
-        self.groupBox_3.setTitle(gqt.fakeTranslate("Form", "IK Controls", None, -1))
+        self.groupBox_2.setTitle(gqt.fakeTranslate("Form", "Joint 选项", None, -1))
+        self.jntNb_label.setText(gqt.fakeTranslate("Form", "骨骼s Number", None, -1))
+        self.groupBox_3.setTitle(gqt.fakeTranslate("Form", "IK 控制器s", None, -1))
         self.ikNb_label.setText(gqt.fakeTranslate("Form", "IK Ctl Number", None, -1))
 

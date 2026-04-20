@@ -131,7 +131,7 @@ class Ui_Form(object):
         self.aiming_checkBox.setText(gqt.fakeTranslate("Form", "Each segment aims at its child", None, -1))
         self.mirrorBehaviour_checkBox.setText(gqt.fakeTranslate("Form", "Mirror Behaviour L and R", None, -1))
         self.aiming_checkBox.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Each segment aims at its child, so that you can translate without skewing.</p><p>It could be used in other areas like fingers.</p></body></html>", None, -1))
-        self.ikRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "IK Reference Array", None, -1))
+        self.ikRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "IK参考阵列", None, -1))
         self.ikRefArrayAdd_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.ikRefArrayRemove_pushButton.setText(gqt.fakeTranslate("Form", ">>", None, -1))
 

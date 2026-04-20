@@ -58,5 +58,5 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.groupBox_2.setTitle(gqt.fakeTranslate("Form", "Joint Options", None, -1))
-        self.jntNb_label.setText(gqt.fakeTranslate("Form", "Joints Number", None, -1))
+        self.groupBox_2.setTitle(gqt.fakeTranslate("Form", "Joint 选项", None, -1))
+        self.jntNb_label.setText(gqt.fakeTranslate("Form", "骨骼s Number", None, -1))

@@ -132,12 +132,12 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.groupBox_2.setTitle(gqt.fakeTranslate("Form", "Joint Options", None, -1))
-        self.jntNb_label.setText(gqt.fakeTranslate("Form", "Joints Number", None, -1))
+        self.groupBox_2.setTitle(gqt.fakeTranslate("Form", "Joint 选项", None, -1))
+        self.jntNb_label.setText(gqt.fakeTranslate("Form", "骨骼s Number", None, -1))
         self.groupBox_3.setTitle(gqt.fakeTranslate("Form", "Chain Master", None, -1))
         self.label_3.setText(gqt.fakeTranslate("Form", "Global:", None, -1))
         self.masterGlobal_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
-        self.label.setText(gqt.fakeTranslate("Form", "Local:", None, -1))
+        self.label.setText(gqt.fakeTranslate("Form", "本地:", None, -1))
         self.masterLocal_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.jntNb_label_2.setText(gqt.fakeTranslate("Form", "Connection Offset", None, -1))
         self.cnxOffset_spinBox.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Index value to offset the connection between the Master chains and the slave chain. For example if the slave chain need to start the rotation from the second segment of the master chain, the offset will be 1.</p><p><span style=\" font-weight:600;\">WARNING</span>: If connection is out of index, will fallback to connect to the latest section in the master</p></body></html>", None, -1))

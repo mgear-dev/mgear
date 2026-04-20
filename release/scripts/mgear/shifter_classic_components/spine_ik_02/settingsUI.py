@@ -178,12 +178,12 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
         self.softness_label.setText(gqt.fakeTranslate("Form", "Softness", None, -1))
-        self.softness_label_2.setText(gqt.fakeTranslate("Form", "Position", None, -1))
+        self.softness_label_2.setText(gqt.fakeTranslate("Form", "位置", None, -1))
         self.softness_label_3.setText(gqt.fakeTranslate("Form", "Lock Orient", None, -1))
-        self.maxStretch_label.setText(gqt.fakeTranslate("Form", "Max Stretch", None, -1))
+        self.maxStretch_label.setText(gqt.fakeTranslate("Form", "最大拉伸", None, -1))
         self.maxSquash_label.setText(gqt.fakeTranslate("Form", "Max Squash", None, -1))
-        self.divisions_label.setText(gqt.fakeTranslate("Form", "Divisions", None, -1))
-        self.autoBend_label.setText(gqt.fakeTranslate("Form", "Auto Bend Control", None, -1))
+        self.divisions_label.setText(gqt.fakeTranslate("Form", "分段", None, -1))
+        self.autoBend_label.setText(gqt.fakeTranslate("Form", "Auto Bend 控制器", None, -1))
         self.centralTangent_label.setText(gqt.fakeTranslate("Form", "Central Tangent", None, -1))
-        self.squashStretchProfile_pushButton.setText(gqt.fakeTranslate("Form", "Squash and Stretch Profile", None, -1))
+        self.squashStretchProfile_pushButton.setText(gqt.fakeTranslate("Form", "挤压和拉伸轮廓", None, -1))
 

@@ -81,7 +81,7 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.divisions_label.setText(gqt.fakeTranslate("Form", "Divisions", None, -1))
+        self.divisions_label.setText(gqt.fakeTranslate("Form", "分段", None, -1))
         self.upvRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "Tip Reference Array", None, -1))
         self.refArrayAdd_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.refArrayRemove_pushButton.setText(gqt.fakeTranslate("Form", ">>", None, -1))

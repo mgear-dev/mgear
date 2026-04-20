@@ -84,7 +84,7 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
         self.groupBox_3.setTitle(gqt.fakeTranslate("Form", "Chain Master", None, -1))
-        self.label.setText(gqt.fakeTranslate("Form", "Local:", None, -1))
+        self.label.setText(gqt.fakeTranslate("Form", "本地:", None, -1))
         self.masterLocal_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.label_3.setText(gqt.fakeTranslate("Form", "Global:", None, -1))
         self.masterGlobal_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))

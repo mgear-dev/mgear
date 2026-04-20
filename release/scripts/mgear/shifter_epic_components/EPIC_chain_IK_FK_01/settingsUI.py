@@ -123,7 +123,7 @@ class Ui_Form(object):
         self.mode_comboBox.setItemText(2, gqt.fakeTranslate("Form", "FK/IK", None, -1))
         self.ikfk_label.setText(gqt.fakeTranslate("Form", "IK/FK Blend:", None, -1))
         self.neutralPose_checkBox.setText(gqt.fakeTranslate("Form", "Neutral pose", None, -1))
-        self.ikRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "IK Reference Array", None, -1))
+        self.ikRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "IK参考阵列", None, -1))
         self.ikRefArrayAdd_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.ikRefArrayRemove_pushButton.setText(gqt.fakeTranslate("Form", ">>", None, -1))
 

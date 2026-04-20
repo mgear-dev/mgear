@@ -39,11 +39,11 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.intScale_checkBox.setText(gqt.fakeTranslate("Form", "Interpolate Scale", None, -1))
-        self.intRotation_checkBox.setText(gqt.fakeTranslate("Form", "Interpolate Rotation", None, -1))
+        self.intScale_checkBox.setText(gqt.fakeTranslate("Form", "Interpolate 缩放", None, -1))
+        self.intRotation_checkBox.setText(gqt.fakeTranslate("Form", "Interpolate 旋转", None, -1))
         self.intTranslation_checkBox.setText(gqt.fakeTranslate("Form", "Interpolate Translation", None, -1))
         self.jointChainCnx_checkBox.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>If checked will connect all the joints in chain, if uncheck will connect each joint to the parent component joint.</p></body></html>", None, -1))
-        self.jointChainCnx_checkBox.setText(gqt.fakeTranslate("Form", "Joint Chain Connection", None, -1))
+        self.jointChainCnx_checkBox.setText(gqt.fakeTranslate("Form", "骨骼 Chain Connection", None, -1))
         self.metaCtl_checkBox.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>If Checked, will create one control for each section</p></body></html>", None, -1))
         self.metaCtl_checkBox.setText(gqt.fakeTranslate("Form", "Meta Ctl", None, -1))
 

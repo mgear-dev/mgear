@@ -421,7 +421,7 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
         self.joint_checkBox.setText(
-            gqt.fakeTranslate("Form", "Joint", None, -1)
+            gqt.fakeTranslate("Form", "骨骼", None, -1)
         )
         self.leafJoint_checkBox.setToolTip(
             gqt.fakeTranslate(
@@ -432,10 +432,10 @@ class Ui_Form(object):
             )
         )
         self.leafJoint_checkBox.setText(
-            gqt.fakeTranslate("Form", "is Leaf Joint (Beta)", None, -1)
+            gqt.fakeTranslate("Form", "is Leaf 骨骼 (Beta)", None, -1)
         )
         self.uniScale_checkBox.setText(
-            gqt.fakeTranslate("Form", "Uniform Scale", None, -1)
+            gqt.fakeTranslate("Form", "Uniform 缩放", None, -1)
         )
         self.neutralRotation_checkBox.setToolTip(
             gqt.fakeTranslate(
@@ -473,7 +473,7 @@ class Ui_Form(object):
             gqt.fakeTranslate("Form", "RBF Layers", None, -1)
         )
         self.ctlSize_label.setText(
-            gqt.fakeTranslate("Form", "Ctl Size", None, -1)
+            gqt.fakeTranslate("Form", "Ctl 大小", None, -1)
         )
         self.controlShape_comboBox.setItemText(
             0, gqt.fakeTranslate("Form", "Arrow", None, -1)
@@ -518,7 +518,7 @@ class Ui_Form(object):
             13, gqt.fakeTranslate("Form", "Square", None, -1)
         )
         self.ikRefArray_groupBox.setTitle(
-            gqt.fakeTranslate("Form", "IK Reference Array", None, -1)
+            gqt.fakeTranslate("Form", "IK参考阵列", None, -1)
         )
         self.ikRefArrayAdd_pushButton.setText(
             gqt.fakeTranslate("Form", "<<", None, -1)
@@ -530,7 +530,7 @@ class Ui_Form(object):
             gqt.fakeTranslate("Form", "Keyable", None, -1)
         )
         self.translate_pushButton.setText(
-            gqt.fakeTranslate("Form", "Translate", None, -1)
+            gqt.fakeTranslate("Form", "移动", None, -1)
         )
         self.tx_checkBox.setText(gqt.fakeTranslate("Form", "tx", None, -1))
         self.ty_checkBox.setText(gqt.fakeTranslate("Form", "ty", None, -1))
@@ -561,7 +561,7 @@ class Ui_Form(object):
             5, gqt.fakeTranslate("Form", "ZYX", None, -1)
         )
         self.scale_pushButton.setText(
-            gqt.fakeTranslate("Form", "Scale", None, -1)
+            gqt.fakeTranslate("Form", "缩放", None, -1)
         )
         self.sx_checkBox.setText(gqt.fakeTranslate("Form", "sx", None, -1))
         self.sy_checkBox.setText(gqt.fakeTranslate("Form", "sy", None, -1))
@@ -573,8 +573,8 @@ class Ui_Form(object):
             gqt.fakeTranslate("Form", "CTL Rotate Mult", None, -1)
         )
         self.rbfLayers_label_4.setText(
-            gqt.fakeTranslate("Form", "CTL Scale Mult", None, -1)
+            gqt.fakeTranslate("Form", "CTL 缩放 Mult", None, -1)
         )
         self.ctlTransMult_label.setText(
-            gqt.fakeTranslate("Form", "CTL Translate Mult", None, -1)
+            gqt.fakeTranslate("Form", "CTL 移动 Mult", None, -1)
         )

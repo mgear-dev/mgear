@@ -111,13 +111,13 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.groupBox_3.setTitle(gqt.fakeTranslate("Form", "Joint Options", None, -1))
-        self.jntNb_label.setText(gqt.fakeTranslate("Form", "Joints Number", None, -1))
+        self.groupBox_3.setTitle(gqt.fakeTranslate("Form", "Joint 选项", None, -1))
+        self.jntNb_label.setText(gqt.fakeTranslate("Form", "骨骼s Number", None, -1))
         self.tipRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "Tip Reference Array", None, -1))
-        self.tipRefArray_copyRef_pushButton.setText(gqt.fakeTranslate("Form", "Copy from Root Ref", None, -1))
+        self.tipRefArray_copyRef_pushButton.setText(gqt.fakeTranslate("Form", "Copy from 根 Ref", None, -1))
         self.tipRefArrayAdd_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.tipRefArrayRemove_pushButton.setText(gqt.fakeTranslate("Form", ">>", None, -1))
-        self.rootRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "Root Reference Array", None, -1))
+        self.rootRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "根 Reference Array", None, -1))
         self.rootRefArray_copyRef_pushButton.setText(gqt.fakeTranslate("Form", "Copy from Tip Ref", None, -1))
         self.rootRefArrayAdd_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.rootRefArrayRemove_pushButton.setText(gqt.fakeTranslate("Form", ">>", None, -1))

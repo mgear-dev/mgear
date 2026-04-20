@@ -97,7 +97,7 @@ class Ui_Form(object):
         self.upVectorDirection_comboBox.setItemText(0, gqt.fakeTranslate("Form", "X", None, -1))
         self.upVectorDirection_comboBox.setItemText(1, gqt.fakeTranslate("Form", "Y", None, -1))
         self.upVectorDirection_comboBox.setItemText(2, gqt.fakeTranslate("Form", "Z", None, -1))
-        self.ikRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "IK Reference Array", None, -1))
+        self.ikRefArray_groupBox.setTitle(gqt.fakeTranslate("Form", "IK参考阵列", None, -1))
         self.ikRefArrayAdd_pushButton.setText(gqt.fakeTranslate("Form", "<<", None, -1))
         self.ikRefArrayRemove_pushButton.setText(gqt.fakeTranslate("Form", ">>", None, -1))
 
