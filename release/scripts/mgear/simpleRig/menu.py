@@ -7,7 +7,7 @@ def install():
     """
     pm.setParent(mgear.menu_id, menu=True)
     pm.menuItem(divider=True)
-    pm.menuItem(label="Simple Rig Tool", command=str_open_simple_rig)
+    pm.menuItem(label="简易绑定工具", command=str_open_simple_rig)
     pm.menuItem(divider=True)
 
 

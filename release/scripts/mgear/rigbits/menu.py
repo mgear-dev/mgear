@@ -12,45 +12,45 @@ def install():
     pm.setParent(mgear.menu_id, menu=True)
     pm.menuItem(divider=True)
     commands = (
-        ("Add NPO", str_add_NPO, "mgear_add_npo.svg"),
+        ("添加NPO", str_add_NPO, "mgear_add_npo.svg"),
         ("-----", None),
         (None, gimmick_submenu),
         # ("Gimmick Setup Tool", str_gimmick_tool),
         ("-----", None),
-        ("Mirror Controls Shape", str_mirror_ctls, "mgear_mirror_controls.svg"),
-        ("Replace Shape", str_replace_shape, "mgear_replace_shape.svg"),
+        ("镜像控制器形状", str_mirror_ctls, "mgear_mirror_controls.svg"),
+        ("替换形状", str_replace_shape, "mgear_replace_shape.svg"),
         ("-----", None),
-        ("Match All Transform", str_matchWorldXform, "mgear_match_transform.svg"),
-        ("Match Pos with BBox", str_matchPosfromBBox, "mgear_match_bbox.svg"),
-        ("Align Ref Axis", str_alignToPointsLoop, "mgear_align_ref_axis.svg"),
+        ("匹配所有变换", str_matchWorldXform, "mgear_match_transform.svg"),
+        ("通过边界框匹配位置", str_matchPosfromBBox, "mgear_match_bbox.svg"),
+        ("对齐参考轴", str_alignToPointsLoop, "mgear_align_ref_axis.svg"),
         ("-----", None),
         (None, pCtl_sub),
         (None, cCtl_sub),
         ("-----", None),
-        ("Duplicate symmetrical", str_duplicateSym, "mgear_duplicate_sym.svg"),
+        ("对称复制", str_duplicateSym, "mgear_duplicate_sym.svg"),
         ("-----", None),
-        ("RBF Manager 2.1", str_rbf_manager2_ui, "mgear_rbf_manager.svg"),
-        ("SDK Manager", str_SDK_manager_ui, "mgear_sdk_manager.svg"),
-        ("SDK Creator", str_sdk_creator, "mgear_sdk_creator.svg"),
+        ("RBF管理器 2.1", str_rbf_manager2_ui, "mgear_rbf_manager.svg"),
+        ("SDK管理器", str_SDK_manager_ui, "mgear_sdk_manager.svg"),
+        ("SDK创建器", str_sdk_creator, "mgear_sdk_creator.svg"),
         ("-----", None),
-        ("Space Manager", str_space_manager, "mgear_space_manager.svg"),
+        ("空间管理器", str_space_manager, "mgear_space_manager.svg"),
         ("-----", None),
-        ("Space Jumper", str_spaceJump, "mgear_space_jumper.svg"),
-        ("Interpolated Transform", str_createInterpolateTransform, "mgear_interpolate_transform.svg"),
+        ("空间跳跃", str_spaceJump, "mgear_space_jumper.svg"),
+        ("插值变换", str_createInterpolateTransform, "mgear_interpolate_transform.svg"),
         (None, connect_submenu),
         ("-----", None),
-        ("Channel Wrangler", str_openChannelWrangler, "mgear_channel_wrangler.svg"),
+        ("通道整理器", str_openChannelWrangler, "mgear_channel_wrangler.svg"),
         ("-----", None),
-        ("Eyelid Rigger 2.1", str_eye_rigger, "mgear_eye_rigger.svg"),
-        ("Facial Rigger 1.0 (Legacy)", str_facial_rigger, "mgear_facial_rigger.svg"),
+        ("眼睑绑定器 2.1", str_eye_rigger, "mgear_eye_rigger.svg"),
+        ("面部绑定器 1.0（旧版）", str_facial_rigger, "mgear_facial_rigger.svg"),
         ("-----", None),
-        ("Wire to Skinning", str_wire_to_skinning, "mgear_wire_to_skinning.svg"),
-        ("Evaluation Partition", str_evaluation_partition, "mgear_evaluation_partition.svg"),
-        ("Blendshape Setup Transfer", str_blendshape_transfer, "mgear_copy.svg"),
+        ("线框到蒙皮", str_wire_to_skinning, "mgear_wire_to_skinning.svg"),
+        ("评估分区", str_evaluation_partition, "mgear_evaluation_partition.svg"),
+        ("混合形状设置传输", str_blendshape_transfer, "mgear_copy.svg"),
         ("-----", None),
-        ("Proxy Geo", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
-        ("Proxy Slicer", str_proxySlicer, "mgear_proxy_slicer.svg"),
-        ("Proxy Slicer Parenting", str_proxySlicer_parent, "mgear_proxy_slicer.svg"),
+        ("代理几何体", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
+        ("代理切片器", str_proxySlicer, "mgear_proxy_slicer.svg"),
+        ("代理切片器父子关系", str_proxySlicer_parent, "mgear_proxy_slicer.svg"),
     )
 
     mgear.menu.install(menuID, commands, image="mgear_rigbits.svg")
@@ -63,13 +63,13 @@ def connect_submenu(parent_menu_id):
         parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
     commands = (
-        ("Connect SRT", str_connect_SRT),
-        ("Connect S", str_connect_S),
-        ("Connect R", str_connect_R),
-        ("Connect T", str_connect_T),
+        ("连接SRT", str_connect_SRT),
+        ("连接S", str_connect_S),
+        ("连接R", str_connect_R),
+        ("连接T", str_connect_T),
     )
 
-    mgear.menu.install("Connect Local SRT", commands, parent_menu_id)
+    mgear.menu.install("连接局部SRT", commands, parent_menu_id)
 
 
 def gimmick_submenu(parent_menu_id):
@@ -79,13 +79,13 @@ def gimmick_submenu(parent_menu_id):
         parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
     commands = (
-        ("Add Joint", str_addJnt),
+        ("添加关节", str_addJnt),
         ("-----", None),
-        ("Add Blended Joint", str_addBlendedJoint),
-        ("Add Support Joint", str_addSupportJoint),
+        ("添加混合关节", str_addBlendedJoint),
+        ("添加支撑关节", str_addSupportJoint),
     )
 
-    mgear.menu.install("Gimmick Joints", commands, parent_menu_id)
+    mgear.menu.install("Gimmick关节", commands, parent_menu_id)
 
 
 def _ctl_submenu(parent_menu_id, name, cCtl=False):
@@ -127,7 +127,7 @@ def pCtl_sub(parent_menu_id):
     Args:
         parent_menu_id (stro): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
-    _ctl_submenu(parent_menu_id, "CTL as Parent", cCtl=False)
+    _ctl_submenu(parent_menu_id, "控制器作为父级", cCtl=False)
 
 
 def cCtl_sub(parent_menu_id):
@@ -136,14 +136,14 @@ def cCtl_sub(parent_menu_id):
     Args:
         parent_menu_id (stro): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
-    _ctl_submenu(parent_menu_id, "CTL as Child", cCtl=True)
+    _ctl_submenu(parent_menu_id, "控制器作为子级", cCtl=True)
 
 
 def install_utils_menu(m):
     """Install rigbit utils submenu"""
     pm.setParent(m, menu=True)
     pm.menuItem(divider=True)
-    pm.menuItem(label="Create mGear Hotkeys", command=str_createHotkeys)
+    pm.menuItem(label="创建mGear快捷键", command=str_createHotkeys)
 
 
 # menu str commands

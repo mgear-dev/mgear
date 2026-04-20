@@ -11,73 +11,73 @@ from mgear.pymaya import versions
 def install_skinning_menu():
     """Install Skinning submenu"""
     commands = (
-        ("Copy Skin", partial(skin.skinCopy, None, None), "mgear_copy.svg"),
+        ("复制蒙皮", partial(skin.skinCopy, None, None), "mgear_copy.svg"),
         (
-            "Copy Skin Add",
+            "添加复制蒙皮",
             partial(skin.skin_copy_add, None, None),
             "mgear_copy-add.svg",
         ),
         (
-            "Copy Skin Partial",
+            "部分复制蒙皮",
             partial(skin.skinCopyPartial, None, None),
             "mgear_copy-partial.svg",
         ),
         (
-            "Select Skin Deformers",
+            "选择蒙皮变形器",
             skin.selectDeformers,
             "mgear_mouse-pointer.svg",
         ),
         ("-----", None),
         (
-            "Skin Cluster Selector",
+            "蒙皮簇选择器",
             str_openSkinClusterSelector,
             "mgear_list.svg",
         ),
-        ("Skin Cluster Rename", skin.rename_skin_clusters, "mgear_edit-3.svg"),
+        ("蒙皮簇重命名", skin.rename_skin_clusters, "mgear_edit-3.svg"),
         ("-----", None),
-        ("Import Skin", partial(skin.importSkin, None), "mgear_log-in.svg"),
+        ("导入蒙皮", partial(skin.importSkin, None), "mgear_log-in.svg"),
         (
-            "Import Skin Pack",
+            "导入蒙皮包",
             partial(skin.importSkinPack, None),
             "mgear_package_in.svg",
         ),
         ("-----", None),
         (
-            "Export Skin",
+            "导出蒙皮",
             partial(skin.exportSkin, None, None),
             "mgear_log-out.svg",
         ),
         (
-            "Export Skin Pack Binary",
+            "导出蒙皮包（二进制）",
             partial(skin.exportSkinPack, None, None),
             "mgear_package_out.svg",
         ),
         (
-            "Export Skin Pack ASCII",
+            "导出蒙皮包（ASCII）",
             partial(skin.exportJsonSkinPack, None, None),
             "mgear_package_out.svg",
         ),
         (
-            "Export Skin Pack ASCII with Position Data",
+            "导出蒙皮包（ASCII，含位置数据）",
             partial(skin.exportJsonSkinPackWithPositions, None, None),
             "mgear_package_out_positions.svg",
         ),
         ("-----", None),
-        ("Get Names in gSkin File", partial(skin.getObjsFromSkinFile, None)),
+        ("获取gSkin文件中的名称", partial(skin.getObjsFromSkinFile, None)),
         ("-----", None),
         (
-            "Import Deformer Weight Map",
+            "导入变形器权重贴图",
             partial(wmap.import_weights_selected, None),
             "mgear_log-in.svg",
         ),
         (
-            "Export Deformer Weight Map",
+            "导出变形器权重贴图",
             partial(wmap.export_weights_selected, None),
             "mgear_log-out.svg",
         ),
     )
 
-    mgear.menu.install("Skin and Weights", commands, image="mgear_skin.svg")
+    mgear.menu.install("蒙皮和权重", commands, image="mgear_skin.svg")
 
 
 def install_utils_menu(m):
@@ -85,7 +85,7 @@ def install_utils_menu(m):
     if versions.current() < 20220000:
         pm.setParent(m, menu=True)
         pm.menuItem(divider=True)
-        pm.menuItem(label="Compile PyQt ui", command=pyqt.ui2py)
+        pm.menuItem(label="编译PyQt ui", command=pyqt.ui2py)
 
 
 str_openSkinClusterSelector = """

@@ -13,45 +13,45 @@ def install():
     cmds.menuItem(divider=True)
     commands = (
         (
-            "Apply ueGear Tag to selected nodes",
+            "为选定节点应用ueGear标签",
             str_auto_tag,
             "mgear_ue_tag_add.svg",
         ),
         (
-            "Remove ueGear Tags from selected nodes",
+            "从选定节点移除ueGear标签",
             str_remove_tag,
             "mgear_ue_tag_remove.svg",
         ),
         ("-----", None),
         (
-            "Import Selected Assets from Unreal",
+            "从Unreal导入选定资产",
             str_import_selected_assets_from_unreal,
             "mgear_ue_import.svg",
         ),
         (
-            "Export Selected Assets to Unreal",
+            "将选定资产导出到Unreal",
             str_export_selected_assets_to_unreal,
             "mgear_ue_export.svg",
         ),
         ("-----", None),
         (
-            "Import Selected Cameras from Sequencer",
+            "从Sequencer导入选定摄像机",
             str_import_selected_cameras_from_unreal,
             "mgear_ue_camera_import.svg",
         ),
         (
-            "Update Sequencer Cameras from Maya Selection",
+            "从Maya选择更新Sequencer摄像机",
             str_update_sequencer_camera_from_maya,
             "mgear_ue_camera_update.svg",
         ),
         ("-----", None),
         (
-            "Import Selected Assets from Unreal Level",
+            "从Unreal关卡导入选定资产",
             str_import_selected_assets_from_level_unreal,
             "mgear_ue_level_import.svg",
         ),
         (
-            "Update Unreal Assets from Maya Selection",
+            "从Maya选择更新Unreal资产",
             str_update_unreal_Assets_from_Maya_Selection,
             "mgear_ue_update.svg",
         ),

@@ -22,7 +22,7 @@ def create_menuitems():
         # Already created
         return
     if cmds.about(api=True) < 201600:
-        cmds.warning("cvWrap menus only available in Maya 2016 and higher.")
+        cmds.warning("cvWrap菜单仅在Maya 2016及更高版本中可用。")
         return
     for menu in ["mainDeformMenu", "mainRigDeformationsMenu"]:
         # Make sure the menu widgets exist first.
@@ -55,21 +55,21 @@ def create_menuitems():
                     )
                     MENU_ITEMS.append(submenu)
                     item = cmds.menuItem(
-                        label="Edit Binding",
+                        label="编辑绑定",
                         command=edit_binding,
                         sourceType="python",
                         parent=submenu,
                     )
                     MENU_ITEMS.append(item)
                     item = cmds.menuItem(
-                        label="Import Binding",
+                        label="导入绑定",
                         command=import_binding,
                         sourceType="python",
                         parent=submenu,
                     )
                     MENU_ITEMS.append(item)
                     item = cmds.menuItem(
-                        label="Export Binding",
+                        label="导出绑定",
                         command=export_binding,
                         sourceType="python",
                         parent=submenu,
@@ -94,7 +94,7 @@ def create_cvwrap(*args, **kwargs):
         result = cmds.cvWrap(**kwargs)
         print(result)
     else:
-        raise RuntimeError("Select at least one surface and one influence object.")
+        raise RuntimeError("请至少选择一个曲面和一个影响对象。")
 
 
 def get_create_command_kwargs():
@@ -131,7 +131,7 @@ def get_create_command_kwargs():
             if os.path.exists(bind_file):
                 args["binding"] = bind_file
             else:
-                cmds.warning("{0} does not exist.".format(bind_file))
+                cmds.warning("{0} 不存在。".format(bind_file))
 
     return args
 
@@ -149,11 +149,11 @@ def display_cvwrap_options(*args, **kwargs):
         except:
             pass
 
-    cmds.textFieldGrp(NAME_WIDGET, label="Node name", text="cvWrap#")
+    cmds.textFieldGrp(NAME_WIDGET, label="节点名称", text="cvWrap#")
     radius = cmds.optionVar(q=RADIUS_WIDGET)
     cmds.floatSliderGrp(
         RADIUS_WIDGET,
-        label="Sample radius",
+        label="采样半径",
         field=True,
         minValue=0.0,
         maxValue=100.0,
@@ -165,19 +165,19 @@ def display_cvwrap_options(*args, **kwargs):
     )
     cmds.textFieldButtonGrp(
         BIND_FILE_WIDGET,
-        label="Binding file ",
+        label="绑定文件 ",
         text="",
-        buttonLabel="Browse",
+        buttonLabel="浏览",
         bc=display_bind_file_dialog,
     )
     use_new_bind_mesh = cmds.optionVar(q=NEW_BIND_MESH_WIDGET)
     cmds.checkBoxGrp(
         NEW_BIND_MESH_WIDGET,
         numberOfCheckBoxes=1,
-        label="Create new bind mesh",
+        label="创建新绑定网格",
         v1=use_new_bind_mesh,
     )
-    mel.eval('setOptionBoxTitle("cvWrap Options");')
+    mel.eval('setOptionBoxTitle("cvWrap 选项");')
     mel.eval('setOptionBoxCommandName("cvWrap");')
     apply_close_button = mel.eval("getOptionBoxApplyAndCloseBtn;")
     cmds.button(apply_close_button, e=True, command=apply_and_close)
@@ -247,7 +247,7 @@ def export_binding(*args, **kwargs):
         file_path = cmds.fileDialog2(
             fileFilter="*.wrap",
             dialogStyle=2,
-            cap="Export Binding",
+            cap="导出绑定",
             startingDirectory=data_dir,
             fm=0,
         )
@@ -264,7 +264,7 @@ def import_binding(*args, **kwargs):
         file_path = cmds.fileDialog2(
             fileFilter="*.wrap",
             dialogStyle=2,
-            cap="Import Binding",
+            cap="导入绑定",
             startingDirectory=data_dir,
             fm=1,
         )
@@ -276,20 +276,20 @@ def get_wrap_node_from_selected():
     """Get a wrap node from the selected geometry."""
     sel = cmds.ls(sl=True) or []
     if not sel:
-        raise RuntimeError("No cvWrap found on selected.")
+        raise RuntimeError("所选对象上未找到cvWrap。")
     if cmds.nodeType(sel[0]) == "cvWrap":
         return sel[0]
     history = cmds.listHistory(sel[0], pdo=0) or []
     wrap_nodes = [node for node in history if cmds.nodeType(node) == "cvWrap"]
     if not wrap_nodes:
-        raise RuntimeError("No cvWrap node found on {0}.".format(sel[0]))
+        raise RuntimeError("在 {0} 上未找到cvWrap节点。".format(sel[0]))
     if len(wrap_nodes) == 1:
         return wrap_nodes[0]
     else:
         # Multiple wrap nodes are deforming the mesh.  Let the user choose which one
         # to use.
         return QtGui.QInputDialog.getItem(
-            None, "Select cvWrap node", "cvWrap node:", wrap_nodes
+            None, "选择cvWrap节点", "cvWrap节点:", wrap_nodes
         )
 
 

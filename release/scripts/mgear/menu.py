@@ -50,18 +50,18 @@ def install_help_menu(menuId=menuId):
     pm.menuItem(parent=menuId,
                 subMenu=True,
                 tearOff=True,
-                label="Help",
+                label="帮助",
                 image="mgear_help-circle.svg")
-    pm.menuItem(label="Web", command=str_web, image="mgear_globe.svg")
-    pm.menuItem(label="Forum",
+    pm.menuItem(label="网站", command=str_web, image="mgear_globe.svg")
+    pm.menuItem(label="论坛",
                 command=str_forum,
                 image="mgear_message-circle.svg")
     pm.menuItem(divider=True)
-    pm.menuItem(label="Documentation",
+    pm.menuItem(label="文档",
                 command=str_docs,
                 image="mgear_book.svg")
     pm.menuItem(divider=True)
-    pm.menuItem(label="About", command=str_about, image="mgear_smile.svg")
+    pm.menuItem(label="关于", command=str_about, image="mgear_smile.svg")
 
 
 def install_utils_menu():
@@ -69,9 +69,9 @@ def install_utils_menu():
     """
     pm.setParent(mgear.menu_id, menu=True)
     pm.menuItem(divider=True)
-    commands = [("Reload", str_reload, "mgear_refresh-cw.svg")]
+    commands = [("重新加载", str_reload, "mgear_refresh-cw.svg")]
 
-    m = install("Utilities", commands, image="mgear_tool.svg")
+    m = install("工具", commands, image="mgear_tool.svg")
     return m
 
 

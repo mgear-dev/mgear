@@ -376,8 +376,11 @@ def connect_curves_to_channel(curves, sdk_node, channel):
         if is_scale:
             # Add rest offset: bw.output + 1.0 → sdk_node.channel
             adl_name = "{}_{}_adl".format(short_sdk, channel)
+            # Maya 2026+ renamed addDoubleLinear to addDL
+            version = int(cmds.about(version=True))
+            node_type = "addDL" if version >= 2026 else "addDoubleLinear"
             adl_node = cmds.createNode(
-                "addDoubleLinear", name=adl_name, skipSelect=True
+                node_type, name=adl_name, skipSelect=True
             )
             cmds.connectAttr(bw_node + ".output", adl_node + ".input1")
             cmds.setAttr(adl_node + ".input2", 1.0)

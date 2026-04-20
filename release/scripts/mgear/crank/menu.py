@@ -10,7 +10,7 @@ def install():
     """
     pm.setParent(mgear.menu_id, menu=True)
     pm.menuItem(divider=True)
-    pm.menuItem(label="Crank: Shot Sculpt",
+    pm.menuItem(label="Crank: 镜头雕刻",
                 command=str_open_crank,
                 image="mgear_crank.svg")
 

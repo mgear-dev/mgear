@@ -4,19 +4,19 @@ import mgear.menu
 def install():
     """Install Skinning submenu"""
     commands = (
-        ("Channel Master", str_openChannelMaster, "mgear_channel_master.svg"),
+        ("通道主控", str_openChannelMaster, "mgear_channel_master.svg"),
         ("-----", None),
-        ("Soft Tweaks", str_openSoftTweakManager, "mgear_soft_tweaks.svg"),
-        ("Cache Manager", str_run_cache_mamanger, "mgear_cache_manager.svg"),
+        ("软调整", str_openSoftTweakManager, "mgear_soft_tweaks.svg"),
+        ("缓存管理器", str_run_cache_mamanger, "mgear_cache_manager.svg"),
         ("-----", None),
-        ("Human IK Mapper", str_mocap_humanIKMapper, "mgear_mocap.svg"),
-        ("Space Recorder", str_space_recorder, "mgear_key.svg"),
+        ("人体IK映射器", str_mocap_humanIKMapper, "mgear_mocap.svg"),
+        ("空间记录器", str_space_recorder, "mgear_key.svg"),
         ("-----", None),
-        ("Smart Reset Attribute/SRT", str_smart_reset, "mgear_smart_reset.svg"),
+        ("智能重置属性/SRT", str_smart_reset, "mgear_smart_reset.svg"),
         ("-----", None),
-        ("Spring Manager", str_openSpringManager, "mgear_spring.svg"),
-        ("Bake Spring nodes (Shifter Component)", str_bakeSprings, "mgear_bake_spring.svg"),
-        ("Clear Baked Spring nodes (Shifter Component)", str_clearSprings, "mgear_clear_spring.svg"),
+        ("弹簧管理器", str_openSpringManager, "mgear_spring.svg"),
+        ("烘焙弹簧节点（Shifter组件）", str_bakeSprings, "mgear_bake_spring.svg"),
+        ("清除烘焙弹簧节点（Shifter组件）", str_clearSprings, "mgear_clear_spring.svg"),
     )
 
     mgear.menu.install("Animbits", commands, image="mgear_animbits.svg")

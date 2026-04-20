@@ -6,9 +6,9 @@ from maya import cmds
 def install():
     """Install Shifter submenu"""
     commands = (
-        ("Guide Manager", str_show_guide_manager, "mgear_list.svg"),
+        ("引导管理器", str_show_guide_manager, "mgear_list.svg"),
         (
-            "Guide Template Manager",
+            "引导模板管理器",
             str_template_manager,
             "mgear_users.svg",
         ),
@@ -16,57 +16,57 @@ def install():
         ("-----", None),
         (None, game_submenu),
         ("-----", None),
-        ("Settings", str_inspect_settings, "mgear_sliders.svg"),
-        ("Duplicate", str_duplicate, "mgear_copy.svg"),
-        ("Duplicate Sym", str_duplicateSym, "mgear_duplicate_sym.svg"),
-        ("Extract Controls", str_extract_controls, "mgear_move.svg"),
+        ("设置", str_inspect_settings, "mgear_sliders.svg"),
+        ("复制", str_duplicate, "mgear_copy.svg"),
+        ("对称复制", str_duplicateSym, "mgear_duplicate_sym.svg"),
+        ("提取控制器", str_extract_controls, "mgear_move.svg"),
         ("-----", None),
-        ("Build from Selection", str_build_from_selection, "mgear_play.svg"),
+        ("从选择构建", str_build_from_selection, "mgear_play.svg"),
         (
-            "Build From Guide Template File",
+            "从引导模板文件构建",
             str_build_from_file,
             "mgear_play-circle.svg",
         ),
-        ("Rig Builder", str_openRigBuilder, "mgear_rigBuilder.svg"),
+        ("绑定构建器", str_openRigBuilder, "mgear_rigBuilder.svg"),
         ("-----", None),
         (
-            "Import Guide Template",
+            "导入引导模板",
             str_import_guide_template,
             "mgear_log-in.svg",
         ),
         (
-            "Export Guide Template",
+            "导出引导模板",
             str_export_guide_template,
             "mgear_log-out.svg",
         ),
         (
-            "Extract Guide From Rig",
+            "从绑定提取引导",
             str_extract_guide_from_rig,
             "mgear_download.svg",
         ),
         (
-            "Extract and Match Guide From Rig",
+            "从绑定提取并匹配引导",
             str_extract_match_guide_from_rig,
             "mgear_download.svg",
         ),
         ("-----", None),
         (
-            "Match Guide to Selected Joint Hierarchy",
+            "匹配引导到选定关节层级",
             str_matchGuide,
             "mgear_crosshair.svg",
         ),
         ("-----", None),
-        ("Auto Fit Guide", str_auto_fit_guide, "mgear_afg.svg"),
+        ("自动适配引导", str_auto_fit_guide, "mgear_afg.svg"),
         ("-----", None),
         ("Plebes...", str_plebes),
         (None, mocap_submenu),
         ("-----", None),
-        ("Update Guide", str_updateGuide, "mgear_loader.svg"),
+        ("更新引导", str_updateGuide, "mgear_loader.svg"),
         ("-----", None),
-        ("Reload Components", str_reloadComponents, "mgear_refresh-cw.svg"),
+        ("重新加载组件", str_reloadComponents, "mgear_refresh-cw.svg"),
         ("-----", None),
         (
-            "Data-Centric Folders Creator",
+            "数据中心文件夹创建器",
             str_dataCentricFolders,
             "mgear_folder.svg",
         ),
@@ -98,7 +98,7 @@ def log_window(m):
     cmds.setParent(m, menu=True)
     cmds.menuItem(
         "mgear_logWindow_menuitem",
-        label="Shifter Log Window ",
+        label="Shifter日志窗口 ",
         command=toogle_log_window,
         checkBox=state,
     )
@@ -121,12 +121,12 @@ def log_submenu(parent_menu_id):
         parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
     commands = (
-        ("Toggle Log", str_toggleLog),
-        ("Toggle Debug Mode", str_toggleDebugMode),
+        ("切换日志", str_toggleLog),
+        ("切换调试模式", str_toggleDebugMode),
     )
 
     m = mgear.menu.install(
-        "Build Log",
+        "构建日志",
         commands,
         parent_menu_id,
         image="mgear_printer.svg",
@@ -142,17 +142,17 @@ def mocap_submenu(parent_menu_id):
         parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
     commands = (
-        ("Human IK Mapper", str_mocap_humanIKMapper, "mgear_mocap.svg"),
+        ("Human IK映射器", str_mocap_humanIKMapper, "mgear_mocap.svg"),
         ("-----", None),
         (
-            "Import Mocap Skeleton Biped (Legacy)",
+            "导入动捕骨骼双足（旧版）",
             str_mocap_importSkeletonBiped,
         ),
-        ("Characterize Biped (Legacy)", str_mocap_characterizeBiped),
-        ("Bake Mocap Biped (Legacy)", str_mocap_bakeMocap),
+        ("特征化双足（旧版）", str_mocap_characterizeBiped),
+        ("烘焙动捕双足（旧版）", str_mocap_bakeMocap),
     )
 
-    mgear.menu.install("Mocap", commands, parent_menu_id)
+    mgear.menu.install("动捕", commands, parent_menu_id)
 
 
 def _has_bindplane_component():
@@ -185,22 +185,22 @@ def guide_utils_submenu(parent_menu_id):
     """
     commands = [
         (
-            "Guide Visualizer",
+            "引导可视化工具",
             str_guide_visualizer,
             "mgear_guide_visualizer.svg",
         ),
         (
-            "Guide Symmetry Tool",
+            "引导对称工具",
             str_guide_symmetry_tool,
             "mgear_guide_symmetry.svg",
         ),
         (
-            "Component Type Lister",
+            "组件类型列表器",
             str_component_type_lister,
             "mgear_component_type_lister.svg",
         ),
         (
-            "Chain Utils",
+            "链工具",
             str_chain_utils,
             "mgear_chain_utils.svg",
         ),
@@ -210,14 +210,14 @@ def guide_utils_submenu(parent_menu_id):
     if _has_bindplane_component():
         commands.append(
             (
-                "BindPlane Control Utils",
+                "BindPlane控制器工具",
                 str_bindplane_control_utils,
                 "mgear_bindplane_control.svg",
             )
         )
 
     mgear.menu.install(
-        "Guide Utils",
+        "引导工具",
         tuple(commands),
         parent_menu_id,
         image="mgear_guide_utils.svg",
@@ -231,17 +231,17 @@ def game_submenu(parent_menu_id):
         parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
     commands = (
-        ("FBX Export", str_game_fbx_export),
+        ("FBX导出", str_game_fbx_export),
         ("-----", None),
-        ("Disconnect Joints", str_game_disconnet),
-        ("Connect Joints", str_game_connect),
-        ("Delete Rig + Keep Joints", str_game_delete_rig),
+        ("断开关节连接", str_game_disconnet),
+        ("连接关节", str_game_connect),
+        ("删除绑定并保留关节", str_game_delete_rig),
         ("-----", None),
-        ("Game Tool Disconnect + Assembly IO", str_openGameAssemblyTool),
+        ("游戏工具断开+装配IO", str_openGameAssemblyTool),
     )
 
     mgear.menu.install(
-        "Game Tools",
+        "游戏工具",
         commands,
         parent_menu_id,
         image="mgear_game.svg",

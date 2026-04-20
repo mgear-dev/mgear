@@ -75,19 +75,19 @@ def install():
     pm.menuItem(divider=True)
     cmds.menuItem(
         "mgear_ap_menuitem",
-        label="Anim Picker",
+        label="动画选择器",
         subMenu=True,
         tearOff=True,
         image="mgear_mouse-pointer.svg",
     )
-    cmds.menuItem(label="Anim Picker", command=str_open_picker_mode)
+    cmds.menuItem(label="动画选择器", command=str_open_picker_mode)
     pm.menuItem(divider=True)
-    cmds.menuItem(label="Edit Anim Picker", command=str_open_edit_mode)
+    cmds.menuItem(label="编辑动画选择器", command=str_open_edit_mode)
     pm.menuItem(divider=True)
-    msg = "Experimental passthrough click when auto opacity enabled."
+    msg = "启用自动不透明度时的实验性穿透点击。"
     cmds.menuItem(
         "mgear_ap_passthrough_menuitem",
-        label="Enable opacity passthrough (Beta)",
+        label="启用不透明度穿透（测试版）",
         command=set_mgear_ap_passthrough_state,
         checkBox=state,
         ann=msg,

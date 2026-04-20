@@ -5,9 +5,9 @@ def install():
     """Install Utilbits submenu"""
     commands = (
         ("xPlorer", str_open_xplorer, "xplorer_icon.svg"),
-        ("Random Colors", str_open_random_colors, "mgear_random_colors.svg"),
-        ("Bookmarks", str_open_bookmarks, "mgear_bookmark.svg"),
-        ("Matcap Viewer", str_open_matcap_viewer, "mgear_circle.svg"),
+        ("随机颜色", str_open_random_colors, "mgear_random_colors.svg"),
+        ("书签", str_open_bookmarks, "mgear_bookmark.svg"),
+        ("Matcap 查看器", str_open_matcap_viewer, "mgear_circle.svg"),
     )
 
     mgear.menu.install("Utilbits", commands, image="mgear_utilbits.svg")
