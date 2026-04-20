@@ -76,20 +76,20 @@ class BookmarksUI(
         self.menu_bar.setNativeMenuBar(False)
         self.menu_bar.setContextMenuPolicy(QtCore.Qt.PreventContextMenu)
 
-        file_menu = self.menu_bar.addMenu("File")
-        self.export_action = file_menu.addAction("Export...")
-        self.import_action = file_menu.addAction("Import...")
+        file_menu = self.menu_bar.addMenu("文件")
+        self.export_action = file_menu.addAction("导出...")
+        self.import_action = file_menu.addAction("导入...")
 
-        edit_menu = self.menu_bar.addMenu("Edit")
-        self.add_sel_action = edit_menu.addAction("+ Selection Bookmark")
-        self.add_iso_action = edit_menu.addAction("+ Isolate Bookmark")
+        edit_menu = self.menu_bar.addMenu("编辑")
+        self.add_sel_action = edit_menu.addAction("+ 选择书签")
+        self.add_iso_action = edit_menu.addAction("+ 隔离书签")
 
-        view_menu = self.menu_bar.addMenu("View")
+        view_menu = self.menu_bar.addMenu("视图")
         self._layout_action_group = QtWidgets.QActionGroup(self)
         self._layout_action_group.setExclusive(True)
-        self.layout_h_action = view_menu.addAction("Horizontal")
-        self.layout_v_action = view_menu.addAction("Vertical")
-        self.layout_g_action = view_menu.addAction("Grid")
+        self.layout_h_action = view_menu.addAction("水平")
+        self.layout_v_action = view_menu.addAction("垂直")
+        self.layout_g_action = view_menu.addAction("网格")
         for action in (
             self.layout_h_action,
             self.layout_v_action,
@@ -403,10 +403,10 @@ class BookmarksUI(
             pos (QPoint): Local position of the click.
         """
         menu = QtWidgets.QMenu(self)
-        sel_action = menu.addAction("+ Selection Bookmark")
-        iso_action = menu.addAction("+ Isolate Bookmark")
+        sel_action = menu.addAction("+ 选择书签")
+        iso_action = menu.addAction("+ 隔离书签")
         menu.addSeparator()
-        toggle_action = menu.addAction("Toggle Menu Bar")
+        toggle_action = menu.addAction("切换菜单栏")
 
         action = menu.exec_(self.chip_container.mapToGlobal(pos))
         if action == sel_action:
@@ -457,8 +457,8 @@ class BookmarksUI(
         """
         new_name, ok = QtWidgets.QInputDialog.getText(
             self,
-            "Rename Bookmark",
-            "New name:",
+            "重命名书签",
+            "新名称：",
             text=bookmark["name"],
         )
         if ok and new_name.strip():

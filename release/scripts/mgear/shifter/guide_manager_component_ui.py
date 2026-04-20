@@ -93,26 +93,26 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.tools_groupBox.setTitle(gqt.fakeTranslate("Form", "Guide Tools", None, -1))
-        self.settings_pushButton.setWhatsThis(gqt.fakeTranslate("Form", "<html><head/><body><p>Open Component/Guide root settings window.</p></body></html>", None, -1))
-        self.settings_pushButton.setText(gqt.fakeTranslate("Form", "Settings", None, -1))
-        self.duplicate_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Duplicate selected component.</p></body></html>", None, -1))
-        self.duplicate_pushButton.setText(gqt.fakeTranslate("Form", "Duplicate", None, -1))
-        self.dupSym_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Duplicate symmetrical selected component.</p></body></html>", None, -1))
-        self.dupSym_pushButton.setText(gqt.fakeTranslate("Form", "Dupl. Sym.", None, -1))
-        self.extrCtl_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Extract Selected Controls and store as control Buffer.</p></body></html>", None, -1))
-        self.extrCtl_pushButton.setText(gqt.fakeTranslate("Form", "Extr. Ctl.", None, -1))
-        self.build_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Build rig from selection</p></body></html>", None, -1))
-        self.build_pushButton.setWhatsThis(gqt.fakeTranslate("Form", "<html><head/><body><p>Open Component/Guide root settings window.</p></body></html>", None, -1))
-        self.build_pushButton.setText(gqt.fakeTranslate("Form", "Build From Selection", None, -1))
-        self.list_groupBox.setTitle(gqt.fakeTranslate("Form", "Component List", None, -1))
-        self.draw_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>Draw selected component.</p></body></html>", None, -1))
-        self.draw_pushButton.setText(gqt.fakeTranslate("Form", "Draw Component", None, -1))
-        self.showUI_checkBox.setText(gqt.fakeTranslate("Form", "Show Setting After Create New Component.", None, -1))
+        self.tools_groupBox.setTitle(gqt.fakeTranslate("Form", "引导工具", None, -1))
+        self.settings_pushButton.setWhatsThis(gqt.fakeTranslate("Form", "<html><head/><body><p>打开组件/引导根设置窗口。</p></body></html>", None, -1))
+        self.settings_pushButton.setText(gqt.fakeTranslate("Form", "设置", None, -1))
+        self.duplicate_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>复制选中的组件。</p></body></html>", None, -1))
+        self.duplicate_pushButton.setText(gqt.fakeTranslate("Form", "复制", None, -1))
+        self.dupSym_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>对称复制选中的组件。</p></body></html>", None, -1))
+        self.dupSym_pushButton.setText(gqt.fakeTranslate("Form", "对称复制", None, -1))
+        self.extrCtl_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>提取选中的控制器并存储为控制器缓冲区。</p></body></html>", None, -1))
+        self.extrCtl_pushButton.setText(gqt.fakeTranslate("Form", "提取控制器", None, -1))
+        self.build_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>从选择构建绑定</p></body></html>", None, -1))
+        self.build_pushButton.setWhatsThis(gqt.fakeTranslate("Form", "<html><head/><body><p>打开组件/引导根设置窗口。</p></body></html>", None, -1))
+        self.build_pushButton.setText(gqt.fakeTranslate("Form", "从选择构建", None, -1))
+        self.list_groupBox.setTitle(gqt.fakeTranslate("Form", "组件列表", None, -1))
+        self.draw_pushButton.setToolTip(gqt.fakeTranslate("Form", "<html><head/><body><p>绘制选中的组件。</p></body></html>", None, -1))
+        self.draw_pushButton.setText(gqt.fakeTranslate("Form", "绘制组件", None, -1))
+        self.showUI_checkBox.setText(gqt.fakeTranslate("Form", "创建新组件后显示设置。", None, -1))
         self.update_guide_checkBox.setText(
             gqt.fakeTranslate(
                 "Form",
-                "Update Guide After Setting The Specified Component Type.",
+                "设置指定组件类型后更新引导。",
                 None,
                 -1,
             )

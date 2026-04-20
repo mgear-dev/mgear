@@ -52,7 +52,7 @@ try:
 except NameError as e:
     _CLIPBOARD = []
 
-ANIM_PICKER_TITLE = "Anim Picker {ap_version} | mGear {m_version}"
+ANIM_PICKER_TITLE = "动画选择器 {ap_version} | mGear {m_version}"
 
 # maya color index
 MAYA_OVERRIDE_COLOR = {

@@ -71,7 +71,7 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.setObjectName(self.toolName)
         self.setWindowFlags(QtCore.Qt.Window)
-        self.setWindowTitle("Shifter Guide Component")
+        self.setWindowTitle("Shifter引导组件")
         self.resize(280, 600)
 
     def create_layout(self):
@@ -88,11 +88,11 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         trackLoadComponent = []
         for path, comps in compDir.items():
             pm.progressWindow(
-                title="Loading Components", progress=0, max=len(comps)
+                title="加载组件", progress=0, max=len(comps)
             )
             for comp_name in comps:
                 pm.progressWindow(
-                    e=True, step=1, status="\nLoading: %s" % comp_name
+                    e=True, step=1, status="\n加载: %s" % comp_name
                 )
                 if comp_name in ["__init__.py", "__pycache__"]:
                     continue

@@ -230,7 +230,7 @@ def export_selected_assets_to_unreal(
             ):
                 import_path_for_new_assets = QtWidgets.QFileDialog.getExistingDirectory(
                     None,
-                    "Select Folder where Unreal Asset (.uasset) will be located",
+                    "选择Unreal资产(.uasset)将位于的文件夹",
                     content_path,
                 )
             if not import_path_for_new_assets or not os.path.isdir(
