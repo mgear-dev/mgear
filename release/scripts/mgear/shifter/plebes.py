@@ -28,7 +28,7 @@ class Plebes:
         """GUI for Plebes"""
         if pm.window("plebesDialog", exists=True):
             pm.deleteUI("plebesDialog")
-        win = pm.window("plebesDialog", title="Rig Plebe", sizeable=True)
+        win = pm.window("plebesDialog", title="快速绑定", sizeable=True)
         pm.window(win, edit=True, height=475, width=300)
 
         pm.frameLayout(
@@ -39,7 +39,7 @@ class Plebes:
             labelVisible=False,
         )
 
-        pm.text(label="Choose a Character Template:")
+        pm.text(label="选择角色模板:")
         self.template_menu = pm.optionMenu(
             "template_menu", changeCommand=self.template_change
         )
@@ -52,19 +52,18 @@ class Plebes:
 
         # Import FBX button
         pm.button(
-            label="Import FBX",
+            label="导入 FBX",
             command=lambda _: self.import_fbx(),
-            annotation="Import the FBX of your skinned character.",
+            annotation="导入蒙皮角色的FBX文件.",
         )
 
         # Fix FBX Naming button
         pm.button(
-            label="Fix FBX Naming",
+            label="修复 FBX 命名",
             command=lambda _: self.fix_fbx_naming(),
             annotation=(
-                "Replaces FBXASCxxx with '_' in node names from imported FBX \n"
-                "files. This is needed when the FBX uses characters that are \n"
-                "not supported in Maya."
+                "将导入FBX文件中节点名称的FBXASCxxx替换为'_'字符.\n"
+                "当FBX使用Maya不支持的字符时需要此操作."
             ),
         )
 
@@ -73,28 +72,27 @@ class Plebes:
 
         # Import Guides button
         pm.button(
-            label="Import Guides",
+            label="导入引导",
             command=lambda _: self.import_guides(),
-            annotation="Import a mGear biped guide template.",
+            annotation="导入mGear双足引导模板.",
         )
 
         # Align Guides button
         pm.button(
-            label="Align Guides",
+            label="对齐引导",
             command=lambda _: self.align_guides(),
             annotation=(
-                "Position the guides to match your character.\n\n"
-                "You will need to adjust the heel and foot width guides\n"
-                "manually, and check that knees and elbows are pointing in the\n"
-                "right direction."
+                "调整引导以匹配你的角色.\n\n"
+                "你需要手动调整脚跟和脚宽引导,\n"
+                "并检查膝盖和肘部指向正确的方向."
             ),
         )
 
         # Build Rig button
         pm.button(
-            label="Build Rig",
+            label="构建绑定",
             command=lambda _: self.rig(),
-            annotation="Build the mGear rig based on the guides.",
+            annotation="基于引导构建mGear绑定.",
         )
 
         # Add row layout for constrain and skin buttons
@@ -106,10 +104,10 @@ class Plebes:
 
         # Constrain to Rig button
         pm.button(
-            label="Constrain to Rig",
+            label="约束到绑定",
             width=125,
             command=lambda _: self.constrain_to_rig(),
-            annotation="Constrain the characters joints to the mGear rig.",
+            annotation="将角色骨骼约束到mGear绑定.",
         )
 
         # OR label
@@ -118,24 +116,23 @@ class Plebes:
         # Column layout for Skin button and export checkbox
         pm.columnLayout(width=105)
         pm.button(
-            label="Skin to Rig",
+            label="蒙皮到绑定",
             width=105,
             command=lambda _: self.skin_to_rig(),
             annotation=(
-                "Transfer skinning to the mGear rig.\n\n"
-                "This is done by first exporting the weights and then remapping\n"
-                "the export to matching mGear joints before bringing it in."
+                "将蒙皮转移到mGear绑定.\n\n"
+                "首先导出权重,然后将导出重新映射到\n"
+                "匹配的mGear骨骼再导入."
             ),
         )
 
         # Export Only checkbox
         self.export_only_check = pm.checkBox(
-            label="Export Only",
+            label="仅导出",
             annotation=(
-                "Exports the skin weights, but doesn't re-apply them. You can\n"
-                "use mGear>Skin and Weights>Import Skin Pack to manually\n"
-                "bring them in later.\n\n"
-                "See the script editor for where to find the skin pack."
+                "导出蒙皮权重,但不重新应用.你可以\n"
+                "稍后使用mGear>Skin and Weights>Import Skin Pack手动导入.\n\n"
+                "请查看脚本编辑器了解蒙皮包的位置."
             ),
         )
 
@@ -245,7 +242,7 @@ class Plebes:
     def import_guides(self):
         """Import mGear's Biped Template guides"""
         if pm.objExists("guide"):
-            pm.warning("There is already a guide in the scene. Skipping!")
+            pm.warning("场景中已有引导.跳过!")
         else:
             io.import_sample_template("biped.sgt")
 
@@ -254,8 +251,8 @@ class Plebes:
         # Sanity check
         if len(pm.ls("rig", assemblies=True)) > 0:
             pm.warning(
-                "The character has already been rigged. "
-                "You can delete the rig and re-build it if you need to"
+                "角色已经绑定."
+                "如果需要,可以删除绑定重新构建"
             )
             return False
 
@@ -291,7 +288,7 @@ class Plebes:
         """Align the mGear guide to character based on the selected template"""
         # Sanity checking
         if not pm.objExists("guide"):
-            pm.warning("You need to import guides first")
+            pm.warning("请先导入引导")
             return False
         if not pm.objExists(self.template.get("root")):
             pm.warning(
@@ -366,15 +363,15 @@ class Plebes:
                                     )
                                 )
         except:
-            pm.displayInfo("No guide settings defined in template")
+            pm.displayInfo("模板中未定义引导设置")
         pm.displayInfo(
-            "Remember to align heels and direction of blades."
-            "Not everything can be automated."
+            "请记住对齐脚跟和刀片方向."
+            "并非所有操作都能自动化."
         )
         if warnings:
             pm.warning(
-                "Some guides failed to align correctly. "
-                "See the script editor for details!"
+                "部分引导未能正确对齐. "
+                "请查看脚本编辑器获取详情!"
             )
 
     def constrain_to_rig(self, *args, **kwargs):
@@ -382,14 +379,14 @@ class Plebes:
         # Sanity checking
         if not pm.objExists(self.template.get("root")):
             pm.warning(
-                "Unable to find '{character}' in scene! ".format(
+                "在场景中找不到'{character}'! ".format(
                     character=self.template.get("root")
                 ),
-                "Check that you have the correct template selected",
+                "请检查是否选择了正确的模板",
             )
             return False
         if not pm.objExists("global_C0_ctl"):
-            pm.warning("You need to build the rig first!")
+            pm.warning("请先构建绑定!")
             return False
         warnings = False
 
@@ -398,8 +395,8 @@ class Plebes:
                 if not pm.objExists(target.get("joint")):
                     warnings = True
                     pm.warning(
-                        "Joint '{joint}' not found, so it won't be "
-                        "connected to the rig.".format(
+                        "找不到骨骼'{joint}', 因此无法 "
+                        "连接到绑定.".format(
                             joint=target.get("joint")
                         )
                     )
@@ -427,11 +424,11 @@ class Plebes:
                     pm.scaleConstraint(
                         source, target.get("joint"), maintainOffset=True
                     )
-        pm.displayInfo("Done attaching the character to the rig")
+        pm.displayInfo("已将角色连接到绑定")
         if warnings:
             pm.warning(
-                "Some joints failed to attach to the rig. "
-                "See the script editor for details!"
+                "部分骨骼未能连接到绑定. "
+                "请查看脚本编辑器获取详情!"
             )
 
     def skin_to_rig(self, *args, **kwargs):
@@ -439,14 +436,14 @@ class Plebes:
         # Sanity checking
         if not pm.objExists(self.template.get("root")):
             pm.warning(
-                "Unable to find '{character}' in scene! ".format(
+                "在场景中找不到'{character}'! ".format(
                     character=self.template.get("root")
                 ),
-                "Check that you have the correct template selected",
+                "请检查是否选择了正确的模板",
             )
             return False
         if not pm.objExists("global_C0_ctl"):
-            pm.warning("You need to build the rig first!")
+            pm.warning("请先构建绑定!")
             return False
 
         # Check and prune selection
@@ -459,7 +456,7 @@ class Plebes:
                 if skin_cluster.skinningMethod.get() < 0:
                     skin_cluster.skinningMethod.set(0)
         if not selection:
-            pm.error("Please select the geometry you want to skin to the rig.")
+            pm.error("请选择要蒙皮到绑定的几何体.")
         pm.select(selection, replace=True)
 
         # Export a Skin Pack

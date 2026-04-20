@@ -41,7 +41,7 @@ class GuideTemplateManagerUI(
     """
 
     TOOL_NAME = "GuideTemplateManager"
-    TOOL_TITLE = "Guide Template Manager"
+    TOOL_TITLE = "引导模板管理器"
 
     def __init__(self, parent=None):
         super(GuideTemplateManagerUI, self).__init__(parent)
@@ -100,16 +100,16 @@ class GuideTemplateManagerUI(
     def create_actions(self):
         """Create QActions for menus."""
         self.export_action = QtWidgets.QAction(
-            "Export Template...", self
+            "导出模板...", self
         )
         self.refresh_action = QtWidgets.QAction(
-            "Refresh List", self
+            "刷新列表", self
         )
         self.edit_folders_action = QtWidgets.QAction(
-            "Edit Source Folders...", self
+            "编辑源文件夹...", self
         )
         self.show_defaults_action = QtWidgets.QAction(
-            "Show Default Guides", self
+            "显示默认引导", self
         )
         self.show_defaults_action.setCheckable(True)
         self.show_defaults_action.setChecked(True)
@@ -119,18 +119,18 @@ class GuideTemplateManagerUI(
         self.menu_bar = QtWidgets.QMenuBar()
         self.menu_bar.setNativeMenuBar(False)
 
-        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu = self.menu_bar.addMenu("文件")
         self.file_menu.addAction(self.export_action)
         self.file_menu.addSeparator()
         self.file_menu.addAction(self.refresh_action)
 
-        self.settings_menu = self.menu_bar.addMenu("Settings")
+        self.settings_menu = self.menu_bar.addMenu("设置")
         self.settings_menu.addAction(self.edit_folders_action)
         self.settings_menu.addSeparator()
         self.settings_menu.addAction(self.show_defaults_action)
 
         self.search_input = QtWidgets.QLineEdit()
-        self.search_input.setPlaceholderText("Search templates...")
+        self.search_input.setPlaceholderText("搜索模板...")
         self.search_input.setClearButtonEnabled(True)
 
         self.template_tree = TemplateTreeWidget()
@@ -197,7 +197,7 @@ class GuideTemplateManagerUI(
 
         for entry in folder_entries:
             if entry.path == core.get_default_templates_dir():
-                entry.label = "Default Templates"
+                entry.label = "默认模板"
 
         # Ensure sgtInfo and cache before populating tree
         core.ensure_all_sgt_info(folder_entries)
@@ -245,7 +245,7 @@ class GuideTemplateManagerUI(
         selection = pm.selected()
         if not selection:
             cmds.warning(
-                "Please select a guide element to add to"
+                "请选择一个要添加到的引导元素"
             )
             return
 
@@ -263,7 +263,7 @@ class GuideTemplateManagerUI(
         components = core.get_components_from_template(sgt_path)
         if not components:
             cmds.warning(
-                "Could not read components from template"
+                "无法从模板读取组件"
             )
             return
 
@@ -273,7 +273,7 @@ class GuideTemplateManagerUI(
 
         roots = dialog.get_root_components()
         if not roots:
-            cmds.warning("No components selected")
+            cmds.warning("未选择组件")
             return
 
         init_parent = None

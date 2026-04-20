@@ -34,7 +34,7 @@ class Ui_Form(object):
         # =====================================================================
         self.groupBox = QtWidgets.QGroupBox(Form)
         self.groupBox.setObjectName("groupBox")
-        self.groupBox.setTitle("Rig Settings")
+        self.groupBox.setTitle("绑定设置")
         self.groupBox.setCheckable(True)
         self.groupBox.setChecked(False)  # Default to inherit from blueprint
         # Create a reference for consistent naming with other override checkboxes
@@ -49,7 +49,7 @@ class Ui_Form(object):
         # Rig Name
         self.rigName_label = QtWidgets.QLabel(self.groupBox)
         self.rigName_label.setObjectName("rigName_label")
-        self.rigName_label.setText("Rig Name")
+        self.rigName_label.setText("绑定名称")
         self.formLayout.setWidget(0, QtWidgets.QFormLayout.LabelRole, self.rigName_label)
 
         self.rigName_lineEdit = QtWidgets.QLineEdit(self.groupBox)
@@ -59,7 +59,7 @@ class Ui_Form(object):
         # Debug Mode
         self.mode_label = QtWidgets.QLabel(self.groupBox)
         self.mode_label.setObjectName("mode_label")
-        self.mode_label.setText("Debug Mode")
+        self.mode_label.setText("调试模式")
         self.formLayout.setWidget(1, QtWidgets.QFormLayout.LabelRole, self.mode_label)
 
         self.mode_comboBox = QtWidgets.QComboBox(self.groupBox)
@@ -71,7 +71,7 @@ class Ui_Form(object):
         # Guide Build Steps
         self.step_label = QtWidgets.QLabel(self.groupBox)
         self.step_label.setObjectName("step_label")
-        self.step_label.setText("Guide Build Steps:")
+        self.step_label.setText("引导构建步骤:")
         self.formLayout.setWidget(2, QtWidgets.QFormLayout.LabelRole, self.step_label)
 
         self.step_comboBox = QtWidgets.QComboBox(self.groupBox)
@@ -93,7 +93,7 @@ class Ui_Form(object):
         # =====================================================================
         self.groupBox_6 = QtWidgets.QGroupBox(Form)
         self.groupBox_6.setObjectName("groupBox_6")
-        self.groupBox_6.setTitle("Animation Channels Settings")
+        self.groupBox_6.setTitle("动画通道设置")
         self.groupBox_6.setCheckable(True)
         self.groupBox_6.setChecked(False)  # Default to inherit from blueprint
         self.override_animChannels_checkBox = self.groupBox_6
@@ -103,12 +103,12 @@ class Ui_Form(object):
 
         self.proxyChannels_checkBox = QtWidgets.QCheckBox(self.groupBox_6)
         self.proxyChannels_checkBox.setObjectName("proxyChannels_checkBox")
-        self.proxyChannels_checkBox.setText("Add Internal Proxy Channels")
+        self.proxyChannels_checkBox.setText("添加内部代理通道")
         self.gridLayout_8.addWidget(self.proxyChannels_checkBox, 0, 0, 1, 1)
 
         self.classicChannelNames_checkBox = QtWidgets.QCheckBox(self.groupBox_6)
         self.classicChannelNames_checkBox.setObjectName("classicChannelNames_checkBox")
-        self.classicChannelNames_checkBox.setText("Use Classic Channel Names (All channels will have unique names.)")
+        self.classicChannelNames_checkBox.setText("使用经典通道名称(所有通道将具有唯一名称)")
         self.classicChannelNames_checkBox.setToolTip(
             '<html><head/><body><p>If this option is checked. The channel name will have unique full name. </p>'
             '<p align="center"><span style=" font-weight:600;">i.e: "arm_L0_blend"</span><br/></p>'
@@ -159,7 +159,7 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.groupBox_7.sizePolicy().hasHeightForWidth())
         self.groupBox_7.setSizePolicy(sizePolicy)
         self.groupBox_7.setObjectName("groupBox_7")
-        self.groupBox_7.setTitle("Base Rig Control")
+        self.groupBox_7.setTitle("基础绑定控制器")
         self.groupBox_7.setCheckable(True)
         self.groupBox_7.setChecked(False)  # Default to inherit from blueprint
         self.override_baseRigControl_checkBox = self.groupBox_7
@@ -172,7 +172,7 @@ class Ui_Form(object):
 
         self.worldCtl_checkBox = QtWidgets.QCheckBox(self.groupBox_7)
         self.worldCtl_checkBox.setObjectName("worldCtl_checkBox")
-        self.worldCtl_checkBox.setText("Use World Ctl or Custom Name")
+        self.worldCtl_checkBox.setText("使用世界控制器或自定义名称")
         self.worldCtl_checkBox.setToolTip(
             '<html><head/><body><p>Shifter creates by default a Base control called '
             '"<span style=" font-weight:600;">global_C0_ctl</span>". </p>'
@@ -199,7 +199,7 @@ class Ui_Form(object):
         # =====================================================================
         self.groupBox_2 = QtWidgets.QGroupBox(Form)
         self.groupBox_2.setObjectName("groupBox_2")
-        self.groupBox_2.setTitle("Skinning Settings")
+        self.groupBox_2.setTitle("蒙皮设置")
         self.groupBox_2.setCheckable(True)
         self.groupBox_2.setChecked(False)  # Default to inherit from blueprint
         self.override_skinning_checkBox = self.groupBox_2
@@ -212,7 +212,7 @@ class Ui_Form(object):
 
         self.importSkin_checkBox = QtWidgets.QCheckBox(self.groupBox_2)
         self.importSkin_checkBox.setObjectName("importSkin_checkBox")
-        self.importSkin_checkBox.setText("Import Skin")
+        self.importSkin_checkBox.setText("导入蒙皮")
         self.verticalLayout.addWidget(self.importSkin_checkBox)
 
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -220,7 +220,7 @@ class Ui_Form(object):
 
         self.skin_label = QtWidgets.QLabel(self.groupBox_2)
         self.skin_label.setObjectName("skin_label")
-        self.skin_label.setText("Skin Path")
+        self.skin_label.setText("蒙皮路径")
         self.horizontalLayout.addWidget(self.skin_label)
 
         self.skin_lineEdit = QtWidgets.QLineEdit(self.groupBox_2)
@@ -229,7 +229,7 @@ class Ui_Form(object):
 
         self.loadSkinPath_pushButton = QtWidgets.QPushButton(self.groupBox_2)
         self.loadSkinPath_pushButton.setObjectName("loadSkinPath_pushButton")
-        self.loadSkinPath_pushButton.setText("Load Path")
+        self.loadSkinPath_pushButton.setText("加载路径")
         self.horizontalLayout.addWidget(self.loadSkinPath_pushButton)
 
         self.verticalLayout.addLayout(self.horizontalLayout)
@@ -246,7 +246,7 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.groupBox_3.sizePolicy().hasHeightForWidth())
         self.groupBox_3.setSizePolicy(sizePolicy)
         self.groupBox_3.setObjectName("groupBox_3")
-        self.groupBox_3.setTitle("Joint Settings")
+        self.groupBox_3.setTitle("骨骼设置")
         self.groupBox_3.setCheckable(True)
         self.groupBox_3.setChecked(False)  # Default to inherit from blueprint
         self.override_jointSettings_checkBox = self.groupBox_3
@@ -256,13 +256,13 @@ class Ui_Form(object):
 
         self.jointRig_checkBox = QtWidgets.QCheckBox(self.groupBox_3)
         self.jointRig_checkBox.setObjectName("jointRig_checkBox")
-        self.jointRig_checkBox.setText("Separated Joint Structure")
+        self.jointRig_checkBox.setText("分离的骨骼结构")
         self.gridLayout_5.addWidget(self.jointRig_checkBox, 0, 0, 1, 1)
 
         self.jointWorldOri_checkBox = QtWidgets.QCheckBox(self.groupBox_3)
         self.jointWorldOri_checkBox.setEnabled(True)
         self.jointWorldOri_checkBox.setObjectName("jointWorldOri_checkBox")
-        self.jointWorldOri_checkBox.setText("Force World Oriented")
+        self.jointWorldOri_checkBox.setText("强制世界方向")
         self.jointWorldOri_checkBox.setToolTip(
             "<html><head/><body><p>Force all the joint to be oriented in World Space</p></body></html>"
         )
@@ -270,12 +270,12 @@ class Ui_Form(object):
 
         self.force_uniScale_checkBox = QtWidgets.QCheckBox(self.groupBox_3)
         self.force_uniScale_checkBox.setObjectName("force_uniScale_checkBox")
-        self.force_uniScale_checkBox.setText("Force uniform scaling in all joints by connection all axis to Z axis")
+        self.force_uniScale_checkBox.setText("通过连接所有轴到Z轴强制所有骨骼统一缩放")
         self.gridLayout_5.addWidget(self.force_uniScale_checkBox, 2, 0, 1, 1)
 
         self.connect_joints_checkBox = QtWidgets.QCheckBox(self.groupBox_3)
         self.connect_joints_checkBox.setObjectName("connect_joints_checkBox")
-        self.connect_joints_checkBox.setText("Connect to existing joints.")
+        self.connect_joints_checkBox.setText("连接到已有骨骼")
         self.connect_joints_checkBox.setToolTip(
             '<html><head/><body><p>When this option is active, mGear Shifter will try to connect to existing joints '
             'in the scene</p>'
@@ -298,7 +298,7 @@ class Ui_Form(object):
         # =====================================================================
         self.groupBox_8 = QtWidgets.QGroupBox(Form)
         self.groupBox_8.setObjectName("groupBox_8")
-        self.groupBox_8.setTitle("Post Build Data Collector")
+        self.groupBox_8.setTitle("构建后数据收集器")
         self.groupBox_8.setCheckable(True)
         self.groupBox_8.setChecked(False)  # Default to inherit from blueprint
         self.override_dataCollector_checkBox = self.groupBox_8
@@ -312,7 +312,7 @@ class Ui_Form(object):
 
         self.dataCollector_checkBox = QtWidgets.QCheckBox(self.groupBox_8)
         self.dataCollector_checkBox.setObjectName("dataCollector_checkBox")
-        self.dataCollector_checkBox.setText("Collect Data on External File")
+        self.dataCollector_checkBox.setText("在外部文件上收集数据")
         self.dataCollector_checkBox.setToolTip(
             '<html><head/><body><p>Collected data will be stored in the root joint of the rig, if exist.</p>'
             '<p>The root joint is the first joint created in the rig. Not necessary to be called "root"</p>'
@@ -325,7 +325,7 @@ class Ui_Form(object):
 
         self.dataCollector_label = QtWidgets.QLabel(self.groupBox_8)
         self.dataCollector_label.setObjectName("dataCollector_label")
-        self.dataCollector_label.setText("Data Path")
+        self.dataCollector_label.setText("数据路径")
         self.horizontalLayout_3.addWidget(self.dataCollector_label)
 
         self.dataCollectorPath_lineEdit = QtWidgets.QLineEdit(self.groupBox_8)
@@ -347,7 +347,7 @@ class Ui_Form(object):
         self.dataCollectorEmbbeded_checkBox = QtWidgets.QCheckBox(self.groupBox_8)
         self.dataCollectorEmbbeded_checkBox.setObjectName("dataCollectorEmbbeded_checkBox")
         self.dataCollectorEmbbeded_checkBox.setText(
-            "Collect Data Embbeded on Root or custom joint (Warning: FBX Ascii format is not supported)"
+            "在根骨骼或自定义骨骼上嵌入收集数据(FBX Ascii格式不支持)"
         )
         self.dataCollectorEmbbeded_checkBox.setToolTip(
             '<html><head/><body><p>Collected data will be stored in the root joint of the rig, if exist.</p>'
@@ -361,7 +361,7 @@ class Ui_Form(object):
 
         self.dataCollectorEmbbeded_label = QtWidgets.QLabel(self.groupBox_8)
         self.dataCollectorEmbbeded_label.setObjectName("dataCollectorEmbbeded_label")
-        self.dataCollectorEmbbeded_label.setText("Custom Joint or Transform")
+        self.dataCollectorEmbbeded_label.setText("自定义骨骼或变换")
         self.horizontalLayout_4.addWidget(self.dataCollectorEmbbeded_label)
 
         self.dataCollectorCustomJoint_lineEdit = QtWidgets.QLineEdit(self.groupBox_8)
@@ -383,7 +383,7 @@ class Ui_Form(object):
         # =====================================================================
         self.groupBox_5 = QtWidgets.QGroupBox(Form)
         self.groupBox_5.setObjectName("groupBox_5")
-        self.groupBox_5.setTitle("Color Settings")
+        self.groupBox_5.setTitle("颜色设置")
         self.groupBox_5.setCheckable(True)
         self.groupBox_5.setChecked(False)  # Default to inherit from blueprint
         self.override_colorSettings_checkBox = self.groupBox_5
@@ -399,19 +399,19 @@ class Ui_Form(object):
         self.label = QtWidgets.QLabel(self.groupBox_5)
         self.label.setAlignment(QtCore.Qt.AlignCenter)
         self.label.setObjectName("label")
-        self.label.setText("Left")
+        self.label.setText("左")
         self.gridLayout_9.addWidget(self.label, 0, 0, 1, 1)
 
         self.label_2 = QtWidgets.QLabel(self.groupBox_5)
         self.label_2.setAlignment(QtCore.Qt.AlignCenter)
         self.label_2.setObjectName("label_2")
-        self.label_2.setText("Center")
+        self.label_2.setText("中")
         self.gridLayout_9.addWidget(self.label_2, 0, 1, 1, 1)
 
         self.label_3 = QtWidgets.QLabel(self.groupBox_5)
         self.label_3.setAlignment(QtCore.Qt.AlignCenter)
         self.label_3.setObjectName("label_3")
-        self.label_3.setText("Right")
+        self.label_3.setText("右")
         self.gridLayout_9.addWidget(self.label_3, 0, 2, 1, 1)
 
         # ----- Left Column (gridLayout_11) -----
@@ -714,7 +714,7 @@ class Ui_Form(object):
         # Use RGB Colors checkbox (below the color grid)
         self.useRGB_checkBox = QtWidgets.QCheckBox(self.groupBox_5)
         self.useRGB_checkBox.setObjectName("useRGB_checkBox")
-        self.useRGB_checkBox.setText("Use RBG Colors")
+        self.useRGB_checkBox.setText("使用RGB颜色")
         self.gridLayout_7.addWidget(self.useRGB_checkBox, 1, 0, 1, 1)
 
         self.gridLayout_2.addWidget(self.groupBox_5, 6, 0, 1, 1)

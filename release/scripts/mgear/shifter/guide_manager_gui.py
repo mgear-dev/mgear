@@ -31,7 +31,7 @@ class GuideManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.setObjectName(self.toolName)
         self.setWindowFlags(QtCore.Qt.Window)
-        self.setWindowTitle("Shifter Guide Manager")
+        self.setWindowTitle("Shifter 引导管理器")
         self.resize(280, 750)
 
     def create_layout(self):
@@ -40,9 +40,9 @@ class GuideManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.gm_layout.setContentsMargins(3, 3, 3, 3)
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.setObjectName("manager_tab")
-        self.tabs.insertTab(0, self.gmc, "Components")
-        self.tabs.insertTab(1, self.guide_explorer, "Guide Explorer")
-        self.tabs.insertTab(2, self.gexp, "Templates")
+        self.tabs.insertTab(0, self.gmc, "组件")
+        self.tabs.insertTab(1, self.guide_explorer, "引导浏览器")
+        self.tabs.insertTab(2, self.gexp, "模板")
 
         self.gm_layout.addWidget(self.tabs)
 

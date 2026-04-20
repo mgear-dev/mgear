@@ -93,45 +93,45 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
 
         :return: None
         """
-        self.refresh_action = QtWidgets.QAction("Refresh", self)
+        self.refresh_action = QtWidgets.QAction("刷新", self)
         self.refresh_action.setShortcut(QtGui.QKeySequence("R"))
         self.refresh_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.mirror_component_action = QtWidgets.QAction("Mirror", self)
+        self.mirror_component_action = QtWidgets.QAction("镜像", self)
 
-        self.build_action = QtWidgets.QAction("Build", self)
+        self.build_action = QtWidgets.QAction("构建", self)
         self.build_action.setShortcut(QtGui.QKeySequence("Ctrl+B"))
         self.build_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.unbuild_action = QtWidgets.QAction("Unbuild", self)
+        self.unbuild_action = QtWidgets.QAction("取消构建", self)
         self.unbuild_action.setShortcut(QtGui.QKeySequence("Ctrl+U"))
         self.unbuild_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.delete_action = QtWidgets.QAction("Delete", self)
+        self.delete_action = QtWidgets.QAction("删除", self)
         self.delete_action.setShortcut(QtGui.QKeySequence("Del"))
         self.delete_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.guide_visibility_action = QtWidgets.QAction("Guide Visibility", self)
+        self.guide_visibility_action = QtWidgets.QAction("引导可见性", self)
         self.guide_visibility_action.setShortcut(QtGui.QKeySequence("H"))
         self.guide_visibility_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.unhide_all_guide_action = QtWidgets.QAction("Unhide All", self)
+        self.unhide_all_guide_action = QtWidgets.QAction("全部显示", self)
         self.unhide_all_guide_action.setShortcut(QtGui.QKeySequence("Ctrl+H"))
         self.unhide_all_guide_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.ctrl_visibility_action = QtWidgets.QAction("Control Visibility", self)
+        self.ctrl_visibility_action = QtWidgets.QAction("控制器可见性", self)
         self.ctrl_visibility_action.setShortcut(QtGui.QKeySequence("C"))
         self.ctrl_visibility_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.joint_visibility_action = QtWidgets.QAction("Joint Visibility", self)
+        self.joint_visibility_action = QtWidgets.QAction("骨骼可见性", self)
         self.joint_visibility_action.setShortcut(QtGui.QKeySequence("J"))
         self.joint_visibility_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.select_component_action = QtWidgets.QAction("Select Component", self)
+        self.select_component_action = QtWidgets.QAction("选择组件", self)
         self.select_component_action.setShortcut(QtGui.QKeySequence("F"))
         self.select_component_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
-        self.update_component_type_action = QtWidgets.QAction("Update Component Type", self)
+        self.update_component_type_action = QtWidgets.QAction("更新组件类型", self)
         self.update_component_type_action.setShortcut(QtGui.QKeySequence("Ctrl+U"))
         self.update_component_type_action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
 

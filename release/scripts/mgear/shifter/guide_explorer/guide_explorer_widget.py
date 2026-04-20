@@ -59,9 +59,9 @@ class GuideExplorerWidget(QtWidgets.QWidget):
         """
         self.filter_components_line_edit = QtWidgets.QLineEdit(self)
         self.filter_components_line_edit.setClearButtonEnabled(True)
-        self.filter_components_line_edit.setPlaceholderText("<Search components>")
+        self.filter_components_line_edit.setPlaceholderText("<搜索组件>")
 
-        self.sync_checkbox = QtWidgets.QCheckBox("Sync Selection")
+        self.sync_checkbox = QtWidgets.QCheckBox("同步选择")
 
         self.guide_tree_widget = guide_tree_widget.GuideTreeWidget()
 
@@ -73,7 +73,7 @@ class GuideExplorerWidget(QtWidgets.QWidget):
         self.right_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
         self.right_scroll.setWidget(self.right_widget)
 
-        self.placeholder_label = QtWidgets.QLabel("Select a component")
+        self.placeholder_label = QtWidgets.QLabel("选择一个组件")
         self.placeholder_label.setAlignment(QtCore.Qt.AlignCenter)
 
     def create_layout(self) -> None:
@@ -455,7 +455,7 @@ class GuideExplorerWidget(QtWidgets.QWidget):
                     self.current_widget.setWindowTitle(data.full_name)
                 # -- if a guide
                 else:
-                    self.current_widget.setWindowTitle("Guide Settings")
+                    self.current_widget.setWindowTitle("引导设置")
 
     def on_sync_checkbox_toggled(self, state: bool) -> None:
         """

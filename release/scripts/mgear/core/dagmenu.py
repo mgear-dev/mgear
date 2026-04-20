@@ -708,7 +708,7 @@ def install():
     cmds.menuItem(divider=True)
     cmds.menuItem(
         "mgear_dagmenu_menuitem",
-        label="mGear Viewport Menu ",
+        label="mGear 视口菜单",
         command=run,
         checkBox=state,
     )
@@ -777,60 +777,60 @@ def mgear_dagmenu_guide_fill(parent_menu, current_guide_locator):
     _current_selection = cmds.ls(selection=True)
     cmds.menuItem(
         parent=parent_menu,
-        label="Settings",
+        label="设置",
         command=partial(guide_manager.inspect_settings, 0),
         image="mgear_sliders.svg",
     )
     cmds.menuItem(parent=parent_menu, divider=True)
     cmds.menuItem(
         parent=parent_menu,
-        label="Build From Selection",
+        label="从选择构建",
         command=guide_manager.build_from_selection,
         image="mgear_play.svg",
     )
     cmds.menuItem(parent=parent_menu, divider=True)
     cmds.menuItem(
         parent=parent_menu,
-        label="Duplicate",
+        label="复制",
         command=partial(guide_manager.duplicate, False),
         image="mgear_copy.svg",
     )
     cmds.menuItem(
         parent=parent_menu,
-        label="Duplicate Symme",
+        label="对称复制",
         command=partial(guide_manager.duplicate, True),
         image="mgear_duplicate_sym.svg",
     )
     cmds.menuItem(parent=parent_menu, divider=True)
     cmds.menuItem(
         parent=parent_menu,
-        label="Guide Manager",
+        label="引导管理器",
         command=guide_manager_gui.show_guide_manager,
         image="mgear_list.svg",
     )
     cmds.menuItem(parent=parent_menu, divider=True)
     cmds.menuItem(
         parent=parent_menu,
-        label="Export Guide From Selection",
+        label="导出选中引导",
         command=partial(io.export_guide_template, None, None),
         image="mgear_log-out.svg",
     )
     cmds.menuItem(parent=parent_menu, divider=True)
     cmds.menuItem(
         parent=parent_menu,
-        label="Update Guide",
+        label="更新引导",
         command=guide_template.updateGuide,
         image="mgear_loader.svg",
     )
     cmds.menuItem(
         parent=parent_menu,
-        label="Update Setected Components Type",
+        label="更新选中组件类型",
         command=compatible_comp_dagmenu.update_component_type_and_update_guide_with_dagmenu,
         image="mgear_loader.svg",
     )
     cmds.menuItem(
         parent=parent_menu,
-        label="Reload Components",
+        label="重新加载组件",
         command=shifter.reloadComponents,
         image="mgear_refresh-cw.svg",
     )
@@ -838,7 +838,7 @@ def mgear_dagmenu_guide_fill(parent_menu, current_guide_locator):
         cmds.menuItem(parent=parent_menu, divider=True)
         cmds.menuItem(
             parent=parent_menu,
-            label="X-Ray Guide Toggle",
+            label="X射线引导切换",
             command=guide_template.guide_toggle_xray,
             image="mgear_x.svg",
         )
@@ -898,7 +898,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
         # select ui host
         cmds.menuItem(
             parent=parent_menu,
-            label="Select host",
+            label="选择宿主",
             command=partial(__select_host_callback, current_control),
             image="hotkeySetSettings.png",
         )
@@ -919,7 +919,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
 
             cmds.menuItem(
                 parent=parent_menu,
-                label="Switch {} to {}".format(
+                label="切换 {} 到 {}".format(
                     attr.split(attr_extension)[0], rvs_state
                 ),
                 command=partial(
@@ -934,7 +934,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
 
             cmds.menuItem(
                 parent=parent_menu,
-                label="Switch {} to {} + Key".format(
+                label="切换 {} 到 {} + 关键帧".format(
                     attr.split(attr_extension)[0], rvs_state
                 ),
                 command=partial(
@@ -945,7 +945,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
 
             cmds.menuItem(
                 parent=parent_menu,
-                label="Range switch",
+                label="范围切换",
                 command=partial(
                     __range_switch_callback, ui_host, attr, attr_extension
                 ),
@@ -962,7 +962,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     # select all function
     cmds.menuItem(
         parent=parent_menu,
-        label="Select child controls",
+        label="选择子级控制器",
         command=partial(__select_nodes_callback, child_controls),
         image="dagNode.svg",
     )
@@ -973,7 +973,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     # reset selected
     cmds.menuItem(
         parent=parent_menu,
-        label="Reset",
+        label="重置",
         command=partial(reset_all_keyable_attributes, _current_selection),
         image="holder.svg",
     )
@@ -982,7 +982,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
         parent=parent_menu,
         subMenu=True,
         tearOff=False,
-        label="Reset Option",
+        label="重置选项",
     )
 
     # reset all

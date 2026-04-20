@@ -284,7 +284,7 @@ class TemplateInfoPanel(QtWidgets.QWidget):
         self._set_placeholder_thumbnail()
 
         # Template name
-        self.name_label = QtWidgets.QLabel("No template selected")
+        self.name_label = QtWidgets.QLabel("未选择模板")
         self.name_label.setStyleSheet(
             "font-weight: bold; font-size: 14px;"
         )
@@ -307,19 +307,19 @@ class TemplateInfoPanel(QtWidgets.QWidget):
         self.tags_label.setStyleSheet("color: #7aa3cc;")
 
         # Action buttons
-        self.capture_btn = QtWidgets.QPushButton("Capture Screenshot")
+        self.capture_btn = QtWidgets.QPushButton("捕获截图")
         self.capture_btn.setIcon(
             QtGui.QIcon(pyqt.get_icon("mgear_camera", _ICON_SIZE))
         )
         self.capture_btn.setEnabled(False)
 
-        self.browse_image_btn = QtWidgets.QPushButton("Browse Image...")
+        self.browse_image_btn = QtWidgets.QPushButton("浏览图片...")
         self.browse_image_btn.setIcon(
             QtGui.QIcon(pyqt.get_icon("mgear_image", _ICON_SIZE))
         )
         self.browse_image_btn.setEnabled(False)
 
-        self.edit_info_btn = QtWidgets.QPushButton("Edit Info")
+        self.edit_info_btn = QtWidgets.QPushButton("编辑信息")
         self.edit_info_btn.setIcon(
             QtGui.QIcon(pyqt.get_icon("mgear_edit", _ICON_SIZE))
         )
@@ -399,7 +399,7 @@ class TemplateInfoPanel(QtWidgets.QWidget):
             author = info.get("author", "")
             if author:
                 self.author_label.setText(
-                    "Author: {}".format(author)
+                    "作者: {}".format(author)
                 )
             else:
                 self.author_label.setText("")
@@ -408,24 +408,24 @@ class TemplateInfoPanel(QtWidgets.QWidget):
                 "date_created", ""
             )
             if date:
-                self.date_label.setText("Date: {}".format(date))
+                self.date_label.setText("日期: {}".format(date))
             else:
                 self.date_label.setText("")
 
             count = info.get("components_count", 0)
             self.components_label.setText(
-                "Components: {}".format(count)
+                "组件: {}".format(count)
             )
 
             tags = info.get("tags", [])
             if tags:
                 self.tags_label.setText(
-                    "Tags: {}".format(", ".join(tags))
+                    "标签: {}".format(", ".join(tags))
                 )
             else:
                 self.tags_label.setText("")
         else:
-            self.description_label.setText("No metadata available")
+            self.description_label.setText("无可用元数据")
             self.author_label.setText("")
             self.date_label.setText("")
             self.components_label.setText("")
@@ -460,7 +460,7 @@ class TemplateInfoPanel(QtWidgets.QWidget):
         if result:
             self.set_template(self._current_path)
         else:
-            cmds.warning("Failed to capture viewport")
+            cmds.warning("截取视口失败")
 
     def _browse_image(self):
         """Browse for a custom thumbnail image."""
@@ -469,9 +469,9 @@ class TemplateInfoPanel(QtWidgets.QWidget):
 
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
-            "Select Thumbnail Image",
+            "选择缩略图图片",
             "",
-            "Images (*.png *.jpg *.jpeg *.bmp)",
+            "图片 (*.png *.jpg *.jpeg *.bmp)",
         )
 
         if not file_path:
@@ -523,7 +523,7 @@ class EditInfoDialog(QtWidgets.QDialog):
     def __init__(self, info, parent=None):
         super(EditInfoDialog, self).__init__(parent)
 
-        self.setWindowTitle("Edit Template Info")
+        self.setWindowTitle("编辑模板信息")
         self.setMinimumWidth(int(pyqt.dpi_scale(400)))
 
         self._info = dict(info)
@@ -531,28 +531,28 @@ class EditInfoDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
 
         # Name
-        layout.addWidget(QtWidgets.QLabel("Name:"))
+        layout.addWidget(QtWidgets.QLabel("名称:"))
         self.name_edit = QtWidgets.QLineEdit(
             info.get("name", "")
         )
         layout.addWidget(self.name_edit)
 
         # Description
-        layout.addWidget(QtWidgets.QLabel("Description:"))
+        layout.addWidget(QtWidgets.QLabel("描述:"))
         self.desc_edit = QtWidgets.QTextEdit()
         self.desc_edit.setPlainText(info.get("description", ""))
         self.desc_edit.setMaximumHeight(int(pyqt.dpi_scale(100)))
         layout.addWidget(self.desc_edit)
 
         # Author
-        layout.addWidget(QtWidgets.QLabel("Author:"))
+        layout.addWidget(QtWidgets.QLabel("作者:"))
         self.author_edit = QtWidgets.QLineEdit(
             info.get("author", "")
         )
         layout.addWidget(self.author_edit)
 
         # Tags
-        layout.addWidget(QtWidgets.QLabel("Tags (comma separated):"))
+        layout.addWidget(QtWidgets.QLabel("标签(逗号分隔):"))
         tags = info.get("tags", [])
         self.tags_edit = QtWidgets.QLineEdit(
             ", ".join(tags) if tags else ""
@@ -561,9 +561,9 @@ class EditInfoDialog(QtWidgets.QDialog):
 
         # Buttons
         btn_layout = QtWidgets.QHBoxLayout()
-        ok_btn = QtWidgets.QPushButton("OK")
+        ok_btn = QtWidgets.QPushButton("确定")
         ok_btn.clicked.connect(self.accept)
-        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn = QtWidgets.QPushButton("取消")
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addStretch()
         btn_layout.addWidget(ok_btn)
@@ -608,7 +608,7 @@ class SourceFoldersDialog(QtWidgets.QDialog):
     def __init__(self, folders, parent=None):
         super(SourceFoldersDialog, self).__init__(parent)
 
-        self.setWindowTitle("Source Folders")
+        self.setWindowTitle("源文件夹")
         self.setMinimumSize(
             int(pyqt.dpi_scale(500)),
             int(pyqt.dpi_scale(300)),
@@ -625,7 +625,7 @@ class SourceFoldersDialog(QtWidgets.QDialog):
         # Buttons
         btn_layout = QtWidgets.QHBoxLayout()
 
-        self.add_btn = QtWidgets.QPushButton("Add Folder")
+        self.add_btn = QtWidgets.QPushButton("添加文件夹")
         self.add_btn.setIcon(
             QtGui.QIcon(
                 pyqt.get_icon("mgear_folder-plus", _ICON_SIZE)
@@ -634,7 +634,7 @@ class SourceFoldersDialog(QtWidgets.QDialog):
         self.add_btn.clicked.connect(self._add_folder)
         btn_layout.addWidget(self.add_btn)
 
-        self.remove_btn = QtWidgets.QPushButton("Remove")
+        self.remove_btn = QtWidgets.QPushButton("移除")
         self.remove_btn.setIcon(
             QtGui.QIcon(
                 pyqt.get_icon("mgear_folder-minus", _ICON_SIZE)
@@ -645,11 +645,11 @@ class SourceFoldersDialog(QtWidgets.QDialog):
 
         btn_layout.addStretch()
 
-        self.up_btn = QtWidgets.QPushButton("Up")
+        self.up_btn = QtWidgets.QPushButton("上移")
         self.up_btn.clicked.connect(self._move_up)
         btn_layout.addWidget(self.up_btn)
 
-        self.down_btn = QtWidgets.QPushButton("Down")
+        self.down_btn = QtWidgets.QPushButton("下移")
         self.down_btn.clicked.connect(self._move_down)
         btn_layout.addWidget(self.down_btn)
 
@@ -658,9 +658,9 @@ class SourceFoldersDialog(QtWidgets.QDialog):
         # OK / Cancel
         dialog_btn_layout = QtWidgets.QHBoxLayout()
         dialog_btn_layout.addStretch()
-        ok_btn = QtWidgets.QPushButton("OK")
+        ok_btn = QtWidgets.QPushButton("确定")
         ok_btn.clicked.connect(self.accept)
-        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn = QtWidgets.QPushButton("取消")
         cancel_btn.clicked.connect(self.reject)
         dialog_btn_layout.addWidget(ok_btn)
         dialog_btn_layout.addWidget(cancel_btn)
@@ -680,7 +680,7 @@ class SourceFoldersDialog(QtWidgets.QDialog):
     def _add_folder(self):
         """Add a folder via directory browser."""
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select Template Folder"
+            self, "选择模板文件夹"
         )
         if folder:
             # Avoid duplicates
@@ -734,7 +734,7 @@ class ImportPartialDialog(QtWidgets.QDialog):
     def __init__(self, components, parent=None):
         super(ImportPartialDialog, self).__init__(parent)
 
-        self.setWindowTitle("Import Partial - Select Components")
+        self.setWindowTitle("部分导入 - 选择组件")
         self.setMinimumSize(
             int(pyqt.dpi_scale(500)),
             int(pyqt.dpi_scale(400)),
@@ -752,8 +752,8 @@ class ImportPartialDialog(QtWidgets.QDialog):
 
         # Info label
         info_label = QtWidgets.QLabel(
-            "Select components to import. Children of selected "
-            "components will be included automatically."
+            "选择要导入的组件.选中组件的 "
+            "子组件将自动包含."
         )
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #aaa;")
@@ -761,7 +761,7 @@ class ImportPartialDialog(QtWidgets.QDialog):
 
         # Component tree
         self.tree = QtWidgets.QTreeWidget()
-        self.tree.setHeaderLabels(["Component", "Type"])
+        self.tree.setHeaderLabels(["组件", "类型"])
         self.tree.setColumnWidth(0, int(pyqt.dpi_scale(250)))
         self.tree.setStyleSheet(
             "QTreeWidget::indicator:unchecked {"
@@ -784,9 +784,9 @@ class ImportPartialDialog(QtWidgets.QDialog):
 
         # Select All / Deselect All
         sel_layout = QtWidgets.QHBoxLayout()
-        select_all_btn = QtWidgets.QPushButton("Select All")
+        select_all_btn = QtWidgets.QPushButton("全选")
         select_all_btn.clicked.connect(self._select_all)
-        deselect_all_btn = QtWidgets.QPushButton("Deselect All")
+        deselect_all_btn = QtWidgets.QPushButton("取消全选")
         deselect_all_btn.clicked.connect(self._deselect_all)
         sel_layout.addWidget(select_all_btn)
         sel_layout.addWidget(deselect_all_btn)
@@ -796,19 +796,19 @@ class ImportPartialDialog(QtWidgets.QDialog):
         # Action buttons
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
-        import_btn = QtWidgets.QPushButton("Import Selected")
+        import_btn = QtWidgets.QPushButton("导入选中项")
         import_btn.setStyleSheet("background-color: #4a7c4e;")
         import_btn.clicked.connect(self._accept_import)
         import_match_btn = QtWidgets.QPushButton(
-            "Import && Match Position"
+            "导入并匹配位置"
         )
         import_match_btn.setStyleSheet("background-color: #4a6c7e;")
         import_match_btn.setToolTip(
-            "Import selected components and match the position "
-            "of the root to the selected guide element"
+            "导入选中组件并将根节点位置 "
+            "匹配到选中的引导元素"
         )
         import_match_btn.clicked.connect(self._accept_import_match)
-        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn = QtWidgets.QPushButton("取消")
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(import_btn)
         btn_layout.addWidget(import_match_btn)

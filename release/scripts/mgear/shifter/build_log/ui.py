@@ -45,7 +45,7 @@ class BuildLogWindow(
     """
 
     TOOL_NAME = "ShifterBuildLog"
-    TOOL_TITLE = "Shifter Build Log"
+    TOOL_TITLE = "Shifter 构建日志"
 
     _instance = None
 
@@ -130,12 +130,12 @@ class BuildLogWindow(
 
         # Search field
         self.search_input = QtWidgets.QLineEdit()
-        self.search_input.setPlaceholderText("Search log...")
+        self.search_input.setPlaceholderText("搜索日志...")
         self.search_input.setClearButtonEnabled(True)
         self.search_input.setFixedWidth(int(pyqt.dpi_scale(200)))
 
         # Font size control
-        self.font_size_label = QtWidgets.QLabel("Font:")
+        self.font_size_label = QtWidgets.QLabel("字体:")
         self.font_size_label.setStyleSheet("color: #aaa;")
         self.font_size_spin = QtWidgets.QSpinBox()
         self.font_size_spin.setRange(8, 32)
@@ -143,7 +143,7 @@ class BuildLogWindow(
         self.font_size_spin.setSuffix("px")
         self.font_size_spin.setFixedWidth(int(pyqt.dpi_scale(70)))
         self.font_size_spin.setToolTip(
-            "Font size (Ctrl+MouseWheel to zoom)"
+            "字体大小(Ctrl+鼠标滚轮缩放)"
         )
 
         # Action buttons
@@ -154,17 +154,17 @@ class BuildLogWindow(
             pyqt.get_icon("mgear_trash-2", _ICON_SIZE)
         )
         self.clear_btn.setFixedSize(btn_size, btn_size)
-        self.clear_btn.setToolTip("Clear log")
+        self.clear_btn.setToolTip("清空日志")
 
         self.export_btn = QtWidgets.QPushButton()
         self.export_btn.setIcon(
             pyqt.get_icon("mgear_save", _ICON_SIZE)
         )
         self.export_btn.setFixedSize(btn_size, btn_size)
-        self.export_btn.setToolTip("Export log to file")
+        self.export_btn.setToolTip("导出日志到文件")
 
-        self.compare_btn = QtWidgets.QPushButton("Compare")
-        self.compare_btn.setToolTip("Compare two log files")
+        self.compare_btn = QtWidgets.QPushButton("比较")
+        self.compare_btn.setToolTip("比较两个日志文件")
 
         # --- Log view ---
         self.log_view = QtWidgets.QTextBrowser()
@@ -179,7 +179,7 @@ class BuildLogWindow(
         self.log_view.viewport().installEventFilter(self)
 
         # --- Status bar ---
-        self.status_label = QtWidgets.QLabel("Ready")
+        self.status_label = QtWidgets.QLabel("就绪")
         self.status_label.setStyleSheet(
             "color: #888; font-style: italic; padding: 2px;"
         )
@@ -295,7 +295,7 @@ class BuildLogWindow(
         warnings = counts.get("warning", 0)
 
         self.status_label.setText(
-            "Total: {} | Errors: {} | Warnings: {}".format(
+            "总计: {} | 错误: {} | 警告: {}".format(
                 total, errors, warnings
             )
         )
@@ -425,7 +425,7 @@ class BuildLogWindow(
             for path in paths:
                 file_name = os.path.basename(path)
                 action = menu.addAction(
-                    "Open {}".format(file_name)
+                "打开 {}".format(file_name)
                 )
                 action.setData(path)
                 action.triggered.connect(
@@ -436,12 +436,12 @@ class BuildLogWindow(
                 menu.addSeparator()
 
         # Standard actions
-        copy_line_action = menu.addAction("Copy Line")
+        copy_line_action = menu.addAction("复制行")
         copy_line_action.triggered.connect(
             lambda *args: _copy_to_clipboard(line_text)
         )
 
-        copy_all_action = menu.addAction("Copy All")
+        copy_all_action = menu.addAction("复制全部")
         copy_all_action.triggered.connect(
             lambda *args: _copy_to_clipboard(
                 self.log_view.toPlainText()
@@ -464,9 +464,9 @@ class BuildLogWindow(
         """Export the log to a file."""
         file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self,
-            "Export Build Log",
+            "导出构建日志",
             "",
-            "Build Log (*.log)",
+            "构建日志 (*.log)",
         )
 
         if not file_path:
@@ -478,10 +478,10 @@ class BuildLogWindow(
 
         if success:
             self.status_label.setText(
-                "Exported: {}".format(os.path.basename(file_path))
+                "已导出: {}".format(os.path.basename(file_path))
             )
         else:
-            self.status_label.setText("Export failed")
+            self.status_label.setText("导出失败")
 
     def _show_compare_dialog(self):
         """Open the log comparison dialog."""
@@ -545,7 +545,7 @@ class CompareLogsDialog(QtWidgets.QDialog):
     def __init__(self, font_size=12, parent=None):
         super(CompareLogsDialog, self).__init__(parent)
 
-        self.setWindowTitle("Compare Build Logs")
+        self.setWindowTitle("比较构建日志")
         self.setMinimumSize(800, 500)
 
         self._font_size = font_size
@@ -561,14 +561,14 @@ class CompareLogsDialog(QtWidgets.QDialog):
         # File picker row
         file_layout = QtWidgets.QHBoxLayout()
 
-        self.load_a_btn = QtWidgets.QPushButton("Load Log A...")
+        self.load_a_btn = QtWidgets.QPushButton("加载日志 A...")
         self.load_a_btn.clicked.connect(self._load_log_a)
-        self.label_a = QtWidgets.QLabel("No file loaded")
+        self.label_a = QtWidgets.QLabel("未加载文件")
         self.label_a.setStyleSheet("color: #888;")
 
-        self.load_b_btn = QtWidgets.QPushButton("Load Log B...")
+        self.load_b_btn = QtWidgets.QPushButton("加载日志 B...")
         self.load_b_btn.clicked.connect(self._load_log_b)
-        self.label_b = QtWidgets.QLabel("No file loaded")
+        self.label_b = QtWidgets.QLabel("未加载文件")
         self.label_b.setStyleSheet("color: #888;")
 
         file_layout.addWidget(self.load_a_btn)
@@ -592,7 +592,7 @@ class CompareLogsDialog(QtWidgets.QDialog):
         layout.addWidget(self.diff_view)
 
         # Close button
-        close_btn = QtWidgets.QPushButton("Close")
+        close_btn = QtWidgets.QPushButton("关闭")
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
@@ -620,9 +620,9 @@ class CompareLogsDialog(QtWidgets.QDialog):
         """
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
-            "Open Build Log",
+            "打开构建日志",
             "",
-            "Build Log (*.log)",
+            "构建日志 (*.log)",
         )
         return path
 
@@ -743,7 +743,7 @@ def _open_file_in_editor(file_path):
     """
     if not os.path.isfile(file_path):
         cmds.warning(
-            "File not found: {}".format(file_path)
+            "文件未找到: {}".format(file_path)
         )
         return
 
