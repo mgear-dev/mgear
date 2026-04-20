@@ -59,12 +59,12 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
-        self.label.setText(gqt.fakeTranslate("Form", "Joint Names", None, -1))
-        self.jointNamesList.horizontalHeaderItem(0).setText(gqt.fakeTranslate("Form", "Name", None, -1))
-        self.add_pushButton.setText(gqt.fakeTranslate("Form", "Add", None, -1))
-        self.remove_pushButton.setText(gqt.fakeTranslate("Form", "Remove", None, -1))
-        self.removeAll_pushButton.setText(gqt.fakeTranslate("Form", "Remove All", None, -1))
-        self.moveUp_pushButton.setText(gqt.fakeTranslate("Form", "Move Up", None, -1))
-        self.moveDown_pushButton.setText(gqt.fakeTranslate("Form", "Move Down", None, -1))
+        Form.setWindowTitle(gqt.fakeTranslate("Form", "表单", None, -1))
+        self.label.setText(gqt.fakeTranslate("Form", "骨骼名称", None, -1))
+        self.jointNamesList.horizontalHeaderItem(0).setText(gqt.fakeTranslate("Form", "名称", None, -1))
+        self.add_pushButton.setText(gqt.fakeTranslate("Form", "添加", None, -1))
+        self.remove_pushButton.setText(gqt.fakeTranslate("Form", "删除", None, -1))
+        self.removeAll_pushButton.setText(gqt.fakeTranslate("Form", "全部删除", None, -1))
+        self.moveUp_pushButton.setText(gqt.fakeTranslate("Form", "上移", None, -1))
+        self.moveDown_pushButton.setText(gqt.fakeTranslate("Form", "下移", None, -1))
 

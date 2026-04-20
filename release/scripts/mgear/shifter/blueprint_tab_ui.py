@@ -24,7 +24,7 @@ class Ui_BlueprintTab(object):
         # =====================================================================
         self.blueprint_groupBox = QtWidgets.QGroupBox(Form)
         self.blueprint_groupBox.setObjectName("blueprint_groupBox")
-        self.blueprint_groupBox.setTitle("Blueprint Guide")
+        self.blueprint_groupBox.setTitle("蓝图指南")
 
         self.blueprint_layout = QtWidgets.QVBoxLayout(self.blueprint_groupBox)
         self.blueprint_layout.setObjectName("blueprint_layout")
@@ -32,10 +32,10 @@ class Ui_BlueprintTab(object):
         # Enable checkbox
         self.useBlueprint_checkBox = QtWidgets.QCheckBox(self.blueprint_groupBox)
         self.useBlueprint_checkBox.setObjectName("useBlueprint_checkBox")
-        self.useBlueprint_checkBox.setText("Enable Blueprint Guide")
+        self.useBlueprint_checkBox.setText("启用蓝图指南")
         self.useBlueprint_checkBox.setToolTip(
-            "When enabled, settings will be inherited from the blueprint guide file.\n"
-            "Use the 'Use Local Override' checkboxes on each section to customize specific settings."
+            "启用后，设置将从蓝图指南文件继承。\n"
+            "使用每个部分的'使用本地覆盖'复选框来自定义特定设置。"
         )
         self.blueprint_layout.addWidget(self.useBlueprint_checkBox)
 
@@ -45,17 +45,17 @@ class Ui_BlueprintTab(object):
 
         self.blueprint_label = QtWidgets.QLabel(self.blueprint_groupBox)
         self.blueprint_label.setObjectName("blueprint_label")
-        self.blueprint_label.setText("Blueprint Path:")
+        self.blueprint_label.setText("蓝图路径:")
         self.path_layout.addWidget(self.blueprint_label)
 
         self.blueprint_lineEdit = QtWidgets.QLineEdit(self.blueprint_groupBox)
         self.blueprint_lineEdit.setObjectName("blueprint_lineEdit")
-        self.blueprint_lineEdit.setPlaceholderText("Relative or absolute path to .sgt file")
+        self.blueprint_lineEdit.setPlaceholderText("相对或绝对路径到.sgt文件")
         self.blueprint_lineEdit.setToolTip(
-            "Path to the blueprint guide template (.sgt file).\n\n"
-            "Supports:\n"
-            "- Absolute paths: C:/projects/guides/blueprint.sgt\n"
-            "- Relative paths: resolved using MGEAR_SHIFTER_CUSTOMSTEP_PATH environment variable"
+            "蓝图指南模板的路径（.sgt文件）。\n\n"
+            "支持:\n"
+            "- 绝对路径: C:/projects/guides/blueprint.sgt\n"
+            "- 相对路径: 使用MGEAR_SHIFTER_CUSTOMSTEP_PATH环境变量解析"
         )
         self.path_layout.addWidget(self.blueprint_lineEdit)
 
@@ -63,7 +63,7 @@ class Ui_BlueprintTab(object):
         self.blueprint_pushButton.setObjectName("blueprint_pushButton")
         self.blueprint_pushButton.setText("...")
         self.blueprint_pushButton.setMaximumWidth(30)
-        self.blueprint_pushButton.setToolTip("Browse for blueprint guide file")
+        self.blueprint_pushButton.setToolTip("浏览蓝图指南文件")
         self.path_layout.addWidget(self.blueprint_pushButton)
 
         self.blueprint_layout.addLayout(self.path_layout)
@@ -82,7 +82,7 @@ class Ui_BlueprintTab(object):
         # =====================================================================
         self.info_groupBox = QtWidgets.QGroupBox(Form)
         self.info_groupBox.setObjectName("info_groupBox")
-        self.info_groupBox.setTitle("How Blueprint Guides Work")
+        self.info_groupBox.setTitle("蓝图指南工作原理")
 
         self.info_layout = QtWidgets.QVBoxLayout(self.info_groupBox)
         self.info_layout.setObjectName("info_layout")
@@ -91,20 +91,20 @@ class Ui_BlueprintTab(object):
         self.info_label.setObjectName("info_label")
         self.info_label.setWordWrap(True)
         self.info_label.setText(
-            "<p>A <b>Blueprint Guide</b> is a serialized guide template (.sgt file) "
-            "that serves as a base configuration for your rig settings.</p>"
-            "<p><b>How it works:</b></p>"
+            "<p><b>蓝图指南</b>是一个序列化的指南模板（.sgt文件），"
+            "用作绑定设置的基础配置。</p>"
+            "<p><b>工作原理:</b></p>"
             "<ol>"
-            "<li>Enable the blueprint and select an .sgt file</li>"
-            "<li>By default, all sections will inherit settings from the blueprint</li>"
-            "<li>Use 'Local Override' checkboxes on each section to customize specific settings</li>"
-            "<li>When a section is overridden, it uses local values instead of blueprint values</li>"
+            "<li>启用蓝图并选择一个.sgt文件</li>"
+            "<li>默认情况下，所有部分都将从蓝图继承设置</li>"
+            "<li>使用每个部分的'本地覆盖'复选框来自定义特定设置</li>"
+            "<li>当一个部分被覆盖时，它使用本地值而不是蓝图值</li>"
             "</ol>"
-            "<p><b>Benefits:</b></p>"
+            "<p><b>优势:</b></p>"
             "<ul>"
-            "<li>Standardize rig settings across multiple characters</li>"
-            "<li>Only override what's different per character</li>"
-            "<li>Changes to the blueprint automatically propagate to all characters using it</li>"
+            "<li>标准化多个角色之间的绑定设置</li>"
+            "<li>只覆盖每个角色的不同之处</li>"
+            "<li>对蓝图的更改会自动传播到使用它的所有角色</li>"
             "</ul>"
         )
         self.info_layout.addWidget(self.info_label)

@@ -83,28 +83,28 @@ class Ui_gameTools(object):
 
     def retranslateUi(self, gameTools):
         gameTools.setWindowTitle(QtWidgets.QApplication.translate(
-            "gameTools", "SHIFTER Game Tools", None, -1))
+            "gameTools", "SHIFTER 游戏工具", None, -1))
         self.gameTools_groupBox.setTitle(
-            QtWidgets.QApplication.translate("gameTools", "EXPORT", None, -1))
+            QtWidgets.QApplication.translate("gameTools", "导出", None, -1))
         self.assetName_label.setText(QtWidgets.QApplication.translate(
-            "gameTools", "Asset Name", None, -1))
+            "gameTools", "资产名称", None, -1))
         self.rigNode_pushButton.setText(QtWidgets.QApplication.translate(
-            "gameTools", "<<< Rig Top Node", None, -1))
+            "gameTools", "<<< 绑定顶层节点", None, -1))
         self.meshNode_pushButton.setText(QtWidgets.QApplication.translate(
-            "gameTools", "<<< Mesh Top Node", None, -1))
+            "gameTools", "<<< 网格顶层节点", None, -1))
         self.path_pushButton.setText(QtWidgets.QApplication.translate(
-            "gameTools", "set Output Folder", None, -1))
+            "gameTools", "设置输出文件夹", None, -1))
         self.script_pushButton.setText(QtWidgets.QApplication.translate(
-            "gameTools", "set Custom Script", None, -1))
+            "gameTools", "设置自定义脚本", None, -1))
         self.disconnectExport_pushButton.setText(
             QtWidgets.QApplication.translate(
-                "gameTools", "Disconnect and Export", None, -1))
+                "gameTools", "断开连接并导出", None, -1))
         self.assembly_groupBox.setTitle(
             QtWidgets.QApplication.translate(
-                "gameTools", "ASSEMBLY", None, -1))
+                "gameTools", "装配", None, -1))
         self.importConnect_pushButton.setText(
             QtWidgets.QApplication.translate(
-                "gameTools", "Import and Connect", None, -1))
+                "gameTools", "导入并连接", None, -1))
         self.referenceConnect_pushButton.setText(
             QtWidgets.QApplication.translate(
-                "gameTools", "Reference and Connect", None, -1))
+                "gameTools", "引用并连接", None, -1))

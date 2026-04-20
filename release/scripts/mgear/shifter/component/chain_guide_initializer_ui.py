@@ -62,14 +62,14 @@ class Ui_Dialog(object):
         self.buttonBox.rejected.connect(Dialog.reject)
 
     def retranslateUi(self, Dialog):
-        Dialog.setWindowTitle(gqt.fakeTranslate("Dialog", "Dialog", None, -1))
-        self.sections_label.setText(gqt.fakeTranslate("Dialog", "Sections Number", None, -1))
-        self.direction_label.setText(gqt.fakeTranslate("Dialog", "Direction", None, -1))
+        Dialog.setWindowTitle(gqt.fakeTranslate("Dialog", "对话框", None, -1))
+        self.sections_label.setText(gqt.fakeTranslate("Dialog", "段数", None, -1))
+        self.direction_label.setText(gqt.fakeTranslate("Dialog", "方向", None, -1))
         self.direction_comboBox.setItemText(0, gqt.fakeTranslate("Dialog", "X", None, -1))
         self.direction_comboBox.setItemText(1, gqt.fakeTranslate("Dialog", "Y", None, -1))
         self.direction_comboBox.setItemText(2, gqt.fakeTranslate("Dialog", "Z", None, -1))
         self.direction_comboBox.setItemText(3, gqt.fakeTranslate("Dialog", "-X", None, -1))
         self.direction_comboBox.setItemText(4, gqt.fakeTranslate("Dialog", "-Y", None, -1))
         self.direction_comboBox.setItemText(5, gqt.fakeTranslate("Dialog", "-Z", None, -1))
-        self.spacing_label.setText(gqt.fakeTranslate("Dialog", "Spacing", None, -1))
+        self.spacing_label.setText(gqt.fakeTranslate("Dialog", "间距", None, -1))
 

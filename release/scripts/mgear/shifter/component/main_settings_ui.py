@@ -37,7 +37,7 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.groupBox.sizePolicy().hasHeightForWidth())
         self.groupBox.setSizePolicy(sizePolicy)
         self.groupBox.setObjectName("groupBox")
-        self.groupBox.setTitle("Channels Host Settings")
+        self.groupBox.setTitle("通道主机设置")
 
         self.gridLayout_2 = QtWidgets.QGridLayout(self.groupBox)
         self.gridLayout_2.setObjectName("gridLayout_2")
@@ -47,7 +47,7 @@ class Ui_Form(object):
 
         self.host_label = QtWidgets.QLabel(self.groupBox)
         self.host_label.setObjectName("host_label")
-        self.host_label.setText("Host:")
+        self.host_label.setText("主机:")
         self.horizontalLayout_2.addWidget(self.host_label)
 
         self.host_lineEdit = QtWidgets.QLineEdit(self.groupBox)
@@ -74,7 +74,7 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.groupBox_4.sizePolicy().hasHeightForWidth())
         self.groupBox_4.setSizePolicy(sizePolicy)
         self.groupBox_4.setObjectName("groupBox_4")
-        self.groupBox_4.setTitle("Color Settings")
+        self.groupBox_4.setTitle("颜色设置")
 
         self.gridLayout_8 = QtWidgets.QGridLayout(self.groupBox_4)
         self.gridLayout_8.setObjectName("gridLayout_8")
@@ -199,12 +199,12 @@ class Ui_Form(object):
         # Color override checkboxes
         self.overrideColors_checkBox = QtWidgets.QCheckBox(self.groupBox_4)
         self.overrideColors_checkBox.setObjectName("overrideColors_checkBox")
-        self.overrideColors_checkBox.setText("Override Colors")
+        self.overrideColors_checkBox.setText("覆盖颜色")
         self.gridLayout_7.addWidget(self.overrideColors_checkBox, 0, 0, 1, 1)
 
         self.useRGB_checkBox = QtWidgets.QCheckBox(self.groupBox_4)
         self.useRGB_checkBox.setObjectName("useRGB_checkBox")
-        self.useRGB_checkBox.setText("Use RGB Colors")
+        self.useRGB_checkBox.setText("使用RGB颜色")
         self.gridLayout_7.addWidget(self.useRGB_checkBox, 0, 1, 1, 1)
 
         self.gridLayout_8.addLayout(self.gridLayout_7, 2, 0, 1, 1)
@@ -226,7 +226,7 @@ class Ui_Form(object):
         # Name
         self.name_label = QtWidgets.QLabel(self.mainSettings_groupBox)
         self.name_label.setObjectName("name_label")
-        self.name_label.setText("Name:")
+        self.name_label.setText("名称:")
         self.formLayout.setWidget(0, QtWidgets.QFormLayout.LabelRole, self.name_label)
 
         self.name_lineEdit = QtWidgets.QLineEdit(self.mainSettings_groupBox)
@@ -236,7 +236,7 @@ class Ui_Form(object):
         # Side
         self.side_label = QtWidgets.QLabel(self.mainSettings_groupBox)
         self.side_label.setObjectName("side_label")
-        self.side_label.setText("Side:")
+        self.side_label.setText("侧边:")
         self.formLayout.setWidget(1, QtWidgets.QFormLayout.LabelRole, self.side_label)
 
         self.side_comboBox = QtWidgets.QComboBox(self.mainSettings_groupBox)
@@ -248,9 +248,9 @@ class Ui_Form(object):
         sizePolicy.setHeightForWidth(self.side_comboBox.sizePolicy().hasHeightForWidth())
         self.side_comboBox.setSizePolicy(sizePolicy)
         self.side_comboBox.setObjectName("side_comboBox")
-        self.side_comboBox.addItem("Center")
-        self.side_comboBox.addItem("Left")
-        self.side_comboBox.addItem("Right")
+        self.side_comboBox.addItem("中心")
+        self.side_comboBox.addItem("左")
+        self.side_comboBox.addItem("右")
         self.formLayout.setWidget(1, QtWidgets.QFormLayout.FieldRole, self.side_comboBox)
 
         # Component Index

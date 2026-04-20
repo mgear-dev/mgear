@@ -62,38 +62,38 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(
-            gqt.fakeTranslate("MainWindow", "MainWindow", None, -1)
+            gqt.fakeTranslate("MainWindow", "主窗口", None, -1)
         )
         self.menuFile.setTitle(
-            gqt.fakeTranslate("MainWindow", "File", None, -1)
+            gqt.fakeTranslate("MainWindow", "文件", None, -1)
         )
         self.menuGuide.setTitle(
-            gqt.fakeTranslate("MainWindow", "Guide", None, -1)
+            gqt.fakeTranslate("MainWindow", "指南", None, -1)
         )
         self.actionBuild.setText(
-            gqt.fakeTranslate("MainWindow", "Build", None, -1)
+            gqt.fakeTranslate("MainWindow", "构建", None, -1)
         )
         self.actionImport.setText(
-            gqt.fakeTranslate("MainWindow", "Import", None, -1)
+            gqt.fakeTranslate("MainWindow", "导入", None, -1)
         )
         self.actionImport_Partial.setText(
-            gqt.fakeTranslate("MainWindow", "Import Partial", None, -1)
+            gqt.fakeTranslate("MainWindow", "部分导入", None, -1)
         )
         self.actionOpen.setText(
-            gqt.fakeTranslate("MainWindow", "Open", None, -1)
+            gqt.fakeTranslate("MainWindow", "打开", None, -1)
         )
         self.actionLoad_Selected_Guide.setText(
-            gqt.fakeTranslate("MainWindow", "Load Selected Guide", None, -1)
+            gqt.fakeTranslate("MainWindow", "加载选定的指南", None, -1)
         )
         self.actionSave.setText(
-            gqt.fakeTranslate("MainWindow", "Save", None, -1)
+            gqt.fakeTranslate("MainWindow", "保存", None, -1)
         )
         self.actionSave_As.setText(
-            gqt.fakeTranslate("MainWindow", "Save As ...", None, -1)
+            gqt.fakeTranslate("MainWindow", "另存为...", None, -1)
         )
         self.actionClear.setText(
-            gqt.fakeTranslate("MainWindow", "Clear", None, -1)
+            gqt.fakeTranslate("MainWindow", "清除", None, -1)
         )
         self.actionDiff_Tool.setText(
-            gqt.fakeTranslate("MainWindow", "Diff Tool", None, -1)
+            gqt.fakeTranslate("MainWindow", "差异工具", None, -1)
         )

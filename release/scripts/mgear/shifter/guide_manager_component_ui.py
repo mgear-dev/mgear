@@ -92,7 +92,7 @@ class Ui_Form(object):
         QtCore.QMetaObject.connectSlotsByName(Form)
 
     def retranslateUi(self, Form):
-        Form.setWindowTitle(gqt.fakeTranslate("Form", "Form", None, -1))
+        Form.setWindowTitle(gqt.fakeTranslate("Form", "表单", None, -1))
         self.tools_groupBox.setTitle(gqt.fakeTranslate("Form", "引导工具", None, -1))
         self.settings_pushButton.setWhatsThis(gqt.fakeTranslate("Form", "<html><head/><body><p>打开组件/引导根设置窗口。</p></body></html>", None, -1))
         self.settings_pushButton.setText(gqt.fakeTranslate("Form", "设置", None, -1))
