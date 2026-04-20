@@ -47,8 +47,8 @@ class TableWidgetDragRowsChannelWrangler(widgets.TableWidgetDragRows):
                 # someone knows better way?  Thanks :)
                 operation_comboBox = QtWidgets.QComboBox()
                 operation_comboBox.setObjectName("operation")
-                operation_comboBox.addItem("Move Channel")
-                operation_comboBox.addItem("Proxy Channel")
+                operation_comboBox.addItem("移动通道")
+                operation_comboBox.addItem("代理通道")
                 size_polizy = QtWidgets.QComboBox.AdjustToContentsOnFirstShow
                 operation_comboBox.SizeAdjustPolicy(size_polizy)
                 oComboOld = rows_widgets_to_move[row_index]

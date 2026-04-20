@@ -75,7 +75,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         group_layout.addLayout(driver_layout, 0, 1)
 
         # Driver button
-        self.Driver_pushButton = QtWidgets.QPushButton("Driver")
+        self.Driver_pushButton = QtWidgets.QPushButton("驱动器")
         self.Driver_pushButton.setMinimumHeight(35)
         driver_layout.addWidget(self.Driver_pushButton)
 
@@ -83,7 +83,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         attr_layout = QtWidgets.QHBoxLayout()
         driver_layout.addLayout(attr_layout)
 
-        attr_label = QtWidgets.QLabel("Driver Attribute")
+        attr_label = QtWidgets.QLabel("驱动器属性")
         attr_label.setMaximumWidth(80)
         attr_layout.addWidget(attr_label)
 
@@ -92,7 +92,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
 
         # Show only connected checkbox
         self.ShowOnlyDriverAtt = QtWidgets.QCheckBox(
-            "Show Only Connected Driver Attributes"
+            "仅显示已连接的驱动器属性"
         )
         driver_layout.addWidget(self.ShowOnlyDriverAtt)
 
@@ -179,7 +179,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         rotate_layout.setSpacing(3)
         key_layout.addLayout(rotate_layout)
 
-        self.rotate_checkBox = QtWidgets.QCheckBox("Rotate")
+        self.rotate_checkBox = QtWidgets.QCheckBox("旋转")
         self.rotate_checkBox.setFixedWidth(MAIN_CB_WIDTH)
         self.rotate_checkBox.setChecked(True)
         rotate_layout.addWidget(self.rotate_checkBox)
@@ -238,7 +238,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
 
         # Add joints button
         self.AddJntsToDriven_pushButton = QtWidgets.QPushButton(
-            "Add Selected Joints To Driven"
+            "将选中骨骼添加到被驱动对象"
         )
         self.AddJntsToDriven_pushButton.setMinimumHeight(35)
         list_layout.addWidget(self.AddJntsToDriven_pushButton)
@@ -253,7 +253,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         list_layout.addWidget(self.Driven_listWidget)
 
         # Set driven key button
-        self.SetDrivenKey_pushButton = QtWidgets.QPushButton("Set Driven Key")
+        self.SetDrivenKey_pushButton = QtWidgets.QPushButton("设置驱动关键帧")
         self.SetDrivenKey_pushButton.setMinimumHeight(35)
         list_layout.addWidget(self.SetDrivenKey_pushButton)
 
@@ -284,7 +284,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         val_layout.setSpacing(3)
         parent_layout.addLayout(val_layout, 3, 0)
 
-        val_label = QtWidgets.QLabel("Driver Val")
+        val_label = QtWidgets.QLabel("驱动器值")
         val_layout.addWidget(val_label)
 
         self.driverVal_SpinBox = QtWidgets.QDoubleSpinBox()
@@ -347,14 +347,14 @@ class SDKManagerWidget(QtWidgets.QWidget):
     def _create_controls_tab(self):
         """Create the Controls tab."""
         self.controls_tab = QtWidgets.QWidget()
-        self.main_tabWidget.addTab(self.controls_tab, "Controls")
+        self.main_tabWidget.addTab(self.controls_tab, "控制器")
 
         tab_layout = QtWidgets.QGridLayout(self.controls_tab)
         tab_layout.setContentsMargins(3, 3, 3, 3)
         tab_layout.setSpacing(3)
 
         # Translate Limits group
-        limits_group = QtWidgets.QGroupBox("Translate Limits")
+        limits_group = QtWidgets.QGroupBox("位移限制")
         tab_layout.addWidget(limits_group, 3, 0)
 
         limits_layout = QtWidgets.QVBoxLayout(limits_group)
@@ -365,7 +365,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         lock_layout = QtWidgets.QHBoxLayout()
         limits_layout.addLayout(lock_layout)
 
-        lock_label = QtWidgets.QLabel("Lock/Unlock Limits")
+        lock_label = QtWidgets.QLabel("锁定/解锁限制")
         lock_label.setMinimumWidth(100)
         lock_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         lock_layout.addWidget(lock_label)
@@ -386,7 +386,7 @@ class SDKManagerWidget(QtWidgets.QWidget):
         upper_layout = QtWidgets.QHBoxLayout()
         limits_layout.addLayout(upper_layout)
 
-        upper_label = QtWidgets.QLabel("Set Upper Limits")
+        upper_label = QtWidgets.QLabel("设置上限")
         upper_label.setMinimumWidth(100)
         upper_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         upper_layout.addWidget(upper_label)

@@ -10,10 +10,10 @@ def createRunTimeCommand(name, rCmd, ann=""):
     """
     if pm.runTimeCommand(name, ex=True):
         pm.runTimeCommand(name, e=True, delete=True)
-        pm.displayWarning("Old hotkey: " + name + " Deleted")
+        pm.displayWarning("旧快捷键: " + name + " 已删除")
 
     pm.runTimeCommand(name, ann=ann, c=rCmd, cat="mGear")
-    pm.displayInfo("Hotkey: " + name + " created")
+    pm.displayInfo("快捷键: " + name + " 已创建")
 
 
 def createHotkeys(*args):
@@ -35,18 +35,18 @@ sel = pm.selected()
 if sel:
     sel = sel[0]
     if sel.hasAttr("ismodel") or sel.hasAttr("isGearGuide"):
-        pm.displayInfo("Export Guide Template")
+        pm.displayInfo("导出指南模板")
         io.export_guide_template(None, None)
     elif sel.hasAttr("isCtl"):
-        pm.displayInfo("Extract Controls")
+        pm.displayInfo("提取控制器")
         guide_manager.extract_controls()
     else:
         shapes = sel.getShapes()
         if shapes and shapes[0].type() in ["nurbsCurve", "mesh", "nurbsSurface"] and skin.getSkinCluster(sel):
-            pm.displayInfo("Export Json Skin Pack")
+            pm.displayInfo("导出JSON皮肤包")
             skin.exportJsonSkinPack()
         else:
-            pm.displayInfo("Export Selected")
+            pm.displayInfo("导出选中对象")
             multipleFilters = "Maya ASCII (*.ma);;Maya Binary (*.mb);;FBX (*.fbx);;All Files (*.*)"
             filePath = pm.fileDialog2(fileFilter=multipleFilters)
             if filePath:
@@ -183,7 +183,7 @@ else:
 import mgear.pymaya as pm
 
 if len(pm.selected()) !=2:
-    print("2 objects must be selected")
+    print("必须选择2个对象")
 else:
     source, target = pm.selected()
 
@@ -278,7 +278,7 @@ pm.viewSet(p=True, fit=True)
 '''
     createRunTimeCommand("mGear_resetCameraPersp", rCmd, ann="")
 
-    pm.displayInfo("mGear Hotkeys creation finish.")
+    pm.displayInfo("mGear快捷键创建完成。")
 
     # walk transform child add
     rCmd = '''
