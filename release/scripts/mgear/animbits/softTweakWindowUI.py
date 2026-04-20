@@ -186,12 +186,12 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(pyqt.fakeTranslate("MainWindow", "MainWindow", None, -1))
-        self.label.setText(pyqt.fakeTranslate("MainWindow", "SoftMod Tweaks List", None, -1))
-        self.refresh_pushButton.setText(pyqt.fakeTranslate("MainWindow", "Refresh List", None, -1))
-        self.groupBox_5.setTitle(pyqt.fakeTranslate("MainWindow", "Auto Tweak", None, -1))
-        self.auto_pushButton.setToolTip(pyqt.fakeTranslate("MainWindow", "<html><head/><body><p><span style=\" font-weight:600;\">1.-</span> Select one or multiple objects  (Mesh or NURBS) to be deformed by a tweak.</p><p><span style=\" font-weight:600;\">2.-</span> Add to the selection the control to be parent of the softTweak</p></body></html>", None, -1))
-        self.auto_pushButton.setText(pyqt.fakeTranslate("MainWindow", "Create Auto Tweak", None, -1))
+        MainWindow.setWindowTitle(pyqt.fakeTranslate("MainWindow", "主窗口", None, -1))
+        self.label.setText(pyqt.fakeTranslate("MainWindow", "软调整列表", None, -1))
+        self.refresh_pushButton.setText(pyqt.fakeTranslate("MainWindow", "刷新列表", None, -1))
+        self.groupBox_5.setTitle(pyqt.fakeTranslate("MainWindow", "自动调整", None, -1))
+        self.auto_pushButton.setToolTip(pyqt.fakeTranslate("MainWindow", "<html><head/><body><p><span style=\" font-weight:600;\">1.-</span> 选择一个或多个对象（网格或NURBS）进行调整变形。</p><p><span style=\" font-weight:600;\">2.-</span> 将控制添加到选择中，作为软调整的父级。</p></body></html>", None, -1))
+        self.auto_pushButton.setText(pyqt.fakeTranslate("MainWindow", "创建自动调整", None, -1))
         self.groupBox.setTitle(pyqt.fakeTranslate("MainWindow", "Create Tweak", None, -1))
         self.name_label.setText(pyqt.fakeTranslate("MainWindow", "名称", None, -1))
         self.ctlGrp_label.setText(pyqt.fakeTranslate("MainWindow", "Ctl grp", None, -1))

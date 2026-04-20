@@ -55,7 +55,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         kill_ui(UI_NAME)
 
         # sets title and object name
-        self.setWindowTitle("Animbits: Cache Manager")
+        self.setWindowTitle("Animbits: 缓存管理器")
         self.setObjectName(UI_NAME)
 
         # creates main layout widget
@@ -105,57 +105,57 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         """
 
         # options widgets -----------------------------------------------------
-        options_widget = QCollapse(title="Options:")
+        options_widget = QCollapse(title="选项：")
         self.main_layout.addWidget(options_widget)
 
         frame_layout = QtWidgets.QGridLayout()
         frame_layout.setContentsMargins(4, 4, 4, 4)
         frame_layout.setSpacing(4)
 
-        label = QtWidgets.QLabel("Options:")
-        display_label = QtWidgets.QLabel("Rig switch:")
-        self.rig_unload_radial = QtWidgets.QRadioButton("Unload")
+        label = QtWidgets.QLabel("选项：")
+        display_label = QtWidgets.QLabel("绑定切换：")
+        self.rig_unload_radial = QtWidgets.QRadioButton("卸载")
         self.rig_unload_radial.setObjectName(
             "cache_manager_unload_qradialbutton")
-        self.rig_unload_radial.setToolTip("Unload the rig after caching")
+        self.rig_unload_radial.setToolTip("缓存后卸载绑定")
         self.rig_unload_radial.setChecked(True)
         self.rig_hide_radial = QtWidgets.QRadioButton("隐藏")
         self.rig_hide_radial.setObjectName("cache_manager_hide_qradialbutton")
-        self.rig_hide_radial.setToolTip("Hides the rig after caching")
+        self.rig_hide_radial.setToolTip("缓存后隐藏绑定")
 
-        model_label = QtWidgets.QLabel("Model group:")
-        filter_help = "Group name containing your shapes to cache"
+        model_label = QtWidgets.QLabel("模型组：")
+        filter_help = "包含要缓存形状的组名称"
         self.model_group_line = QtWidgets.QLineEdit()
         self.model_group_line.setObjectName("cache_manager_model_qlineedit")
         self.model_group_line.setToolTip(filter_help)
         self.model_group_line.setWhatsThis(filter_help)
         self.model_group_line.setPlaceholderText(
-            "Group name containing your shapes")
-        self.model_group_button = QtWidgets.QPushButton("Set")
+            "包含形状的组名称")
+        self.model_group_button = QtWidgets.QPushButton("设置")
 
-        path_label = QtWidgets.QLabel("GPU path:")
-        filter_help = "Path where GPU files will get stored"
+        path_label = QtWidgets.QLabel("GPU路径：")
+        filter_help = "GPU文件将存储的路径"
         self.path_group_line = QtWidgets.QLineEdit()
         self.path_group_line.setObjectName("cache_manager_model_qlineedit")
         self.path_group_line.setToolTip(filter_help)
         self.path_group_line.setWhatsThis(filter_help)
-        self.path_group_line.setPlaceholderText("Path where files get saved")
+        self.path_group_line.setPlaceholderText("文件存储路径")
         self.path_group_line.setReadOnly(True)
         self.path_group_button = QtWidgets.QPushButton("...")
 
         display_frame = QtWidgets.QFrame()
         display_layout = QtWidgets.QGridLayout(display_frame)
         display_layout.setContentsMargins(0, 0, 0, 0)
-        gpu_display_label = QtWidgets.QLabel("Display type:")
-        self.keep_display_radial = QtWidgets.QRadioButton("Current")
+        gpu_display_label = QtWidgets.QLabel("显示类型：")
+        self.keep_display_radial = QtWidgets.QRadioButton("当前")
         self.keep_display_radial.setObjectName(
             "cache_manager_keep_dysplay_qradialbutton")
-        self.keep_display_radial.setToolTip("Keep current shading display")
+        self.keep_display_radial.setToolTip("保持当前着色显示")
         self.keep_display_radial.setChecked(True)
-        self.color_display_radial = QtWidgets.QRadioButton("Color")
+        self.color_display_radial = QtWidgets.QRadioButton("颜色")
         self.color_display_radial.setObjectName(
             "cache_manager_color_display_qradialbutton")
-        self.color_display_radial.setToolTip("Sets GPU display color")
+        self.color_display_radial.setToolTip("设置GPU显示颜色")
         self.color_button = QtWidgets.QPushButton()
         self.color_button.setEnabled(False)
 
@@ -189,13 +189,13 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         frame_layout.setSpacing(4)
 
         # creates search line edit
-        label = QtWidgets.QLabel("Search:")
-        filter_help = "Type to filter your scene rigs"
+        label = QtWidgets.QLabel("搜索：")
+        filter_help = "输入以过滤场景绑定"
         self.filter_line = QtWidgets.QLineEdit()
         self.filter_line.setObjectName("cache_manager_filter_qlineedit")
         self.filter_line.setToolTip(filter_help)
         self.filter_line.setWhatsThis(filter_help)
-        self.filter_line.setPlaceholderText("Type to filter assets")
+        self.filter_line.setPlaceholderText("输入以过滤资产")
 
         # creates search list view
         self.rigs_list_view = QtWidgets.QListView()
@@ -221,12 +221,12 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         frame_layout.setSpacing(4)
 
         # creates cache button
-        self.cache_button = QtWidgets.QPushButton("Cache Selected")
+        self.cache_button = QtWidgets.QPushButton("缓存选中")
         self.cache_button.setObjectName("cache_manager_cache_qpushbutton")
         self.cache_button.setPalette(self.blue)
 
         # creates rig button
-        self.rig_button = QtWidgets.QPushButton("Set Rig")
+        self.rig_button = QtWidgets.QPushButton("设置绑定")
         self.rig_button.setObjectName("cache_manager_rig_qpushbutton")
         self.rig_button.setPalette(self.orange)
 
@@ -307,7 +307,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         # Create a QFileDialog instance for directory selection
         directory = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select Directory", "", QtWidgets.QFileDialog.ShowDirsOnly
+            self, "选择目录", "", QtWidgets.QFileDialog.ShowDirsOnly
         )
         return directory
 
@@ -322,7 +322,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         """ Launches the GPU cache generation for the selected items
         """
 
-        print("Generating caches...")
+        print("正在生成缓存...")
 
         # gets time line values
         start, end = get_timeline_values()
@@ -336,7 +336,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
             # checks for cache on scene
             if not is_rig(rig_node):
-                print("Cache for {} already exists on your scene"
+                print("{}的缓存已存在于场景中"
                       .format(rig_node))
                 continue
 
@@ -375,7 +375,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         """ Reloads rigs for the selected items
         """
 
-        print("Reloading rigs...")
+        print("正在重新加载绑定...")
 
         items = self.rigs_list_view.selectedIndexes()
 
