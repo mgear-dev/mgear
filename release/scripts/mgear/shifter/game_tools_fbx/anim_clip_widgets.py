@@ -26,11 +26,11 @@ class AnimClipsListWidget(QtWidgets.QWidget):
         anim_clip_options_layout = QtWidgets.QHBoxLayout()
         main_layout.addLayout(anim_clip_options_layout)
 
-        self._add_anim_clip_button = QtWidgets.QPushButton("Add Clip")
+        self._add_anim_clip_button = QtWidgets.QPushButton("添加片段")
         anim_clip_options_layout.addWidget(self._add_anim_clip_button)
 
         self._delete_all_clips_button = QtWidgets.QPushButton(
-            "Delete All Clips"
+            "删除所有片段"
         )
         anim_clip_options_layout.addWidget(self._delete_all_clips_button)
         anim_clip_options_layout.addStretch()
@@ -105,14 +105,14 @@ class AnimClipsListWidget(QtWidgets.QWidget):
     def _on_add_animation_clip_button_clicked(self):
         if not self._root_joint:
             cmds.warning(
-                "Could not add animation clip because no root joint is defined!"
+                "无法添加动画片段，因为未定义根关节！"
             )
             return
 
         export_node = fbx_export_node.FbxExportNode.get()
         anim_clip_name = export_node.add_animation_clip(self._root_joint)
         if not anim_clip_name:
-            cmds.warning("Was not possible to add new animation clip")
+            cmds.warning("无法添加新动画片段")
             return
 
         self._add_animation_clip(anim_clip_name)
@@ -162,48 +162,48 @@ class AnimClipWidget(QtWidgets.QFrame):
 
         self._delete_button = QtWidgets.QPushButton()
         self._delete_button.setIcon(pyqt.get_icon("mgear_trash"))
-        self._delete_button.setStatusTip("Delete Clip")
+        self._delete_button.setStatusTip("删除片段")
         self._delete_button.setMaximumSize(25, 25)
         set_transparent_button(self._delete_button)
         clip_name_layout.addWidget(self._delete_button)
 
         self._clip_name_lineedit = QtWidgets.QLineEdit()
-        self._clip_name_lineedit.setStatusTip("Clip Name")
+        self._clip_name_lineedit.setStatusTip("片段名称")
         clip_name_layout.addWidget(self._clip_name_lineedit)
 
         self._anim_layer_combo = AnimationLayerCB()
-        self._anim_layer_combo.setStatusTip("Animation Layer")
+        self._anim_layer_combo.setStatusTip("动画层")
         clip_name_layout.addWidget(self._anim_layer_combo)
 
         self._start_frame_box = QtWidgets.QLineEdit()
         self._start_frame_box.setValidator(QtGui.QIntValidator())
-        self._start_frame_box.setStatusTip("Start Frame")
+        self._start_frame_box.setStatusTip("开始帧")
         self._start_frame_box.setFixedSize(40, 20)
         clip_name_layout.addWidget(self._start_frame_box)
 
         self._end_frame_box = QtWidgets.QLineEdit()
         self._end_frame_box.setValidator(QtGui.QIntValidator())
-        self._end_frame_box.setStatusTip("End Frame")
+        self._end_frame_box.setStatusTip("结束帧")
         self._end_frame_box.setFixedSize(40, 20)
         clip_name_layout.addWidget(self._end_frame_box)
 
         self._set_range_button = QtWidgets.QPushButton()
         self._set_range_button.setIcon(pyqt.get_icon("mgear_film"))
-        self._set_range_button.setStatusTip("Set Frame Range")
+        self._set_range_button.setStatusTip("设置帧范围")
         self._set_range_button.setMaximumSize(25, 25)
         set_transparent_button(self._set_range_button)
         clip_name_layout.addWidget(self._set_range_button)
 
         self._play_button = QtWidgets.QPushButton()
         self._play_button.setIcon(pyqt.get_icon("mgear_play"))
-        self._play_button.setStatusTip("Play Sequence")
+        self._play_button.setStatusTip("播放序列")
         self._play_button.setMaximumSize(25, 25)
         set_transparent_button(self._play_button)
         clip_name_layout.addWidget(self._play_button)
 
         self._export_checkbox = QtWidgets.QCheckBox()
         self._export_checkbox.setChecked(True)
-        self._export_checkbox.setStatusTip("Export Clip")
+        self._export_checkbox.setStatusTip("导出片段")
         clip_name_layout.addWidget(self._export_checkbox)
 
     def create_connections(self):
@@ -236,7 +236,7 @@ class AnimClipWidget(QtWidgets.QFrame):
 
         with pyqt.block_signals(self._clip_name_lineedit):
             self._clip_name_lineedit.setText(
-                anim_clip_data.get("title", "Untitled")
+                anim_clip_data.get("title", "未命名")
             )
         with pyqt.block_signals(self._start_frame_box):
             self._start_frame_box.setText(
@@ -254,7 +254,7 @@ class AnimClipWidget(QtWidgets.QFrame):
             self._anim_layer_combo.clear()
             # TODO: Maybe we should filter display layers that are set with override mode?
             anim_layers = animLayers.all_anim_layers_ordered()
-            self._anim_layer_combo.addItems(["None"] + anim_layers)
+            self._anim_layer_combo.addItems(["无"] + anim_layers)
             serialised_anim_layer = anim_clip_data.get("anim_layer", "None")
 
             if not serialised_anim_layer:
@@ -265,7 +265,7 @@ class AnimClipWidget(QtWidgets.QFrame):
                 self._anim_layer_combo.setCurrentText(serialised_anim_layer)
             else:
                 cmds.warning(
-                    "Animation Layer not found: {}".format(
+                    "未找到动画层：{}".format(
                         serialised_anim_layer
                     )
                 )
@@ -274,7 +274,7 @@ class AnimClipWidget(QtWidgets.QFrame):
         self._export_checkbox.setChecked(flag)
 
     def _clear(self):
-        self._clip_name_lineedit.setText("Untitled")
+        self._clip_name_lineedit.setText("未命名")
         self._start_frame_box.setText("")
         self._end_frame_box.setText("")
         self._export_checkbox.setChecked(False)
@@ -363,15 +363,15 @@ class AnimClipWidget(QtWidgets.QFrame):
 
     def _on_custom_context_menu_requested(self, pos):
         context_menu = QtWidgets.QMenu(parent=self)
-        delete_anim_clip_action = context_menu.addAction("Delete")
-        playblast_menu = QtWidgets.QMenu("Playblast", parent=self)
+        delete_anim_clip_action = context_menu.addAction("删除")
+        playblast_menu = QtWidgets.QMenu("播放预览", parent=self)
         playblast_25_action = playblast_menu.addAction("25%")
         playblast_50_action = playblast_menu.addAction("50%")
         playblast_75_action = playblast_menu.addAction("75%")
         playblast_100_action = playblast_menu.addAction("100%")
         playblast_menu.addSeparator()
         open_playblasts_folder_action = playblast_menu.addAction(
-            "Open in Explorer"
+            "在资源管理器中打开"
         )
 
         context_menu.addAction(delete_anim_clip_action)
@@ -412,7 +412,7 @@ class AnimationLayerCB(QtWidgets.QComboBox):
         self.clear()
 
         anim_layers = animLayers.all_anim_layers_ordered()
-        self.addItems(["None"] + anim_layers)
+        self.addItems(["无"] + anim_layers)
 
         self.setCurrentText(currentText)
 

@@ -240,7 +240,7 @@ def generate_sgt_info(sgt_path):
             info["components_list"] = comp_list
     except Exception as e:
         cmds.warning(
-            "Failed to read template {}: {}".format(sgt_path, e)
+            "读取模板失败：{}：{}".format(sgt_path, e)
         )
 
     return info
@@ -305,7 +305,7 @@ def capture_viewport_thumbnail(save_path, width=None, height=None):
             return save_path
     except Exception as e:
         cmds.warning(
-            "Viewport capture failed: {}".format(str(e))
+            "视口捕获失败：{}".format(str(e))
         )
     return None
 
@@ -329,7 +329,7 @@ def get_components_from_template(sgt_path):
         conf = shifter_io._import_guide_template(sgt_path)
     except Exception as e:
         cmds.warning(
-            "Failed to read template {}: {}".format(sgt_path, e)
+            "读取模板失败：{}：{}".format(sgt_path, e)
         )
         return []
 
