@@ -43,7 +43,7 @@ def get_deformer_joints(rigTopNode):
 
     if not deformer_jnts:
         pm.displayError(
-            "{} is empty. The tool can't find any joint".format(rigTopNode)
+            "{} 为空。工具找不到任何关节".format(rigTopNode)
         )
     return deformer_jnts
 

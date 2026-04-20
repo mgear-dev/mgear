@@ -13,7 +13,7 @@ def updateGuide(*args):
         rgGuide = guide.Rig()
         rgGuide.update(oSel)
     else:
-        pm.displayWarning("Please select the guide top node")
+        pm.displayWarning("请选择指南顶部节点")
 
 
 def guide_toggle_xray(*args):
@@ -447,47 +447,44 @@ def print_guide_diff(diff_report):
 
         if "components_miss" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("The guide is missing some components:")
+            pm.displayWarning("指南缺少一些组件：")
             print(json.dumps(diff_report["components_miss"], indent=4))
 
         if "components_extra" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("The guide has some extra components:")
+            pm.displayWarning("指南有一些额外的组件：")
             print(json.dumps(diff_report["components_extra"], indent=4))
 
         if "root_transform_not_match" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("The guide root position is not matching")
+            pm.displayWarning("指南根位置不匹配")
             print(json.dumps(diff_report["root_transform_not_match"],
                              indent=4))
 
         if "component_transform_diff" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("The guide components position is not "
-                              "matching")
+            pm.displayWarning("指南组件位置不匹配")
             print(json.dumps(diff_report["component_transform_diff"],
                              indent=4))
 
         if "root_settings_diff" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("Guide root not matching settings "
-                              "parameters")
+            pm.displayWarning("指南根设置参数不匹配")
             print(json.dumps(diff_report["root_settings_diff"], indent=4))
 
         if "component_settings_diff" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("Components not matching parameters"
-                              " found")
+            pm.displayWarning("发现组件参数不匹配")
             print(json.dumps(diff_report["component_settings_diff"], indent=4))
 
         if "pre_diff" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("Pre Custom steps differences found")
+            pm.displayWarning("发现预自定义步骤差异")
             print(json.dumps(diff_report["pre_diff"], indent=4))
 
         if "post_diff" in diff_report.keys():
             print("".join(["="] * 80))
-            pm.displayWarning("post Custom steps differences found")
+            pm.displayWarning("发现后自定义步骤差异")
             print(json.dumps(diff_report["post_diff"], indent=4))
 
 

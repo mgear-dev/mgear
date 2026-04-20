@@ -41,7 +41,7 @@ class GuideTemplateExplorer(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.setObjectName(self.toolName)
         self.setWindowFlags(QtCore.Qt.Window)
-        self.setWindowTitle("Guide Template Explorer")
+        self.setWindowTitle("指南模板浏览器")
         self.resize(300, 330)
 
     def create_layout(self):
@@ -77,7 +77,7 @@ class GuideTemplateExplorer(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         if template:
             self.__model.load(template)
         else:
-            pm.displayWarning("Not guide root slected")
+            pm.displayWarning("未选择指南根")
 
     def open_template(self):
         template = io._import_guide_template()

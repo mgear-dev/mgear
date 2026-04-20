@@ -201,7 +201,7 @@ def export_guide_template(filePath=None, meta=None, conf=None, *args):
                     )
         else:
             pm.displayWarning(
-                "Guide root or guide component must be selected"
+                "必须选择指南根或指南组件"
             )
             return
     if conf:
@@ -227,7 +227,7 @@ def _import_guide_template(filePath=None):
     if not filePath:
         filePath = _get_file()
     if not filePath:
-        pm.displayWarning("File path to template is None")
+        pm.displayWarning("模板文件路径为空")
         return
     conf = None
     with open(filePath, 'r') as f:
