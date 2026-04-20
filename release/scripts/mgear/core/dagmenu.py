@@ -504,7 +504,7 @@ def __switch_parent_callback(*args):
                 break
 
     if not root or not target_control_list:
-        pm.displayInfo("Not root or target control list for space transfer")
+        pm.displayInfo("没有根节点或目标控制列表用于空间转换")
         return
 
     autokey = cmds.listConnections(
@@ -618,7 +618,7 @@ def __space_transfer_callback(*args):
                 break
 
     if not root or not target_control_list:
-        pm.displayInfo("Not root or target control list for space transfer")
+        pm.displayInfo("没有根节点或目标控制列表用于空间转换")
         return
 
     # autokey = cmds.listConnections(
@@ -1132,7 +1132,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
                 parent=parent_menu,
                 subMenu=True,
                 tearOff=False,
-                label="Parent {} {}".format(part, ctl),
+                label="父级 {} {}".format(part, ctl),
                 image="dynamicConstraint.svg",
             )
             cmds.radioMenuItemCollection(parent=_p_switch_menu)
@@ -1162,7 +1162,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
             combo_box.addItem("__")  # required to include the last item
             cmds.menuItem(
                 parent=_p_switch_menu,
-                label="++ Space Transfer ++",
+                label="++ 空间转换 ++",
                 command=partial(
                     __space_transfer_callback, uih, attr, combo_box
                 ),

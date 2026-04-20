@@ -54,7 +54,7 @@ def parentCns(driver, driven, maintain_offset=True, **kwargs):
     # Check if all attributes are locked, raise an exception if so
     if len(skip_translate) == 3 and len(skip_rotate) == 3:
         raise ValueError(
-            "All translate and rotate attributes on the driven are locked."
+            "所有平移和旋转属性在驱动对象上都被锁定。"
         )
 
     # Apply constraint, skipping the locked attributes
@@ -873,9 +873,9 @@ def create_proximity_constraint(shape,
     """
 
     if not cmds.objExists(shape):
-        raise RuntimeError("Shape '{}' does not exist.".format(shape))
+        raise RuntimeError("形状 '{}' 不存在。".format(shape))
     if not cmds.objExists(in_trans):
-        raise RuntimeError("Transform '{}' does not exist.".format(in_trans))
+        raise RuntimeError("变换 '{}' 不存在。".format(in_trans))
 
     # Check inMesh connection to determine if intermediate exists
     shape_attrs = cmds.listConnections(shape + ".inMesh", d=True) or []
@@ -1025,9 +1025,9 @@ def create_uv_pin_constraint(shape,
         tuple: (output transform, uvPin node)
     """
     if not cmds.objExists(shape):
-        raise RuntimeError("Shape '{}' does not exist.".format(shape))
+        raise RuntimeError("形状 '{}' 不存在。".format(shape))
     if not cmds.objExists(in_trans):
-        raise RuntimeError("Transform '{}' does not exist.".format(in_trans))
+        raise RuntimeError("变换 '{}' 不存在。".format(in_trans))
 
     # Check if deformedGeometry is connected
     shape_attrs = cmds.listConnections(shape + ".worldSpace[0]", d=True) or []

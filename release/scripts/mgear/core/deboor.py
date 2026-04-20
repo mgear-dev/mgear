@@ -36,9 +36,9 @@ def get_open_uniform_kv(n, d):
         [0, 0, 0, 0, 0.5, 1, 1, 1, 1]
     """
     if not isinstance(n, int) or not isinstance(d, int):
-        raise TypeError("Both 'n' and 'd' must be integers.")
+        raise TypeError("'n' 和 'd' 必须是整数。")
     if n <= d:
-        raise ValueError("'n' must be greater than 'd'.")
+        raise ValueError("'n' 必须大于 'd'。")
 
     start = [0] * (d + 1)
     middle = [(i - d) / float(n - d) for i in range(d + 1, n)]
@@ -65,9 +65,9 @@ def get_periodic_uniform_kv(n, d):
         ValueError: If n is not greater than d.
     """
     if not isinstance(n, int) or not isinstance(d, int):
-        raise TypeError("Both 'n' and 'd' must be integers.")
+        raise TypeError("'n' 和 'd' 必须是整数。")
     if n <= d:
-        raise ValueError("'n' must be greater than 'd'.")
+        raise ValueError("'n' 必须大于 'd'。")
 
     step = 1.0 / (n + d)
     return (
