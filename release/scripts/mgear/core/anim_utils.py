@@ -222,7 +222,7 @@ def getRootNode():
 
     current = pm.ls(sl=True)
     if not current:
-        raise RuntimeError("You need to select at least one rig node")
+        raise RuntimeError("您至少需要选择一个绑定节点")
 
     if current[0].hasAttr("is_rig"):
         root = current[0]
@@ -235,7 +235,7 @@ def getRootNode():
                 holder = holder.getParent()
 
     if not root:
-        raise RuntimeError("Couldn't find root node from your selection")
+        raise RuntimeError("无法从您的选择中找到根节点")
 
     return root
 
@@ -268,7 +268,7 @@ def get_control_list(control, blend_attr, extension="_ctl"):
         controls = cmds.getAttr("{}.{}".format(control, controls_attribute))
     except ValueError:
         if control == "world_ctl":
-            _msg = "New type attributes using world as host are not supported"
+            _msg = "不支持使用世界作为宿主的新类型属性"
             raise RuntimeError(_msg)
         attr = "{}_{}_ctl".format(
             blend_attr.split("_")[0], control.split(":")[-1].split("_")[1]
@@ -747,7 +747,7 @@ def change_rotate_order(control, target_order):
         )
 
     if not cmds.getAttr("{}.rotateOrder".format(control), settable=True):
-        raise RuntimeError("RotateOrder is locked on the given control")
+        raise RuntimeError("给定控件的旋转顺序已锁定")
 
     # Maya's rotate order's index
     rotate_orders = {
@@ -2675,12 +2675,12 @@ def match_fk_to_ik_scale_slide(fk_controls, ui_host,
     def parent_of(obj):
         p = cmds.listRelatives(obj, parent=True, fullPath=True)
         if not p:
-            raise RuntimeError("No parent for {}".format(obj))
+            raise RuntimeError("{} 没有父级".format(obj))
         return p[0]
 
     for ctl in fk_controls:
         if not cmds.objExists(ctl):
-            raise RuntimeError("Control not found: {}".format(ctl))
+            raise RuntimeError("未找到控件: {}".format(ctl))
 
     # Rest lengths from parent hierarchy for each segment
     rest_segments = []
@@ -2691,7 +2691,7 @@ def match_fk_to_ik_scale_slide(fk_controls, ui_host,
     rest_total = sum(rest_segments)
 
     if rest_total == 0:
-        raise RuntimeError("Rest pose total length is zero.")
+        raise RuntimeError("休息姿势总长度为零。")
 
     # Current lengths between consecutive FK controls
     cur_segments = []
@@ -2730,7 +2730,7 @@ def match_fk_to_ik_scale_slide(fk_controls, ui_host,
 
     for p in (s_path, sl_path):
         if not cmds.objExists(p):
-            raise RuntimeError("Missing attribute: {}".format(p))
+            raise RuntimeError("缺少属性: {}".format(p))
 
     cmds.setAttr(s_path, scale_val)
     cmds.setAttr(sl_path, slide_val)
@@ -2754,7 +2754,7 @@ def place_upv_from_fk(fk_controls, upv_ctl, distance_multiplier=2.0):
     """
     for ctl in list(fk_controls) + [upv_ctl]:
         if not cmds.objExists(ctl):
-            raise RuntimeError("Control not found: {}".format(ctl))
+            raise RuntimeError("未找到控件: {}".format(ctl))
 
     first = fk_controls[0]
     mid = fk_controls[len(fk_controls) // 2]

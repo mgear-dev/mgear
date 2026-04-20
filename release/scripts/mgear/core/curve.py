@@ -398,7 +398,7 @@ def getCurveInfo(curve):
         8
     """
     if not curve or not cmds.objExists(curve):
-        cmds.warning("Curve does not exist: {}".format(curve))
+        cmds.warning("曲线不存在: {}".format(curve))
         return None
 
     curve_shape = None
@@ -421,7 +421,7 @@ def getCurveInfo(curve):
                     break
 
     if not curve_shape:
-        cmds.warning("Could not find nurbsCurve shape for: {}".format(curve))
+        cmds.warning("无法找到 {} 的 nurbsCurve 形状".format(curve))
         return None
 
     try:
@@ -460,8 +460,8 @@ def getCurveInfo(curve):
         else:
             # Build uniform knot vector as fallback
             print(
-                "Building uniform knot vector. Maya returned {} knots, "
-                "expected {}".format(len(maya_knots), expected_length)
+                "构建均匀节点向量。Maya 返回了 {} 个节点，"
+                "预期 {}".format(len(maya_knots), expected_length)
             )
             knots = []
             for i in range(expected_length):

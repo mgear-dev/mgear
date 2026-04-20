@@ -25,7 +25,7 @@ def is_selected_object_mesh(obj=None):
         selection = pm.selected()
 
         if not selection:
-            raise ValueError("No object is selected.")
+            raise ValueError("未选择任何对象。")
 
         # Get the first item in the selection
         obj = selection[0]
@@ -143,7 +143,7 @@ def create_square_polygon_with_reference(
         pm.nt.Transform: The PyNode transform of the newly created polygon object.
     """
     if reference_matrix is None:
-        pm.displayWarning("Reference matrix is not specified. Aborting.")
+        pm.displayWarning("未指定参考矩阵。操作中止。")
         return None
 
     # # Retrieve the world matrix from the reference object
