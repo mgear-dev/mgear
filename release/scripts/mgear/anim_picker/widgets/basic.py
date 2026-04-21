@@ -5,11 +5,9 @@ from __future__ import unicode_literals
 
 # python
 import os
-import platform
 
 # dcc
 import maya.cmds as cmds
-from mgear.pymaya import versions
 
 # mgear
 from mgear.vendor.Qt import QtGui
@@ -24,20 +22,6 @@ from mgear.vendor.Qt import QtWidgets
 # module
 from mgear.core import pyqt
 from mgear.anim_picker.handlers import __EDIT_MODE__
-
-# Some platforms have issue with OpenGl and PySide2-2.0.0.alpha
-platform_name = platform.system()
-if platform_name == "Windows":
-    if versions.current() >= 20220000:
-        __USE_OPENGL__ = False
-    else:
-        __USE_OPENGL__ = True
-elif platform_name == "Linux":
-    __USE_OPENGL__ = True
-elif platform_name == "Darwin":
-    __USE_OPENGL__ = False
-else:
-    __USE_OPENGL__ = False
 
 # =============================================================================
 # generic functions

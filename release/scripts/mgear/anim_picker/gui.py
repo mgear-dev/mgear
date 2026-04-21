@@ -341,16 +341,6 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Scale view in Y for positive Y values (maya-like)
         self.scale(1, -1)
 
-        # Open GL render, to check...
-        # if basic.__USE_OPENGL__:
-        #     # make that view use OpenGL
-        #     gl_format = QtOpenGL.QGLFormat()
-        #     gl_format.setSampleBuffers(True)
-        #     gl_widget = QtOpenGL.QGLWidget(gl_format)
-
-        #     # use the GL widget for viewing
-        #     self.setViewport(gl_widget)
-
         self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter)
 
         # TODO
