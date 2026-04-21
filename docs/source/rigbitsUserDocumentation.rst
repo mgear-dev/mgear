@@ -856,10 +856,99 @@ Save and load partition configurations using the **File** menu.
 Scripting Access
 ----------------
 
+Launch the UI:
+
 .. code-block:: python
 
     from mgear.rigbits import evaluation_partition
     evaluation_partition.show()
+
+Run from a ``.evp`` configuration file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``execute_from_file`` is the main entry point for pipeline automation and scripting. It loads a ``.evp`` file, creates a ``PolygonGroupManager``, and assigns the partition shaders to the mesh. It does **not** run the 8-step pipeline by itself — it only prepares the manager so you can inspect it, modify it, or feed it to the pipeline.
+
+.. code-block:: python
+
+    from mgear.rigbits import evaluation_partition as evp
+
+    # Load the config and build the manager (shaders are created and assigned)
+    manager = evp.core.execute_from_file("D:/configs/character_body.evp")
+
+    # Optional: override the mesh stored in the config
+    # manager = evp.core.execute_from_file(
+    #     "D:/configs/character_body.evp",
+    #     mesh="body_geo",
+    # )
+
+**Returns:** a ``PolygonGroupManager`` instance, or ``None`` if loading failed.
+
+The manager holds the in-memory state reconstructed from the ``.evp`` file:
+
+* ``manager.mesh`` — target mesh (long name)
+* ``manager.groups`` — list of ``PolygonGroup`` objects, each with ``name``, ``color``, ``face_indices``, ``shader_node``, and ``shading_group``
+
+This is useful for:
+
+1. **Feeding the pipeline.** Every step function takes a manager as input. ``execute_from_file`` is the scripted way to get one without opening the UI.
+2. **Previewing / QC.** Shaders are already assigned, so you can visually verify the partition in the viewport before executing the split.
+3. **Inspecting or tweaking groups in code.** Iterate ``manager.groups`` to validate face counts, rename, recolor, or adjust face assignments (``add_faces_to_group``, ``remove_faces_from_group``, ``update_group_color``, ``rename_group``) before running the pipeline.
+4. **Running a subset of steps** on the same manager (e.g. only split + skin copy, skipping blendshapes).
+
+Run the full 8-step pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The typical scripted flow is: load the config, then hand the manager to ``execute_full_pipeline``.
+
+.. code-block:: python
+
+    from mgear.rigbits import evaluation_partition as evp
+
+    manager = evp.core.execute_from_file("D:/configs/character_body.evp")
+
+    # Optional: inspect or modify the manager here
+    # for group in manager.groups:
+    #     print(group.name, len(group.face_indices))
+
+    grp, partitions, proxy = evp.core.execute_full_pipeline(manager)
+
+Run individual pipeline steps
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you only need a subset of the pipeline, call the step functions directly on the manager. Step 1 (``split_polygon_groups``) must run first because it produces the partition meshes that every later step operates on.
+
+.. code-block:: python
+
+    from mgear.rigbits import evaluation_partition as evp
+
+    manager = evp.core.execute_from_file("D:/configs/character_body.evp")
+
+    # Step 1 — split the source mesh into partition meshes
+    grp, partitions = evp.core.split_polygon_groups(manager)
+
+    source = manager.mesh
+
+    # Step 2 — transfer blendshapes
+    evp.core.transfer_blendshapes(source, partitions)
+
+    # Step 3 — clean unused BS targets
+    evp.core.clean_unused_bs_targets(partitions)
+
+    # Step 4 — reconnect BS input connections
+    evp.core.reconnect_bs_inputs(source, partitions)
+
+    # Step 5 — copy skin clusters
+    evp.core.copy_skin_clusters(source, partitions)
+
+    # Step 6 — remove unused influences
+    evp.core.remove_unused_influences(partitions)
+
+    # Step 7 — copy skin configuration and reproduce localization
+    evp.core.copy_skin_configuration(source, partitions)
+    evp.core.reproduce_skin_localization(source, partitions)
+
+    # Step 8 — create the proximity wrap proxy
+    proxy = evp.core.create_proximity_wrap_proxy(source, partitions, grp, manager)
 
 .. _blendshape-transfer:
 
