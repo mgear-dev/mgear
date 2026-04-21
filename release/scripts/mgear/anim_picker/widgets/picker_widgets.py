@@ -1485,10 +1485,7 @@ class PointHandle(DefaultPolygon):
 
     def paint(self, painter, options, widget=None):
         """Paint graphic item"""
-        if basic.__USE_OPENGL__:
-            painter.setRenderHint(QtGui.QPainter.HighQualityAntialiasing)
-        else:
-            painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
 
         # Get polygon path
         path = self.shape()
@@ -1596,10 +1593,7 @@ class Polygon(DefaultPolygon):
     def paint(self, painter, options, widget=None):
         """Paint graphic item"""
         # Set render quality
-        if basic.__USE_OPENGL__:
-            painter.setRenderHint(QtGui.QPainter.HighQualityAntialiasing)
-        else:
-            painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
 
         # Get polygon path
         path = self.shape()
@@ -1825,10 +1819,7 @@ class PickerItem(DefaultPolygon):
         pass
         # for debug only
         # # Set render quality
-        # if basic.__USE_OPENGL__:
-        #    painter.setRenderHint(QtGui.QPainter.HighQualityAntialiasing)
-        # else:
-        #    painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        # painter.setRenderHint(QtGui.QPainter.Antialiasing)
 
         # # Get polygon path
         # path = self.shape()
