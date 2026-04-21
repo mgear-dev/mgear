@@ -154,8 +154,8 @@ def export_data(node, tab=None, filePath=None):
         else:
             keys = config["tabs_data"].keys()
             pm.displayWarning(
-                "Tab {}, not found int current node.".format(tab)
-                + " Available tabs are: {}".format(keys)
+                "标签 '{}' 在当前节点中未找到。".format(tab)
+                + " 可用的标签有：{}".format(keys)
             )
     data["config"] = config
 
@@ -163,7 +163,7 @@ def export_data(node, tab=None, filePath=None):
     if not filePath:
         filePath = pm.fileDialog2(
             fileMode=0,
-            fileFilter="Channel Master Configuration .cmc (*%s)" % ".cmc",
+            fileFilter="Channel Master 配置文件 .cmc (*%s)" % ".cmc",
         )
     if not filePath:
         return
@@ -188,7 +188,7 @@ def import_data(filePath=None, node=None, add_data=False):
     if not filePath:
         filePath = pm.fileDialog2(
             fileMode=1,
-            fileFilter="Channel Master Configuration .cmc (*%s)" % ".cmc",
+            fileFilter="Channel Master 配置文件 .cmc (*%s)" % ".cmc",
         )
 
     if not filePath:
@@ -202,7 +202,7 @@ def import_data(filePath=None, node=None, add_data=False):
         if data:
             node = create_channel_master_node(data["node_name"])
         else:
-            pm.displayWarning("Data not imported!")
+            pm.displayWarning("数据未导入！")
             return
 
     if add_data:
@@ -234,12 +234,12 @@ def set_external_config_path(node, filePath=None):
         TYPE: Description
     """
     if not node:
-        pm.displayWarning("Channel Master Node doesn't exist")
+        pm.displayWarning("Channel Master 节点不存在")
         return
     if not filePath:
         filePath = pm.fileDialog2(
             fileMode=1,
-            fileFilter="Channel Master Configuration .cmc (*%s)" % ".cmc",
+            fileFilter="Channel Master 配置文件 .cmc (*%s)" % ".cmc",
         )
     if not filePath:
         return

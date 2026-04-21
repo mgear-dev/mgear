@@ -188,7 +188,7 @@ def reset_creation_value_attribute(attr_config, namespace=None):
         cmds.setAttr(fullname_attr, val)
     else:
         pm.displayWarning(
-            "Initial Creation Value was not originally stored for {}".format(
+            "初始创建值最初未存储于 {}".format(
                 fullname_attr
             )
         )

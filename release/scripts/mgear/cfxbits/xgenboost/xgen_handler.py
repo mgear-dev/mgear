@@ -25,8 +25,8 @@ def filter_curve_guides(crvs, xgen_description):
             filtered_crvs.append(crv)
         else:
             pm.displayWarning(
-                "Object {0} is not crv guide for {1} and will be"
-                " skipped".format(crv.name(), xgen_description))
+                "对象 {0} 不是 {1} 的曲线引导，将被"
+                "跳过".format(crv.name(), xgen_description))
     return filtered_crvs
 
 

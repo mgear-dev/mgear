@@ -1,4 +1,4 @@
-"""Predefined nurbsCurve shapes to be use as a rigging control Icons"""
+"""预定义的NURBS曲线形状，用作装配控制图标"""
 
 #############################################
 # GLOBAL
@@ -27,25 +27,25 @@ def create(
     icon="cube",
     **kwargs
 ):
-    """Icon master function
+    """图标主函数
 
-    **Create icon master function.**
-    This function centralize all the icons creation
+    **创建图标主函数。**
+    此函数集中管理所有图标的创建
 
-    Arguments:
-        parent (dagNode): The parent for the new icon
-        name (str): Name of the Icon.
-        m (matrix): Transformation matrix of the icon
-        color (int | list of float | tuple of float): The color in index base or RGB.
-        icon (str): Icon type. Options: "cube", "pyramid", "square",
-            "flower", "circle", "cylinder", "compas", "diamond",
-                    "cubewithpeak", "sphere", "arrow", "crossarrow",
-                    "cross", "null", "gear", "mgear"
-        kwargs: The keyword arguments can vary depending of the icon type.
-                    Please refear to the specific icon method for more info.
+    参数:
+        parent (dagNode): 新图标的父对象
+        name (str): 图标名称。
+        m (matrix): 图标的变换矩阵
+        color (int | 浮点数列表 | 浮点数元组): 基于索引或RGB的颜色。
+        icon (str): 图标类型。选项: "cube"（立方体）、"pyramid"（金字塔）、"square"（方形）、
+            "flower"（花朵）、"circle"（圆形）、"cylinder"（圆柱体）、"compas"（指南针）、"diamond"（菱形）、
+                    "cubewithpeak"（带顶点的立方体）、"sphere"（球体）、"arrow"（箭头）、"crossarrow"（十字箭头）、
+                    "cross"（十字）、"null"（空）、"gear"（齿轮）、"mgear"
+        kwargs: 关键字参数根据图标类型而有所不同。
+                    请参阅特定图标方法以获取更多信息。
 
-    Returns:
-        dagNode: The newly created icon.
+    返回:
+        dagNode: 新创建的图标。
 
     """
     kwargs.setdefault("w", 1)
@@ -207,23 +207,21 @@ def cube(
     pos_offset=None,
     rot_offset=None,
 ):
-    """Create a curve with a CUBE shape.
+    """创建具有CUBE形状的曲线。
 
-    Arguments:
-        parent (dagNode): The parent object of the newly created curve.
-        name (str): Name of the curve.
-        width (float): Width of the shape.
-        height (float): Height of the shape.
-        depth (float): Depth of the shape.
-        color (int | list of float | tuple of float): The color in index base or RGB.
-        m (matrix): The global transformation of the curve.
-        pos_offset (vector): The xyz position offset of the curve
-            from its center.
-        rot_offset (vector): The xyz rotation offset of the curve
-            from its center. xyz in radians
+    参数:
+        parent (dagNode): 新曲线的父对象。
+        name (str): 曲线名称。
+        width (float): 形状的宽度。
+        height (float): 形状的高度。
+        depth (float): 形状的深度。
+        color (int | 浮点数列表 | 浮点数元组): 基于索引或RGB的颜色。
+        m (matrix): 曲线的全局变换。
+        pos_offset (vector): 曲线从中心的xyz位置偏移。
+        rot_offset (vector): 曲线从中心的xyz旋转偏移（弧度）。
 
-    Returns:
-        dagNode: The newly created icon.
+    返回:
+        dagNode: 新创建的图标。
 
     """
     lenX = width * 0.5
@@ -279,23 +277,21 @@ def pyramid(
     pos_offset=None,
     rot_offset=None,
 ):
-    """Create a curve with a PYRAMIDE shape.
+    """创建具有PYRAMID形状的曲线。
 
-    Arguments:
-        parent (dagNode): The parent object of the newly created curve.
-        name (str): Name of the curve.
-        width (float): Width of the shape.
-        height (float): Height of the shape.
-        depth (float): Depth of the shape.
-        color (int | list of float | tuple of float): The color in index base or RGB.
-        m (matrix): The global transformation of the curve.
-        pos_offset (vector): The xyz position offset of the curve
-            from its center.
-        rot_offset (vector): The xyz rotation offset of the curve
-            from its center. xyz in radians
+    参数:
+        parent (dagNode): 新曲线的父对象。
+        name (str): 曲线名称。
+        width (float): 形状的宽度。
+        height (float): 形状的高度。
+        depth (float): 形状的深度。
+        color (int | 浮点数列表 | 浮点数元组): 基于索引或RGB的颜色。
+        m (matrix): 曲线的全局变换。
+        pos_offset (vector): 曲线从中心的xyz位置偏移。
+        rot_offset (vector): 曲线从中心的xyz旋转偏移（弧度）。
 
-    Returns:
-        dagNode: The newly created icon.
+    返回:
+        dagNode: 新创建的图标。
 
     """
     lenX = width * 0.5
@@ -330,22 +326,20 @@ def square(
     pos_offset=None,
     rot_offset=None,
 ):
-    """Create a curve with a SQUARE shape.
+    """创建具有SQUARE形状的曲线。
 
-    Arguments:
-        parent (dagNode): The parent object of the newly created curve.
-        name (str): Name of the curve.
-        width (float): Width of the shape.
-        depth (float): Depth of the shape.
-        color (int | list of float | tuple of float): The color in index base or RGB.
-        m (matrix): The global transformation of the curve.
-        pos_offset (vector): The xyz position offset of the curve from
-            its center.
-        rot_offset (vector): The xyz rotation offset of the curve from
-            its center. xyz in radians
+    参数:
+        parent (dagNode): 新曲线的父对象。
+        name (str): 曲线名称。
+        width (float): 形状的宽度。
+        depth (float): 形状的深度。
+        color (int | 浮点数列表 | 浮点数元组): 基于索引或RGB的颜色。
+        m (matrix): 曲线的全局变换。
+        pos_offset (vector): 曲线从中心的xyz位置偏移。
+        rot_offset (vector): 曲线从中心的xyz旋转偏移（弧度）。
 
-    Returns:
-        dagNode: The newly created icon.
+    返回:
+        dagNode: 新创建的图标。
 
     """
     lenX = width * 0.5
@@ -375,21 +369,19 @@ def flower(
     rot_offset=None,
     degree=3,
 ):
-    """Create a curve with a FLOWER shape.
+    """创建具有FLOWER形状的曲线。
 
-    Arguments:
-        parent (dagNode): The parent object of the newly created curve.
-        name (str): Name of the curve.
-        width (float): Width of the shape.
-        color (int | list of float | tuple of float): The color in index base or RGB.
-        m (matrix): The global transformation of the curve.
-        pos_offset (vector): The xyz position offset of the curve from
-            its center.
-        rot_offset (vector): The xyz rotation offset of the curve from
-            its center. xyz in radians
+    参数:
+        parent (dagNode): 新曲线的父对象。
+        name (str): 曲线名称。
+        width (float): 形状的宽度。
+        color (int | 浮点数列表 | 浮点数元组): 基于索引或RGB的颜色。
+        m (matrix): 曲线的全局变换。
+        pos_offset (vector): 曲线从中心的xyz位置偏移。
+        rot_offset (vector): 曲线从中心的xyz旋转偏移（弧度）。
 
-    Returns:
-        dagNode: The newly created icon.
+    返回:
+        dagNode: 新创建的图标。
 
     """
     dlen = width
@@ -424,21 +416,19 @@ def circle(
     rot_offset=None,
     degree=3,
 ):
-    """Create a curve with a CIRCLE shape.
+    """创建具有CIRCLE形状的曲线。
 
-    Arguments:
-        parent (dagNode): The parent object of the newly created curve.
-        name (str): Name of the curve.
-        width (float): Width of the shape.
-        color (int | list of float | tuple of float): The color in index base or RGB.
-        m (matrix): The global transformation of the curve.
-        pos_offset (vector): The xyz position offset of the curve from
-            its center.
-        rot_offset (vector): The xyz rotation offset of the curve from
-            its center. xyz in radians
+    参数:
+        parent (dagNode): 新曲线的父对象。
+        name (str): 曲线名称。
+        width (float): 形状的宽度。
+        color (int | 浮点数列表 | 浮点数元组): 基于索引或RGB的颜色。
+        m (matrix): 曲线的全局变换。
+        pos_offset (vector): 曲线从中心的xyz位置偏移。
+        rot_offset (vector): 曲线从中心的xyz旋转偏移（弧度）。
 
-    Returns:
-        dagNode: The newly created icon.
+    返回:
+        dagNode: 新创建的图标。
 
     """
     dlen = width * 0.5
@@ -474,22 +464,20 @@ def cylinder(
     rot_offset=None,
     degree=3,
 ):
-    """Create a curve with a CYLINDER shape.
+    """创建具有CYLINDER形状的曲线。
 
-    Arguments:
-        parent (dagNode): The parent object of the newly created curve.
-        name (str): Name of the curve.
-        width (float): Width of the shape.
-        height (float): Height of the shape.
-        color (int | list of float | tuple of float): The color in index base or RGB.
-        m (matrix): The global transformation of the curve.
-        pos_offset (vector): The xyz position offset of the curve from
-            its center.
-        rot_offset (vector): The xyz rotation offset of the curve from
-            its center. xyz in radians
+    参数:
+        parent (dagNode): 新曲线的父对象。
+        name (str): 曲线名称。
+        width (float): 形状的宽度。
+        height (float): 形状的高度。
+        color (int | 浮点数列表 | 浮点数元组): 基于索引或RGB的颜色。
+        m (matrix): 曲线的全局变换。
+        pos_offset (vector): 曲线从中心的xyz位置偏移。
+        rot_offset (vector): 曲线从中心的xyz旋转偏移（弧度）。
 
-    Returns:
-        dagNode: The newly created icon.
+    返回:
+        dagNode: 新创建的图标。
 
     """
     dlen = width * 0.5

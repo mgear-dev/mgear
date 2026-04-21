@@ -128,12 +128,12 @@ class ChannelTable(QtWidgets.QTableWidget):
     def create_menu(self):
         self.menu = QtWidgets.QMenu(self)
 
-        reset_value_action = QtWidgets.QAction("Reset Value to Default", self)
+        reset_value_action = QtWidgets.QAction("重置值为默认", self)
         reset_value_action.setIcon(pyqt.get_icon("mgear_rewind"))
         reset_value_action.triggered.connect(self.reset_value_slot)
         self.menu.addAction(reset_value_action)
         reset_creation_value_action = QtWidgets.QAction(
-            "Reset to Creation Value", self
+            "重置为创建值", self
         )
         reset_creation_value_action.setIcon(pyqt.get_icon("mgear_rewind"))
         reset_creation_value_action.triggered.connect(
@@ -143,20 +143,20 @@ class ChannelTable(QtWidgets.QTableWidget):
         self.menu.addSeparator()
 
         sync_graph_editor_action = QtWidgets.QAction(
-            "Sync Selected with Graph Editor", self
+            "与曲线编辑器同步选中项", self
         )
         sync_graph_editor_action.setIcon(pyqt.get_icon("mgear_activity"))
         sync_graph_editor_action.triggered.connect(self.sync_graph_editor)
         self.menu.addAction(sync_graph_editor_action)
         self.menu.addSeparator()
 
-        select_attr_host_action = QtWidgets.QAction("Select Host", self)
+        select_attr_host_action = QtWidgets.QAction("选择宿主", self)
         select_attr_host_action.setIcon(pyqt.get_icon("mgear_arrow-up"))
         select_attr_host_action.triggered.connect(self.select_host)
         self.menu.addAction(select_attr_host_action)
         self.menu.addSeparator()
 
-        set_range_action = QtWidgets.QAction("Set Range", self)
+        set_range_action = QtWidgets.QAction("设置范围", self)
         set_range_action.setIcon(pyqt.get_icon("mgear_sliders"))
         set_range_action.triggered.connect(self.set_range_slot)
         self.menu.addAction(set_range_action)

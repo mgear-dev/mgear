@@ -38,7 +38,7 @@ class XgenBoost(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.create_connections()
 
     def init_ui(self):
-        self.setWindowTitle("Xgen IGS Boost")
+        self.setWindowTitle("Xgen IGS 增强")
         self.setObjectName(self.toolName)
         self.setWindowFlags(QtCore.Qt.Window)
 

@@ -139,7 +139,7 @@ def duplicate(ui, dup_guide=None):
     if dup_guide:
         dup_guide = dup_guide[0]
     else:
-        pm.displayWarning("Nothing selected to duplicate")
+        pm.displayWarning("未选择任何对象进行复制")
         return
 
     if dup_guide in xgen_handler.get_connected_curve_guides(description):
@@ -156,8 +156,8 @@ def duplicate(ui, dup_guide=None):
 
     else:
         pm.displayWarning(
-            "Object {0} is not crv guide for {1} and can't be"
-            " duplicated".format(dup_guide.name(), name))
+            "对象 {0} 不是 {1} 的曲线引导，无法"
+            "复制".format(dup_guide.name(), name))
 
 
 @utils.one_undo
@@ -181,7 +181,7 @@ def duplicate_sym(ui, dup_guides=None, skip_all=False, re_sym_all=False):
                         continue
                     if re_sym_all:
                         pm.displayInfo(
-                            "Re symmetry guide {}".format(crv.name()))
+                            "重新对称引导 {}".format(crv.name()))
                         pm.delete(sym_cnx)
                     else:
                         dup_option = show_dup_sym_options(crv.name())
@@ -190,12 +190,12 @@ def duplicate_sym(ui, dup_guides=None, skip_all=False, re_sym_all=False):
                             continue
                         elif dup_option == 2:  # re sym
                             pm.displayInfo(
-                                "Re symmetry guide {}".format(crv.name()))
+                                "重新对称引导 {}".format(crv.name()))
                             pm.delete(sym_cnx)
                         elif dup_option == 3:  # re sym all
                             re_sym_all = True
                             pm.displayInfo(
-                                "Re symmetry guide {}".format(crv.name()))
+                                "重新对称引导 {}".format(crv.name()))
                             pm.delete(sym_cnx)
                         elif dup_option == 4:  # cancel
                             break
@@ -219,8 +219,8 @@ def duplicate_sym(ui, dup_guides=None, skip_all=False, re_sym_all=False):
             new_guides.append(new_crv)
         else:
             pm.displayWarning(
-                "Object {0} is not crv guide for {1} and can't be"
-                " duplicated".format(crv.name(), name))
+                "对象 {0} 不是 {1} 的曲线引导，无法"
+                "复制".format(crv.name(), name))
     if new_guides:
         pm.select(new_guides)
     return new_guides
@@ -461,11 +461,11 @@ def move_guide_ctx(ui):
 
     name = ui.xgen_description_lineEdit.text()
     if not name:
-        pm.displayWarning("No Xgen IGS description selected")
+        pm.displayWarning("未选择Xgen IGS描述")
         return
 
     if not pm.selected():
-        pm.displayWarning("Nothing selected to move")
+        pm.displayWarning("未选择任何对象进行移动")
         return
     DESCRIPTION = xgen_handler.get_description(name)
     SCALP = xgen_handler.get_scalp(DESCRIPTION)
@@ -489,11 +489,11 @@ def duplicate_guide_ctx(ui):
 
     name = ui.xgen_description_lineEdit.text()
     if not name:
-        pm.displayWarning("No Xgen IGS description selected")
+        pm.displayWarning("未选择Xgen IGS描述")
         return
 
     if not pm.selected():
-        pm.displayWarning("Nothing selected to duplicate")
+        pm.displayWarning("未选择任何对象进行复制")
         return
 
     DESCRIPTION = xgen_handler.get_description(name)
@@ -522,7 +522,7 @@ class DuplicateSymOptions(QtWidgets.QDialog):
     def __init__(self, guide_name="", parent=pyqt.maya_main_window()):
         super(DuplicateSymOptions, self).__init__(parent)
 
-        self.setWindowTitle("Duplicate Symmetrical Options")
+        self.setWindowTitle("对称复制选项")
         self.setWindowFlags(self.windowFlags()
                             ^ QtCore.Qt.WindowContextHelpButtonHint)
 
@@ -534,17 +534,17 @@ class DuplicateSymOptions(QtWidgets.QDialog):
         self.option = 0  # cancel
 
     def create_widgets(self):
-        self.skip_btn = QtWidgets.QPushButton("Skip")
-        self.skip_all_btn = QtWidgets.QPushButton("Skip All")
-        self.re_sym_btn = QtWidgets.QPushButton("Re Sym")
-        self.re_sym_all_btn = QtWidgets.QPushButton("Re Sym All")
+        self.skip_btn = QtWidgets.QPushButton("跳过")
+        self.skip_all_btn = QtWidgets.QPushButton("全部跳过")
+        self.re_sym_btn = QtWidgets.QPushButton("重新对称")
+        self.re_sym_all_btn = QtWidgets.QPushButton("全部重新对称")
         self.cancel_btn = QtWidgets.QPushButton("取消")
 
     def create_layout(self):
 
         wdg_layout = QtWidgets.QHBoxLayout()
         wdg_layout.addWidget(QtWidgets.QLabel(
-            "Duplicate symmetry: {}".format(self.guide_name)))
+            "对称复制: {}".format(self.guide_name)))
 
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
