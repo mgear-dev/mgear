@@ -308,6 +308,28 @@ def _restore_assignments():
     """Restore all stored shading group assignments."""
     global _original_assignments
 
+    # First, clear matcap_SG from all tracked shapes.  This
+    # guarantees a clean slate before re-applying originals,
+    # avoiding cases where face-based restore leaves residual
+    # matcap_SG membership (e.g. stored face lists with short
+    # names that fail to match some components).
+    if cmds.objExists(SG_NAME):
+        for shape in _original_assignments:
+            if not cmds.objExists(shape):
+                continue
+            try:
+                cmds.sets(
+                    shape,
+                    edit=True,
+                    forceElement="initialShadingGroup",
+                )
+            except (RuntimeError, ValueError):
+                pass
+
+    # Re-apply stored assignments.  Since shapes are now in
+    # initialShadingGroup, face-based forceElement calls will
+    # correctly move faces to their original SGs with no
+    # matcap_SG leftovers.
     for shape, assignments in _original_assignments.items():
         if not cmds.objExists(shape):
             continue
