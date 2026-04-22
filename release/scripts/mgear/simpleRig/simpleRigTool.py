@@ -611,6 +611,27 @@ def _get_branch_bbox_data(selection=None, yZero=True, *args):
 # Build and IO ===========================================
 
 
+def _ctl_depth(ctl):
+    """Count how many simple-rig control ancestors a control has.
+
+    Walks up the parent chain skipping npo transforms (parent of parent)
+    until the ancestor is no longer a simple-rig control. Used as a stable
+    sort key to order controls parent-first.
+
+    Args:
+        ctl (dagNode): Simple-rig control node.
+
+    Returns:
+        int: Number of simple-rig control ancestors above ctl.
+    """
+    depth = 0
+    p = ctl.getParent(2)
+    while p is not None and p.hasAttr("is_simple_rig_ctl"):
+        depth += 1
+        p = p.getParent(2)
+    return depth
+
+
 def _collect_configuration_from_rig():
     """Collects the configuration from the rig and create a dictionary with it
 
@@ -628,6 +649,10 @@ def _collect_configuration_from_rig():
         rig_root.listRelatives(allDescendents=True, type="transform")
     )
     ctl_list = [d for d in descendents if d.hasAttr("is_simple_rig_ctl")]
+    # Ensure strict parent-first order. Maya's allDescendents reversal is not a
+    # topological sort across sibling branches of unequal depth, which can leave
+    # a child ahead of its parent and break convert_to_shifter_guide lookups.
+    ctl_list.sort(key=_ctl_depth)
     ctl_names_list = []
     # get setting for each ctl
     for c in ctl_list:
@@ -954,7 +979,7 @@ def convert_to_shifter_guide():
                 int(ctl_conf["ctl_index"]),
                 t,
                 guide,
-                parent=parentRelation[ctl_conf["ctl_parent"]],
+                parent=parentRelation.get(ctl_conf["ctl_parent"], guide.model),
                 grps=grps,
             )
             parentRelation[c] = root
@@ -962,6 +987,79 @@ def convert_to_shifter_guide():
         return guide, configDict
     else:
         return None, None
+
+
+_SKINNABLE_SHAPE_TYPES = ("mesh", "nurbsSurface", "nurbsCurve")
+
+
+def _collect_skinnable_shapes(root, claimed):
+    """Collect skinnable shapes under root, respecting claim boundaries.
+
+    Walks the DAG under root in depth-first order. When a descendant
+    transform is present in claimed (i.e. is driven by another control),
+    the traversal stops at that transform so its subtree is left to the
+    owning control's joint.
+
+    Args:
+        root (dagNode): Driven node to walk from. May itself be a shape
+            transform (mesh/nurbs) or a plain group transform.
+        claimed (set): Set of PyNodes that are any control's driven. Used
+            to stop descent at other controls' driven roots.
+
+    Returns:
+        list: Non-intermediate shape nodes whose type is in
+            _SKINNABLE_SHAPE_TYPES.
+    """
+    shapes = []
+    stack = [(root, True)]
+    while stack:
+        node, is_root = stack.pop()
+        if not is_root and node in claimed:
+            continue
+        for shp in node.getShapes() or []:
+            if shp.type() not in _SKINNABLE_SHAPE_TYPES:
+                continue
+            if shp.attr("intermediateObject").get():
+                continue
+            shapes.append(shp)
+        for child in node.getChildren(type="transform") or []:
+            stack.append((child, False))
+    return shapes
+
+
+def _auto_skin_driven(driven, jnt, claimed):
+    """Bind every skinnable shape under driven to jnt.
+
+    Descent stops at transforms owned by other controls (present in
+    claimed), so nested controls keep their own sub-geometry. Each shape
+    gets its own skinCluster. Failures on a single shape are logged and
+    skipped; they do not prevent the remaining shapes from binding.
+
+    Args:
+        driven (dagNode): The driven node for this control.
+        jnt (dagNode): The joint that will bind the geometry.
+        claimed (set): Claim-set built across all controls.
+
+    Returns:
+        list: skinCluster nodes created by this call.
+    """
+    skins = []
+    for shp in _collect_skinnable_shapes(driven, claimed):
+        try:
+            sc = pm.skinCluster(
+                jnt,
+                shp,
+                tsb=True,
+                nw=2,
+                n="{}_skinCluster".format(shp.name()),
+            )
+            skins.append(sc)
+        except RuntimeError:
+            pm.displayWarning(
+                "Automatic skinning, can't be created for"
+                " {}. Skipped.".format(shp.name())
+            )
+    return skins
 
 
 # @utils.one_undo
@@ -1002,6 +1100,16 @@ def convert_to_shifter_rig():
 
             attribute.addAttribute(rig.model, "geoUnselectable", "bool", True)
 
+            # Build the claim-set: every transform driven by any control.
+            # Used by _auto_skin_driven to stop descending into subtrees that
+            # belong to a deeper control's joint.
+            claimed = set()
+            for cc in configDict["ctl_list"]:
+                for dd in configDict["ctl_settings"][cc]["driven_list"]:
+                    nodes = pm.ls(dd)
+                    if nodes:
+                        claimed.add(nodes[0])
+
             # skin driven to new rig and  apply control shapes
             driven = None
             for c in configDict["ctl_list"]:
@@ -1009,22 +1117,10 @@ def convert_to_shifter_rig():
                 for d in ctl_conf["driven_list"]:
                     driven = pm.ls(d)
                     jnt = pm.ls(c.replace("ctl", "0_jnt"))
+                    if not (driven and jnt):
+                        continue
                     connect_selectable(rig.model, [driven[0]])
-                    if driven and jnt:
-                        try:
-                            pm.skinCluster(
-                                jnt[0],
-                                driven[0],
-                                tsb=True,
-                                nw=2,
-                                n="{}_skinCluster".format(d),
-                            )
-                        except RuntimeError:
-                            pm.displayWarning(
-                                "Automatic skinning, can't be "
-                                "created for"
-                                " {}. Skipped.".format(d)
-                            )
+                    _auto_skin_driven(driven[0], jnt[0], claimed)
 
                 curve.update_curve_from_data(ctl_conf["ctl_shapes"])
 
