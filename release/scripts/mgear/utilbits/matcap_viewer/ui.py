@@ -329,9 +329,12 @@ class MatcapViewerUI(
         """
         if core.is_matcap_active():
             if self.apply_selected_action.isChecked():
+                meshes = self._get_target_meshes()
+                if meshes is not None and not meshes:
+                    self._notify_empty_selection()
+                    return
                 # Restore old, then re-apply to new selection
                 core.restore_original_materials()
-                meshes = self._get_target_meshes()
                 if meshes:
                     core.apply_matcap(meshes=meshes)
                     self._apply_texture(image_path)
@@ -342,6 +345,9 @@ class MatcapViewerUI(
             return
 
         meshes = self._get_target_meshes()
+        if meshes is not None and not meshes:
+            self._notify_empty_selection()
+            return
         result = core.apply_matcap(meshes=meshes)
         if result:
             self._apply_texture(image_path)
@@ -360,23 +366,37 @@ class MatcapViewerUI(
         """Get meshes based on apply mode setting.
 
         Returns:
-            list: Mesh transforms, or None for all meshes.
+            list or None: Mesh transforms to apply to.  None means
+                "apply to all meshes in the scene".  An empty list
+                means "Apply to Selected" is on but nothing valid
+                is selected — callers must warn and abort.
         """
         if self.apply_selected_action.isChecked():
-            sel = cmds.ls(selection=True, long=True)
-            if sel:
-                meshes = []
-                for node in sel:
-                    shapes = cmds.listRelatives(
-                        node,
-                        shapes=True,
-                        fullPath=True,
-                        type="mesh",
-                    )
-                    if shapes:
-                        meshes.append(node)
-                return meshes or None
+            sel = cmds.ls(selection=True, long=True) or []
+            meshes = []
+            for node in sel:
+                shapes = cmds.listRelatives(
+                    node,
+                    shapes=True,
+                    fullPath=True,
+                    type="mesh",
+                )
+                if shapes:
+                    meshes.append(node)
+            return meshes
         return None
+
+    def _notify_empty_selection(self):
+        """Show an in-viewport message that nothing is selected."""
+        cmds.inViewMessage(
+            assistMessage=(
+                "Matcap Viewer: "
+                "<hl>Apply to Selected</hl> is on but nothing is "
+                "selected"
+            ),
+            pos="topCenter",
+            fade=True,
+        )
 
     # =============================================================
     # TOGGLE MATERIAL

@@ -241,10 +241,14 @@ def scan_folders(folder_paths):
 def get_all_mesh_transforms():
     """Get all mesh transform nodes in the scene.
 
+    Intermediate shapes (e.g. blendshape target caches, orig shapes)
+    are skipped since they are not visible and can live under
+    hidden/locked transforms that raise on listRelatives.
+
     Returns:
         list: Deduplicated list of mesh transform long names.
     """
-    shapes = cmds.ls(type="mesh", long=True) or []
+    shapes = cmds.ls(type="mesh", noIntermediate=True, long=True) or []
     transforms = set()
     for shape in shapes:
         parents = cmds.listRelatives(
@@ -271,31 +275,45 @@ def store_original_assignments(meshes):
     global _original_assignments
 
     for transform in meshes:
+        if not cmds.objExists(transform):
+            continue
         shapes = cmds.listRelatives(
-            transform, shapes=True, fullPath=True, type="mesh"
+            transform,
+            shapes=True,
+            fullPath=True,
+            type="mesh",
+            noIntermediate=True,
         )
         if not shapes:
             continue
+        short_transform = transform.rsplit("|", 1)[-1]
         for shape in shapes:
             if shape in _original_assignments:
                 continue
+            short_shape = shape.rsplit("|", 1)[-1]
+            # Any of these prefixes in an SG member list means
+            # the member belongs to this shape.  cmds.sets can
+            # return the member using the shape OR the transform
+            # name (short or long) with an optional component
+            # suffix like ".f[0:3]".
+            prefixes = (shape, short_shape, transform, short_transform)
             sgs = cmds.listSets(type=1, object=shape) or []
             assignments = []
             for sg in sgs:
                 members = cmds.sets(sg, query=True) or []
                 shape_members = []
-                short_shape = shape.rsplit("|", 1)[-1]
                 for member in members:
-                    # Match full path, short name, or short name
-                    # with component suffix (e.g. "pCubeShape1.f[0]")
-                    if member == shape or member.startswith(
-                        shape + "."
-                    ):
-                        shape_members.append(member)
-                    elif member == short_shape or member.startswith(
-                        short_shape + "."
-                    ):
-                        shape_members.append(member)
+                    # Normalize every matched member to the
+                    # shape's full DAG path so the restore pass
+                    # always resolves correctly.
+                    for prefix in prefixes:
+                        if member == prefix:
+                            shape_members.append(shape)
+                            break
+                        if member.startswith(prefix + "."):
+                            suffix = member[len(prefix):]
+                            shape_members.append(shape + suffix)
+                            break
                 if shape_members:
                     assignments.append((sg, shape_members))
                 elif not assignments:
@@ -308,28 +326,8 @@ def _restore_assignments():
     """Restore all stored shading group assignments."""
     global _original_assignments
 
-    # First, clear matcap_SG from all tracked shapes.  This
-    # guarantees a clean slate before re-applying originals,
-    # avoiding cases where face-based restore leaves residual
-    # matcap_SG membership (e.g. stored face lists with short
-    # names that fail to match some components).
-    if cmds.objExists(SG_NAME):
-        for shape in _original_assignments:
-            if not cmds.objExists(shape):
-                continue
-            try:
-                cmds.sets(
-                    shape,
-                    edit=True,
-                    forceElement="initialShadingGroup",
-                )
-            except (RuntimeError, ValueError):
-                pass
-
-    # Re-apply stored assignments.  Since shapes are now in
-    # initialShadingGroup, face-based forceElement calls will
-    # correctly move faces to their original SGs with no
-    # matcap_SG leftovers.
+    # Re-apply stored assignments directly.  forceElement will
+    # pull faces/shapes out of matcap_SG and into the original SG.
     for shape, assignments in _original_assignments.items():
         if not cmds.objExists(shape):
             continue
@@ -342,6 +340,22 @@ def _restore_assignments():
                 valid = [m for m in members if cmds.objExists(m)]
                 if valid:
                     cmds.sets(valid, edit=True, forceElement=sg)
+
+    # Safety net: any shape still in matcap_SG after the restore
+    # (e.g. an SG was deleted, or a stored member no longer
+    # resolves) gets pushed to initialShadingGroup so nothing is
+    # left rendering the matcap shader.
+    if cmds.objExists(SG_NAME):
+        residual = cmds.sets(SG_NAME, query=True) or []
+        if residual:
+            try:
+                cmds.sets(
+                    residual,
+                    edit=True,
+                    forceElement="initialShadingGroup",
+                )
+            except (RuntimeError, ValueError):
+                pass
 
     _original_assignments = {}
 
@@ -423,8 +437,14 @@ def apply_matcap(meshes=None):
 
         shapes = []
         for transform in meshes:
+            if not cmds.objExists(transform):
+                continue
             shape_list = cmds.listRelatives(
-                transform, shapes=True, fullPath=True, type="mesh"
+                transform,
+                shapes=True,
+                fullPath=True,
+                type="mesh",
+                noIntermediate=True,
             )
             if shape_list:
                 shapes.extend(shape_list)
