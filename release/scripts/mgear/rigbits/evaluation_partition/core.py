@@ -35,7 +35,7 @@ _TRANSFORM_ATTRS = (
 )
 DEFAULT_GROUP_NAME = "Default Group"
 CONFIG_FILE_EXT = ".evp"
-CONFIG_VERSION = "1.0"
+CONFIG_VERSION = "2.0"
 
 
 # =====================================================
@@ -350,6 +350,36 @@ def get_short_name(name):
         str: Short name without path (e.g., "pCube1").
     """
     return name.split("|")[-1]
+
+
+def resolve_mesh_short_name(short):
+    """Resolve a short mesh name to a unique long DAG path.
+
+    Args:
+        short (str): Short node name (e.g., "body").
+
+    Returns:
+        str: Long DAG path of the single matching mesh transform.
+
+    Raises:
+        RuntimeError: If zero or more than one mesh transform matches.
+    """
+    matches = cmds.ls(short, long=True, type="transform") or []
+    matches = [
+        m for m in matches
+        if cmds.listRelatives(m, shapes=True, type="mesh", fullPath=True)
+    ]
+    if not matches:
+        raise RuntimeError(
+            "No mesh named '{}' found in scene.".format(short)
+        )
+    if len(matches) > 1:
+        raise RuntimeError(
+            "Short name '{}' is ambiguous - matches: {}".format(
+                short, ", ".join(matches)
+            )
+        )
+    return matches[0]
 
 
 def names_match(name1, name2):
@@ -2150,14 +2180,14 @@ def execute_full_pipeline(manager):
         # Re-resolve source mesh path in case DAG
         # changed during split.
         if not cmds.objExists(source):
-            short = get_short_name(source)
-            resolved = cmds.ls(short, long=True)
-            if resolved:
-                source = resolved[0]
-            else:
+            try:
+                source = resolve_mesh_short_name(
+                    get_short_name(source)
+                )
+            except RuntimeError as e:
                 cmds.warning(
-                    "Source mesh no longer exists "
-                    "after split."
+                    "Could not re-resolve source mesh "
+                    "after split: {}".format(e)
                 )
                 return grp, partitions, None
 
@@ -2337,8 +2367,7 @@ def manager_to_config(manager):
     """
     return {
         "version": CONFIG_VERSION,
-        "mesh": manager.mesh,
-        "mesh_short_name": manager._mesh_short_name,
+        "mesh": manager._mesh_short_name,
         "groups": [group_to_dict(g) for g in manager.groups],
     }
 
@@ -2401,7 +2430,7 @@ def apply_configuration(config, mesh=None, create_shaders=True):
 
     Example:
         >>> config = {
-        ...     "version": "1.0",
+        ...     "version": "2.0",
         ...     "mesh": "pCube1",
         ...     "groups": [
         ...         {"name": "Default Group", "color": [0.5, 0.6, 0.7], "face_indices": [0, 1, 2]},
@@ -2409,15 +2438,33 @@ def apply_configuration(config, mesh=None, create_shaders=True):
         ...     ]
         ... }
         >>> manager = apply_configuration(config)
-    """
-    target_mesh = mesh or config.get("mesh")
-    if not target_mesh:
-        cmds.warning("No mesh specified in configuration.")
-        return None
 
-    if not cmds.objExists(target_mesh):
-        cmds.warning(f"Mesh '{target_mesh}' does not exist.")
-        return None
+    Raises:
+        RuntimeError: If the config mesh short name is ambiguous in the
+            current scene (matches more than one mesh transform).
+    """
+    target_mesh = mesh
+    if not target_mesh:
+        config_mesh = config.get("mesh")
+        if not config_mesh:
+            cmds.warning("No mesh specified in configuration.")
+            return None
+
+        version = config.get("version", "1.0")
+        if version == "1.0":
+            # Legacy: mesh field is a long DAG path.  Prefer it
+            # verbatim if it still resolves; otherwise fall back
+            # to a short-name lookup.
+            if cmds.objExists(config_mesh):
+                target_mesh = config_mesh
+            else:
+                target_mesh = resolve_mesh_short_name(
+                    config.get("mesh_short_name")
+                    or get_short_name(config_mesh)
+                )
+        else:
+            # v2.0+: mesh field is a short name.
+            target_mesh = resolve_mesh_short_name(config_mesh)
 
     # Create manager
     manager = PolygonGroupManager(target_mesh)
@@ -2474,7 +2521,7 @@ def execute_from_config(config, mesh=None):
 
     Example:
         >>> config = {
-        ...     "version": "1.0",
+        ...     "version": "2.0",
         ...     "mesh": "pSphere1",
         ...     "groups": [
         ...         {"name": "Default Group", "color": [0.6, 0.7, 0.6], "face_indices": list(range(100))},

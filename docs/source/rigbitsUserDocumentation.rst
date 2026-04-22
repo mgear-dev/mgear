@@ -950,6 +950,27 @@ If you only need a subset of the pipeline, call the step functions directly on t
     # Step 8 — create the proximity wrap proxy
     proxy = evp.core.create_proximity_wrap_proxy(source, partitions, grp, manager)
 
+``.evp`` configuration format
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As of schema **v2.0**, ``.evp`` files store the target mesh as a **short name** rather than a full DAG path. This makes configurations portable across scenes, namespaces, and rig reorganizations — the tool resolves the short name to the actual node in the current scene at load time.
+
+Backwards compatibility:
+
+* Existing v1.0 ``.evp`` files (which store the long path) still load. If the stored long path still resolves, it is used verbatim; otherwise the tool falls back to a short-name lookup using the ``mesh_short_name`` field.
+* Re-saving a v1.0 file writes it out as v2.0 automatically.
+
+Ambiguity:
+
+* If the short name in a config matches **more than one** mesh transform in the current scene, ``apply_configuration`` raises ``RuntimeError`` listing every match. Rename the conflicting nodes, or pass ``mesh=`` explicitly to disambiguate:
+
+  .. code-block:: python
+
+      manager = evp.core.execute_from_file(
+          "D:/configs/character_body.evp",
+          mesh="|rig|geo|body",   # explicit long path wins
+      )
+
 .. _blendshape-transfer:
 
 Blendshape Setup Transfer
