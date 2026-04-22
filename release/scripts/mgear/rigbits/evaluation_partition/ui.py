@@ -584,25 +584,14 @@ class EvaluationPartitionUI(
             self.set_status("Import failed", error=True)
             return
 
-        # Resolve config mesh to a long DAG path.  v2.0 stores short
-        # names; v1.0 stores long paths but may need short-name
-        # fallback if the path no longer resolves.
-        config_mesh_raw = config.get("mesh", "")
-        mesh = ""
-        if config_mesh_raw:
-            version = config.get("version", "1.0")
-            if version == "1.0" and cmds.objExists(config_mesh_raw):
-                mesh = config_mesh_raw
-            else:
-                short = (
-                    config.get("mesh_short_name")
-                    or core.get_short_name(config_mesh_raw)
-                )
-                try:
-                    mesh = core.resolve_mesh_short_name(short)
-                except RuntimeError as e:
-                    self.set_status(str(e), error=True)
-                    return
+        # Resolve the config mesh to a long DAG path so the mismatch
+        # dialog and downstream cmds.objExists check both work with
+        # the canonical name.
+        try:
+            mesh = core.resolve_config_mesh(config)
+        except RuntimeError as e:
+            self.set_status(str(e), error=True)
+            return
         current_mesh = self.mesh_input.text().strip()
 
         # If current mesh is set and different from config, ask user

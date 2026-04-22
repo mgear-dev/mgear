@@ -36,6 +36,7 @@ _TRANSFORM_ATTRS = (
 DEFAULT_GROUP_NAME = "Default Group"
 CONFIG_FILE_EXT = ".evp"
 CONFIG_VERSION = "2.0"
+LEGACY_CONFIG_VERSION = "1.0"
 
 
 # =====================================================
@@ -352,11 +353,14 @@ def get_short_name(name):
     return name.split("|")[-1]
 
 
-def resolve_mesh_short_name(short):
-    """Resolve a short mesh name to a unique long DAG path.
+def resolve_mesh_short_name(name):
+    """Resolve a mesh name to a unique long DAG path.
+
+    Accepts either a short name (``"body"``) or a partial/long DAG
+    path (``"|rig|geo|body"``) — anything ``cmds.ls`` would match.
 
     Args:
-        short (str): Short node name (e.g., "body").
+        name (str): Mesh transform name to resolve.
 
     Returns:
         str: Long DAG path of the single matching mesh transform.
@@ -364,22 +368,56 @@ def resolve_mesh_short_name(short):
     Raises:
         RuntimeError: If zero or more than one mesh transform matches.
     """
-    matches = cmds.ls(short, long=True, type="transform") or []
+    matches = cmds.ls(name, long=True, type="transform") or []
     matches = [
         m for m in matches
         if cmds.listRelatives(m, shapes=True, type="mesh", fullPath=True)
     ]
     if not matches:
         raise RuntimeError(
-            "No mesh named '{}' found in scene.".format(short)
+            "No mesh named '{}' found in scene.".format(name)
         )
     if len(matches) > 1:
         raise RuntimeError(
-            "Short name '{}' is ambiguous - matches: {}".format(
-                short, ", ".join(matches)
+            "Mesh name '{}' is ambiguous - matches: {}".format(
+                name, ", ".join(matches)
             )
         )
     return matches[0]
+
+
+def resolve_config_mesh(config):
+    """Resolve the target mesh from a loaded ``.evp`` config dict.
+
+    Centralizes the v1.0 / v2.0 dispatch so the core loader and the
+    UI loader stay in lockstep.
+
+    v1.0 stores the long DAG path in ``mesh`` and may carry a
+    redundant ``mesh_short_name``; the long path is preferred when it
+    still resolves, otherwise the short name is looked up.  v2.0+
+    stores the short name directly in ``mesh``.
+
+    Args:
+        config (dict): Loaded ``.evp`` configuration.
+
+    Returns:
+        str: Long DAG path of the resolved mesh, or empty string if
+            the config has no ``mesh`` field.
+
+    Raises:
+        RuntimeError: If the short-name lookup is ambiguous or the
+            mesh is no longer in the scene.
+    """
+    config_mesh = config.get("mesh")
+    if not config_mesh:
+        return ""
+
+    version = config.get("version", LEGACY_CONFIG_VERSION)
+    if version == LEGACY_CONFIG_VERSION and cmds.objExists(config_mesh):
+        return config_mesh
+
+    short = config.get("mesh_short_name") or get_short_name(config_mesh)
+    return resolve_mesh_short_name(short)
 
 
 def names_match(name1, name2):
@@ -2439,32 +2477,20 @@ def apply_configuration(config, mesh=None, create_shaders=True):
         ... }
         >>> manager = apply_configuration(config)
 
+    Legacy v1.0 configs (with a long DAG path in ``mesh``) are also
+    accepted; the long path is honored if it still resolves,
+    otherwise the short name is looked up.
+
     Raises:
         RuntimeError: If the config mesh short name is ambiguous in the
             current scene (matches more than one mesh transform).
     """
     target_mesh = mesh
     if not target_mesh:
-        config_mesh = config.get("mesh")
-        if not config_mesh:
+        target_mesh = resolve_config_mesh(config)
+        if not target_mesh:
             cmds.warning("No mesh specified in configuration.")
             return None
-
-        version = config.get("version", "1.0")
-        if version == "1.0":
-            # Legacy: mesh field is a long DAG path.  Prefer it
-            # verbatim if it still resolves; otherwise fall back
-            # to a short-name lookup.
-            if cmds.objExists(config_mesh):
-                target_mesh = config_mesh
-            else:
-                target_mesh = resolve_mesh_short_name(
-                    config.get("mesh_short_name")
-                    or get_short_name(config_mesh)
-                )
-        else:
-            # v2.0+: mesh field is a short name.
-            target_mesh = resolve_mesh_short_name(config_mesh)
 
     # Create manager
     manager = PolygonGroupManager(target_mesh)
