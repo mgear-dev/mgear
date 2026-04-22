@@ -12,6 +12,17 @@ from mgear.vendor.Qt import QtWidgets, QtCore
 from mgear.core.pyqt import maya_main_window
 
 
+RANDOM_COLOR_PREFIX = "RandomColor_"
+DEFAULT_SG = "initialShadingGroup"
+COLORABLE_SHAPE_TYPES = ("mesh", "nurbsSurface")
+
+# Module-level state so tracking persists across UI close/reopen.
+_original_assignments = {}
+_random_assignments = {}
+_tracked_objects = []
+_active = False
+
+
 class BlenderColorPalette:
     """
     Generates colors similar to Blender's Random Color feature.
@@ -110,6 +121,309 @@ class BlenderColorPalette:
             colors.append((r, g, b))
 
         return colors
+
+
+# ================================================================
+# Colorable object discovery
+# ================================================================
+
+
+def _get_colorable_shapes(transform):
+    """Return non-intermediate mesh/NURBS shapes under transform.
+
+    Args:
+        transform (str): Transform long name.
+
+    Returns:
+        list: Shape long names, empty if none or transform is gone.
+    """
+    if not cmds.objExists(transform):
+        return []
+    shapes = cmds.listRelatives(
+        transform,
+        shapes=True,
+        fullPath=True,
+        noIntermediate=True,
+        type=COLORABLE_SHAPE_TYPES,
+    )
+    return shapes or []
+
+
+def get_selected_colorable_transforms():
+    """Return selected transforms that have a colorable shape.
+
+    Accepts mesh or NURBS shapes directly (mapped to their parent
+    transform) as well as their parent transforms.
+
+    Returns:
+        list: Deduplicated transform long names.
+    """
+    selection = cmds.ls(selection=True, long=True) or []
+    transforms = []
+    seen = set()
+    for node in selection:
+        target = node
+        node_type = cmds.nodeType(node)
+        if node_type in COLORABLE_SHAPE_TYPES:
+            parents = cmds.listRelatives(
+                node, parent=True, fullPath=True
+            )
+            if not parents:
+                continue
+            target = parents[0]
+        if not _get_colorable_shapes(target):
+            continue
+        if target not in seen:
+            seen.add(target)
+            transforms.append(target)
+    return transforms
+
+
+def get_all_colorable_transforms():
+    """Return every transform in the scene with a colorable shape.
+
+    Returns:
+        list: Sorted transform long names, intermediate shapes skipped.
+    """
+    shapes = cmds.ls(
+        type=COLORABLE_SHAPE_TYPES,
+        noIntermediate=True,
+        long=True,
+    ) or []
+    transforms = set()
+    for shape in shapes:
+        parents = cmds.listRelatives(
+            shape, parent=True, fullPath=True
+        )
+        if parents:
+            transforms.add(parents[0])
+    return sorted(transforms)
+
+
+# ================================================================
+# Assignment snapshot / restore
+# ================================================================
+
+
+def store_assignments(transforms, target_dict):
+    """Snapshot per-shape shading group membership.
+
+    Mirrors the matcap_viewer pattern: records each SG the shape
+    belongs to and normalizes every member name to the shape's
+    full DAG path so restore always resolves.  Shapes already
+    present in target_dict are skipped so repeated snapshots never
+    overwrite an earlier capture (important for Apply-then-Apply
+    without Remove All: the true originals survive).
+
+    Args:
+        transforms (list): Transform long names.
+        target_dict (dict): Mutated in place - shape -> list of
+            (sg, members_or_None) tuples.
+    """
+    for transform in transforms:
+        shapes = _get_colorable_shapes(transform)
+        if not shapes:
+            continue
+        short_transform = transform.rsplit("|", 1)[-1]
+        for shape in shapes:
+            if shape in target_dict:
+                continue
+            short_shape = shape.rsplit("|", 1)[-1]
+            prefixes = (shape, short_shape, transform, short_transform)
+            sgs = cmds.listSets(type=1, object=shape) or []
+            assignments = []
+            for sg in sgs:
+                members = cmds.sets(sg, query=True) or []
+                shape_members = []
+                for member in members:
+                    for prefix in prefixes:
+                        if member == prefix:
+                            shape_members.append(shape)
+                            break
+                        if member.startswith(prefix + "."):
+                            suffix = member[len(prefix):]
+                            shape_members.append(shape + suffix)
+                            break
+                if shape_members:
+                    assignments.append((sg, shape_members))
+                elif not assignments:
+                    assignments.append((sg, None))
+            if assignments:
+                target_dict[shape] = assignments
+
+
+def _restore_from(source_dict, sweep_prefix=None):
+    """Reapply stored assignments, optionally sweeping residuals.
+
+    Args:
+        source_dict (dict): Output of store_assignments - shape ->
+            [(sg, members_or_None), ...].
+        sweep_prefix (str, optional): If set, any shape still in an
+            SG whose name starts with this prefix after the restore
+            is forced to initialShadingGroup.  Used to clear stray
+            RandomColor_* membership when restoring originals.
+    """
+    affected_shapes = []
+    for shape, assignments in source_dict.items():
+        if not cmds.objExists(shape):
+            continue
+        affected_shapes.append(shape)
+        for sg, members in assignments:
+            if not cmds.objExists(sg):
+                continue
+            if members is None:
+                cmds.sets(shape, edit=True, forceElement=sg)
+            else:
+                valid = [m for m in members if cmds.objExists(m)]
+                if valid:
+                    cmds.sets(valid, edit=True, forceElement=sg)
+
+    if not sweep_prefix:
+        return
+    for shape in affected_shapes:
+        stray = any(
+            sg.startswith(sweep_prefix)
+            for sg in (cmds.listSets(type=1, object=shape) or [])
+        )
+        if not stray:
+            continue
+        try:
+            cmds.sets(shape, edit=True, forceElement=DEFAULT_SG)
+        except (RuntimeError, ValueError):
+            pass
+
+
+def restore_originals():
+    """Restore original materials on every tracked shape.
+
+    Leaves _original_assignments / _random_assignments / tracking
+    intact so Toggle can flip back to random colors.
+    """
+    global _active
+    if not _original_assignments:
+        _active = False
+        return
+    cmds.undoInfo(openChunk=True)
+    try:
+        _restore_from(
+            _original_assignments,
+            sweep_prefix=RANDOM_COLOR_PREFIX,
+        )
+        _active = False
+    finally:
+        cmds.undoInfo(closeChunk=True)
+
+
+def reapply_random_colors():
+    """Re-assign the last-captured random-color SGs to tracked shapes."""
+    global _active
+    if not _random_assignments:
+        return
+    cmds.undoInfo(openChunk=True)
+    try:
+        _restore_from(_random_assignments)
+        _active = True
+    finally:
+        cmds.undoInfo(closeChunk=True)
+
+
+def toggle_random_colors():
+    """Flip between originals and last-applied random colors.
+
+    Returns:
+        str: "off", "on", or "empty" (nothing tracked yet).
+    """
+    if _active:
+        restore_originals()
+        return "off"
+    if _random_assignments:
+        reapply_random_colors()
+        return "on"
+    return "empty"
+
+
+def remove_colors(transforms=None):
+    """Restore originals and drop tracking for the given transforms.
+
+    Args:
+        transforms (list, optional): Transform long names to remove
+            from tracking.  None means "all tracked" - equivalent to
+            the old remove-all behavior.  Anything not currently
+            tracked is silently skipped.
+
+    Returns:
+        int: Number of transforms that were actually removed.
+    """
+    global _active
+
+    if not _original_assignments and not _random_assignments:
+        return 0
+
+    if transforms is None:
+        targets = list(_tracked_objects)
+    else:
+        tracked_set = set(_tracked_objects)
+        targets = [t for t in transforms if t in tracked_set]
+
+    if not targets:
+        return 0
+
+    target_shapes = set()
+    for transform in targets:
+        for shape in _get_colorable_shapes(transform):
+            target_shapes.add(shape)
+
+    partial_originals = {
+        shape: _original_assignments[shape]
+        for shape in target_shapes
+        if shape in _original_assignments
+    }
+
+    cmds.undoInfo(openChunk=True)
+    try:
+        _restore_from(
+            partial_originals,
+            sweep_prefix=RANDOM_COLOR_PREFIX,
+        )
+
+        sgs_to_delete = set()
+        for shape in target_shapes:
+            for sg, _members in _random_assignments.get(shape, []):
+                if sg and sg.startswith(RANDOM_COLOR_PREFIX):
+                    sgs_to_delete.add(sg)
+        for sg in sgs_to_delete:
+            if not cmds.objExists(sg):
+                continue
+            # Skip SGs still referenced by a shape we are not
+            # removing in this call.
+            remaining = cmds.sets(sg, query=True) or []
+            if remaining:
+                continue
+            shader = cmds.listConnections(
+                sg + ".surfaceShader", source=True, destination=False
+            ) or []
+            try:
+                cmds.delete(sg)
+            except RuntimeError:
+                pass
+            for node in shader:
+                if cmds.objExists(node):
+                    try:
+                        cmds.delete(node)
+                    except RuntimeError:
+                        pass
+    finally:
+        cmds.undoInfo(closeChunk=True)
+
+    for shape in target_shapes:
+        _original_assignments.pop(shape, None)
+        _random_assignments.pop(shape, None)
+    for transform in targets:
+        if transform in _tracked_objects:
+            _tracked_objects.remove(transform)
+    if not _tracked_objects:
+        _active = False
+    return len(targets)
 
 
 class RandomColorTool(QtWidgets.QWidget):
@@ -231,6 +545,16 @@ class RandomColorTool(QtWidgets.QWidget):
         )
         options_layout.addWidget(self.reuse_materials_cb)
 
+        self.apply_to_all_cb = QtWidgets.QCheckBox(
+            "Apply to all (scene mesh + NURBS)"
+        )
+        self.apply_to_all_cb.setChecked(False)
+        self.apply_to_all_cb.setToolTip(
+            "When checked, ignore selection and apply to every "
+            "mesh and NURBS surface in the scene."
+        )
+        options_layout.addWidget(self.apply_to_all_cb)
+
         main_layout.addWidget(options_group)
 
         # === Preset Buttons ===
@@ -270,15 +594,27 @@ class RandomColorTool(QtWidgets.QWidget):
                 background-color: #4275a6;
             }
         """)
-        action_layout.addWidget(self.apply_btn)
+        action_layout.addWidget(self.apply_btn, 2)
+
+        self.toggle_btn = QtWidgets.QPushButton("Toggle")
+        self.toggle_btn.setMinimumHeight(40)
+        self.toggle_btn.setToolTip(
+            "Toggle between random colors and the original "
+            "materials on all tracked objects."
+        )
+        action_layout.addWidget(self.toggle_btn, 1)
 
         main_layout.addLayout(action_layout)
 
         # === Utility Buttons ===
         util_layout = QtWidgets.QHBoxLayout()
 
-        self.remove_btn = QtWidgets.QPushButton("Remove Colors")
-        self.remove_btn.setToolTip("Remove RandomColor materials from selected objects")
+        self.remove_btn = QtWidgets.QPushButton("Remove")
+        self.remove_btn.setToolTip(
+            "Restore original materials.  With 'Apply to all' "
+            "checked, restores every tracked object; otherwise "
+            "restores only the selected tracked objects."
+        )
         util_layout.addWidget(self.remove_btn)
 
         self.cleanup_btn = QtWidgets.QPushButton("Cleanup Unused")
@@ -299,7 +635,8 @@ class RandomColorTool(QtWidgets.QWidget):
     def connect_signals(self):
         """Connect UI signals to slots"""
         self.apply_btn.clicked.connect(self.apply_random_colors)
-        self.remove_btn.clicked.connect(self.remove_random_colors)
+        self.toggle_btn.clicked.connect(self.on_toggle)
+        self.remove_btn.clicked.connect(self.on_remove)
         self.cleanup_btn.clicked.connect(self.cleanup_unused_materials)
 
         self.preset_pastel_btn.clicked.connect(self.apply_pastel_preset)
@@ -329,23 +666,6 @@ class RandomColorTool(QtWidgets.QWidget):
         self.val_min_spin.setValue(0.65)
         self.val_max_spin.setValue(0.85)
         self.status_label.setText("Preset: Vibrant")
-
-    def get_selected_meshes(self):
-        """Get selected mesh transform nodes"""
-        selection = cmds.ls(selection=True, long=True)
-        meshes = []
-
-        for obj in selection:
-            # Check if it's a mesh or has a mesh shape
-            shapes = cmds.listRelatives(obj, shapes=True, type='mesh', fullPath=True) or []
-            if shapes:
-                meshes.append(obj)
-            elif cmds.nodeType(obj) == 'mesh':
-                parent = cmds.listRelatives(obj, parent=True, fullPath=True)
-                if parent:
-                    meshes.append(parent[0])
-
-        return meshes
 
     def create_openpbr_shader(self, name, color):
         """
@@ -378,100 +698,161 @@ class RandomColorTool(QtWidgets.QWidget):
 
         return shader, sg
 
-    def assign_material(self, mesh, shading_group):
-        """Assign a shading group to a mesh"""
-        shapes = cmds.listRelatives(mesh, shapes=True, type='mesh', fullPath=True) or []
-        for shape in shapes:
+    def assign_material(self, transform, shading_group):
+        """Assign a shading group to every colorable shape."""
+        for shape in _get_colorable_shapes(transform):
             cmds.sets(shape, edit=True, forceElement=shading_group)
 
     def apply_random_colors(self):
-        """Main function to apply random colors to selected objects"""
-        meshes = self.get_selected_meshes()
+        """Apply random colors to selected or all colorable objects."""
+        global _random_assignments
+        global _tracked_objects
+        global _active
 
-        if not meshes:
-            self.status_label.setText("No mesh objects selected!")
-            cmds.warning("No mesh objects selected!")
+        if self.apply_to_all_cb.isChecked():
+            transforms = get_all_colorable_transforms()
+            empty_msg = "No mesh or NURBS objects in the scene."
+        else:
+            transforms = get_selected_colorable_transforms()
+            empty_msg = "No mesh or NURBS objects selected!"
+
+        if not transforms:
+            self.status_label.setText(empty_msg)
+            cmds.warning(empty_msg)
             return
 
-        # Get settings
         sat_range = (self.sat_min_spin.value(), self.sat_max_spin.value())
         val_range = (self.val_min_spin.value(), self.val_max_spin.value())
         mode = self.mode_combo.currentIndex()
         unique_colors = self.unique_colors_cb.isChecked()
 
-        # Generate colors based on mode
-        if mode == 0:  # Blender Palette
+        if mode == 0:
             if unique_colors:
-                colors = [BlenderColorPalette.generate_blender_color(sat_range, val_range)
-                          for _ in meshes]
+                colors = [
+                    BlenderColorPalette.generate_blender_color(
+                        sat_range, val_range
+                    )
+                    for _ in transforms
+                ]
             else:
-                single_color = BlenderColorPalette.generate_blender_color(sat_range, val_range)
-                colors = [single_color] * len(meshes)
-
-        elif mode == 1:  # Fully Random
+                single = BlenderColorPalette.generate_blender_color(
+                    sat_range, val_range
+                )
+                colors = [single] * len(transforms)
+        elif mode == 1:
             if unique_colors:
-                colors = [BlenderColorPalette.generate_fully_random_color(sat_range, val_range)
-                          for _ in meshes]
+                colors = [
+                    BlenderColorPalette.generate_fully_random_color(
+                        sat_range, val_range
+                    )
+                    for _ in transforms
+                ]
             else:
-                single_color = BlenderColorPalette.generate_fully_random_color(sat_range, val_range)
-                colors = [single_color] * len(meshes)
-
-        else:  # Harmony modes
-            harmony_types = {2: "complementary", 3: "triadic", 4: "analogous"}
+                single = BlenderColorPalette.generate_fully_random_color(
+                    sat_range, val_range
+                )
+                colors = [single] * len(transforms)
+        else:
+            harmony_types = {
+                2: "complementary",
+                3: "triadic",
+                4: "analogous",
+            }
             harmony = harmony_types.get(mode, "complementary")
-            colors = BlenderColorPalette.generate_harmony_colors(len(meshes), harmony)
+            colors = BlenderColorPalette.generate_harmony_colors(
+                len(transforms), harmony
+            )
 
-        # Start undo chunk
         cmds.undoInfo(openChunk=True)
-
         try:
+            # Snapshot originals for any transforms we have not
+            # seen yet.  Repeated Apply without Remove All keeps
+            # the true pre-apply state.
+            store_assignments(transforms, _original_assignments)
+
+            # Re-snapshot random-color SGs from scratch for the
+            # set being (re)applied now.  We drop only the
+            # affected shapes so previously tracked objects left
+            # untouched by this apply still round-trip on Toggle.
+            affected_shapes = []
+            for transform in transforms:
+                affected_shapes.extend(_get_colorable_shapes(transform))
+            for shape in affected_shapes:
+                _random_assignments.pop(shape, None)
+
             created_count = 0
-
-            for mesh, color in zip(meshes, colors):
-                # Create unique material name
-                short_name = mesh.split('|')[-1].replace(':', '_')
-                material_name = f"RandomColor_{short_name}_{random.randint(1000, 9999)}"
-
-                # Create shader and assign
-                shader, sg = self.create_openpbr_shader(material_name, color)
-                self.assign_material(mesh, sg)
+            for transform, color in zip(transforms, colors):
+                short_name = (
+                    transform.split("|")[-1].replace(":", "_")
+                )
+                material_name = "{prefix}{name}_{rand}".format(
+                    prefix=RANDOM_COLOR_PREFIX,
+                    name=short_name,
+                    rand=random.randint(1000, 9999),
+                )
+                shader, sg = self.create_openpbr_shader(
+                    material_name, color
+                )
+                self.assign_material(transform, sg)
                 created_count += 1
 
-            self.status_label.setText(f"Applied colors to {created_count} object(s)")
+            store_assignments(transforms, _random_assignments)
 
+            for transform in transforms:
+                if transform not in _tracked_objects:
+                    _tracked_objects.append(transform)
+            _active = True
+
+            self.status_label.setText(
+                f"Applied colors to {created_count} object(s)"
+            )
         except Exception as e:
             cmds.warning(f"Error applying colors: {str(e)}")
             self.status_label.setText(f"Error: {str(e)}")
-
         finally:
             cmds.undoInfo(closeChunk=True)
 
-    def remove_random_colors(self):
-        """Remove RandomColor materials from selected objects and assign default"""
-        meshes = self.get_selected_meshes()
+    def on_toggle(self):
+        """Toggle between random colors and originals on tracked set."""
+        result = toggle_random_colors()
+        if result == "off":
+            self.status_label.setText(
+                f"Originals restored on {len(_tracked_objects)} object(s)"
+            )
+        elif result == "on":
+            self.status_label.setText(
+                f"Random colors reapplied to {len(_tracked_objects)} object(s)"
+            )
+        else:
+            self.status_label.setText(
+                "Nothing tracked yet - click Apply first."
+            )
 
-        if not meshes:
-            self.status_label.setText("No mesh objects selected!")
-            return
+    def on_remove(self):
+        """Remove random colors from all tracked or just the selection.
 
-        cmds.undoInfo(openChunk=True)
-
-        try:
-            # Get default lambert
-            default_sg = "initialShadingGroup"
-
-            for mesh in meshes:
-                shapes = cmds.listRelatives(mesh, shapes=True, type='mesh', fullPath=True) or []
-                for shape in shapes:
-                    cmds.sets(shape, edit=True, forceElement=default_sg)
-
-            self.status_label.setText(f"Reset {len(meshes)} object(s) to default material")
-
-        except Exception as e:
-            cmds.warning(f"Error removing colors: {str(e)}")
-
-        finally:
-            cmds.undoInfo(closeChunk=True)
+        When "Apply to all" is checked, restores originals on every
+        tracked object.  Otherwise, restores only the tracked objects
+        currently selected - lets the user undo parts of a prior apply.
+        """
+        if self.apply_to_all_cb.isChecked():
+            count = remove_colors(None)
+            empty_msg = "Nothing to remove."
+        else:
+            selected = get_selected_colorable_transforms()
+            if not selected:
+                self.status_label.setText(
+                    "No mesh or NURBS objects selected!"
+                )
+                return
+            count = remove_colors(selected)
+            empty_msg = "Selected objects are not tracked."
+        if count:
+            self.status_label.setText(
+                f"Removed random colors from {count} object(s)"
+            )
+        else:
+            self.status_label.setText(empty_msg)
 
     def cleanup_unused_materials(self):
         """Delete unused RandomColor materials"""

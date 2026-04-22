@@ -93,7 +93,7 @@ Right-click on nodes to access additional options.
 Random Colors
 =============
 
-Random Colors is a tool for quickly assigning random muted or pastel colors to selected mesh objects. It creates OpenPBR (standardSurface) shaders with randomized colors, making it easy to visually distinguish objects in your scene.
+Random Colors is a tool for quickly assigning random muted or pastel colors to mesh and NURBS objects. It creates OpenPBR (standardSurface) shaders with randomized colors, making it easy to visually distinguish objects in your scene. The tool remembers the original material assignments per shape (including per-face multi-material setups), so originals can be restored or toggled back on at any time.
 
 .. image:: images/utilbits/random_colors.png
     :align: center
@@ -130,16 +130,30 @@ Apply common color styles with one click.
 
 Control how colors are assigned to objects.
 
-- **Unique Colors**: Generate a different color for each selected object
-- **Reuse Single Color**: Apply the same random color to all selected objects
+- **Unique color per object**: Generate a different color for each object in the target set
+- **Reuse existing RandomColor materials**: When enabled, the tool will reuse any matching ``RandomColor_*`` materials it finds instead of creating new ones
+- **Apply to all (scene mesh + NURBS)**: When checked, ignore selection and target every mesh and NURBS surface in the scene. When unchecked, only the current selection is targeted. This checkbox also controls the **Remove** button's scope.
 
-**Material Management**
+Apply Scope
+-----------
 
-Tools for managing RandomColor materials in your scene.
+- **Selected** (default): Uses the current Maya selection. Mesh transforms and NURBS surface transforms are both recognized; other node types are ignored. Empty selection shows a warning and aborts.
+- **All**: Check **Apply to all (scene mesh + NURBS)** in the Options group to sweep the whole scene. Intermediate shapes (blendshape caches, orig shapes) are skipped.
 
-- **Create and Apply**: Automatically create new OpenPBR shaders and assign them to selected objects
-- **Remove Materials**: Remove RandomColor materials from selected objects
-- **Cleanup**: Delete unused RandomColor materials from the scene
+Buttons
+-------
+
+- **Apply Random Colors**: Snapshots the current material assignments for the target set, then assigns a new ``RandomColor_*`` shader to each object. Repeated applies without a Remove keep the original (pre-first-apply) state on file — the true originals always survive.
+- **Toggle**: Flips between the last-applied random colors and the originals on every tracked object. Colors are preserved across toggles (the exact same random colors come back when toggling on again). Click **Apply Random Colors** to generate a fresh set.
+- **Remove**: Restores original materials. With **Apply to all** checked, restores every tracked object and clears tracking. With **Apply to all** unchecked, restores only the tracked objects in the current selection — useful for undoing parts of a prior apply while keeping the rest colored.
+- **Cleanup Unused**: Deletes any orphaned ``RandomColor_*`` shading groups and shaders left behind in the scene (for example, from older sessions).
+
+Restore Original Materials
+--------------------------
+
+Before applying random colors, the tool snapshots each shape's shading group membership, including per-face assignments on multi-material meshes. Full DAG paths are normalized at snapshot time so restores resolve reliably even if the shape was queried via transform short name. **Remove** and the off-side of **Toggle** reinstate the snapshot; a safety sweep pushes any shape still carrying a ``RandomColor_*`` SG onto ``initialShadingGroup`` so nothing is left rendering the random shader after a restore.
+
+Tracking state (originals, last-applied SGs, tracked transform list) persists in memory across UI close and reopen within the same Maya session.
 
 **Shader Properties**
 
