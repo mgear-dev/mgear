@@ -5,7 +5,7 @@ setlocal
 :: build_solvers.bat  --  Build mGear Maya solver plugins (.mll)
 ::
 :: Usage:
-::   build_solvers.bat              (auto-detect Maya 2023-2027)
+::   build_solvers.bat              (auto-detect Maya 2022-2027)
 ::   build_solvers.bat 2027         (target a specific Maya version)
 ::   build_solvers.bat clean        (delete build folder and rebuild)
 ::   build_solvers.bat clean 2027   (clean + specific version)
@@ -29,7 +29,7 @@ if /i "%~1"=="clean" (
 
 :: ----- Auto-detect Maya version if not specified ---------------------------
 if "%MAYA_VER%"=="" (
-    for %%V in (2027 2026 2025 2024 2023) do (
+    for %%V in (2027 2026 2025 2024 2023 2022) do (
         if exist "C:\Program Files\Autodesk\Maya%%V\include\maya\MFn.h" (
             set "MAYA_VER=%%V"
             goto :found_maya
@@ -44,9 +44,11 @@ if "%MAYA_VER%"=="" (
 :found_maya
 
 :: ----- Determine Visual Studio generator -----------------------------------
+:: Maya 2022-2024 were built with VS 2019; 2025+ with VS 2022.
 set "VS_GEN=Visual Studio 17 2022"
 if "%MAYA_VER%"=="2024" set "VS_GEN=Visual Studio 16 2019"
 if "%MAYA_VER%"=="2023" set "VS_GEN=Visual Studio 16 2019"
+if "%MAYA_VER%"=="2022" set "VS_GEN=Visual Studio 16 2019"
 
 set "MAYA_ROOT=C:\Program Files\Autodesk\Maya%MAYA_VER%"
 set "BUILD_DIR=%CMAKE_DIR%\build_%MAYA_VER%"

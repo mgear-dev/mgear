@@ -17,10 +17,25 @@ Before compiling mGear solvers, ensure you have the following installed:
 To generate the build solution for Visual Studio, run the following commands:
 
 ```sh
+cmake -G "Visual Studio 16 2019" -A x64 -DMAYA_VERSION=2022 ../
+cmake -G "Visual Studio 16 2019" -A x64 -DMAYA_VERSION=2023 ../
 cmake -G "Visual Studio 16 2019" -A x64 -DMAYA_VERSION=2024 ../
 cmake -G "Visual Studio 17 2022" -A x64 -DMAYA_VERSION=2025 ../
 cmake -G "Visual Studio 17 2022" -A x64 -DMAYA_VERSION=2026 ../
 cmake -G "Visual Studio 17 2022" -A x64 -DMAYA_VERSION=2027 ../
+```
+
+Or use the helper script which auto-detects the installed Maya SDK and picks the matching Visual Studio generator:
+
+```bat
+:: Auto-detect (Maya 2022-2027)
+build_solvers.bat
+
+:: Target a specific version
+build_solvers.bat 2022
+
+:: Clean build
+build_solvers.bat clean 2022
 ```
 
 To compile the solution:
