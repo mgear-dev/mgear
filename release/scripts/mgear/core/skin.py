@@ -1485,7 +1485,63 @@ def skin_copy_add(sourceMesh=None, targetMesh=None, layer_name=None, *args):
     return new_skin
 
 
-def _skinCopyPartialExecute(sourceMesh, vertices, normalize=True):
+def get_soft_selection_weights():
+    """Return per-vertex soft-selection falloff weights.
+
+    Reads Maya's current rich selection.  When soft selection is
+    disabled the helper still returns a weight of 1.0 for every
+    selected vertex, so callers can use the result unconditionally
+    as a "soft = 1.0 means full effect" lookup.
+
+    Returns:
+        dict: ``{(transform_name, vertex_index): float}`` mapping.
+            Empty dict if no vertex selection or if rich selection
+            could not be retrieved.
+    """
+    rich_sel = OpenMaya.MRichSelection()
+    try:
+        OpenMaya.MGlobal.getRichSelection(rich_sel)
+    except Exception:
+        return {}
+
+    sel_list = OpenMaya.MSelectionList()
+    rich_sel.getSelection(sel_list)
+
+    weights = {}
+    iterator = OpenMaya.MItSelectionList(sel_list)
+    while not iterator.isDone():
+        dag_path = OpenMaya.MDagPath()
+        component = OpenMaya.MObject()
+        iterator.getDagPath(dag_path, component)
+
+        if component.isNull() or not component.hasFn(
+            OpenMaya.MFn.kMeshVertComponent
+        ):
+            iterator.next()
+            continue
+
+        # Resolve to transform name to match _skinCopyPartialExecute
+        transform_path = OpenMaya.MDagPath(dag_path)
+        if transform_path.node().hasFn(OpenMaya.MFn.kMesh):
+            transform_path.pop()
+        transform_name = transform_path.partialPathName()
+
+        comp_fn = OpenMaya.MFnSingleIndexedComponent(component)
+        for i in range(comp_fn.elementCount()):
+            vtx_idx = comp_fn.element(i)
+            try:
+                w = comp_fn.weight(i).influence()
+            except Exception:
+                w = 1.0
+            weights[(transform_name, vtx_idx)] = w
+        iterator.next()
+
+    return weights
+
+
+def _skinCopyPartialExecute(
+    sourceMesh, vertices, normalize=True, soft_weights=None
+):
     """Execute the partial skin copy operation.
 
     Strategy:
@@ -1499,6 +1555,13 @@ def _skinCopyPartialExecute(sourceMesh, vertices, normalize=True):
         sourceMesh: Source mesh name or node with skinCluster.
         vertices (list): List of vertex components to copy weights to.
         normalize (bool): Normalize weights after copying.
+        soft_weights (dict, optional): Mapping of
+            ``(transform_name, vertex_index) -> falloff (0-1)``.  When
+            provided, each vertex's final weight per influence is a
+            linear blend ``original * (1 - soft) + copied * soft``.
+            Vertices missing from the dict default to 1.0 (full
+            effect), making this argument backwards-compatible with
+            hard selection.
 
     """
     sourceName = str(sourceMesh)
@@ -1532,8 +1595,18 @@ def _skinCopyPartialExecute(sourceMesh, vertices, normalize=True):
         # Extract vertex index
         vtxIdx = int(vtxStr.split("[")[1].split("]")[0])
         if nodeName not in verticesByMesh:
-            verticesByMesh[nodeName] = []
-        verticesByMesh[nodeName].append(vtxIdx)
+            verticesByMesh[nodeName] = set()
+        verticesByMesh[nodeName].add(vtxIdx)
+
+    # When soft selection is active, MRichSelection contains both the
+    # hard-selected vertices (weight 1.0) and the falloff region
+    # (weight < 1.0).  pm.ls(sl=True, fl=True) only returns the hard
+    # set, so expand each mesh's vertex set with the falloff vertices
+    # so they participate in the blend below.
+    if soft_weights:
+        for (meshName, vtxIdx) in soft_weights:
+            if meshName in verticesByMesh:
+                verticesByMesh[meshName].add(vtxIdx)
 
     # Process each target mesh
     totalVertices = 0
@@ -1591,11 +1664,22 @@ def _skinCopyPartialExecute(sourceMesh, vertices, normalize=True):
         # 3. Store copied weights
         copiedWeights = getCurrentWeights(targetSkinNode, dagPath, components)
 
-        # 4. Merge: replace only selected vertex weights in original array
+        # 4. Merge: blend copied weights into original by soft falloff.
+        # When soft_weights is None or a vertex is missing, soft=1.0
+        # collapses the blend to a pure overwrite (hard selection).
         for vtxIdx in vtxIndices:
+            if soft_weights:
+                soft = soft_weights.get((meshName, vtxIdx), 1.0)
+            else:
+                soft = 1.0
+            inv = 1.0 - soft
             for infIdx in range(numInfluences):
                 arrayIdx = vtxIdx * numInfluences + infIdx
-                originalWeights.set(copiedWeights[arrayIdx], arrayIdx)
+                blended = (
+                    originalWeights[arrayIdx] * inv
+                    + copiedWeights[arrayIdx] * soft
+                )
+                originalWeights.set(blended, arrayIdx)
 
         # 5. Apply merged weights in one batch
         influenceIndices = OpenMaya.MIntArray()
@@ -1720,12 +1804,17 @@ class SkinCopyPartialUI(QtWidgets.QDialog):
 
         normalize = self.normalize_chk.isChecked()
 
+        # Capture soft-selection falloff before any selection change
+        soft_weights = get_soft_selection_weights()
+
         # Store vertex names as strings for safe reselection
         vertex_names = [str(v) for v in vertices]
 
         # Execute copy
         try:
-            _skinCopyPartialExecute(sourceMesh, vertices, normalize)
+            _skinCopyPartialExecute(
+                sourceMesh, vertices, normalize, soft_weights=soft_weights
+            )
         except Exception as e:
             pm.displayError("Copy failed: {}".format(e))
             import traceback
@@ -1747,11 +1836,17 @@ def openSkinCopyPartialUI():
     return dialog
 
 
-def skinCopyPartial(sourceMesh=None, targetMesh=None, normalize=True):
+def skinCopyPartial(
+    sourceMesh=None, targetMesh=None, normalize=True, soft_select=True
+):
     """Copy skin weights from source mesh to selected vertices on target mesh.
 
     Uses closest point matching - for each selected vertex on the target,
     finds the closest vertex on the source and copies its weights.
+
+    When Maya's soft selection is enabled the falloff weights are read
+    from the active rich selection and used to linearly blend the
+    copied weights with the original weights per vertex.
 
     When called without sourceMesh, opens the UI for interactive use.
 
@@ -1761,6 +1856,9 @@ def skinCopyPartial(sourceMesh=None, targetMesh=None, normalize=True):
         targetMesh (str or PyNode): Target mesh with skinCluster.
             If None, derives from selected vertices.
         normalize (bool): Normalize weights after copying. Defaults to True.
+        soft_select (bool): Honor Maya's soft selection falloff when
+            blending the copied weights. Defaults to True. Set False
+            to force a hard copy regardless of soft-select state.
 
     Returns:
         bool: True if successful, False otherwise.
@@ -1789,13 +1887,17 @@ def skinCopyPartial(sourceMesh=None, targetMesh=None, normalize=True):
         pm.displayWarning("Please select vertices on target mesh.")
         return False
 
+    soft_weights = get_soft_selection_weights() if soft_select else None
+
     # Unused but kept for API compatibility
     _ = targetMesh
 
     if isinstance(sourceMesh, string_types):
         sourceMesh = pm.PyNode(sourceMesh)
 
-    return _skinCopyPartialExecute(sourceMesh, vertices, normalize)
+    return _skinCopyPartialExecute(
+        sourceMesh, vertices, normalize, soft_weights=soft_weights
+    )
 
 
 ######################################

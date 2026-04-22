@@ -55,6 +55,32 @@ A dialog appears with the following options:
 
 This tool uses closest-point matching to find the corresponding source vertex for each selected target vertex, making it ideal for fixing specific areas without a full skin copy.
 
+**Soft selection support**
+
+When Maya's soft selection is enabled (``B`` key), the tool automatically expands the working set to include every vertex inside the falloff region — you do not need to manually select them. Each vertex's falloff value (0–1) is read from the active rich selection and used to **linearly blend** the copied weights with the vertex's existing weights:
+
+* Vertices at the center of the selection (falloff = 1.0) receive the **full copied weight** (100% replacement).
+* Vertices at the edge of the falloff (falloff ≈ 0.0) keep weights very close to their original.
+* Everything in between is a smooth, proportional blend.
+
+The result is a continuous gradient out from the click point instead of a hard seam at the selection boundary.
+
+The hard selection still defines **which meshes** are touched: only meshes that contain at least one explicitly selected vertex are processed, even if soft falloff happens to reach a neighboring mesh.
+
+Hard selection (soft select off) behaves exactly as before: every explicitly selected vertex is fully replaced with the copied weights and nothing else is touched.
+
+**Scripted use**
+
+.. code-block:: python
+
+    from mgear.core import skin
+
+    # Honors current soft-selection state by default.
+    skin.skinCopyPartial(sourceMesh="body_geo")
+
+    # Force a hard copy regardless of soft-select state.
+    skin.skinCopyPartial(sourceMesh="body_geo", soft_select=False)
+
 
 Select Skin Deformers
 =====================
