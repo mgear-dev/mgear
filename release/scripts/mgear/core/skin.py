@@ -1488,20 +1488,19 @@ def skin_copy_add(sourceMesh=None, targetMesh=None, layer_name=None, *args):
 def get_soft_selection_weights():
     """Return per-vertex soft-selection falloff weights.
 
-    Reads Maya's current rich selection.  When soft selection is
-    disabled the helper still returns a weight of 1.0 for every
-    selected vertex, so callers can use the result unconditionally
-    as a "soft = 1.0 means full effect" lookup.
-
     Returns:
-        dict: ``{(transform_name, vertex_index): float}`` mapping.
-            Empty dict if no vertex selection or if rich selection
-            could not be retrieved.
+        dict: ``{(transform_short_name, vertex_index): float}`` mapping.
+            Empty dict when soft selection is disabled, when there is
+            no vertex selection, or when rich selection cannot be
+            retrieved.
     """
+    if not cmds.softSelect(query=True, softSelectEnabled=True):
+        return {}
+
     rich_sel = OpenMaya.MRichSelection()
     try:
         OpenMaya.MGlobal.getRichSelection(rich_sel)
-    except Exception:
+    except RuntimeError:
         return {}
 
     sel_list = OpenMaya.MSelectionList()
@@ -1520,18 +1519,29 @@ def get_soft_selection_weights():
             iterator.next()
             continue
 
-        # Resolve to transform name to match _skinCopyPartialExecute
+        # Match the short-name resolution used by _skinCopyPartialExecute.
+        # partialPathName() can include parent prefixes when the transform
+        # short name is ambiguous; strip to the final token for consistency.
         transform_path = OpenMaya.MDagPath(dag_path)
         if transform_path.node().hasFn(OpenMaya.MFn.kMesh):
             transform_path.pop()
-        transform_name = transform_path.partialPathName()
+        transform_name = transform_path.partialPathName().split("|")[-1]
 
         comp_fn = OpenMaya.MFnSingleIndexedComponent(component)
+        # Probe weight access once.  When rich selection has no per-element
+        # weights (uniform case) this lets the entire component default to
+        # 1.0 without paying an exception per vertex.
+        try:
+            comp_fn.weight(0).influence()
+            has_weights = True
+        except RuntimeError:
+            has_weights = False
+
         for i in range(comp_fn.elementCount()):
             vtx_idx = comp_fn.element(i)
-            try:
+            if has_weights:
                 w = comp_fn.weight(i).influence()
-            except Exception:
+            else:
                 w = 1.0
             weights[(transform_name, vtx_idx)] = w
         iterator.next()
@@ -1598,11 +1608,9 @@ def _skinCopyPartialExecute(
             verticesByMesh[nodeName] = set()
         verticesByMesh[nodeName].add(vtxIdx)
 
-    # When soft selection is active, MRichSelection contains both the
-    # hard-selected vertices (weight 1.0) and the falloff region
-    # (weight < 1.0).  pm.ls(sl=True, fl=True) only returns the hard
-    # set, so expand each mesh's vertex set with the falloff vertices
-    # so they participate in the blend below.
+    # Expand each mesh's vertex set with the soft-selection falloff
+    # region; pm.ls(sl=True, fl=True) only returns hard-selected
+    # vertices, so falloff vertices need to be unioned in explicitly.
     if soft_weights:
         for (meshName, vtxIdx) in soft_weights:
             if meshName in verticesByMesh:
@@ -1664,14 +1672,11 @@ def _skinCopyPartialExecute(
         # 3. Store copied weights
         copiedWeights = getCurrentWeights(targetSkinNode, dagPath, components)
 
-        # 4. Merge: blend copied weights into original by soft falloff.
-        # When soft_weights is None or a vertex is missing, soft=1.0
-        # collapses the blend to a pure overwrite (hard selection).
+        # 4. Merge: blend copied into original per soft falloff.
+        # Missing vertices default to 1.0, collapsing to a pure overwrite.
+        soft_lookup = soft_weights or {}
         for vtxIdx in vtxIndices:
-            if soft_weights:
-                soft = soft_weights.get((meshName, vtxIdx), 1.0)
-            else:
-                soft = 1.0
+            soft = soft_lookup.get((meshName, vtxIdx), 1.0)
             inv = 1.0 - soft
             for infIdx in range(numInfluences):
                 arrayIdx = vtxIdx * numInfluences + infIdx
