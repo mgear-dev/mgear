@@ -23,7 +23,8 @@ logger = logging.getLogger("mgear.utilbits.bookmarks")
 BOOKMARK_SELECTION = "selection"
 BOOKMARK_ISOLATE = "isolate"
 CONFIG_FILE_EXT = ".sbk"
-CONFIG_VERSION = "1.0"
+CONFIG_VERSION = "2.0"
+LEGACY_CONFIG_VERSION = "1.0"
 SCENE_NODE_NAME = "mgear_selection_bookmarks"
 SCENE_NODE_TYPE_ATTR = "is_selection_bookmarks_data"
 SCENE_NODE_DATA_ATTR = "bookmarks_data"
@@ -71,6 +72,7 @@ def create_bookmark(name, bookmark_type, items, color=None):
         "color": list(color),
         "type": bookmark_type,
         "items": list(items),
+        "use_selected_namespace": False,
     }
 
 
@@ -88,22 +90,32 @@ def bookmark_from_selection(name, bookmark_type, color=None):
     sel = cmds.ls(selection=True, long=True, flatten=True)
     if not sel:
         return None
-    return create_bookmark(name, bookmark_type, sel, color)
+    items = [to_storage_form(s) for s in sel]
+    return create_bookmark(name, bookmark_type, items, color)
 
 
 def validate_bookmark_items(bookmark):
     """Filter bookmark items to only those that exist in the scene.
 
+    Resolves stored short names through ``resolve_bookmark_items`` so
+    namespace handling is consistent with recall.
+
     Args:
         bookmark (dict): The bookmark to validate.
 
     Returns:
-        list: Valid item names that exist in the current scene.
+        list: Valid long DAG paths for items that exist in the
+            current scene. Returns an empty list if resolution fails
+            (ambiguous items, etc.) -- callers that need detailed
+            error reporting should call ``resolve_bookmark_items``.
     """
-    items = bookmark["items"]
-    if not items:
+    if not bookmark.get("items"):
         return []
-    return cmds.ls(items, long=True) or []
+    try:
+        resolved, _missing = resolve_bookmark_items(bookmark)
+    except RuntimeError:
+        return []
+    return resolved
 
 
 def build_tooltip(bookmark):
@@ -135,7 +147,7 @@ def build_tooltip(bookmark):
             components[obj].setdefault(comp_type, 0)
             components[obj][comp_type] += 1
         else:
-            objects.append(item.rsplit("|", 1)[-1])
+            objects.append(item)
 
     lines = [type_label]
     lines.append("{} items total".format(len(items)))
@@ -153,11 +165,14 @@ def build_tooltip(bookmark):
             lines.append("")
         lines.append("Components:")
         for obj, types in sorted(components.items()):
-            short = obj.rsplit("|", 1)[-1]
             parts = []
             for comp_type, count in sorted(types.items()):
                 parts.append("{} {}".format(count, comp_type))
-            lines.append("  {}: {}".format(short, ", ".join(parts)))
+            lines.append("  {}: {}".format(obj, ", ".join(parts)))
+
+    if bookmark.get("use_selected_namespace"):
+        lines.append("")
+        lines.append("Namespace: from current selection")
 
     return "\n".join(lines)
 
@@ -180,6 +195,140 @@ def text_color_for_background(color):
 
 
 #############################################
+# NAME / NAMESPACE HELPERS
+#############################################
+
+
+def to_storage_form(name):
+    """Convert a long DAG path or any node name to v2.0 storage form.
+
+    Strips the DAG path, keeping ``namespace:short[.component]``.
+
+    Args:
+        name (str): Maya node name, possibly with full DAG path.
+
+    Returns:
+        str: Storage-form name.
+    """
+    return name.rsplit("|", 1)[-1]
+
+
+def extract_namespace(name):
+    """Return the namespace prefix of a node name (without trailing colon).
+
+    Handles nested namespaces (``char01:rig:body`` -> ``char01:rig``).
+    Returns an empty string if the node has no namespace.
+
+    Args:
+        name (str): Node name (long path, short, or with components).
+
+    Returns:
+        str: Namespace string, possibly nested, or empty string.
+    """
+    short = name.rsplit("|", 1)[-1]
+    obj = short.split(".", 1)[0]
+    if ":" not in obj:
+        return ""
+    return obj.rsplit(":", 1)[0]
+
+
+def strip_namespace(name):
+    """Return the node's bare short name with no DAG path or namespace.
+
+    Components are preserved (``char01:body.f[0:10]`` -> ``body.f[0:10]``).
+
+    Args:
+        name (str): Node name (long path, short, or with components).
+
+    Returns:
+        str: Short name without namespace.
+    """
+    short = name.rsplit("|", 1)[-1]
+    if "." in short:
+        obj, comp = short.split(".", 1)
+        return obj.rsplit(":", 1)[-1] + "." + comp
+    return short.rsplit(":", 1)[-1]
+
+
+def swap_namespace(stored_item, new_ns):
+    """Replace the namespace prefix of a v2.0 storage-form item.
+
+    Args:
+        stored_item (str): Item in storage form (``ns:short[.comp]``).
+        new_ns (str): New namespace, possibly nested. Empty string
+            means root namespace.
+
+    Returns:
+        str: Item with the namespace replaced.
+    """
+    bare = strip_namespace(stored_item)
+    if new_ns:
+        return "{}:{}".format(new_ns, bare)
+    return bare
+
+
+def resolve_bookmark_items(bookmark):
+    """Resolve a bookmark's items to long DAG paths in the current scene.
+
+    Honors the ``use_selected_namespace`` toggle: when on, every item's
+    stored namespace is replaced with the namespace of the currently
+    selected object before lookup.
+
+    Components like ``ns:body.f[0:10]`` are resolved by looking up the
+    parent transform first (so ambiguity is detected on the transform),
+    then re-attaching the component suffix to the long path.
+
+    Args:
+        bookmark (dict): The bookmark dictionary.
+
+    Returns:
+        tuple: ``(resolved, missing)`` where ``resolved`` is a list of
+            long DAG paths (with components if present) and ``missing``
+            is a list of stored items that did not resolve.
+
+    Raises:
+        RuntimeError: If any item is ambiguous, or if
+            ``use_selected_namespace`` is on with no current selection.
+    """
+    items = bookmark.get("items", [])
+    if bookmark.get("use_selected_namespace"):
+        sel = cmds.ls(selection=True, long=True) or []
+        if not sel:
+            raise RuntimeError(
+                "'Use selected namespace' is on but nothing is selected."
+            )
+        new_ns = extract_namespace(sel[0])
+        items = [swap_namespace(i, new_ns) for i in items]
+
+    resolved = []
+    ambiguous = []
+    missing = []
+    for item in items:
+        if "." in item and "[" in item:
+            obj, comp = item.split(".", 1)
+        else:
+            obj, comp = item, None
+        matches = cmds.ls(obj, long=True) or []
+        if not matches:
+            missing.append(item)
+            continue
+        if len(matches) > 1:
+            ambiguous.append((item, matches))
+            continue
+        resolved.append(matches[0] + ("." + comp if comp else ""))
+
+    if ambiguous:
+        details = "\n".join(
+            "  '{}' -> {}".format(name, ", ".join(m))
+            for name, m in ambiguous
+        )
+        raise RuntimeError(
+            "Bookmark items are ambiguous:\n{}".format(details)
+        )
+    return resolved, missing
+
+
+#############################################
 # SELECTION LOGIC
 #############################################
 
@@ -191,10 +340,18 @@ def recall_selection(bookmark, mode="replace"):
         bookmark (dict): The bookmark dictionary.
         mode (str): "replace", "add", or "deselect".
     """
-    valid = validate_bookmark_items(bookmark)
+    try:
+        valid, missing = resolve_bookmark_items(bookmark)
+    except RuntimeError as e:
+        cmds.warning(str(e))
+        return
     if not valid:
         cmds.warning("No bookmark items found in scene")
         return
+    if missing:
+        cmds.warning(
+            "{} bookmark item(s) not found in scene".format(len(missing))
+        )
     if mode == "add":
         cmds.select(valid, add=True)
     elif mode == "deselect":
@@ -216,7 +373,10 @@ def add_selected_to_bookmark(bookmark):
     if not sel:
         return 0
     existing = set(bookmark["items"])
-    new_items = [i for i in sel if i not in existing]
+    new_items = [
+        item for item in (to_storage_form(s) for s in sel)
+        if item not in existing
+    ]
     bookmark["items"].extend(new_items)
     return len(new_items)
 
@@ -230,11 +390,14 @@ def remove_selected_from_bookmark(bookmark):
     Returns:
         int: Number of items removed.
     """
-    sel = set(cmds.ls(selection=True, long=True, flatten=True) or [])
+    sel = cmds.ls(selection=True, long=True, flatten=True) or []
     if not sel:
         return 0
+    sel_storage = {to_storage_form(s) for s in sel}
     original_count = len(bookmark["items"])
-    bookmark["items"] = [i for i in bookmark["items"] if i not in sel]
+    bookmark["items"] = [
+        i for i in bookmark["items"] if i not in sel_storage
+    ]
     return original_count - len(bookmark["items"])
 
 
@@ -254,10 +417,18 @@ def toggle_isolate(bookmark):
     Args:
         bookmark (dict): The bookmark dictionary.
     """
-    valid = validate_bookmark_items(bookmark)
+    try:
+        valid, missing = resolve_bookmark_items(bookmark)
+    except RuntimeError as e:
+        cmds.warning(str(e))
+        return
     if not valid:
         cmds.warning("No bookmark items found in scene")
         return
+    if missing:
+        cmds.warning(
+            "{} bookmark item(s) not found in scene".format(len(missing))
+        )
 
     panel = _get_active_model_panel()
     if not panel:
@@ -325,6 +496,9 @@ def bookmarks_to_config(bookmarks, layout="horizontal"):
                 "color": list(bm["color"]),
                 "type": bm["type"],
                 "items": list(bm["items"]),
+                "use_selected_namespace": bool(
+                    bm.get("use_selected_namespace", False)
+                ),
             }
             for bm in bookmarks
         ],
@@ -340,8 +514,24 @@ def config_to_bookmarks(config):
     Returns:
         tuple: (list of bookmark dicts, layout string).
     """
-    bookmarks = config.get("bookmarks", [])
+    version = config.get("version", LEGACY_CONFIG_VERSION)
     layout = config.get("layout", "horizontal")
+    bookmarks = []
+    for raw in config.get("bookmarks", []):
+        items = raw.get("items", [])
+        if version == LEGACY_CONFIG_VERSION:
+            # Legacy schema stored full DAG paths; trim to storage form
+            # (namespace:short[.component]) so the resolver can match.
+            items = [to_storage_form(i) for i in items]
+        bookmarks.append({
+            "name": raw.get("name", "Bookmark"),
+            "color": list(raw.get("color", random_pastel_color())),
+            "type": raw.get("type", BOOKMARK_SELECTION),
+            "items": items,
+            "use_selected_namespace": bool(
+                raw.get("use_selected_namespace", False)
+            ),
+        })
     return bookmarks, layout
 
 

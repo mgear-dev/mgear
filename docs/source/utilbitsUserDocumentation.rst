@@ -177,6 +177,31 @@ Features
 - **Isolate Bookmark**: Show only the bookmarked objects in the viewport, hiding everything else
 - **Toggle**: Click again to restore full scene visibility
 
+Name Resolution and Namespaces
+------------------------------
+
+As of bookmark schema **v2.0**, items are stored as **short names with their namespace** (``char01:body``, ``char01:body.f[0:10]``) rather than full DAG paths. This means a bookmark survives DAG reorganization — moving the rig under a new group, renaming a parent, etc. no longer breaks the bookmark.
+
+**Per-bookmark namespace mode**
+
+Right-click a bookmark and toggle **Use Selected Object's Namespace** to control how the bookmark resolves at recall time:
+
+- **Off (default)**: The bookmark uses the namespace embedded when it was created. ``char01:body`` always selects ``char01:body``.
+- **On**: At recall time, the namespace is taken from whatever object you currently have selected, and the bookmark's stored namespaces are *replaced*. This lets one bookmark drive the same selection set across multiple character instances — create a bookmark on ``char01``, select any object in ``char02``, click the bookmark, and the equivalent ``char02:`` items are selected. The tooltip shows ``Namespace: from current selection`` when this mode is on.
+
+If the toggle is on but nothing is selected when you click the bookmark, the tool warns and does nothing rather than guessing.
+
+**Ambiguous short names**
+
+If a stored short name (after any namespace swap) matches **more than one** object in the scene, the bookmark refuses to select anything and shows a warning listing every match. Rename the conflicting nodes to disambiguate, or namespace them.
+
+Backwards Compatibility
+-----------------------
+
+- Existing v1.0 ``.sbk`` files (which store full DAG paths) still load. Each item is trimmed to its storage form on load.
+- Re-saving a v1.0 file writes it out as v2.0 automatically; ``Use Selected Object's Namespace`` defaults to **off** on migrated bookmarks so behavior matches the original.
+- Bookmarks stored in the Maya scene (network node) follow the same migration rules.
+
 .. _matcap-viewer:
 
 Matcap Viewer

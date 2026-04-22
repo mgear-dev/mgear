@@ -156,6 +156,7 @@ class ChipButton(QtWidgets.QPushButton):
     add_to_shelf_requested = QtCore.Signal(object)
     delete_requested = QtCore.Signal(object)
     toggle_menu_requested = QtCore.Signal()
+    toggle_namespace_mode_requested = QtCore.Signal(object)
     drag_reorder = QtCore.Signal(object, object)
 
     def __init__(self, bookmark, parent=None):
@@ -308,6 +309,12 @@ class ChipButton(QtWidgets.QPushButton):
         add_action = menu.addAction("Add Selected Items")
         remove_action = menu.addAction("Remove Selected Items")
         menu.addSeparator()
+        ns_action = menu.addAction("Use Selected Object's Namespace")
+        ns_action.setCheckable(True)
+        ns_action.setChecked(
+            bool(self.bookmark.get("use_selected_namespace", False))
+        )
+        menu.addSeparator()
         shelf_action = menu.addAction("Add to Shelf")
         menu.addSeparator()
         toggle_menu_action = menu.addAction("Toggle Menu Bar")
@@ -324,6 +331,8 @@ class ChipButton(QtWidgets.QPushButton):
             self.add_items_requested.emit(self.bookmark)
         elif action == remove_action:
             self.remove_items_requested.emit(self.bookmark)
+        elif action == ns_action:
+            self.toggle_namespace_mode_requested.emit(self.bookmark)
         elif action == shelf_action:
             self.add_to_shelf_requested.emit(self.bookmark)
         elif action == toggle_menu_action:

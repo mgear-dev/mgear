@@ -259,6 +259,9 @@ class BookmarksUI(
         chip.add_to_shelf_requested.connect(self._on_add_to_shelf)
         chip.delete_requested.connect(self._on_delete)
         chip.toggle_menu_requested.connect(self._toggle_menu_bar)
+        chip.toggle_namespace_mode_requested.connect(
+            self._on_toggle_namespace_mode
+        )
 
     def _insert_chip_widget(self, chip):
         """Insert chip widget into the current layout.
@@ -521,6 +524,20 @@ class BookmarksUI(
             self._auto_save()
         else:
             cmds.warning("No matching items to remove")
+
+    def _on_toggle_namespace_mode(self, bookmark):
+        """Flip the bookmark's use_selected_namespace toggle.
+
+        Args:
+            bookmark (dict): The bookmark to modify.
+        """
+        bookmark["use_selected_namespace"] = not bookmark.get(
+            "use_selected_namespace", False
+        )
+        chip = self._find_chip_for_bookmark(bookmark)
+        if chip:
+            chip.update_bookmark(bookmark)
+        self._auto_save()
 
     def _on_add_to_shelf(self, bookmark):
         """Add bookmark to Maya's current shelf.
