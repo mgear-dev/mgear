@@ -2,6 +2,22 @@ Release Log
 ===========
 
 
+5.3.2
+------
+**Enhancements**
+	* Core: Skin: Add soft selection support to Copy Skin Partial — falloff vertices are blended proportional to Maya's rich-selection falloff instead of producing a hard seam at the selection boundary
+	* Rigbits: Evaluation Partition: Store short names in .evp configs (v2.0) for portability across scenes, namespaces and rig reorganizations, with explicit ambiguity errors and backwards-compatible v1.0 loading
+	* SimpleRig: Auto-skin walks the subtree under each driven, binding every mesh / NURBS descendant to the correct joint and respecting nested controls via a claim-set, so controls attached to plain transforms no longer skip their geometry
+	* Utilbits: Bookmarks: Store short names with namespace (v2.0), per-bookmark "Use Selected Object's Namespace" toggle to drive one bookmark across multiple rig instances, ambiguity detection, backwards-compatible v1.0 loading
+	* Utilbits: Random Colors: Remember original shading-group assignments for restoration, add Toggle and Remove operations, Apply-to-all (mesh + NURBS) option with NURBS surface support
+	* Docs: Rigbits: Add Evaluation Partition scripting examples (execute_from_file, execute_full_pipeline, per-step usage)
+	* Docs: SimpleRig: Add user documentation
+
+**Bug Fix**
+	* Anim Picker: Fix rendering with PySide6 / Linux #609, remove dead __USE_OPENGL__ code path #580
+	* SimpleRig: Fix KeyError in Convert to Shifter Rig when the control hierarchy has sibling branches of unequal depth (parent could be processed after child)
+	* Utilbits: Matcap Viewer: Fix shader restore and selection handling — skip intermediate shapes, match SG members via both short and full DAG paths for face-based restores, abort "Apply to Selected" on empty selection, and clear residual matcap_SG before restore
+
 5.3.1
 ------
 **Enhancements**
