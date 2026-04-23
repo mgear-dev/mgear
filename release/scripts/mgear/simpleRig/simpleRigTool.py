@@ -1075,19 +1075,24 @@ def convert_to_shifter_rig():
         guide, configDict = convert_to_shifter_guide()
         if guide:
             # ensure the objects are removed from the original rig
+            # and their matrix driver chain is cleaned up (3x
+            # mgear_mulMatrix + decomposeMatrix per driven).  Shifter
+            # takes over via skin, so the chain is dead weight once
+            # the simple rig is deleted.
             for c in configDict["ctl_list"]:
                 ctl_conf = configDict["ctl_settings"][c]
                 for d in ctl_conf["driven_list"]:
                     driven = pm.ls(d)
-                    if driven and driven[0].getParent(-1).hasAttr(
-                        "is_simple_rig"
-                    ):
+                    if not driven:
+                        continue
+                    if driven[0].getParent(-1).hasAttr("is_simple_rig"):
                         pm.displayWarning(
                             "{}: cut for old rig hierarchy"
                             "to avoid delete it when delete "
                             "the old rig!!"
                         )
-                        pm.parent(driven, w=True)
+                        pm.parent(driven[0], w=True)
+                    _disconnect_driven(driven[0])
 
             # delete original rig
             pm.delete(simple_rig_root)
