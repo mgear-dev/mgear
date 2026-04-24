@@ -185,6 +185,12 @@ def _get_switch_node_attrs(node, end_string):
                 "{}.{}".format(node, attr), query=True, usedAsProxy=True
             ):
                 continue
+            # Skip string attributes — switch/blend attrs are enum or numeric
+            attr_type = cmds.attributeQuery(
+                attr, node=node, attributeType=True
+            )
+            if attr_type in ("string", "typed"):
+                continue
             attrs.append(attr)
     return attrs
 
@@ -1136,9 +1142,13 @@ def mgear_dagmenu_fill(parent_menu, current_control):
                 image="dynamicConstraint.svg",
             )
             cmds.radioMenuItemCollection(parent=_p_switch_menu)
-            k_values = cmds.addAttr(
+            enum_name = cmds.addAttr(
                 "{}.{}".format(uih, attr), query=True, enumName=True
-            ).split(":")
+            )
+            if not enum_name:
+                cmds.deleteUI(_p_switch_menu)
+                continue
+            k_values = enum_name.split(":")
             current_state = cmds.getAttr("{}.{}".format(uih, attr))
 
             combo_box = QtWidgets.QComboBox()
