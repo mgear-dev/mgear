@@ -1,8 +1,8 @@
 import math
 from typing import Tuple
 
-PHI = (math.sqrt(5) - 1) / 2
-GOLDEN_ANGLE = PHI * 360
+PHI = (1 + math.sqrt(5)) / 2
+GOLDEN_ANGLE = (2 - PHI) * 360
 
 
 def float_to_byte_color(color: Tuple[float, float, float]) -> Tuple[int, int, int]:
