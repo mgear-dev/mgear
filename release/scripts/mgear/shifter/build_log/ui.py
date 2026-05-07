@@ -14,6 +14,7 @@ from mgear.core import pyqt
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
+from mgear.vendor.Qt import QtCompat
 
 from maya import cmds
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
@@ -228,7 +229,7 @@ class BuildLogWindow(
             self._on_font_size_changed
         )
 
-        self.clear_btn.clicked.connect(self._clear_log)
+        self.clear_btn.clicked.connect(self.clear_log)
         self.export_btn.clicked.connect(self._export_log)
         self.compare_btn.clicked.connect(self._show_compare_dialog)
 
@@ -454,7 +455,7 @@ class BuildLogWindow(
     # EXPORT / COMPARE
     # =================================================================
 
-    def _clear_log(self):
+    def clear_log(self):
         """Clear all log records and the display."""
         self.handler.clear()
         self.log_view.clear()
@@ -502,13 +503,7 @@ class BuildLogWindow(
         Returns:
             bool: True if the instance is safe to reuse.
         """
-        if cls._instance is None:
-            return False
-        try:
-            cls._instance.objectName()
-            return True
-        except RuntimeError:
-            return False
+        return cls._instance is not None and QtCompat.isValid(cls._instance)
 
     @classmethod
     def _teardown_dead_instance(cls):
@@ -521,7 +516,9 @@ class BuildLogWindow(
             return
         try:
             mgear.unregister_log_handler(instance.handler.handle)
-        except (AttributeError, RuntimeError):
+        except AttributeError:
+            # Guards against an instance that failed mid-__init__ before
+            # ``self.handler`` was assigned.
             pass
         _uninstall_display_hooks()
         cls._instance = None
@@ -539,7 +536,7 @@ class BuildLogWindow(
         the new instance.
         """
         if cls._is_instance_alive():
-            cls._instance._clear_log()
+            cls._instance.clear_log()
             cls._instance.raise_()
             cls._instance.show()
             cls._instance.activateWindow()
