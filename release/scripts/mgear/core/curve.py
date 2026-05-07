@@ -1327,3 +1327,78 @@ def add_linear_skinning_to_curve(curve_name, joint_list):
             )
 
     return skin_cluster
+
+
+# ========================================
+# Shape copy helpers
+# ========================================
+
+
+CURVE_DISPLAY_ATTRS = (
+    "overrideEnabled",
+    "overrideDisplayType",
+    "overrideRGBColors",
+    "overrideColor",
+    "overrideColorR",
+    "overrideColorG",
+    "overrideColorB",
+    "overrideColorA",
+    "lineWidth",
+    "alwaysDrawOnTop",
+)
+
+
+def create_curve_shape_under(src_shape_path, dst_xform_path):
+    """Build an independent NurbsCurve shape under ``dst_xform_path``
+    that is a geometry-level copy of ``src_shape_path``, using the
+    OpenMaya API directly.
+
+    Bypasses ``cmds.duplicate`` entirely -- there is no temporary
+    transform to delete and no descendant hierarchy to walk, so the
+    cost is constant per shape regardless of where the source lives
+    in the DAG. The result is independent of any instancing on the
+    source.
+
+    Args:
+        src_shape_path (str): Full DAG path to a NurbsCurve shape.
+        dst_xform_path (str): Full DAG path to the parent transform.
+
+    Returns:
+        str: Full DAG path of the newly created shape.
+    """
+    src_curve = om2.MFnNurbsCurve(utils.get_dag_path(src_shape_path))
+
+    dst_sel = om2.MSelectionList()
+    dst_sel.add(dst_xform_path)
+    dst_obj = dst_sel.getDependNode(0)
+
+    new_curve = om2.MFnNurbsCurve()
+    new_obj = new_curve.create(
+        src_curve.cvPositions(om2.MSpace.kObject),
+        src_curve.knots(),
+        src_curve.degree,
+        src_curve.form,
+        False,  # create2D
+        True,  # rational
+        dst_obj,
+    )
+    return om2.MFnDagNode(new_obj).fullPathName()
+
+
+def copy_curve_display_attrs(src_shape, dst_shape):
+    """Best-effort copy of curve display attributes (color, line
+    width, override flags) from ``src_shape`` to ``dst_shape``. The
+    set of attributes copied is :data:`CURVE_DISPLAY_ATTRS`.
+
+    Missing or locked attributes are skipped silently so the copy
+    succeeds even if the source has unusual attribute state.
+
+    Args:
+        src_shape (str): Path to the source shape.
+        dst_shape (str): Path to the destination shape.
+    """
+    for attr in CURVE_DISPLAY_ATTRS:
+        try:
+            cmds.setAttr(dst_shape + "." + attr, cmds.getAttr(src_shape + "." + attr))
+        except (RuntimeError, ValueError):
+            pass

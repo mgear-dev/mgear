@@ -5,10 +5,10 @@ from mgear.core import pyqt
 
 
 from maya import cmds
-import maya.api.OpenMaya as om2
 
 import mgear.pymaya as pm
 from mgear.pymaya import datatypes
+from mgear.core import curve
 from mgear.core import transform
 
 import mgear
@@ -141,77 +141,6 @@ def inspect_settings(tabIdx=0, *args):
         pm.displayError("The selected object is not part of component guide")
 
 
-_CURVE_DISPLAY_ATTRS = (
-    "overrideEnabled",
-    "overrideDisplayType",
-    "overrideRGBColors",
-    "overrideColor",
-    "overrideColorR",
-    "overrideColorG",
-    "overrideColorB",
-    "overrideColorA",
-    "lineWidth",
-    "alwaysDrawOnTop",
-)
-
-
-def _curve_shape_copy(src_shape_path, dst_xform_path):
-    """Build an independent NurbsCurve shape under ``dst_xform_path``
-    that is a geometry-level copy of ``src_shape_path``, using the
-    OpenMaya API directly.
-
-    Bypasses ``cmds.duplicate`` entirely -- there is no temporary
-    transform to delete and no descendant hierarchy to walk, so the
-    cost is constant per shape regardless of where the source lives
-    in the DAG. The result is independent of any instancing on the
-    source.
-
-    Args:
-        src_shape_path (str): Full DAG path to a NurbsCurve shape.
-        dst_xform_path (str): Full DAG path to the parent transform.
-
-    Returns:
-        str: Full DAG path of the newly created shape.
-    """
-    src_sel = om2.MSelectionList()
-    src_sel.add(src_shape_path)
-    src_curve = om2.MFnNurbsCurve(src_sel.getDagPath(0))
-
-    dst_sel = om2.MSelectionList()
-    dst_sel.add(dst_xform_path)
-    dst_obj = dst_sel.getDependNode(0)
-
-    new_curve = om2.MFnNurbsCurve()
-    new_obj = new_curve.create(
-        src_curve.cvPositions(om2.MSpace.kObject),
-        src_curve.knots(),
-        src_curve.degree,
-        src_curve.form,
-        False,  # create2D
-        True,  # rational
-        dst_obj,
-    )
-    return om2.MFnDagNode(new_obj).fullPathName()
-
-
-def _copy_curve_display_attrs(src_shape, dst_shape):
-    """Best-effort copy of curve display attributes (color, line
-    width, override flags) from ``src_shape`` to ``dst_shape``.
-
-    Missing or locked attributes are skipped silently so the buffer
-    is created even if the source has unusual attribute state.
-    """
-    for attr in _CURVE_DISPLAY_ATTRS:
-        src_attr = src_shape + "." + attr
-        dst_attr = dst_shape + "." + attr
-        if not cmds.objExists(src_attr) or not cmds.objExists(dst_attr):
-            continue
-        try:
-            cmds.setAttr(dst_attr, cmds.getAttr(src_attr))
-        except (RuntimeError, ValueError):
-            pass
-
-
 def extract_controls(*args):
     """Extract the selected controls from the rig to use in the new build.
 
@@ -253,14 +182,6 @@ def extract_controls(*args):
         short_name = ctl_path.split("|")[-1]
         buffer_name = short_name + "_controlBuffer"
 
-        # Delete any existing buffer for this control
-        try:
-            old = pm.PyNode(c_grp_name + "|" + buffer_name)
-            pm.delete(old)
-        except (TypeError, RuntimeError):
-            pass
-
-        # Source curve shapes (filters mesh, locator, intermediate)
         curve_shapes = (
             cmds.listRelatives(
                 ctl_path,
@@ -272,6 +193,9 @@ def extract_controls(*args):
             or []
         )
 
+        # Skip before touching any existing buffer, so a control that
+        # temporarily lost its curve shapes does not lose its previous
+        # buffer with no replacement.
         if not curve_shapes:
             mgear.log(
                 "'{}': No NurbsCurve shapes found, "
@@ -280,8 +204,10 @@ def extract_controls(*args):
             )
             continue
 
-        # Warn (once) if any source shape is instanced. The OpenMaya
-        # copy below produces an independent shape regardless.
+        old_buffer = c_grp_name + "|" + buffer_name
+        if cmds.objExists(old_buffer):
+            cmds.delete(old_buffer)
+
         for shape in curve_shapes:
             if len(cmds.listRelatives(shape, allParents=True) or []) > 1:
                 mgear.log(
@@ -291,45 +217,31 @@ def extract_controls(*args):
                 )
                 break
 
-        # Fast path: parentOnly skips all children AND all shapes;
-        # only the transform is created. Cost is constant per control,
-        # independent of descendant hierarchy size.
         dup = cmds.duplicate(ctl_path, parentOnly=True, returnRootsOnly=True)[0]
         dup = cmds.parent(dup, c_grp_name)[0]
         dup = cmds.rename(dup, buffer_name)
         dup_path = cmds.ls(dup, long=True)[0]
 
-        # Build curve shapes directly via OpenMaya
         for i, src_shape in enumerate(curve_shapes):
-            new_shape_path = _curve_shape_copy(src_shape, dup_path)
-            _copy_curve_display_attrs(src_shape, new_shape_path)
+            new_shape_path = curve.create_curve_shape_under(src_shape, dup_path)
+            curve.copy_curve_display_attrs(src_shape, new_shape_path)
             new_name = (
                 buffer_name + "Shape" if i == 0 else "{}Shape{}".format(buffer_name, i)
             )
             cmds.rename(new_shape_path, new_name)
 
-        # Make sure the buffer is not a member of any objectSet
-        # the source control belongs to (render layers, selection
-        # sets, etc. linked through instObjGroups[0]).
-        try:
-            sets = (
-                cmds.listConnections(
-                    ctl_path + ".instObjGroups[0]",
-                    type="objectSet",
-                )
-                or []
-            )
-        except (TypeError, ValueError):
-            sets = []
+        # objectSet membership is reachable only through instObjGroups[0]
+        # connections; drop the buffer from each set the source belonged to.
+        sets = (
+            cmds.listConnections(ctl_path + ".instObjGroups[0]", type="objectSet") or []
+        )
         for s in sets:
             try:
                 cmds.sets(dup_path, remove=s)
             except RuntimeError:
                 pass
 
-        mgear.log(
-            "Extracted '{}' ({} shape(s))".format(short_name, len(curve_shapes))
-        )
+        mgear.log("Extracted '{}' ({} shape(s))".format(short_name, len(curve_shapes)))
 
 
 # Extract guide from rigs
