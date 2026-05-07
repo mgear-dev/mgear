@@ -163,8 +163,15 @@ def log(message, severity=sev_comment, infos=False):
         for handler in _log_handlers:
             try:
                 handler(message, severity)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Surface the failure on stderr so a future regression is
+                # visible, but keep dispatching to remaining handlers so a
+                # single broken handler does not interrupt log output.
+                sys.stderr.write(
+                    "[mgear.log] handler raised: {}: {}\n".format(
+                        type(exc).__name__, exc
+                    )
+                )
 
 # ========================================================
 # Exception

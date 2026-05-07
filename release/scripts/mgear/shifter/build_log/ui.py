@@ -493,8 +493,61 @@ class BuildLogWindow(
     # =================================================================
 
     @classmethod
+    def _is_instance_alive(cls):
+        """Return True if ``cls._instance`` is non-None and its underlying
+        Qt C++ peer is still alive. Detects the case where the workspace
+        control was destroyed externally (e.g. via ``cmds.deleteUI``)
+        without the Python ``closeEvent`` running.
+
+        Returns:
+            bool: True if the instance is safe to reuse.
+        """
+        if cls._instance is None:
+            return False
+        try:
+            cls._instance.objectName()
+            return True
+        except RuntimeError:
+            return False
+
+    @classmethod
+    def _teardown_dead_instance(cls):
+        """Defensively clean up after an instance whose C++ peer was
+        destroyed externally without the Python close path running.
+        Idempotent and safe to call when ``cls._instance`` is None.
+        """
+        instance = cls._instance
+        if instance is None:
+            return
+        try:
+            mgear.unregister_log_handler(instance.handler.handle)
+        except (AttributeError, RuntimeError):
+            pass
+        _uninstall_display_hooks()
+        cls._instance = None
+
+    @classmethod
     def show_window(cls):
-        """Show the build log window, creating it if needed."""
+        """Show the build log window, creating it if needed.
+
+        Reuses the existing live instance when one is present, so UI state
+        (filter buttons, font size, search text) survives across builds.
+        Log content from the prior build is cleared on reuse so each
+        build starts with an empty log. Recreates only when the prior
+        instance's C++ peer is gone, after running an explicit teardown
+        so module-level hooks and handler registrations do not leak into
+        the new instance.
+        """
+        if cls._is_instance_alive():
+            cls._instance._clear_log()
+            cls._instance.raise_()
+            cls._instance.show()
+            cls._instance.activateWindow()
+            return cls._instance
+
+        if cls._instance is not None:
+            cls._teardown_dead_instance()
+
         workspace_control = cls.TOOL_NAME + "WorkspaceControl"
         if cmds.workspaceControl(workspace_control, exists=True):
             cmds.deleteUI(workspace_control)
@@ -775,17 +828,22 @@ def _cleanup_old_log_window():
 # pm.display* HOOKS
 # =====================================================================
 
-# Saved originals for uninstall
+# Saved originals for uninstall, plus the handler identity the hooks
+# are currently bound to (None when not installed).
 _original_display_info = None
 _original_display_warning = None
 _original_display_error = None
+_hooked_handler = None
 
 
 def _install_display_hooks(handler):
     """Wrap pm.displayInfo/Warning/Error to forward to the log handler.
 
-    This captures messages from custom steps and other code that
-    uses pm.display* instead of mgear.log().
+    This captures messages from custom steps and other code that uses
+    ``pm.display*`` instead of ``mgear.log()``. The guard is identity-
+    aware: re-installing with the same handler is a no-op, but a fresh
+    handler triggers an uninstall-then-reinstall so the closures always
+    reference the live handler.
 
     Args:
         handler (BuildLogHandler): The handler to forward to.
@@ -793,12 +851,12 @@ def _install_display_hooks(handler):
     global _original_display_info
     global _original_display_warning
     global _original_display_error
+    global _hooked_handler
 
-    # Guard against double-install: if already hooked, the globals hold
-    # the real originals — capturing again would store the hooked
-    # versions, causing infinite recursion when they call themselves.
-    if _original_display_info is not None:
+    if _hooked_handler is handler:
         return
+    if _hooked_handler is not None:
+        _uninstall_display_hooks()
 
     import mgear.pymaya as pm
     from mgear.pymaya import cmd as pm_cmd
@@ -828,14 +886,18 @@ def _install_display_hooks(handler):
     pm.displayWarning = hooked_warning
     pm.displayError = hooked_error
 
+    _hooked_handler = handler
+
 
 def _uninstall_display_hooks():
     """Restore original pm.displayInfo/Warning/Error functions."""
     global _original_display_info
     global _original_display_warning
     global _original_display_error
+    global _hooked_handler
 
     if _original_display_info is None:
+        _hooked_handler = None
         return
 
     import mgear.pymaya as pm
@@ -852,3 +914,4 @@ def _uninstall_display_hooks():
     _original_display_info = None
     _original_display_warning = None
     _original_display_error = None
+    _hooked_handler = None

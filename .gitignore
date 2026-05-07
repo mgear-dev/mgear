@@ -58,6 +58,7 @@ excons.cache
 /.claude
 CLAUDE.md
 openspec/
+/.localFiles/
 pyproject.toml
 
 # CMake build artifacts
