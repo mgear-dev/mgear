@@ -5,6 +5,7 @@ from mgear.core import pyqt
 
 
 from maya import cmds
+import maya.api.OpenMaya as om2
 
 import mgear.pymaya as pm
 from mgear.pymaya import datatypes
@@ -140,110 +141,194 @@ def inspect_settings(tabIdx=0, *args):
         pm.displayError("The selected object is not part of component guide")
 
 
+_CURVE_DISPLAY_ATTRS = (
+    "overrideEnabled",
+    "overrideDisplayType",
+    "overrideRGBColors",
+    "overrideColor",
+    "overrideColorR",
+    "overrideColorG",
+    "overrideColorB",
+    "overrideColorA",
+    "lineWidth",
+    "alwaysDrawOnTop",
+)
+
+
+def _curve_shape_copy(src_shape_path, dst_xform_path):
+    """Build an independent NurbsCurve shape under ``dst_xform_path``
+    that is a geometry-level copy of ``src_shape_path``, using the
+    OpenMaya API directly.
+
+    Bypasses ``cmds.duplicate`` entirely -- there is no temporary
+    transform to delete and no descendant hierarchy to walk, so the
+    cost is constant per shape regardless of where the source lives
+    in the DAG. The result is independent of any instancing on the
+    source.
+
+    Args:
+        src_shape_path (str): Full DAG path to a NurbsCurve shape.
+        dst_xform_path (str): Full DAG path to the parent transform.
+
+    Returns:
+        str: Full DAG path of the newly created shape.
+    """
+    src_sel = om2.MSelectionList()
+    src_sel.add(src_shape_path)
+    src_curve = om2.MFnNurbsCurve(src_sel.getDagPath(0))
+
+    dst_sel = om2.MSelectionList()
+    dst_sel.add(dst_xform_path)
+    dst_obj = dst_sel.getDependNode(0)
+
+    new_curve = om2.MFnNurbsCurve()
+    new_obj = new_curve.create(
+        src_curve.cvPositions(om2.MSpace.kObject),
+        src_curve.knots(),
+        src_curve.degree,
+        src_curve.form,
+        False,  # create2D
+        True,  # rational
+        dst_obj,
+    )
+    return om2.MFnDagNode(new_obj).fullPathName()
+
+
+def _copy_curve_display_attrs(src_shape, dst_shape):
+    """Best-effort copy of curve display attributes (color, line
+    width, override flags) from ``src_shape`` to ``dst_shape``.
+
+    Missing or locked attributes are skipped silently so the buffer
+    is created even if the source has unusual attribute state.
+    """
+    for attr in _CURVE_DISPLAY_ATTRS:
+        src_attr = src_shape + "." + attr
+        dst_attr = dst_shape + "." + attr
+        if not cmds.objExists(src_attr) or not cmds.objExists(dst_attr):
+            continue
+        try:
+            cmds.setAttr(dst_attr, cmds.getAttr(src_attr))
+        except (RuntimeError, ValueError):
+            pass
+
+
 def extract_controls(*args):
-    """Extract the selected controls from the rig to use it
-    in the new build.
+    """Extract the selected controls from the rig to use in the new build.
 
-    The control NurbsCurve shapes are stored under the
-    controllers_org group.  The controls are renamed with
-    "_controlBuffer" suffix.
+    For each selected control, only the transform itself is duplicated
+    (``parentOnly=True``), so the descendant hierarchy is never touched
+    -- extraction time is independent of how many children, joints,
+    constraints, or DG nodes hang under the control. NurbsCurve shapes
+    are then rebuilt directly under the new buffer transform with the
+    OpenMaya API (``MFnNurbsCurve.create``), which sidesteps the
+    ``cmds.duplicate`` shape machinery entirely.
 
-    Uses ``parentOnly=True`` duplication to avoid child
-    leaking, then manually copies only NurbsCurve shapes.
-    Handles instanced/shared shapes (ghost controls) by
-    creating independent copies.
+    Mesh, locator, and other non-curve shape types are filtered out
+    at the source-collection step. Intermediate shapes are filtered
+    too. Ghost controls (instanced/shared shapes) get an independent
+    copy automatically -- no instance survives into the buffer. The
+    buffer is removed from any objectSets the source belongs to.
 
     Args:
         *args: Ignored (Maya menu callback compatibility).
     """
-    oSel = pm.selected()
+    o_sel = pm.selected()
 
     try:
-        cGrp = pm.PyNode("controllers_org")
+        c_grp = pm.PyNode("controllers_org")
     except TypeError:
-        cGrp = False
         pm.displayWarning(
-            "No controllers_org group in the scene "
-            "or the group is not unique"
+            "No controllers_org group in the scene or the group is not unique"
         )
         return
 
-    for x in oSel:
+    c_grp_name = c_grp.name()
+
+    for x in o_sel:
         if not x.hasAttr("isCtl"):
-            pm.displayWarning(
-                "{}: Is not a valid mGear control".format(
-                    x.name()
-                )
-            )
+            pm.displayWarning("{}: Is not a valid mGear control".format(x.name()))
             continue
 
-        buffer_name = x.name().split("|")[-1] + "_controlBuffer"
+        ctl_path = x.longName()
+        short_name = ctl_path.split("|")[-1]
+        buffer_name = short_name + "_controlBuffer"
 
-        # Delete existing buffer if present
+        # Delete any existing buffer for this control
         try:
-            old = pm.PyNode(
-                cGrp.name() + "|" + buffer_name
-            )
+            old = pm.PyNode(c_grp_name + "|" + buffer_name)
             pm.delete(old)
         except (TypeError, RuntimeError):
             pass
 
-        # Duplicate the control once to get all shapes
-        # (handles instanced shapes correctly)
-        temp = pm.duplicate(x)[0]
-
-        # Create clean buffer transform
-        new = pm.createNode(
-            "transform", name=buffer_name, parent=cGrp
+        # Source curve shapes (filters mesh, locator, intermediate)
+        curve_shapes = (
+            cmds.listRelatives(
+                ctl_path,
+                shapes=True,
+                fullPath=True,
+                noIntermediate=True,
+                type="nurbsCurve",
+            )
+            or []
         )
 
-        # Check for instanced shapes on the original
-        for shape in x.getShapes():
-            all_parents = cmds.listRelatives(
-                shape.name(), allParents=True
-            ) or []
-            if len(all_parents) > 1:
+        if not curve_shapes:
+            mgear.log(
+                "'{}': No NurbsCurve shapes found, "
+                "skipping extraction".format(short_name),
+                mgear.sev_warning,
+            )
+            continue
+
+        # Warn (once) if any source shape is instanced. The OpenMaya
+        # copy below produces an independent shape regardless.
+        for shape in curve_shapes:
+            if len(cmds.listRelatives(shape, allParents=True) or []) > 1:
                 mgear.log(
                     "Instanced shape detected on '{}', "
-                    "creating independent copy".format(
-                        x.name()
-                    ),
+                    "creating independent copy".format(short_name),
                     mgear.sev_warning,
                 )
                 break
 
-        # Move only NurbsCurve shapes to the buffer,
-        # skip intermediate objects and non-curve types
-        shape_count = 0
-        for shape in temp.getShapes():
-            if shape.type() != "nurbsCurve":
-                continue
-            if shape.intermediateObject.get():
-                continue
-            pm.parent(
-                shape, new, shape=True, relative=True
-            )
-            pm.rename(shape, buffer_name + "Shape")
-            shape_count += 1
+        # Fast path: parentOnly skips all children AND all shapes;
+        # only the transform is created. Cost is constant per control,
+        # independent of descendant hierarchy size.
+        dup = cmds.duplicate(ctl_path, parentOnly=True, returnRootsOnly=True)[0]
+        dup = cmds.parent(dup, c_grp_name)[0]
+        dup = cmds.rename(dup, buffer_name)
+        dup_path = cmds.ls(dup, long=True)[0]
 
-        # Delete the temp transform (children and
-        # leftover non-curve shapes)
-        pm.delete(temp)
-
-        # Validate: skip empty buffers
-        if shape_count == 0:
-            mgear.log(
-                "'{}': No NurbsCurve shapes found, "
-                "skipping extraction".format(x.name()),
-                mgear.sev_warning,
+        # Build curve shapes directly via OpenMaya
+        for i, src_shape in enumerate(curve_shapes):
+            new_shape_path = _curve_shape_copy(src_shape, dup_path)
+            _copy_curve_display_attrs(src_shape, new_shape_path)
+            new_name = (
+                buffer_name + "Shape" if i == 0 else "{}Shape{}".format(buffer_name, i)
             )
-            pm.delete(new)
-            continue
+            cmds.rename(new_shape_path, new_name)
+
+        # Make sure the buffer is not a member of any objectSet
+        # the source control belongs to (render layers, selection
+        # sets, etc. linked through instObjGroups[0]).
+        try:
+            sets = (
+                cmds.listConnections(
+                    ctl_path + ".instObjGroups[0]",
+                    type="objectSet",
+                )
+                or []
+            )
+        except (TypeError, ValueError):
+            sets = []
+        for s in sets:
+            try:
+                cmds.sets(dup_path, remove=s)
+            except RuntimeError:
+                pass
 
         mgear.log(
-            "Extracted '{}' ({} shape(s))".format(
-                x.name(), shape_count
-            )
+            "Extracted '{}' ({} shape(s))".format(short_name, len(curve_shapes))
         )
 
 
