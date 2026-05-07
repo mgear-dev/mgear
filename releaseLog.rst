@@ -2,6 +2,18 @@ Release Log
 ===========
 
 
+5.3.3
+------
+**Enhancements**
+	* Core: Curve: Add public shape-copy helpers create_curve_shape_under, copy_curve_display_attrs, and CURVE_DISPLAY_ATTRS for geometry-level NurbsCurve copy via OpenMaya
+	* Core: Logging: mgear.log() handler exceptions now surface to stderr instead of being silently swallowed; remaining handlers still receive the message
+	* Solvers: Build: Add Maya 2022 support to Windows build script
+
+**Bug Fix**
+	* Shifter: Fix extract controls performance regression — slow on top-level controls with many descendants; now uses parentOnly duplicate + OpenMaya MFnNurbsCurve.create for constant-time-per-control extraction, while preserving the prior fix's safety guarantees (no child leaking, no mesh/locator shapes, ghost-control independence) and propagating display attributes to the buffer
+	* Shifter: Build Log: Fix custom step messages disappearing from the build log on the second and subsequent builds when the window was kept open; the window now reuses the live instance across builds (preserves filter buttons, font size, and search text), display hooks always bind to the live handler, and log content clears at the start of each new build
+	* SimpleRig: Convert to Shifter Rig now disconnects driven matrix chains (mgear_mulMatrix + decomposeMatrix) before deleting the simple-rig root, preventing orphaned utility nodes with broken driver inputs in the converted scene
+
 5.3.2
 ------
 **Enhancements**
