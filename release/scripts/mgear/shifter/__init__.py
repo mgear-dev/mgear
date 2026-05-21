@@ -908,6 +908,7 @@ class Rig(object):
         pm.select(ctl_master_grp, replace=True)
         dag_node = pm.dagPose(save=True, selection=True)
         pm.connectAttr(dag_node.message, self.model.rigPoses[0])
+        pm.select(clear=True)
 
         # hide all DG nodes inputs in channel box -----------------------
         # only hides if components_finalize or All steps are done
