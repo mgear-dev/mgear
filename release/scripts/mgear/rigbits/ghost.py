@@ -81,14 +81,17 @@ def createGhostCtl(ctl, parent=None, connect=True):
         if visInputs:
             pm.connectAttr(visInputs[0], newShape.visibility, force=True)
     if parent:
-        pm.parent(newCtl, parent)
         oTra = pm.createNode(
             "transform", n=newCtl.name() + "_npo", p=parent, ss=True
         )
         oTra.setMatrix(
             ctl.getParent().getMatrix(worldSpace=True), worldSpace=True
         )
-        pm.parent(newCtl, oTra)
+        # Relative reparent: newCtl already has the correct local TRS from
+        # duplicate(), and oTra sits at ctl's original parent world matrix,
+        # so r=True yields the correct world position without trying to
+        # modify TRS attrs (which may be locked on the source control).
+        pm.parent(newCtl, oTra, r=True)
     if connect:
         rigbits.connectLocalTransform([newCtl, ctl])
         rigbits.connectUserDefinedChannels(newCtl, ctl)
