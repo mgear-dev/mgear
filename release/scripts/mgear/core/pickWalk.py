@@ -14,6 +14,10 @@ from mgear.core import string
 def get_all_tag_children(node):
     """Gets all child tag controls from the given tag node
 
+    Traverses controller tag hierarchy using listConnections instead of
+    cmds.controller, which can segfault in Maya 2025 on certain
+    controller tag nodes.
+
     Args:
         node (str): Name of controller object with tag
 
@@ -21,22 +25,36 @@ def get_all_tag_children(node):
         list: List of child controls (Maya transform nodes)
     """
 
-    # store child nodes
     children = []
 
-    # gets first child control
-    child = cmds.controller(node, query=True, children=True)
+    tags = cmds.ls(cmds.listConnections(node, type="controller"))
+    if not tags:
+        return children
 
-    # loop on child controller nodes to get all children
-    while child is not None:
-        children.extend(child)
-        tags = []
-        for c in child:
-            tag = cmds.ls(cmds.listConnections(c, type="controller"))
-            tags.extend(tag)
-            if cmds.listConnections("{}.parent".format(tag[0])) == node:
-                return children
-        child = cmds.controller(tags, query=True, children=True)
+    current_tags = tags
+    seen_tags = set()
+    while current_tags:
+        next_tags = []
+        for tag in current_tags:
+            if tag in seen_tags:
+                continue
+            seen_tags.add(tag)
+            child_tags = cmds.listConnections(
+                "{}.children".format(tag), type="controller"
+            )
+            if not child_tags:
+                continue
+            for ct in child_tags:
+                if ct in seen_tags:
+                    continue
+                seen_tags.add(ct)
+                ctl = cmds.listConnections(
+                    "{}.controllerObject".format(ct)
+                )
+                if ctl:
+                    children.extend(ctl)
+                next_tags.append(ct)
+        current_tags = next_tags
 
     return children
 
