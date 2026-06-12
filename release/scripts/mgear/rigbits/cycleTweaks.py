@@ -2,8 +2,8 @@
 
 This module content the tools and procedures to rig tweaks with a benigne cycle
 """
-import pymel.core as pm
-import pymel.core.datatypes as datatypes
+import mgear.pymaya as pm
+import mgear.pymaya.datatypes as datatypes
 
 from mgear.core import icon, skin, node
 from mgear import rigbits

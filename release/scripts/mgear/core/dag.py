@@ -1,8 +1,9 @@
-"""Nvigate the DAG hierarchy"""
+"""Navigate the DAG hierarchy"""
 
+from typing import List
 
 import maya.cmds as cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 
 #############################################
 # DAG
@@ -34,7 +35,7 @@ def getShapes(node):
         list: The shapes of the node
 
     """
-    return node.listRelatives(shapes=True)
+    return node.listRelatives(shapes=True, fullPath=True)
 
 
 def findChild(node, name):
@@ -90,13 +91,13 @@ def __findChildren(node, name, firstOnly=False, partialName=False):
     if partialName:
         children = [item for item
                     in node.listRelatives(allDescendents=True,
-                                          type="transform")
-                    if item.name().split("|")[-1].split("_")[-1] == name]
+                                          type="transform", fullPath=True)
+                    if item.split("|")[-1].split("_")[-1] == name]
     else:
         children = [item for item
                     in node.listRelatives(allDescendents=True,
-                                          type="transform")
-                    if item.name().split("|")[-1] == name]
+                                          type="transform", fullPath=True)
+                    if item.split("|")[-1] == name]
     if not children:
         return False
     if firstOnly:
@@ -121,12 +122,12 @@ def __findChild(node, name):
     try:
         for item in cmds.listRelatives(node.name(),
                                        allDescendents=True,
-                                       type="transform"):
+                                       type="transform", fullPath=True):
             if item.split("|")[-1] == name:
                 return pm.PyNode(item)
     except pm.MayaNodeError:
         for item in node.listRelatives(allDescendents=True,
-                                       type="transform"):
+                                       type="transform", fullPath=True):
             if item.split("|")[-1] == name:
                 return item
 
@@ -185,8 +186,8 @@ def findComponentChildren(node, name, sideIndex):
     """
     children = []
     for item in node.listRelatives(allDescendents=True,
-                                   type="transform"):
-        checkName = item.name().split("|")[-1].split("_")
+                                   type="transform", fullPath=True):
+        checkName = item.split("|")[-1].split("_")
         if checkName[0] == name and checkName[1] == sideIndex:
             children.append(item)
 
@@ -255,3 +256,39 @@ def findComponentChildren3(node, name, sideIndex):
             children.append(item)
 
     return [pm.PyNode(x) for x in children]
+
+
+def findComponentChildren4(node: pm.PyNode, name: str, sideIndex: str) -> List[pm.PyNode]:
+    """
+    Return all transform DAG nodes that belong to a given component.
+
+    :param pm.PyNode node: The root node whose hierarchy to search.
+    :param str name: Component name, for example "root" or "ik_hand_root".
+    :param str sideIndex: Side or index string, for example "C0".
+    :return: Matching transform nodes belonging to the component.
+    :rtype: list[pm.PyNode]
+    """
+    name_tokens = name.split("_")
+    prefix_len = len(name_tokens) + 1
+    children = set()
+
+    # -- All descendant transforms plus the node itself
+    paths = pm.listRelatives(node.name(),
+                             allDescendents=True,
+                             fullPath=True,
+                             type="transform") or []
+
+    for path in paths:
+        check_name = path.split("|")[-1]
+        parts = check_name.split("_")
+
+        # -- Check if transform belongs to the component
+        is_component = (len(parts) >= prefix_len
+                        and parts[:prefix_len - 1] == name_tokens
+                        and parts[prefix_len - 1] == sideIndex)
+
+        if is_component:
+            children.add(path)
+
+    return [pm.PyNode(x) for x in children]
+

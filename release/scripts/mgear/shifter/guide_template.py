@@ -1,6 +1,6 @@
 import json
 
-import pymel.core as pm
+import mgear.pymaya as pm
 from mgear.shifter import guide
 
 

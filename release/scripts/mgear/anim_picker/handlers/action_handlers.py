@@ -12,9 +12,10 @@ from mgear.vendor.Qt import QtWidgets
 
 # from PySide2 import QtWidgets
 
+
 class SpaceChangeList(QtWidgets.QMenu):
 
-    """ Space switcher list with automatic matching
+    """Space switcher list with automatic matching
 
     Attributes:
         combo_attr (str): attribute with the spaces
@@ -24,14 +25,9 @@ class SpaceChangeList(QtWidgets.QMenu):
         ui_host (str): control host with the combo attribute
     """
 
-    def __init__(self,
-                 namespace,
-                 ui_host,
-                 combo_attr,
-                 ctl,
-                 self_widget,
-                 *args,
-                 **kwargs):
+    def __init__(
+        self, namespace, ui_host, combo_attr, ctl, self_widget, *args, **kwargs
+    ):
         super(SpaceChangeList, self).__init__(*args, **kwargs)
         self.namespace = namespace
         if namespace:
@@ -44,8 +40,7 @@ class SpaceChangeList(QtWidgets.QMenu):
         self.init_gui()
 
     def init_gui(self):
-        """initialize the gui
-        """
+        """initialize the gui"""
         self.listWidget = QtWidgets.QListWidget(self)
         action = QtWidgets.QWidgetAction(self)
         action.setDefaultWidget(self.listWidget)
@@ -53,45 +48,49 @@ class SpaceChangeList(QtWidgets.QMenu):
         self.listWidget.setFocus()
 
         self.key_list = anim_utils.getComboKeys(
-            self.namespace, self.ui_host, self.combo_attr)
+            self.namespace, self.ui_host, self.combo_attr
+        )
         self.listWidget.addItems(self.key_list)
         current_idx = anim_utils.getComboIndex(
-            self.namespace, self.ui_host, self.combo_attr)
+            self.namespace, self.ui_host, self.combo_attr
+        )
         self.listWidget.setCurrentRow(current_idx)
 
         self.listWidget.currentRowChanged.connect(self.accept)
 
     def accept(self):
-        """sets the new space
-        """
+        """sets the new space"""
         if self.listWidget.currentRow() == self.listWidget.count() - 1:
             self.listWidget.setCurrentRow(
                 anim_utils.getComboIndex_with_namespace(
-                    self.namespace, self.ui_host, self.combo_attr))
+                    self.namespace, self.ui_host, self.combo_attr
+                )
+            )
 
-            anim_utils.ParentSpaceTransfer.showUI(self.listWidget,
-                                                  self.ui_host,
-                                                  stripNamespace(self.ui_host),
-                                                  self.combo_attr,
-                                                  self.ctl)
+            anim_utils.ParentSpaceTransfer.showUI(
+                self.listWidget,
+                self.ui_host,
+                stripNamespace(self.ui_host),
+                self.combo_attr,
+                self.ctl,
+            )
         else:
-            anim_utils.changeSpace_with_namespace(self.namespace,
-                                                  self.ui_host,
-                                                  self.combo_attr,
-                                                  self.listWidget.currentRow(),
-                                                  self.ctl)
+            anim_utils.changeSpace_with_namespace(
+                self.namespace,
+                self.ui_host,
+                self.combo_attr,
+                self.listWidget.currentRow(),
+                self.ctl,
+            )
             space = self.listWidget.item(self.listWidget.currentRow()).text()
             self.self_widget.text.set_text(space)
         self.close()
         self.deleteLater()
 
 
-def show_space_chage_list(namespace,
-                          ui_host,
-                          combo_attr,
-                          ctl,
-                          self_widget,
-                          env_init):
+def show_space_chage_list(
+    namespace, ui_host, combo_attr, ctl, self_widget, env_init
+):
     """Shows wht space switch list and also initialize the picker widget name
 
     Args:
@@ -105,9 +104,11 @@ def show_space_chage_list(namespace,
     try:
         if env_init:
             key_list = anim_utils.getComboKeys_with_namespace(
-                namespace, ui_host, combo_attr)
+                namespace, ui_host, combo_attr
+            )
             current_idx = anim_utils.getComboIndex_with_namespace(
-                namespace, ui_host, combo_attr)
+                namespace, ui_host, combo_attr
+            )
             self_widget.text.set_text(key_list[current_idx])
 
         else:
@@ -117,17 +118,18 @@ def show_space_chage_list(namespace,
                 ql.deleteLater()
             # create a new instance
 
-            ql = SpaceChangeList(namespace,
-                                 ui_host,
-                                 combo_attr,
-                                 ctl,
-                                 self_widget,
-                                 maya_window)
+            ql = SpaceChangeList(
+                namespace, ui_host, combo_attr, ctl, self_widget, maya_window
+            )
 
             pyqt.position_window(ql)
             ql.exec_()
     except Exception as e:
-        print("Could not build space change list for ctl {}. Rig components renamed?".format(ctl))
+        print(
+            "Could not build space change list for ctl {}. Rig components renamed?".format(
+                ctl
+            )
+        )
         print("Error: " + str(e))
         return
 
@@ -144,10 +146,9 @@ def spine_ik_fk_transfer(namespace, fkControls, ikControls):
         fkControls = [namespace + ":" + ctl for ctl in fkControls]
         ikControls = [namespace + ":" + ctl for ctl in ikControls]
 
-    anim_utils.SpineIkFkTransfer.showUI("root",
-                                        namespace,
-                                        fkControls,
-                                        ikControls)
+    anim_utils.SpineIkFkTransfer.showUI(
+        "root", namespace, fkControls, ikControls
+    )
 
 
 def ik_fk_transfer(namespace, ikfk_attr, uihost, fks, ik, upv, ik_rot=None):
@@ -167,10 +168,6 @@ def ik_fk_transfer(namespace, ikfk_attr, uihost, fks, ik, upv, ik_rot=None):
     else:
         model = uihost
 
-    anim_utils.IkFkTransfer.showUI(model,
-                                   ikfk_attr,
-                                   uihost,
-                                   fks,
-                                   ik,
-                                   upv,
-                                   ik_rot)
+    anim_utils.IkFkTransfer.showUI(
+        model, ikfk_attr, uihost, fks, ik, upv, ik_rot
+    )

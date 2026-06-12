@@ -1,7 +1,7 @@
 """Component Arm 2 joints 01 module"""
 
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -299,8 +299,17 @@ class Component(component.Main):
                                             self.match_fk1_off,
                                             "fk1_mth")
 
+        if self.settings["ikTR"]:
+            reference = self.ikRot_ctl
+
+            self.match_ikRot = self.add_match_ref(self.ikRot_ctl,
+                                                  self.fk2_ctl,
+                                                  "ikRot_mth")
+        else:
+            reference = self.ik_ctl
+
         self.match_fk2 = self.add_match_ref(self.fk_ctl[2],
-                                            self.ik_ctl,
+                                            reference,
                                             "fk2_mth")
 
         self.match_ik = self.add_match_ref(self.ik_ctl,
@@ -479,15 +488,6 @@ class Component(component.Main):
             transform.getTransform(self.eff_loc))
         if self.negate:
             self.end_ref.attr("rz").set(180.0)
-
-        if self.settings["ikTR"]:
-            # reference = self.ikRot_ctl
-            self.match_ikRot = primitive.addTransform(
-                self.fk2_ctl,
-                self.getName("ikRot_mth"),
-                transform.getTransform(self.ikRot_ctl))
-        # else:
-        #     reference = self.ik_ctl
 
         self.jnt_pos.append([self.end_ref, "end"])
 

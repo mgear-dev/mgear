@@ -1,5 +1,5 @@
 import maya.cmds as cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.mel
 import os
 import sys
@@ -566,7 +566,7 @@ def get_fbx_import_presets():
 # query and format all fbxmaya commands
 
 """
-import pymel.core as pm
+import mgear.pymaya as pm
 cds = pm.pluginInfo( 'fbxmaya.mll', query=True, command=True )
 
 

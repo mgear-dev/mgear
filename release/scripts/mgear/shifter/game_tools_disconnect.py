@@ -1,4 +1,4 @@
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.cmds as cmds
 import json
 import sys
@@ -85,12 +85,23 @@ def connect_joints_from_matrixConstraint():
 
 
 @mutils.one_undo
-def delete_rig_keep_joints():
-    # Should pop up confirmation dialog
-    button_pressed = QtWidgets.QMessageBox.question(
-        pyqt.maya_main_window(), "Warning", "Delete Rigs in the scene?"
-    )
-    if button_pressed == QtWidgets.QMessageBox.Yes:
+def delete_rig_keep_joints(confirmPop=True):
+    confirm = False
+    if confirmPop:
+        # Should pop up confirmation dialog
+        button_pressed = QtWidgets.QMessageBox.question(
+            pyqt.maya_main_window(), "Warning", "Delete Rigs in the scene?"
+        )
+        if button_pressed == QtWidgets.QMessageBox.Yes:
+            confirm = True
+
+        else:
+            pm.displayInfo("Cancelled")
+            return
+    else:
+        confirm = True
+
+    if confirm:
         disconnect_joints()
         for rig_root in get_rig_root_from_set():
             rig_name = rig_root.name()
@@ -103,8 +114,6 @@ def delete_rig_keep_joints():
             pm.delete(rig_root)
 
             pm.displayInfo("{} deleted.".format(rig_name))
-    else:
-        pm.displayInfo("Cancelled")
 
 
 def get_deformers_sets():
@@ -289,7 +298,6 @@ def get_connections(source=None, embed_info=False):
                 "string",
                 value=str(attrs_list_checked),
             )
-
     connections = {}
     connections["joints"] = []
     connections["attrs"] = []
@@ -297,6 +305,8 @@ def get_connections(source=None, embed_info=False):
     if not source:
         source = pm.selected()
     for jnt in source:
+        if isinstance(jnt, str):
+            jnt = pm.PyNode(jnt)
         leaf_jnt = None
         if not jnt.name().startswith(("blend_", "leaf_")):
             connections["joints"].append(jnt.name())

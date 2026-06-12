@@ -1,6 +1,6 @@
 """Rigbits utilitie tools"""
 
-import pymel.core as pm
+import mgear.pymaya as pm
 
 
 def createRunTimeCommand(name, rCmd, ann=""):
@@ -29,7 +29,7 @@ def createHotkeys(*args):
 from mgear.core import skin
 from mgear.shifter import io
 from mgear.shifter import guide_manager
-import pymel.core as pm
+import mgear.pymaya as pm
 
 sel = pm.selected()
 if sel:
@@ -59,7 +59,7 @@ if sel:
 
     # duplicate sym
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 from mgear.shifter import guide_manager
 import mgear.rigbits as rigbits
 if isinstance(pm.selected()[0], pm.MeshFace):
@@ -76,7 +76,7 @@ else:
 
     # duplicate
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 from mgear.shifter import guide_manager
 import mgear.rigbits as rigbits
 if isinstance(pm.selected()[0], pm.MeshFace):
@@ -93,7 +93,7 @@ else:
 
     # frame in center
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.mel as mel
 
 def frameSelectedCenter():
@@ -134,7 +134,7 @@ else:
 
     # toggle visibility Softimage style
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 for obj in pm.selected():
     if pm.selected()[0].nodeType() == "transform":
 
@@ -148,7 +148,7 @@ for obj in pm.selected():
 
     # toggle wireframe on top
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.mel as mel
 
 panel = pm.getPanel(wf=True)
@@ -164,7 +164,7 @@ else:
 
     # toggle shaded wireframe
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.mel as mel
 
 panel = pm.getPanel(wf=True)
@@ -180,7 +180,7 @@ else:
 
     # align 2 transforms
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 
 if len(pm.selected()) !=2:
     print("2 objects must be selected")
@@ -218,7 +218,7 @@ guide_manager.build_from_selection()
 
     # walk transform child
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkDown(pm.selected())
@@ -230,7 +230,7 @@ pw.walkDown(pm.selected())
 
     # walk transform Parent
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkUp(pm.selected())
@@ -241,7 +241,7 @@ pw.walkUp(pm.selected())
 
     # walk transform Left
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkLeft(pm.selected())
@@ -251,7 +251,7 @@ pw.walkLeft(pm.selected())
 
     # walk transform Right
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkRight(pm.selected())
@@ -261,7 +261,7 @@ pw.walkRight(pm.selected())
 
     # walk mirror
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkMirror(pm.selected())
@@ -271,7 +271,7 @@ pw.walkMirror(pm.selected())
 
     # reset camera persp
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 
 pm.viewSet(p=True, fit=True)
 
@@ -282,7 +282,7 @@ pm.viewSet(p=True, fit=True)
 
     # walk transform child add
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkDown(pm.selected(), True)
@@ -294,7 +294,7 @@ pw.walkDown(pm.selected(), True)
 
     # walk transform Parent
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkUp(pm.selected(), True)
@@ -305,7 +305,7 @@ pw.walkUp(pm.selected(), True)
 
     # walk transform Left
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkLeft(pm.selected(), True)
@@ -315,7 +315,7 @@ pw.walkLeft(pm.selected(), True)
 
     # walk transform Right
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkRight(pm.selected(), True)
@@ -325,7 +325,7 @@ pw.walkRight(pm.selected(), True)
 
     # walk mirror
     rCmd = '''
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear.core.pickWalk as pw
 
 pw.walkMirror(pm.selected(), True)

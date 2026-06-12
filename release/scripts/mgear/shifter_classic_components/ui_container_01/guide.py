@@ -1,6 +1,6 @@
 """Guide UI Slider 01 module"""
 from functools import partial
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.shifter.component import guide
 from mgear.core import transform, pyqt, attribute

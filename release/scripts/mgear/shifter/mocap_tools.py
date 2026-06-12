@@ -1,6 +1,6 @@
 import os
 
-import pymel.core as pm
+import mgear.pymaya as pm
 
 import mgear.core.attribute as att
 import mgear.core.transform as tra
@@ -21,6 +21,8 @@ skelFK = [
         u"Spine",
         u"Spine1",
         u"Spine2",
+        u"Spine3",
+        u"Spine4",
         u"LeftShoulder",
         u"LeftArm",
         u"LeftForeArm",
@@ -61,6 +63,8 @@ skelFK = [
         u"RightHandPinky3",
         u"Neck",
         u"Neck1",
+        u"Neck2",
+        u"Neck3",
         u"Head"
     )
 ]
@@ -201,7 +205,8 @@ def characterizeBiped(*args):
             oB = pm.PyNode(b)
         except Exception:
             pm.displayWarning(b + ": Is not in the scene")
-        tra.matchWorldTransform(oB, oA)
+        if a and b:
+            tra.matchWorldTransform(oB, oA)
 
     # Constrain FK controls
     for a, b in zip(skelFK, gearFK):

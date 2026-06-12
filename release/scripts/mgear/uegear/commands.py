@@ -12,15 +12,17 @@ import tempfile
 import traceback
 
 import maya.cmds as cmds
+import maya.mel as mel
 import maya.api.OpenMaya as OpenMaya
-import pymel.core as pm
 
 from mgear.vendor.Qt import QtWidgets
 
 from mgear.core import utils as mUtils
+from mgear.core import attribute
 
 from mgear.uegear import log, tag, bridge, io, ioutils
 from mgear.uegear import utils as ueUtils
+from mgear.uegear import camera as ueCamera
 
 # DEBUGGING
 import importlib
@@ -31,6 +33,17 @@ importlib.reload(ueUtils)
 
 logger = log.uegear_logger
 
+def get_unreal_version():
+    """Gets the Unreal version for the active session"""
+    print("[mGear] Retrieving Unreal Engine Version.")
+
+    uegear_bridge = bridge.UeGearBridge()
+
+    result = uegear_bridge.execute(
+        "get_unreal_version"
+    ).get("ReturnValue", "")
+
+    return result
 
 def content_project_directory():
     """
@@ -575,13 +588,15 @@ def update_selected_transforms():
 
     uegear_bridge = bridge.UeGearBridge()
 
-    selected_nodes = pm.selected()
+    selected_nodes = cmds.ls( selection=True )
     world_up = cmds.optionVar(query="upAxisDirection")
 
     old_rotation_orders = list()
-    for selected_node in selected_nodes:
-        old_rotation_orders.append(selected_node.getRotationOrder())
-        selected_node.setRotationOrder("XZY", True)
+    for node_name in selected_nodes:
+        rot_order_index = cmds.getAttr(f"{node_name}.rotateOrder")
+        old_rotation_orders.append(rot_order_index)
+        cmds.setAttr(f"{node_name}.rotateOrder", 0) # XYZ
+
     try:
         objects = cmds.ls(sl=True, sn=True)
         for obj in objects:
@@ -607,7 +622,7 @@ def update_selected_transforms():
             )
     finally:
         for i, selected_node in enumerate(selected_nodes):
-            selected_node.setRotationOrder(old_rotation_orders[i], True)
+            cmds.setAttr(f"{node_name}.rotateOrder", old_rotation_orders[i])
 
 
 # NOT IMPLEMENTED
@@ -728,6 +743,12 @@ def import_selected_cameras_from_unreal():
                     transform_node, tag.TAG_ASSET_PATH_ATTR_NAME, asset_path
                 )
 
+        # Check if camera contains filmback attribute, if it does then we convert the curve data and apply it to the
+        # `Sensor Height` `Sensor Width`
+        # transform node is always a camera, as we are only importing a camera.
+        for camera_name in transform_nodes:
+            ueCamera.unreal_to_maya_sensor_conversion(camera_name)
+
     return True
 
 
@@ -764,12 +785,20 @@ def update_sequencer_camera_from_maya():
     # Export FBX file into disk
     for i in range(len(cameras)):
         camera_name = ue_camera_names[i]
-        fbx_file_path = os.path.join(temp_folder, camera_name + ".fbx")
+
+        if " " in camera_name:
+            modified_camera_name = camera_name.replace(" ", "_")
+        else:
+            modified_camera_name = camera_name
+        fbx_file_path = os.path.join(temp_folder, modified_camera_name + ".fbx")
+
+        maya_cam_name = nodes_to_export[i]
 
         try:
-            cmds.file(
-                fbx_file_path, force=True, typ="FBX export", pr=True, es=True
-            )
+            mel.eval("FBXExportCameras - v 1")
+            cmds.select(maya_cam_name, replace=True)
+            cmds.file(fbx_file_path, force=True, typ="FBX", pr=True, es=True, mbl=True)
+
             msg = "Camera '{}' exported as FBX to '{}'"
             print(msg.format(camera_name, fbx_file_path))
         except Exception as e:

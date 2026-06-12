@@ -1,6 +1,6 @@
-import pymel.core as pm
-from pymel.core import datatypes
-from pymel import util as pmu
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
+from mgear.pymaya import util as pmu
 
 
 import mgear
@@ -235,7 +235,7 @@ def alignToPointsLoop(points=None, loc=None, name=None, *args):
     if not points:
         oSel = pm.selected(fl=True)
 
-        checkType = "<class 'pymel.core.general.MeshVertex'>"
+        checkType = "<class 'mgear.pymaya.geometry.MeshVertex'>"
         if not oSel or len(oSel) < 3 or str(type(oSel[0])) != checkType:
             pm.displayWarning(
                 "We need to select a points loop, with at "
@@ -247,7 +247,7 @@ def alignToPointsLoop(points=None, loc=None, name=None, *args):
     if not loc:
         if not name:
             name = "axisCenterRef"
-        loc = pm.spaceLocator(n=name)
+        loc = pm.spaceLocator(n=name)[0]
 
     oLen = len(points)
     wPos = [0, 0, 0]
@@ -412,19 +412,33 @@ def replaceShape(source=None, targets=None, *args):
         shape = target.getShapes()
         cnx = []
         if shape:
-            cnx = shape[0].listConnections(plugs=True, c=True)
-            cnx = [[c[1], c[0].shortName()] for c in cnx]
+            raw_cnx = shape[0].listConnections(plugs=True, c=True)
+            # Store (is_destination, other_plug, shape_attr_short_name)
+            # so we can restore the correct connection direction later.
+            cnx = [
+                [c[0].plug().isDestination, c[1], c[0].shortName()]
+                for c in raw_cnx
+            ]
             # Disconnect the conexion before delete the old shape
             for s in shape:
                 for c in s.listConnections(plugs=True, c=True):
-                    pm.disconnectAttr(c[0])
+                    if c[0].plug().isDestination:
+                        pm.disconnectAttr(c[1], c[0])
+                    else:
+                        pm.disconnectAttr(c[0], c[1])
         pm.delete(shape)
         pm.parent(source2.getShapes(), target, r=True, s=True)
 
         for i, sh in enumerate(target.getShapes()):
-            # Restore shapes connections
-            for c in cnx:
-                pm.connectAttr(c[0], sh.attr(c[1]))
+            # Restore shapes connections respecting original direction.
+            for is_dst, other_plug, shape_attr in cnx:
+                try:
+                    if is_dst:
+                        pm.connectAttr(other_plug, sh.attr(shape_attr))
+                    else:
+                        pm.connectAttr(sh.attr(shape_attr), other_plug)
+                except RuntimeError:
+                    pass
             pm.rename(sh, target.name() + "_%s_Shape" % str(i))
 
         pm.delete(source2)
@@ -716,3 +730,108 @@ def connect_scale_from_world_matrix(driver, driven):
         pm.connectAttr(
             dec_matrix.attr("outputScale" + axis), driven.attr("scale" + axis)
         )
+
+# Hide and lock functions
+
+
+def lock_hide_ctl(ctlList, ctl_ext="_ctl", lock_ext="_lock"):
+    """Hide shapes, lock attrs, rename, and remove from object sets.
+
+    Args:
+        ctl_list (list): Iterable of controls (MObjects or names).
+        ctl_ext (str, optional): Suffix to replace. Defaults to "_ctl".
+        lock_ext (str, optional): Replacement suffix. Defaults to "_lock".
+    """
+
+    for ctl in ctlList:
+        try:
+            if isinstance(ctl, str):
+                ctl = pm.PyNode(ctl)
+            # Hide shapes
+            for shape in ctl.getShapes():
+                shape.visibility.set(False)
+            # lock ctl attr
+            attribute.lockAttribute(ctl)
+            pm.rename(ctl, ctl.name().replace(ctl_ext, lock_ext))
+
+            # remove from grp
+            grps = ctl.listConnections(t="objectSet")
+            for grp in grps:
+                grp.remove(ctl)
+        except:
+            print("{}: not found".format(ctl))
+
+
+def show_hide_toggle(ctl, at_name, groupA, groupB, keyable=False):
+    """Create boolean attr on ctl to toggle visibility of two groups.
+
+    Args:
+        ctl (pm.DagNode|str): Control node or its name.
+        attr_name (str): Name of the toggle attribute to create.
+        group_a (list): Nodes visible when attr is True.
+        group_b (list): Nodes visible when attr is False.
+    """
+
+    # create attr
+    ctl = pm.PyNode(ctl)
+    at = attribute.addAttribute(ctl, at_name, "bool", value=True, keyable=keyable, channelBox=True)
+
+    # connect visibility group A
+    for x in groupA:
+        pm.connectAttr(at, x + ".visibility")
+
+    # reverse note
+    rever = node.createReverseNode(at)
+
+    # connect visibility group B
+    for x in groupB:
+        pm.connectAttr(rever.outputX, x + ".visibility")
+
+
+def hide_shape(obj_list, attr_name, attr_host, val=True, keyable=False):
+    """Hide shapes of given nodes using a host boolean attribute.
+
+    Args:
+        obj_list (list): Nodes (or names) whose shapes will be hidden.
+        attr_name (str): Attribute name to create/use on the host.
+        attr_host (pm.DependNode|str): Node holding the attribute.
+        val (bool, optional): Initial value. Defaults to True.
+    """
+
+    if not attr_host.hasAttr(attr_name):
+        attrHide = attribute.addAttribute(
+            attr_host, attr_name, "bool", val, keyable=keyable, channelBox=True
+        )
+    else:
+        attrHide = attr_host.attr(attr_name)
+
+    for ctl in obj_list:
+        if isinstance(ctl, str):
+            ctl = pm.PyNode(ctl)
+        for shape in ctl.getShapes():
+            if not shape.visibility.isConnected():
+                pm.connectAttr(attrHide, shape.visibility)
+
+
+def hide_transform(transform_list, attr_name, attr_host, val=True, keyable=False):
+    """Hide transform nodes using a host boolean attribute.
+
+    Args:
+        transform_list (list): Transform nodes (or names) to hide.
+        attr_name (str): Attribute name to create/use on the host.
+        attr_host (pm.DependNode|str): Node holding the attribute.
+        val (bool, optional): Initial value. Defaults to True.
+    """
+
+    if not attr_host.hasAttr(attr_name):
+        attrHide = attribute.addAttribute(
+            attr_host, attr_name, "bool", val, keyable=keyable, channelBox=True
+        )
+    else:
+        attrHide = attr_host.attr(attr_name)
+
+    for part in transform_list:
+        if isinstance(part, str):
+            part = pm.PyNode(part)
+        if not part.visibility.isConnected():
+            pm.connectAttr(attrHide, part.visibility)

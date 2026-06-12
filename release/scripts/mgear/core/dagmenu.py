@@ -10,8 +10,8 @@ from functools import partial
 
 # Maya imports
 from maya import cmds, mel
-import pymel.core as pm
-from pymel import versions
+import mgear.pymaya as pm
+from mgear.pymaya import versions
 
 # mGear imports
 import mgear
@@ -23,6 +23,7 @@ from mgear.core.anim_utils import mirrorPose
 from mgear.core.anim_utils import get_host_from_node
 from mgear.core.anim_utils import change_rotate_order
 from mgear.core.anim_utils import ikFkMatch_with_namespace
+from mgear.core.anim_utils import ikFkMatch_with_namespace2
 from mgear.core.anim_utils import get_ik_fk_controls
 from mgear.core.anim_utils import get_ik_fk_controls_by_role
 from mgear.core.anim_utils import IkFkTransfer
@@ -38,9 +39,10 @@ from mgear.shifter import guide_manager_gui
 from mgear.shifter import io
 from mgear.shifter import guide_template
 
-from .six import string_types
+string_types = str
 
 from mgear.vendor.Qt import QtWidgets
+from mgear.compatible import compatible_comp_dagmenu
 
 
 def __change_rotate_order_callback(*args):
@@ -163,17 +165,27 @@ def _find_rig_root(node):
 def _get_switch_node_attrs(node, end_string):
     """
     returns list of attr names for given node that match the end_string arg and are not proxy attrs
+
     Args:
-        node: str
-    Returns: list of strings
+        node (TYPE): Description
+        end_string (str or list): list of string suffix to search in the attr
+
+    Returns:
+        Returns: list of strings
+
     """
     attrs = []
-    for attr in cmds.listAttr(node, userDefined=True, keyable=True) or []:
-        if not attr.lower().endswith(end_string) or cmds.addAttr(
-            "{}.{}".format(node, attr), query=True, usedAsProxy=True
-        ):
-            continue
-        attrs.append(attr)
+    if not node:
+        return []
+    if not isinstance(end_string, list):
+        end_string = [end_string]
+    for end_str in end_string:
+        for attr in cmds.listAttr(node, userDefined=True, keyable=True) or []:
+            if not attr.lower().endswith(end_str) or cmds.addAttr(
+                "{}.{}".format(node, attr), query=True, usedAsProxy=True
+            ):
+                continue
+            attrs.append(attr)
     return attrs
 
 
@@ -189,6 +201,8 @@ def __range_switch_callback(*args):
 
     switch_control = args[0].split("|")[-1]
     blend_attr = args[1]
+    # blend attriute extension _blend, _switch or other
+    # blend_attr_ext = args[2]
 
     # the gets root node for the given control
     # this assumes the rig is root is a root node.
@@ -202,33 +216,49 @@ def __range_switch_callback(*args):
 
     # ik_controls, fk_controls = _get_controls(switch_control, blend_attr)
     # search criteria to find all the components sharing the blend
-    criteria = blend_attr.replace("_blend", "") + "_id*_ctl_cnx"
+    if "_Switch" in blend_attr:
+        criteria = "*_id*_ctl_cnx"
+    else:
+        criteria = blend_attr.replace("_blend", "") + "_id*_ctl_cnx"
+    #     component_ctl = [x for x in component_ctl if "leg" in x or "arm" in x]
     component_ctl = (
         cmds.listAttr(switch_control, ud=True, string=criteria) or []
     )
     if component_ctl:
         ik_list = []
+        # fk_list = []
+        # NOTE: with the new implemantation provably ikRot_list and upc_list
+        # are not needed anymore since the controls will be passed with the
+        #  ik_controls_complete_dict and fk_controls_complete_list
         ikRot_list = []
-        fk_list = []
         upv_list = []
 
-        for com_list in component_ctl:
-            # set the initial val for the blend attr in each iteration
+        ik_controls_complete_dict = {}
+        fk_controls_complete_list = []
+        for i, comp_ctl_list in enumerate(component_ctl):
+
             ik_controls, fk_controls = get_ik_fk_controls_by_role(
-                switch_control, com_list
+                switch_control, comp_ctl_list
             )
-            ik_list.append(ik_controls["ik_control"])
-            if ik_controls["ik_rot"]:
-                ikRot_list.append(ik_controls["ik_rot"])
-            upv_list.append(ik_controls["pole_vector"])
-            fk_list = fk_list + fk_controls
+            fk_controls_complete_list = fk_controls_complete_list + fk_controls
+            filtered_ik_controls = {
+                k: v for k, v in ik_controls.items() if v is not None
+            }
+            ik_controls_complete_dict.update(filtered_ik_controls)
+            if filtered_ik_controls:
+                if "ik_control" in ik_controls_complete_dict.keys():
+                    ik_list.append(ik_controls_complete_dict["ik_control"])
+                if "pole_vector" in ik_controls_complete_dict.keys():
+                    upv_list.append(ik_controls_complete_dict["pole_vector"])
+                if "ik_rot" in ik_controls_complete_dict.keys():
+                    ikRot_list.append(ik_controls_complete_dict["ik_rot"])
 
         # calls the ui
         range_switch.showUI(
             model=root,
             ikfk_attr=blend_attr,
             uihost=stripNamespace(switch_control),
-            fks=fk_list,
+            fks=fk_controls_complete_list,
             ik=ik_list,
             upv=upv_list,
             ikRot=ikRot_list,
@@ -236,7 +266,6 @@ def __range_switch_callback(*args):
 
 
 def __reset_all_transforms_callback(controls, *args):
-    print(controls)
     for c in controls:
         resetTransform(c, t=True, r=True, s=True)
 
@@ -291,39 +320,96 @@ def __switch_fkik_callback(*args):
     switch_control = args[0].split("|")[-1]
     keyframe = args[1]
     blend_attr = args[2]
+    # blend attr extension. _blend, _switch or other
+    blend_attr_ext = args[3]
 
     # gets namespace
     namespace = getNamespace(switch_control)
 
     # search criteria to find all the components sharing the blend
-    criteria = blend_attr.replace("_blend", "") + "_id*_ctl_cnx"
-    component_ctl = (
-        cmds.listAttr(switch_control, ud=True, string=criteria) or []
-    )
-    blend_fullname = "{}.{}".format(switch_control, blend_attr)
-    for i, comp_ctl_list in enumerate(component_ctl):
-        # we need to need to set the original blend value for each ik/fk match
-        if i == 0:
-            init_val = cmds.getAttr(blend_fullname)
-        else:
-            cmds.setAttr(blend_fullname, init_val)
-
-        ik_controls, fk_controls = get_ik_fk_controls_by_role(
-            switch_control, comp_ctl_list
+    # criteria = blend_attr.replace(blend_attr_ext, "") + "_id*_ctl_cnx"
+    # criteria = "*_id*_ctl_cnx"
+    if "_Switch" in blend_attr:
+        criteria = "*_id*_ctl_cnx"
+        component_ctl = (
+            cmds.listAttr(switch_control, ud=True, string=criteria) or []
         )
+        blend_fullname = "{}.{}".format(switch_control, blend_attr)
+        # if blend_attr_ext == "_blend":
+        #     ik_val = 1.0
+        #     fk_val = 0.0
+        # else:
+        ik_val = False
+        fk_val = True
+        ik_controls_complete_dict = {}
+        fk_controls_complete_list = []
+        for i, comp_ctl_list in enumerate(component_ctl):
 
+            ik_controls, fk_controls = get_ik_fk_controls_by_role(
+                switch_control, comp_ctl_list
+            )
+            fk_controls_complete_list = fk_controls_complete_list + fk_controls
+            filtered_ik_controls = {
+                k: v for k, v in ik_controls.items() if v is not None
+            }
+            ik_controls_complete_dict.update(filtered_ik_controls)
+        init_val = None
+        if ik_controls["ik_control"] and fk_controls:
+            # we need to set the original blend value for each ik/fk match
+            if not init_val:
+                init_val = cmds.getAttr(blend_fullname)
+            else:
+                cmds.setAttr(blend_fullname, init_val)
         # runs switch
-        ikFkMatch_with_namespace(
+        ikFkMatch_with_namespace2(
             namespace=namespace,
             ikfk_attr=blend_attr,
             ui_host=switch_control,
-            fks=fk_controls,
-            ik=ik_controls["ik_control"],
-            upv=ik_controls["pole_vector"],
-            ik_rot=ik_controls["ik_rot"],
-            key=keyframe,
-            ik_controls=ik_controls,
+            fk_controls=fk_controls_complete_list,
+            ik_controls=ik_controls_complete_dict,
+            keyframe=keyframe,
+            ik_val=ik_val,
+            fk_val=fk_val,
         )
+
+    else:  # _blend attr system
+        criteria = blend_attr.replace("_blend", "") + "_id*_ctl_cnx"
+        component_ctl = (
+            cmds.listAttr(switch_control, ud=True, string=criteria) or []
+        )
+        blend_fullname = "{}.{}".format(switch_control, blend_attr)
+        ik_val = 1.0
+        fk_val = 0.0
+        # if blend_attr_ext == "_blend":
+        # else:
+        #     ik_val = False
+        #     fk_val = True
+        for i, comp_ctl_list in enumerate(component_ctl):
+
+            ik_controls, fk_controls = get_ik_fk_controls_by_role(
+                switch_control, comp_ctl_list
+            )
+            init_val = None
+            if ik_controls["ik_control"] and fk_controls:
+                # we need to set the original blend value for each ik/fk match
+                if not init_val:
+                    init_val = cmds.getAttr(blend_fullname)
+                else:
+                    cmds.setAttr(blend_fullname, init_val)
+                # runs switch
+                ikFkMatch_with_namespace(
+                    namespace=namespace,
+                    ikfk_attr=blend_attr,
+                    ui_host=switch_control,
+                    fks=fk_controls,
+                    ik=ik_controls["ik_control"],
+                    upv=ik_controls["pole_vector"],
+                    ik_rot=ik_controls["ik_rot"],
+                    key=keyframe,
+                    ik_controls=ik_controls,
+                    ik_val=ik_val,
+                    fk_val=fk_val,
+                )
 
 
 def __switch_parent_callback(*args):
@@ -334,7 +420,7 @@ def __switch_parent_callback(*args):
     """
 
     # creates a map for non logical components controls
-    control_map = {"elbow": "mid", "rot": "orbit", "knee": "mid"}
+    control_map = {"elbow": ["mid"], "rot":[ "orbit"], "knee": ["mid"], "ik": ["headIK"],"head": ["headFree"]}
 
     # switch_control = args[0].split("|")[-1].split(":")[-1]
     switch_control = args[0].split("|")[-1]
@@ -342,7 +428,6 @@ def __switch_parent_callback(*args):
     switch_attr = args[1]
     switch_idx = args[2]
     search_token = switch_attr.split("_")[-1].split("ref")[0].split("Ref")[0]
-    print(search_token)
     target_control = None
 
     # control_01 attr don't standard name ane need to be check
@@ -369,7 +454,7 @@ def __switch_parent_callback(*args):
                 break
             elif (
                 search_token in control_map.keys()
-                and ctl.ctl_role.get() == control_map[search_token]
+                and ctl.ctl_role.get() in control_map[search_token]
             ):
                 target_control = ctl.stripNamespace()
                 break
@@ -383,6 +468,15 @@ def __switch_parent_callback(*args):
             for ctl in uiHost.attr(comp_ctl_list).listConnections():
 
                 target_control_list.append(ctl.stripNamespace())
+
+    if search_token in ["follow"] and not target_control_list:
+        # in this case we asume that the control holds is own space
+        # switch attr. This attr is also expected to have simple name
+        # witout description to witch component belongs. This works only
+        # if the attr is on a control of the same component that is not a
+        # genearal uiHost for other components
+        target_control = uiHost.stripNamespace()
+        target_control_list.append(target_control)
 
     # gets root node for the given control
     namespace_value = args[0].split("|")[-1].split(":")
@@ -447,7 +541,8 @@ def __space_transfer_callback(*args):
     """
 
     # creates a map for non logical components controls
-    control_map = {"elbow": "mid", "rot": "orbit", "knee": "mid"}
+    control_map = {"elbow": ["mid"], "rot": ["orbit", "fk0"], "knee": ["mid"],
+                   "ik": ["headIK"], "head": ["headFree"]}
 
     # switch_control = args[0].split("|")[-1].split(":")[-1]
     switch_control = args[0].split("|")[-1]
@@ -455,7 +550,6 @@ def __space_transfer_callback(*args):
     switch_attr = args[1]
     combo_box = args[2]
     search_token = switch_attr.split("_")[-1].split("ref")[0].split("Ref")[0]
-    print(search_token)
     target_control = None
 
     # control_01 attr don't standard name ane need to be check
@@ -482,7 +576,7 @@ def __space_transfer_callback(*args):
                 break
             elif (
                 search_token in control_map.keys()
-                and ctl.ctl_role.get() == control_map[search_token]
+                and ctl.ctl_role.get() in control_map[search_token]
             ):
                 target_control = ctl.stripNamespace()
                 break
@@ -494,8 +588,9 @@ def __space_transfer_callback(*args):
             # found controls for the match.
             # This is needed for regular ik match in Control_01
             for ctl in uiHost.attr(comp_ctl_list).listConnections():
+                if ctl.ctl_role.get() == "ctl":
 
-                target_control_list.append(ctl.stripNamespace())
+                    target_control_list.append(ctl.stripNamespace())
 
     # gets root node for the given control
     namespace_value = args[0].split("|")[-1].split(":")
@@ -526,17 +621,18 @@ def __space_transfer_callback(*args):
         pm.displayInfo("Not root or target control list for space transfer")
         return
 
-    autokey = cmds.listConnections(
-        "{}.{}".format(switch_control, switch_attr), type="animCurve"
-    )
+    # autokey = cmds.listConnections(
+    #     "{}.{}".format(switch_control, switch_attr), type="animCurve"
+    # )
 
-    if autokey:
-        for target_control in target_control_list:
-            cmds.setKeyframe(
-                "{}:{}".format(namespace_value, target_control),
-                "{}.{}".format(switch_control, switch_attr),
-                time=(cmds.currentTime(query=True) - 1.0),
-            )
+    # if autokey:
+    #     print("Autokey run")
+    #     for target_control in target_control_list:
+    #         cmds.setKeyframe(
+    #             "{}:{}".format(namespace_value, target_control),
+    #             "{}.{}".format(switch_control, switch_attr),
+    #             time=(cmds.currentTime(query=True) - 1.0),
+    #         )
 
     # triggers switch
     ParentSpaceTransfer.showUI(
@@ -547,13 +643,13 @@ def __space_transfer_callback(*args):
         target_control_list[0],
     )
 
-    if autokey:
-        for target_control in target_control_list:
-            cmds.setKeyframe(
-                "{}:{}".format(namespace_value, target_control),
-                "{}.{}".format(switch_control, switch_attr),
-                time=(cmds.currentTime(query=True)),
-            )
+    # if autokey:
+    #     for target_control in target_control_list:
+    #         cmds.setKeyframe(
+    #             "{}:{}".format(namespace_value, target_control),
+    #             "{}.{}".format(switch_control, switch_attr),
+    #             time=(cmds.currentTime(query=True)),
+    #         )
 
 
 def __switch_xray_ctl_callback(*args):
@@ -728,6 +824,12 @@ def mgear_dagmenu_guide_fill(parent_menu, current_guide_locator):
     )
     cmds.menuItem(
         parent=parent_menu,
+        label="Update Setected Components Type",
+        command=compatible_comp_dagmenu.update_component_type_and_update_guide_with_dagmenu,
+        image="mgear_loader.svg",
+    )
+    cmds.menuItem(
+        parent=parent_menu,
         label="Reload Components",
         command=shifter.reloadComponents,
         image="mgear_refresh-cw.svg",
@@ -769,7 +871,10 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     child_controls.append(current_control)
     attrs = _get_switch_node_attrs(current_control, "_blend")
     attrs2 = _get_switch_node_attrs(current_control, "ref")
-    if attrs or attrs2:
+    attrs3 = _get_switch_node_attrs(current_control, "_switch")
+    # attrs4 = _get_switch_node_attrs(current_control, "follow")
+
+    if attrs or attrs2 or attrs3:
         ui_host = current_control
 
     else:
@@ -779,7 +884,9 @@ def mgear_dagmenu_fill(parent_menu, current_control):
             )[0]
             attrs = _get_switch_node_attrs(ui_host, "_blend")
             attrs2 = _get_switch_node_attrs(ui_host, "ref")
-            if not attrs and not attrs2:
+            attrs3 = _get_switch_node_attrs(ui_host, "_switch")
+            attrs4 = _get_switch_node_attrs(ui_host, "follow")
+            if not attrs and not attrs2 and not attrs3 and not attrs4:
                 ui_host = None
         except ValueError:
             ui_host = None
@@ -799,37 +906,58 @@ def mgear_dagmenu_fill(parent_menu, current_control):
         # divider
         cmds.menuItem(parent=parent_menu, divider=True)
 
-    for attr in attrs:
-        # found attribute so get current state
-        current_state = cmds.getAttr("{}.{}".format(ui_host, attr))
-        states = {0: "Fk", 1: "Ik"}
+    def add_menu_items(attrs, attr_extension="_blend"):
+        for attr in attrs:
+            # found attribute so get current state
+            current_state = cmds.getAttr("{}.{}".format(ui_host, attr))
+            if attr_extension == "_blend":
+                states = {0: "Fk", 1: "Ik"}
+            else:
+                states = {0: "IK", 1: "Fk"}
 
-        rvs_state = states[int(not current_state)]
+            rvs_state = states[int(not current_state)]
 
-        cmds.menuItem(
-            parent=parent_menu,
-            label="Switch {} to {}".format(attr.split("_blend")[0], rvs_state),
-            command=partial(__switch_fkik_callback, ui_host, False, attr),
-            image="kinReroot.png",
-        )
+            cmds.menuItem(
+                parent=parent_menu,
+                label="Switch {} to {}".format(
+                    attr.split(attr_extension)[0], rvs_state
+                ),
+                command=partial(
+                    __switch_fkik_callback,
+                    ui_host,
+                    False,
+                    attr,
+                    attr_extension,
+                ),
+                image="kinReroot.png",
+            )
 
-        cmds.menuItem(
-            parent=parent_menu,
-            label="Switch {} to {} + Key".format(
-                attr.split("_blend")[0], rvs_state
-            ),
-            command=partial(__switch_fkik_callback, ui_host, True, attr),
-            image="character.svg",
-        )
+            cmds.menuItem(
+                parent=parent_menu,
+                label="Switch {} to {} + Key".format(
+                    attr.split(attr_extension)[0], rvs_state
+                ),
+                command=partial(
+                    __switch_fkik_callback, ui_host, True, attr, attr_extension
+                ),
+                image="character.svg",
+            )
 
-        cmds.menuItem(
-            parent=parent_menu,
-            label="Range switch",
-            command=partial(__range_switch_callback, ui_host, attr),
-        )
+            cmds.menuItem(
+                parent=parent_menu,
+                label="Range switch",
+                command=partial(
+                    __range_switch_callback, ui_host, attr, attr_extension
+                ),
+            )
 
-        # divider
-        cmds.menuItem(parent=parent_menu, divider=True)
+            # divider
+            cmds.menuItem(parent=parent_menu, divider=True)
+
+    if attrs:
+        add_menu_items(attrs)
+    if attrs3:
+        add_menu_items(attrs3, attr_extension="_switch")
 
     # select all function
     cmds.menuItem(
@@ -980,8 +1108,21 @@ def mgear_dagmenu_fill(parent_menu, current_control):
     cmds.menuItem(parent=parent_menu, divider=True)
 
     # handles constrains attributes (constrain switches)
-    if ui_host:
-        for attr in _get_switch_node_attrs(ui_host, "ref"):
+    space_attrs = _get_switch_node_attrs(ui_host, ["ref", "follow"])
+    ui_hosts = [ui_host for x in space_attrs]
+
+    # in case is not uiHost but also contain space attr like follow or ref
+    if current_control != ui_host:
+        space_attr_out_of_uiHost = _get_switch_node_attrs(
+            current_control, ["ref", "follow"]
+        )
+        out_ui_hosts = [current_control for x in space_attr_out_of_uiHost]
+        if space_attr_out_of_uiHost:
+            space_attrs = space_attrs + space_attr_out_of_uiHost
+            ui_hosts = ui_hosts + out_ui_hosts
+
+    if ui_hosts:
+        for attr, uih in zip(space_attrs, ui_hosts):
 
             part, ctl = (
                 attr.split("_")[0],
@@ -996,9 +1137,9 @@ def mgear_dagmenu_fill(parent_menu, current_control):
             )
             cmds.radioMenuItemCollection(parent=_p_switch_menu)
             k_values = cmds.addAttr(
-                "{}.{}".format(ui_host, attr), query=True, enumName=True
+                "{}.{}".format(uih, attr), query=True, enumName=True
             ).split(":")
-            current_state = cmds.getAttr("{}.{}".format(ui_host, attr))
+            current_state = cmds.getAttr("{}.{}".format(uih, attr))
 
             combo_box = QtWidgets.QComboBox()
 
@@ -1014,7 +1155,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
                     label=k_val,
                     radioButton=state,
                     command=partial(
-                        __switch_parent_callback, ui_host, attr, idx, k_val
+                        __switch_parent_callback, uih, attr, idx, k_val
                     ),
                 )
 
@@ -1023,7 +1164,7 @@ def mgear_dagmenu_fill(parent_menu, current_control):
                 parent=_p_switch_menu,
                 label="++ Space Transfer ++",
                 command=partial(
-                    __space_transfer_callback, ui_host, attr, combo_box
+                    __space_transfer_callback, uih, attr, combo_box
                 ),
             )
 

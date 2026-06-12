@@ -1,6 +1,6 @@
 """Component Meta 01 module"""
 
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.shifter import component
 

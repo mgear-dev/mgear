@@ -23,7 +23,7 @@
 from copy import copy
 import struct
 
-from mgear.vendor.Qt import QtGui, QtCore, QtWidgets
+from mgear.vendor.Qt import QtGui, QtCore, QtWidgets, QtCompat
 
 
 FLOAT_SLIDER_DRAG_STEPS = [100.0, 10.0, 1.0, 0.1, 0.01, 0.001]
@@ -432,7 +432,14 @@ class slider(QtWidgets.QSlider):
         self.startDragpos = QtCore.QPointF()
         self.realStartDragpos = QtCore.QPointF()
         self.LeftButton = QtCore.Qt.LeftButton
-        self.MidButton = QtCore.Qt.MidButton
+
+        # Try importing PySide6, fall back to PySide2 if not available
+        try:
+            MiddleButton = QtCompat.Qt.MidButton
+        except ImportError:
+            MiddleButton = QtCore.Qt.MidButton
+
+        self.MidButton = MiddleButton
         self.draggers = None
         self._click_offset = 0
         self._prev_x = 0

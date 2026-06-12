@@ -1,5 +1,5 @@
 import pyblish.api
-import pymel.core as pm
+import mgear.pymaya as pm
 
 
 @pyblish.api.log

@@ -1,19 +1,22 @@
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 import maya.cmds as cmds
-from maya import OpenMayaUI as omui
-from shiboken2 import wrapInstance
+
+# from shiboken2 import wrapInstance
+from maya import mel
 
 import mgear
 from mgear.core import callbackManager
 from mgear.core import widgets as mwgt
 from mgear.core.utils import one_undo, viewport_off
 from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
+from mgear.core import pyqt
 
 from mgear.rigbits.mirror_controls import MirrorController
 
 import json
 from functools import partial
+import ast
 
 ########################################
 #   Load Plugins
@@ -24,13 +27,7 @@ if not pm.pluginInfo("mayaHIK", query=True, loaded=True):
     pm.loadPlugin("mayaHIK")
 
 
-def maya_main_window():
-    main_window_ptr = omui.MQtUtil.mainWindow()
-    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
-
-
 class HumanIKMapper:
-
     # Hard coded values for bone names in Human Ik
 
     HEAD_NAMES = [
@@ -113,7 +110,6 @@ class HumanIKMapper:
         "LeafLeftLegRoll5",
     ]
 
-
     CHAR_NAME = "MGearIKHuman"
 
     # Dictionary containing all relevant info; [bone] = {target:'', sub_ik:''}
@@ -128,29 +124,29 @@ class HumanIKMapper:
             return
         reference_bone = selection[-1]
 
-        pm.mel.HIKCharacterControlsTool()
+        cmds.HIKCharacterControlsTool()
 
         # creates a set with current HIKCharNodes, creates a new node and subtracts sets members to get new node
 
         tmp = set(pm.ls(type="HIKCharacterNode"))
-        pm.mel.hikCreateDefinition()
+        mel.eval("hikCreateDefinition;")
         hikChar = list(set(pm.ls(type="HIKCharacterNode")) - tmp)[0]
         hikChar.rename(cls.CHAR_NAME)
-        pm.mel.hikSetCurrentCharacter(hikChar)
+        mel.eval('hikSetCurrentCharacter("{}");'.format(hikChar))
 
         if reference_bone:
-            pm.mel.setCharacterObject(
-                reference_bone,
-                hikChar,
-                pm.mel.hikGetNodeIdFromName("Reference"),
-                0,
+            node_id = cmds.hikGetNodeIdFromName("Reference")
+            mel.eval(
+                'setCharacterObject("{}", "{}", "{}", {});'.format(
+                    reference_bone, hikChar, node_id, 0
+                )
             )
 
-        pm.mel.hikUpdateDefinitionUI()
+        mel.eval("hikUpdateDefinitionUI();")
 
     @classmethod
     def is_initialized(cls):
-        return pm.mel.hikGetCurrentCharacter()
+        return mel.eval("hikGetCurrentCharacter;")
 
     @classmethod
     @one_undo
@@ -180,7 +176,7 @@ class HumanIKMapper:
                     ]
                 )
 
-        hikChar = pm.mel.hikGetCurrentCharacter()
+        hikChar = mel.eval("hikGetCurrentCharacter;")
         locked_ctrls = cls.get_locked_ctrls(ctrls)
         if locked_ctrls:
             if LockedCtrlsDialog(ctrls_list=locked_ctrls).exec_():
@@ -189,17 +185,22 @@ class HumanIKMapper:
                 return
 
         for bone, ctrl in zip(bones_list, ctrls):
-            pm.mel.setCharacterObject(
-                ctrl, hikChar, pm.mel.hikGetNodeIdFromName(bone), 0
+            node_id = cmds.hikGetNodeIdFromName(bone)
+            mel.eval(
+                'setCharacterObject("{}", "{}", "{}", {});'.format(
+                    ctrl, hikChar, node_id, 0
+                )
             )
 
-        pm.evalDeferred("pm.mel.hikUpdateDefinitionUI()")
+        pm.evalDeferred(
+            'from maya import mel; mel.eval("hikUpdateDefinitionUI();")'
+        )
         return
 
     @classmethod
     def get_locked_ctrls(cls, ctrl_list):
         """
-            Receives a list of controllers and returns the controllers that have a locked attribute
+        Receives a list of controllers and returns the controllers that have a locked attribute
         """
         locked_ctrls = []
         for ctrl in ctrl_list:
@@ -232,12 +233,15 @@ class HumanIKMapper:
         # clears current char config
         cls.char_config = {}
 
-        hik_count = pm.mel.hikGetNodeCount()
-        hikChar = pm.mel.hikGetCurrentCharacter()
+        hik_count = cmds.hikGetNodeCount()
+        hikChar = mel.eval("hikGetCurrentCharacter;")
 
+        if not hikChar:
+            return cls.char_config
         for i in range(hik_count):
-            bone_name = pm.mel.GetHIKNodeName(i)
-            bone_target = pm.mel.hikGetSkNode(hikChar, i)
+            bone_name = cmds.GetHIKNodeName(i)
+            # bone_target = cmds.hikGetSkNode(hikChar, i)
+            bone_target = mel.eval('hikGetSkNode("{}", {})'.format(hikChar, i))
 
             if bone_target:
                 cls.char_config[bone_name] = {"target": bone_target}
@@ -270,16 +274,16 @@ class HumanIKMapper:
         with open(file_path, "r") as fp:
             cls.char_config = json.load(fp)
 
-        hikChar = pm.mel.hikGetCurrentCharacter()
+        hikChar = mel.eval("hikGetCurrentCharacter;")
 
         if not hikChar:
-            pm.mel.HIKCharacterControlsTool()
+            cmds.HIKCharacterControlsTool()
 
             tmp = set(pm.ls(type="HIKCharacterNode"))
-            pm.mel.hikCreateDefinition()
+            cmds.hikCreateDefinition()
             hikChar = list(set(pm.ls(type="HIKCharacterNode")) - tmp)[0]
             hikChar.rename(cls.CHAR_NAME)
-            pm.mel.hikSetCurrentCharacter(hikChar)
+            cmds.hikSetCurrentCharacter(hikChar)
 
         ctls = [
             pm.PyNode(cls.char_config[bone]["target"])
@@ -301,9 +305,11 @@ class HumanIKMapper:
                 return
 
         for bone in cls.char_config:
-            bone_id = pm.mel.hikGetNodeIdFromName(bone)
-            pm.mel.setCharacterObject(
-                cls.char_config[bone]["target"], hikChar, bone_id, 0
+            bone_id = cmds.hikGetNodeIdFromName(bone)
+            mel.eval(
+                'setCharacterObject("{}", "{}", "{}", {});'.format(
+                    cls.char_config[bone]["target"], hikChar, bone_id, 0
+                )
             )
             if cls.char_config[bone]["sub_ik"]:
                 cls.set_sub_ik(
@@ -313,15 +319,16 @@ class HumanIKMapper:
 
     @classmethod
     def set_sub_ik(cls, bone_target, sub_ik_ctls, do_mirror=False):
-
         def sub_ik_setup(bone_target, sub_ik_ctls):
-
             if not pm.attributeQuery("sub_ik", node=bone_target, exists=True):
-                pm.addAttr(bone_target, longName="sub_ik", attributeType="message")
+                pm.addAttr(
+                    bone_target, longName="sub_ik", attributeType="message"
+                )
 
             for sub_ik_ctl in sub_ik_ctls:
-
-                if not pm.attributeQuery("sub_ik", node=sub_ik_ctl, exists=True):
+                if not pm.attributeQuery(
+                    "sub_ik", node=sub_ik_ctl, exists=True
+                ):
                     pm.addAttr(
                         sub_ik_ctl, longName="sub_ik", attributeType="message"
                     )
@@ -335,8 +342,13 @@ class HumanIKMapper:
         all_sub_ik_ctls = list(sub_ik_ctls)
 
         if do_mirror:
-            opposite_bone_target = MirrorController.get_opposite_control(bone_target)
-            opposite_sub_ik_ctls = [MirrorController.get_opposite_control(ctl) for ctl in sub_ik_ctls]
+            opposite_bone_target = MirrorController.get_opposite_control(
+                bone_target
+            )
+            opposite_sub_ik_ctls = [
+                MirrorController.get_opposite_control(ctl)
+                for ctl in sub_ik_ctls
+            ]
             all_sub_ik_ctls.extend(opposite_sub_ik_ctls)
 
         locked_ctrls = cls.get_locked_ctrls(all_sub_ik_ctls)
@@ -349,8 +361,6 @@ class HumanIKMapper:
         sub_ik_setup(bone_target, sub_ik_ctls)
         if do_mirror:
             sub_ik_setup(opposite_bone_target, opposite_sub_ik_ctls)
-
-
 
     @classmethod
     def clear_sub_ik(cls, bone_target):
@@ -388,31 +398,57 @@ class HumanIKMapper:
     @classmethod
     @viewport_off
     def bake(cls):
-        current_ik_char = pm.mel.hikGetCurrentCharacter()
+        print("Baking character".center(30, '#'))
+        current_ik_char = mel.eval("hikGetCurrentCharacter;")
+        print(f"{current_ik_char}".center(30, '#'))
         attrs_string = " ".join(cls.get_sub_ik_bake_attrs())
-        sub_ik_ctls = [cls.char_config[bone]["sub_ik"] for bone in cls.char_config if cls.char_config[bone]["sub_ik"]]
-        sub_ik_constraints = [cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls]
-        sub_ik_constraints_string = " ".join(sub_ik_constraints)
+        sub_ik_ctls = [
+            cls.char_config[bone]["sub_ik"]
+            for bone in cls.char_config
+            if cls.char_config[bone]["sub_ik"]
+        ]
+        if sub_ik_ctls:
+            sub_ik_constraints = [
+                cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
+            ]
+            sub_ik_constraints_string = " ".join(sub_ik_constraints)
 
-        mel_cmd = """
-            string $currCharacter = hikGetCurrentCharacter();
-            
-            if( $currCharacter != "" )
-            {{
-                string $preBakeCmd =  "hikBakeCharacterPre( \\"{0}\\" ); ";
-                $preBakeCmd += "select -add {1};";
-                string $postBakeCmd = "hikBakeCharacterPost( \\"{0}\\" ); ";
-                $postBakeCmd += "delete {2};";
+            mel_cmd = """
+                string $currCharacter = hikGetCurrentCharacter();
 
-                performBakeSimulationArgList 2 {{ "1", "animationList", $preBakeCmd, $postBakeCmd }};
-            }}
+                if( $currCharacter != "" )
+                {{
+                    string $preBakeCmd =  "hikBakeCharacterPre( \\"{0}\\" ); ";
+                    $preBakeCmd += "select -add {1};";
+                    string $postBakeCmd = "hikBakeCharacterPost( \\"{0}\\" ); ";
+                    $postBakeCmd += "delete {2};";
 
-        """.format(
-            current_ik_char, attrs_string, sub_ik_constraints_string
-        )
+                    performBakeSimulationArgList 2 {{ "1", "animationList", $preBakeCmd, $postBakeCmd }};
+                }}
 
-        pm.mel.eval(mel_cmd)
-        # cls.sub_iks_binding(False)
+            """.format(
+                current_ik_char, attrs_string, sub_ik_constraints_string
+            )
+
+            mel.eval(mel_cmd)
+
+        else:
+            mel_cmd = """
+                string $currCharacter = hikGetCurrentCharacter();
+
+                if( $currCharacter != "" )
+                {{
+                    string $preBakeCmd =  "hikBakeCharacterPre( \\"{0}\\" ); ";
+                    string $postBakeCmd = "hikBakeCharacterPost( \\"{0}\\" ); ";
+
+                    performBakeSimulationArgList 2 {{ "1", "animationList", $preBakeCmd, $postBakeCmd }};
+                }}
+
+            """.format(current_ik_char)
+
+            mel.eval(mel_cmd)
+
+            # cls.sub_iks_binding(False)
 
     @classmethod
     def get_sub_ik_bake_attrs(cls):
@@ -433,52 +469,162 @@ class HumanIKMapper:
                     attrs.append(sub_ik.rotate.name())
         return attrs
 
-
     @classmethod
     @one_undo
-    def batch_bake(cls, file_list):
-
-        curr_character = pm.mel.hikGetCurrentCharacter()
-        # pm.mel.hikSetCurrentCharacter(hikChar)
+    @viewport_off
+    def batch_bake(cls, file_list, timeline=False):
+        # curr_character = mel.eval("hikGetCurrentCharacter;") # Not used ?
+        # cmds.hikSetCurrentCharacter(hikChar)
+        cmds.timeEditor(mute=True)
         existing_ik_humans = set(pm.ls(type="HIKCharacterNode"))
 
         HumanIKMapper.refresh_char_configuration()
 
         # TODO: determine first and last frame, change anim layer name to fbx name,
-        sub_ik_ctls = [cls.char_config[bone]["sub_ik"] for bone in cls.char_config if
-                       cls.char_config[bone]["sub_ik"]]
-        sub_ik_constraints = [cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls]
-        print(sub_ik_constraints)
+        sub_ik_ctls = [
+            cls.char_config[bone]["sub_ik"]
+            for bone in cls.char_config
+            if cls.char_config[bone]["sub_ik"]
+        ]
+        sub_ik_constraints = [
+            cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
+        ]
+
+        current_start_frame = 0
+        clip_id = 1
 
         for file in file_list:
+            # TODO test with references
             ref_node = cmds.file(file, r=True, namespace=":", type="FBX")
-            file_ik_human = list(set(pm.ls(type="HIKCharacterNode")) - existing_ik_humans)[0]
+            file_ik_human = list(
+                set(pm.ls(type="HIKCharacterNode")) - existing_ik_humans
+            )
+            if file_ik_human:
+                file_ik_human = file_ik_human[0]
             existing_ik_humans = set(pm.ls(type="HIKCharacterNode"))
 
-            frame_range = "{0}:{1}".format(pm.playbackOptions(q=True, min=True), pm.playbackOptions(q=True, max=True))
-            # pm.evalDeferred(deferred_cmd)
-            pm.evalDeferred("from mgear.animbits.humanIkMapper import HumanIKMapper \n"
-                            "HumanIKMapper.deferred_bake(\"{0}\", \"{1}\")".format(file_ik_human, frame_range))
+            frame_range = (
+                cmds.playbackOptions(q=True, min=True),
+                cmds.playbackOptions(q=True, max=True)
+            )
+            if not timeline:
+                cmds.evalDeferred(
+                    "from mgear.animbits.humanIkMapper import HumanIKMapper \n"
+                    'HumanIKMapper.deferred_bake("{0}", "{1}")'.format(
+                        file_ik_human, frame_range, current_start_frame, clip_id
+                    )
+                )
+            else:
+                cmds.evalDeferred(
+                    "from mgear.animbits.humanIkMapper import HumanIKMapper \n"
+                    'HumanIKMapper.deferred_bake_timeline("{0}", "{1}", "{2}", {3})'.format(
+                        file_ik_human, frame_range, current_start_frame, clip_id
+                    )
+                )
+            current_start_frame += frame_range[1]
+            clip_id += 1
+
+        cmds.timeEditor(mute=False)
+        cmds.playbackOptions(min=0, max=current_start_frame)
 
     @classmethod
     def deferred_bake(cls, ikhuman, frame_range):
         # updates src
         HumanIKMapper.sub_iks_binding(True)
+        cmds.optionMenuGrp(
+            "hikSourceList", edit=True, value=" {0}".format(ikhuman)
+        )
+        mel.eval("hikUpdateCurrentSourceFromUI;")
 
-        pm.optionMenuGrp("hikSourceList", edit=True, value=" {0}".format(ikhuman))
-        pm.mel.hikUpdateCurrentSourceFromUI()
-
-        sub_ik_ctls = [cls.char_config[bone]["sub_ik"] for bone in HumanIKMapper.char_config if HumanIKMapper.char_config[bone]["sub_ik"]]
-        sub_ik_constraints = [cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls]
+        sub_ik_ctls = [
+            cls.char_config[bone]["sub_ik"]
+            for bone in HumanIKMapper.char_config
+            if HumanIKMapper.char_config[bone]["sub_ik"]
+        ]
+        sub_ik_constraints = [
+            cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
+        ]
         # print("sub ik ctls = {1}, \n subik constraints = {1}".format(sub_ik_ctls, sub_ik_constraints))
 
-        pm.mel.hikBakeCharacterPre("{0}".format(pm.mel.hikGetCurrentCharacter()))
-        pm.select(HumanIKMapper.get_sub_ik_bake_attrs(), add=1)
-        pm.bakeResults(pm.ls(sl=1), bakeOnOverrideLayer=True, simulation=True, t=frame_range, sampleBy=1)
-        pm.mel.hikBakeCharacterPost("{0}".format(pm.mel.hikGetCurrentCharacter()))
+        mel.eval(
+            'hikBakeCharacterPre("{}");'.format(
+                mel.eval("hikGetCurrentCharacter;")
+            )
+        )
+        cmds.select(HumanIKMapper.get_sub_ik_bake_attrs(), add=1)
+        cmds.bakeResults(
+            cmds.ls(sl=1),
+            bakeOnOverrideLayer=True,
+            simulation=True,
+            t=ast.literal_eval(frame_range),
+            sampleBy=1,
+        )
+        mel.eval(
+            'hikBakeCharacterPost("{}");'.format(
+                mel.eval("hikGetCurrentCharacter;")
+            )
+        )
         if sub_ik_constraints:
-            pm.delete(sub_ik_constraints)
-        pm.rename("BakeResults", ikhuman)
+            cmds.delete(sub_ik_constraints)
+        cmds.rename("BakeResults", ikhuman)
+    
+    @classmethod
+    @viewport_off
+    def deferred_bake_timeline(cls, ikhuman, frame_range, start_frame, clip_id):
+        
+        # updates src
+        HumanIKMapper.sub_iks_binding(True)
+        cmds.optionMenuGrp(
+            "hikSourceList", edit=True, value=" {0}".format(ikhuman)
+        )
+        mel.eval("hikUpdateCurrentSourceFromUI;")
+
+        sub_ik_ctls = [
+            cls.char_config[bone]["sub_ik"]
+            for bone in HumanIKMapper.char_config
+            if HumanIKMapper.char_config[bone]["sub_ik"]
+        ]
+        sub_ik_constraints = [
+            cmds.parentConstraint(ctl, query=True) for ctl in sub_ik_ctls
+        ]
+        # print("sub ik ctls = {1}, \n subik constraints = {1}".format(sub_ik_ctls, sub_ik_constraints))
+
+        mel.eval(
+            'hikBakeCharacterPre("{}");'.format(
+                mel.eval("hikGetCurrentCharacter;")
+            )
+        )
+        cmds.select(HumanIKMapper.get_sub_ik_bake_attrs(), add=1)
+        cmds.bakeResults(
+            cmds.ls(sl=1),
+            simulation=True,
+            t=ast.literal_eval(frame_range),
+            sampleBy=1,
+        )
+        mel.eval(
+            'hikBakeCharacterPost("{}");'.format(
+                mel.eval("hikGetCurrentCharacter;")
+            )
+        )
+        if sub_ik_constraints:
+            cmds.delete(sub_ik_constraints)
+        # cmds.rename("BakeResults", ikhuman)
+        ctls = cls.get_all_controls()
+        cmds.select(ctls)
+        animSource = cmds.timeEditorAnimSource(ikhuman, aso=1)
+        animClip = cmds.timeEditorClip(f"{ikhuman}_Clip", startTime=start_frame, rootClipId=clip_id, animSource=animSource, track="Composition1:0")
+
+
+    @classmethod
+    def get_all_controls(cls):
+        ctls = []
+        for bone in cls.char_config.values():
+            if bone['target']:
+                ctls.append(bone['target'])
+            if bone['sub_ik']:
+                ctls.extend(bone['sub_ik'])
+
+        return ctls
 
 
 class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
@@ -514,12 +660,15 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.import_action = QtWidgets.QAction("Import")
         self.export_action = QtWidgets.QAction("Export")
         self.bake_action = QtWidgets.QAction("Bake")
-        self.export_batch_bake_action = QtWidgets.QAction("Export Batch Bake Config")
-        self.import_batch_bake_action = QtWidgets.QAction("Import Batch Bake Config")
-
+        self.bake_timeline_action = QtWidgets.QAction("Bake to timeline")
+        self.export_batch_bake_action = QtWidgets.QAction(
+            "Export Batch Bake Config"
+        )
+        self.import_batch_bake_action = QtWidgets.QAction(
+            "Import Batch Bake Config"
+        )
 
     def create_widgets(self):
-
         self.menu_bar = QtWidgets.QMenuBar()
         self.file_menu = self.menu_bar.addMenu("File")
         self.file_menu.addAction(self.import_action)
@@ -600,16 +749,23 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         # bake tab
         self.bake_paths_lw = QtWidgets.QListWidget()
-        self.bake_paths_lw.setSelectionMode(QtWidgets.QListWidget.ExtendedSelection)
+        self.bake_paths_lw.setSelectionMode(
+            QtWidgets.QListWidget.ExtendedSelection
+        )
         add_remove_font = QtGui.QFont()
         add_remove_font.setPointSize(25)
         self.add_bake_path_btn = QtWidgets.QPushButton("+")
-        self.add_bake_path_btn.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
+        self.add_bake_path_btn.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
         self.add_bake_path_btn.setFont(add_remove_font)
         self.remove_bake_path_btn = QtWidgets.QPushButton("-")
-        self.remove_bake_path_btn.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
+        self.remove_bake_path_btn.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
         self.remove_bake_path_btn.setFont(add_remove_font)
-        self.batch_bake_btn = QtWidgets.QPushButton("Batch Bake")
+        self.batch_bake_layers_btn = QtWidgets.QPushButton("Batch Bake Layers")
+        self.batch_bake_timeline_btn = QtWidgets.QPushButton("Batch Bake Timeline")
 
     def create_layout(self):
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -617,15 +773,14 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         main_layout.setMenuBar(self.menu_bar)
 
         self.tabs = QtWidgets.QTabWidget()
-        self.tabs.minimumSizeHint(
-
-        )
+        self.tabs.minimumSizeHint()
         main_layout.addWidget(self.tabs)
         self.setup_tab = QtWidgets.QWidget()
-        self.setup_tab.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        self.setup_tab.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred
+        )
         self.setup_layout = QtWidgets.QVBoxLayout(self.setup_tab)
         self.tabs.addTab(self.setup_tab, "Setup")
-
 
         self.configure_collapsible = mwgt.CollapsibleWidget(
             "Configuration", expanded=True
@@ -676,7 +831,6 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         mirror_layout.addWidget(self.mirror_checkbox)
         configure_layout.addLayout(mirror_layout)
 
-
         self.instructions_collapsible = mwgt.CollapsibleWidget(
             "Instructions", expanded=False
         )
@@ -693,7 +847,8 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.setup_layout.addWidget(self.mapping_collapsible)
         self.mapping_collapsible.header_wgt.setFixedHeight(18)
         self.mapping_collapsible.setSizePolicy(
-            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.MinimumExpanding
+            QtWidgets.QSizePolicy.Preferred,
+            QtWidgets.QSizePolicy.MinimumExpanding,
         )
         mapping_buttons = QtWidgets.QHBoxLayout()
         mapping_buttons.addWidget(self.refresh_mapping_btn)
@@ -705,7 +860,9 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         # batch bake
 
         self.batch_bake_tab = QtWidgets.QWidget()
-        self.batch_bake_tab.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored)
+        self.batch_bake_tab.setSizePolicy(
+            QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored
+        )
         batch_bake_vlayout = QtWidgets.QVBoxLayout(self.batch_bake_tab)
         paths_hlayout = QtWidgets.QHBoxLayout()
         path_buttons_vlayout = QtWidgets.QVBoxLayout()
@@ -717,20 +874,23 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         paths_hlayout.addLayout(path_buttons_vlayout)
 
         batch_bake_vlayout.addLayout(paths_hlayout)
-        batch_bake_vlayout.addWidget(self.batch_bake_btn)
+        batch_bake_vlayout.addWidget(self.batch_bake_layers_btn)
+        batch_bake_vlayout.addWidget(self.batch_bake_timeline_btn)
 
         self.tabs.addTab(self.batch_bake_tab, "Batch Bake")
 
     def create_connections(self):
-
         self.export_action.triggered.connect(
             HumanIKMapper.export_char_configuration
         )
         self.import_action.triggered.connect(self.import_config)
         self.bake_action.triggered.connect(HumanIKMapper.bake)
-        self.export_batch_bake_action.triggered.connect(self.export_batch_bake_config)
-        self.import_batch_bake_action.triggered.connect(self.import_batch_bake_config)
-
+        self.export_batch_bake_action.triggered.connect(
+            self.export_batch_bake_config
+        )
+        self.import_batch_bake_action.triggered.connect(
+            self.import_batch_bake_config
+        )
 
         self.initialize_btn.clicked.connect(HumanIKMapper.initialize_character)
 
@@ -823,7 +983,8 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         self.add_bake_path_btn.clicked.connect(self.add_batch_bake_paths)
         self.remove_bake_path_btn.clicked.connect(self.remove_batch_bake_paths)
-        self.batch_bake_btn.clicked.connect(self.batch_bake)
+        self.batch_bake_layers_btn.clicked.connect(self.batch_bake_layers)
+        self.batch_bake_timeline_btn.clicked.connect(self.batch_bake_timeline)
 
     def deferred_resize(self):
         # print("calling deferred resize")
@@ -880,12 +1041,19 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         for item in selected_items:
             self.bake_paths_lw.takeItem(self.bake_paths_lw.row(item))
 
-    def batch_bake(self):
+    def batch_bake_layers(self):
         files = []
         for i in range(self.bake_paths_lw.count()):
             files.append(self.bake_paths_lw.item(i).text())
         print(files)
         HumanIKMapper.batch_bake(files)
+
+    def batch_bake_timeline(self):
+        files = []
+        for i in range(self.bake_paths_lw.count()):
+            files.append(self.bake_paths_lw.item(i).text())
+        print(files)
+        HumanIKMapper.batch_bake(files, timeline=True)
 
     def export_batch_bake_config(self):
         files = []
@@ -1029,7 +1197,7 @@ class BoneListDialog(QtWidgets.QDialog):
 
 
 class LockedCtrlsDialog(QtWidgets.QDialog):
-    def __init__(self, parent=maya_main_window(), ctrls_list=[]):
+    def __init__(self, parent=pyqt.maya_main_window(), ctrls_list=[]):
         super(LockedCtrlsDialog, self).__init__(parent)
 
         self.setWindowTitle("Locked attributes detected")
@@ -1089,7 +1257,6 @@ class LockedCtrlsDialog(QtWidgets.QDialog):
 
 def show(*args):
     return mgear.core.pyqt.showDialog(HumanIKMapperUI, dockable=True)
-
 
 
 if __name__ == "__main__":

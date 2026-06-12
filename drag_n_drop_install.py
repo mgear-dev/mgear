@@ -7,8 +7,12 @@ from datetime import datetime
 
 try:
     from maya.app.startup import basic
-    from PySide2 import QtWidgets, QtCore, QtGui
-    from shiboken2 import wrapInstance
+    try:
+        from PySide2 import QtWidgets, QtCore, QtGui
+        from shiboken2 import wrapInstance
+    except ModuleNotFoundError:
+        from PySide6 import QtWidgets, QtCore, QtGui
+        from shiboken6 import wrapInstance
     import maya.OpenMayaUI as OpenMayaUI
     import maya.cmds as cmds
     import maya.api.OpenMaya as om
@@ -19,10 +23,10 @@ except ImportError():
 
 # -- constants
 TITLE = "Install mGear"
-VERSION = 1.2
+VERSION = 1.4
 MGEAR_MOD_PATH = "MGEAR_MODULE_PATH"
 MAYA_MOD_PATH = "MAYA_MODULE_PATH"
-PLUGINS = ["mgear_solvers.mll", "weightDriver.mll"]
+PLUGINS = ["mgear_solvers.mll", "mGearWeightDriver.mll"]
 DEFAULT_ITEMS = ["platforms", "mGear.mod", "scripts", "icons"]
 CURRENT_FOLDER = os.path.dirname(__file__)
 

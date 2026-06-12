@@ -1,9 +1,9 @@
 
 # imports
 from __future__ import absolute_import
-from PySide2 import QtCore
-from PySide2 import QtGui
-from PySide2 import QtWidgets
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtWidgets
+from mgear.vendor.Qt import QtGui
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 # tool imports
@@ -60,7 +60,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         # creates main layout widget
         self.main_layout = QtWidgets.QVBoxLayout(self)
-        self.main_layout.setMargin(6)
+        self.main_layout.setContentsMargins(6, 6, 6, 6)
         self.main_layout.setSpacing(6)
 
         # colors to use
@@ -109,7 +109,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.main_layout.addWidget(options_widget)
 
         frame_layout = QtWidgets.QGridLayout()
-        frame_layout.setMargin(4)
+        frame_layout.setContentsMargins(4, 4, 4, 4)
         frame_layout.setSpacing(4)
 
         label = QtWidgets.QLabel("Options:")
@@ -145,7 +145,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         display_frame = QtWidgets.QFrame()
         display_layout = QtWidgets.QGridLayout(display_frame)
-        display_layout.setMargin(0)
+        display_layout.setContentsMargins(0, 0, 0, 0)
         gpu_display_label = QtWidgets.QLabel("Display type:")
         self.keep_display_radial = QtWidgets.QRadioButton("Current")
         self.keep_display_radial.setObjectName(
@@ -185,7 +185,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         # create layout for frame
         frame_layout = QtWidgets.QGridLayout(frame)
-        frame_layout.setMargin(4)
+        frame_layout.setContentsMargins(4, 4, 4, 4)
         frame_layout.setSpacing(4)
 
         # creates search line edit
@@ -202,8 +202,8 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.rigs_list_view.setObjectName("cache_manager_rigs_qlistview")
         self.rigs_list_view.setAlternatingRowColors(True)
         self.rigs_list_view.setSelectionMode(
-            self.rigs_list_view.ExtendedSelection)
-        self.rigs_list_view.setEditTriggers(self.rigs_list_view.NoEditTriggers)
+            QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.rigs_list_view.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         # adds widgets to frame layout
         frame_layout.addWidget(label, 0, 0, 1, 1)
@@ -217,7 +217,7 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         # create layout for frame
         frame_layout = QtWidgets.QGridLayout(frame)
-        frame_layout.setMargin(4)
+        frame_layout.setContentsMargins(4, 4, 4, 4)
         frame_layout.setSpacing(4)
 
         # creates cache button
@@ -299,15 +299,17 @@ class AnimbitsCacheManagerDialog(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.color_button.setPalette(palette)
 
     def _show_browser(self):
-        """ Opens the file browser dialog
+        """Opens the file browser dialog
 
-        This file browser is used in order to pick where the caching files
-        are going to be stored
+        This file browser is used to pick where the caching files
+        are going to be stored.
         """
 
-        brower = QtWidgets.QFileDialog(self)
-        brower.setFileMode(brower.DirectoryOnly)
-        return brower.getExistingDirectory()
+        # Create a QFileDialog instance for directory selection
+        directory = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Select Directory", "", QtWidgets.QFileDialog.ShowDirsOnly
+        )
+        return directory
 
     def dockCloseEventTriggered(self, *args, **kwargs):  # @unusedVariables
         """ Overwrites MayaQWidgetDockableMixin method

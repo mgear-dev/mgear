@@ -10,8 +10,7 @@ from maya import OpenMaya
 
 
 def get_flattened_nodes(nodes):
-    '''Will 'flatten' sets to get all nodes
-    '''
+    """Will 'flatten' sets to get all nodes"""
     # Init results
     results = []
 
@@ -40,8 +39,7 @@ def get_flattened_nodes(nodes):
 
 
 def select_nodes(nodes, namespace=None, modifier=None):
-    '''Select maya node handler with specific modifier behavior
-    '''
+    """Select maya node handler with specific modifier behavior"""
     # Parse nodes
     filtered_nodes = []
     for node in nodes:
@@ -87,8 +85,7 @@ def select_nodes(nodes, namespace=None, modifier=None):
 
 
 def reset_node_attributes(node, attr="rigBindPose"):
-    '''Will reset attribute to stored values
-    '''
+    """Will reset attribute to stored values"""
     # Sanity check
     if not cmds.objExists(node):
         msg = "reset_node_attributes -> '{}' not found, skipping".format(node)
@@ -98,7 +95,9 @@ def reset_node_attributes(node, attr="rigBindPose"):
     # Check for attribute
     if not cmds.attributeQuery(attr, n=node, ex=True):
         msg = "reset_node_attributes -> '{}' has no attribute named \
-        '{}', skipping".format(node, attr)
+        '{}', skipping".format(
+            node, attr
+        )
         sys.stderr.write(msg)
         return
 
@@ -111,7 +110,9 @@ def reset_node_attributes(node, attr="rigBindPose"):
     # Check type
     if not type(attr_values) == {}:
         msg = "reset_node_attributes -> stored data for node '{}' are not a \
-        dictionary".format(node)
+        dictionary".format(
+            node
+        )
         sys.stderr.write(msg)
         return
 
@@ -126,7 +127,9 @@ def reset_node_attributes(node, attr="rigBindPose"):
             cmds.setAttr("{}.{}".format(node, attr_key), attr_values[attr_key])
         except Exception:
             msg = "reset_node_attributes -> failed to set attribute '{}.{}' \
-            to {}".format(node, attr, str(attr_values[attr_key]))
+            to {}".format(
+                node, attr, str(attr_values[attr_key])
+            )
             sys.stderr.write(msg)
 
     return True
@@ -137,16 +140,14 @@ class SelectionCheck(object):
         self.sel = OpenMaya.MSelectionList()
 
     def update(self):
-        '''Will update selection data
-        '''
+        """Will update selection data"""
         # Get current selection
         self.sel.clear()
         OpenMaya.MGlobal.getActiveSelectionList(self.sel)
 
     @staticmethod
     def get_node_mobject(node):
-        '''Will return node mobject if possible
-        '''
+        """Will return node mobject if possible"""
         # Sanity check
         if not cmds.objExists(node):
             return
@@ -162,8 +163,7 @@ class SelectionCheck(object):
 
     @classmethod
     def get_node_mdagpath(cls, node):
-        '''Return node MDagPath if possible
-        '''
+        """Return node MDagPath if possible"""
         mobject = cls.get_node_mobject(node)
         if not mobject:
             return
@@ -175,8 +175,7 @@ class SelectionCheck(object):
         return OpenMaya.MDagPath.getAPathTo(mobject)
 
     def is_selected(self, node):
-        '''Will check if node is currently selected
-        '''
+        """Will check if node is currently selected"""
         # Get node MDagPath
         node = self.get_node_mdagpath(node)
         if not node:

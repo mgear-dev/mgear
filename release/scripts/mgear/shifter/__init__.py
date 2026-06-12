@@ -6,21 +6,21 @@ import sys
 import json
 
 # Maya
-import pymel.core as pm
-from pymel.core import datatypes
-from pymel import versions
+import mgear.pymaya as pm
+from maya import cmds, mel
+from mgear.pymaya import datatypes
+from mgear.pymaya import versions
 
 # mgear
 import mgear
-import mgear.core.utils
-from . import guide, component
+from . import guide, component, custom_step_widget
 
 from mgear.core import primitive, attribute, skin, dag, icon, node
 from mgear import shifter_classic_components
 from mgear import shifter_epic_components
 from mgear.shifter import naming
 import importlib
-from mgear.core import utils
+from mgear.core import utils as core_utils
 
 PY2 = sys.version_info[0] == 2
 
@@ -35,105 +35,83 @@ if not pm.pluginInfo("matrixNodes", q=True, loaded=True):
 
 COMPONENT_PATH = os.path.join(os.path.dirname(__file__), "component")
 TEMPLATE_PATH = os.path.join(COMPONENT_PATH, "templates")
-SYNOPTIC_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), os.pardir, "synoptic", "tabs")
-)
 
 SHIFTER_COMPONENT_ENV_KEY = "MGEAR_SHIFTER_COMPONENT_PATH"
 
+# Module-level caches for performance
+_component_directories_cache = None
+_component_module_cache = {}
+
 
 def log_window():
-    if mgear.logMode and mgear.use_log_window:
-        log_window_name = "mgear_shifter_build_log_window"
-        log_window_field_reporter = "mgear_shifter_log_field_reporter"
+    """Show the Shifter build log window.
 
-        # call pm.window(log_window_name, exists=True) 2 times to avoid
-        # false check in Maya 2024
-        pm.window(log_window_name, exists=True)
+    Delegates to the build_log module which provides a Qt-based
+    window with color-coded severity, filtering, and log export.
+    """
+    from .build_log import log_window as _log_window
 
-        if not pm.window(log_window_name, exists=True):
-            log_win = pm.window(
-                log_window_name,
-                title="Shifter Build Log",
-                iconName="Shifter Log",
-                width=800,
-                height=500,
-            )
-            form = pm.formLayout()
-            reporter = pm.cmdScrollFieldReporter(
-                log_window_field_reporter, width=400, height=200, clr=True
-            )
-
-            btn_close = pm.button(
-                label="Close",
-                command=lambda *args: pm.deleteUI(log_win, window=True),
-            )
-
-            margin_v = 5
-            margin_h = 5
-            pm.formLayout(
-                form,
-                e=True,
-                attachForm=[
-                    (reporter, "top", margin_v),
-                    (reporter, "right", margin_h),
-                    (reporter, "left", margin_h),
-                    (btn_close, "bottom", margin_v),
-                    (btn_close, "right", margin_h),
-                    (btn_close, "left", margin_h),
-                ],
-                attachControl=[
-                    (reporter, "bottom", margin_v, btn_close),
-                ],
-            )
-
-            pm.setParent("..")
-            pm.showWindow(log_win)
-        else:
-            pm.cmdScrollFieldReporter(
-                log_window_field_reporter, e=True, clr=True
-            )
-            pm.showWindow(log_window_name)
-        mgear.logInfos()
+    _log_window()
 
 
 def getComponentDirectories():
-    """Get the components directory"""
-    # TODO: ready to support multiple default directories
-    return mgear.core.utils.gatherCustomModuleDirectories(
-        SHIFTER_COMPONENT_ENV_KEY,
-        [
-            os.path.join(os.path.dirname(shifter_classic_components.__file__)),
-            os.path.join(os.path.dirname(shifter_epic_components.__file__)),
-        ],
-    )
-    # return mgear.core.utils.gatherCustomModuleDirectories(
-    #     SHIFTER_COMPONENT_ENV_KEY,
-    #     os.path.join(os.path.dirname(shifter_classic_components.__file__)))
+    """Get the components directory.
+
+    Results are cached for performance since directory contents
+    don't change during a Maya session.
+    """
+    global _component_directories_cache
+    if _component_directories_cache is None:
+        _component_directories_cache = core_utils.gatherCustomModuleDirectories(
+            SHIFTER_COMPONENT_ENV_KEY,
+            [
+                os.path.join(os.path.dirname(shifter_classic_components.__file__)),
+                os.path.join(os.path.dirname(shifter_epic_components.__file__)),
+            ],
+        )
+    return _component_directories_cache
 
 
 def importComponentGuide(comp_type):
     """Import the Component guide"""
     dirs = getComponentDirectories()
-    defFmt = "mgear.core.shifter.component.{}.guide"
+    defFmt = "mgear.shifter.component.{}.guide"
     customFmt = "{}.guide"
 
-    module = mgear.core.utils.importFromStandardOrCustomDirectories(
+    module = core_utils.importFromStandardOrCustomDirectories(
         dirs, defFmt, customFmt, comp_type
     )
     return module
 
 
 def importComponent(comp_type):
-    """Import the Component"""
+    """Import the Component.
+
+    Results are cached per component type for performance.
+    """
+    global _component_module_cache
+    if comp_type in _component_module_cache:
+        return _component_module_cache[comp_type]
+
     dirs = getComponentDirectories()
-    defFmt = "mgear.core.shifter.component.{}"
+    defFmt = "mgear.shifter.component.{}"
     customFmt = "{}"
 
-    module = mgear.core.utils.importFromStandardOrCustomDirectories(
+    module = core_utils.importFromStandardOrCustomDirectories(
         dirs, defFmt, customFmt, comp_type
     )
+    _component_module_cache[comp_type] = module
     return module
+
+
+def clearComponentCache():
+    """Clear the component directory and module caches.
+
+    Call this if you add new components during a Maya session.
+    """
+    global _component_directories_cache, _component_module_cache
+    _component_directories_cache = None
+    _component_module_cache = {}
 
 
 def reloadComponents(*args):
@@ -142,14 +120,16 @@ def reloadComponents(*args):
     Args:
         *args: Dummy
     """
+    # Clear caches before reloading
+    clearComponentCache()
     compDir = getComponentDirectories()
 
     for x in compDir:
         for com in compDir[x]:
             try:
                 if PY2:
-                    reload(importComponent(com))
-                    reload(importComponentGuide(com))
+                    reload(importComponent(com)) # type: ignore
+                    reload(importComponentGuide(com)) # type: ignore
                 else:
                     importlib.reload(importComponent(com))
                     importlib.reload(importComponentGuide(com))
@@ -177,6 +157,9 @@ class Rig(object):
         self.groups = {}
         self.subGroups = {}
 
+        self.bindPlanes = {}
+        self.combinedBindPlanes = {}
+
         self.components = {}
         self.componentsIndex = []
 
@@ -184,8 +167,92 @@ class Rig(object):
 
         self.build_data = {}
 
-        self.component_finalize = False
+        # Joint name cache for faster lookups during build
+        self._joint_cache = None
 
+        # Build cancellation state
+        self.stopBuild = False
+        self._cancelEnabled = False
+
+    def buildJointCache(self):
+        """Build a cache of all joint names in the scene for fast lookups.
+
+        This avoids repeated pm.ls() calls during joint creation.
+        """
+        # Simple set for O(1) existence checks - no PyNode wrapping needed
+        joint_names = cmds.ls(type="joint") or []
+        self._joint_cache = set(joint_names)
+
+    def getCachedJoint(self, name):
+        """Get a joint from cache by name.
+
+        Args:
+            name (str): The joint name to look up.
+
+        Returns:
+            PyNode or None: The joint if found, None otherwise.
+        """
+        if self._joint_cache is None:
+            return None
+        if name in self._joint_cache:
+            return pm.PyNode(name)
+        return None
+
+    def _initBuildCancel(self):
+        """Initialize the build cancellation mechanism.
+
+        Enables ESC key cancellation during rig build in interactive mode.
+        In batch mode, cancellation is disabled since there's no UI.
+        """
+        self.stopBuild = False
+        self._cancelEnabled = not cmds.about(batch=True)
+        self._gMainProgressBar = None
+
+        if self._cancelEnabled:
+            try:
+                self._gMainProgressBar = mel.eval("$tmp = $gMainProgressBar")
+                cmds.progressBar(
+                    self._gMainProgressBar,
+                    edit=True,
+                    beginProgress=True,
+                    isInterruptable=True,
+                    status="Building Rig...",
+                    maxValue=100,
+                )
+            except Exception:
+                self._cancelEnabled = False
+
+    def _endBuildCancel(self):
+        """End the build cancellation mechanism."""
+        if self._cancelEnabled and self._gMainProgressBar:
+            try:
+                cmds.progressBar(
+                    self._gMainProgressBar, edit=True, endProgress=True
+                )
+            except Exception:
+                pass
+
+    def _checkBuildCancelled(self):
+        """Check if build was cancelled by user pressing ESC.
+
+        Returns:
+            bool: True if cancelled, False otherwise.
+        """
+        if self.stopBuild:
+            return True
+        if self._cancelEnabled and self._gMainProgressBar:
+            try:
+                if cmds.progressBar(
+                    self._gMainProgressBar, query=True, isCancelled=True
+                ):
+                    self.stopBuild = True
+                    pm.displayWarning("Build cancelled by user")
+                    return True
+            except Exception:
+                pass
+        return False
+
+    @core_utils.one_undo
     def buildFromDict(self, conf_dict):
         log_window()
         startTime = datetime.datetime.now()
@@ -205,21 +272,25 @@ class Rig(object):
 
         # Build
         mgear.log("\n" + "= BUILDING RIG " + "=" * 46)
-        self.from_dict_custom_step(conf_dict, pre=True)
+        # Get merged options early so custom steps use blueprint values
+        merged_options = self.guide.getMergedOptions()
+        self.from_dict_custom_step(merged_options, pre=True)
         self.build()
-        self.from_dict_custom_step(conf_dict, pre=False)
+
+        # Check if build was cancelled
+        if self.stopBuild:
+            mgear.log("\n" + "= SHIFTER BUILD CANCELLED " + "=" * 40)
+            return None
+
+        self.from_dict_custom_step(merged_options, pre=False)
         # Collect post-build data
-        build_data = self.collect_build_data()
+        if self.options["data_collector_embedded"] or self.options["data_collector"]:
+            build_data = self.collect_build_data()
+        else:
+            build_data = None
 
         endTime = datetime.datetime.now()
         finalTime = endTime - startTime
-        pm.flushUndo()
-        pm.displayInfo(
-            "Undo history have been flushed to avoid "
-            "possible crash after rig is build. \n"
-            "More info: "
-            "https://github.com/miquelcampos/mgear/issues/72"
-        )
         mgear.log(
             "\n"
             + "= SHIFTER BUILD RIG DONE {} [ {} ] {}".format(
@@ -229,6 +300,7 @@ class Rig(object):
 
         return build_data
 
+    @core_utils.one_undo
     def buildFromSelection(self):
         """Build the rig from selected guides."""
 
@@ -236,6 +308,7 @@ class Rig(object):
         mgear.log("\n" + "= SHIFTER RIG SYSTEM " + "=" * 46)
 
         self.stopBuild = False
+        build_data = None
         selection = pm.ls(selection=True)
         if not selection:
             selection = pm.ls("guide")
@@ -263,21 +336,21 @@ class Rig(object):
             # Build
             mgear.log("\n" + "= BUILDING RIG " + "=" * 46)
             self.build()
+
+            # Check if build was cancelled
+            if self.stopBuild:
+                mgear.log("\n" + "= SHIFTER BUILD CANCELLED " + "=" * 40)
+                return None
+
             if ismodel:
                 self.postCustomStep()
 
             # Collect post-build data
-            build_data = self.collect_build_data()
+            if self.options["data_collector_embedded"] or self.options["data_collector"]:
+                build_data = self.collect_build_data()
 
             endTime = datetime.datetime.now()
             finalTime = endTime - startTime
-            pm.flushUndo()
-            pm.displayInfo(
-                "Undo history have been flushed to avoid "
-                "possible crash after rig is build. \n"
-                "More info: "
-                "https://github.com/miquelcampos/mgear/issues/72"
-            )
             mgear.log(
                 "\n"
                 + "= SHIFTER BUILD RIG DONE {} [ {} ] {}".format(
@@ -287,46 +360,223 @@ class Rig(object):
 
         return build_data
 
+    @core_utils.viewport_off
     def build(self):
-        """Build the rig."""
+        """Build the rig.
 
-        self.options = self.guide.values
-        self.guides = self.guide.components
+        The build can be cancelled by pressing ESC during execution.
+        """
+        self._initBuildCancel()
+        try:
+            # Use merged options to apply blueprint settings when enabled
+            self.options = self.guide.getMergedOptions()
+            self.guides = self.guide.components
 
-        self.customStepDic["mgearRun"] = self
+            self.customStepDic["mgearRun"] = self
 
-        self.initialHierarchy()
-        self.processComponents()
-        self.finalize()
+            # Build joint cache if connecting to existing joints
+            if self.options.get("connect_joints"):
+                self.buildJointCache()
 
-        return self.model
+            self.initialHierarchy()
+            if self._checkBuildCancelled():
+                return None
+            self.processComponents()
+            if self._checkBuildCancelled():
+                return None
+            self.finalize()
+
+            return self.model
+        finally:
+            self._endBuildCancel()
 
     def stepsList(self, checker, attr):
         if self.options[checker] and self.options[attr]:
-            return self.options[attr].split(",")
+            return self._parseCustomSteps(self.options[attr])
         else:
             return None
 
-    def from_dict_custom_step(self, conf_dict, pre=True):
+    def _parseCustomSteps(self, customStepsStr):
+        """Parse custom steps from JSON or legacy comma-separated format.
+
+        Args:
+            customStepsStr (str): The custom steps string from Maya attribute
+
+        Returns:
+            list: List of active step path strings (e.g., ["_shared\\step.py"])
+        """
+        if not customStepsStr:
+            return []
+
+        # Try JSON format first (version 2)
+        customStepsStr = customStepsStr.strip()
+        if customStepsStr.startswith("{"):
+            try:
+                data = json.loads(customStepsStr)
+                if isinstance(data, dict) and data.get("version") == 2:
+                    return self._extractActiveStepsFromJson(data.get("items", []))
+            except json.JSONDecodeError:
+                pass
+
+        # Fall back to legacy comma-separated format
+        steps = []
+        for step in customStepsStr.split(","):
+            step = step.strip()
+            if not step:
+                continue
+            if step.startswith("*"):
+                # Inactive step in legacy format
+                continue
+            # Extract path from "name | path" format
+            if "|" in step:
+                path = step.split("|")[-1].strip()
+                if path.startswith(" "):
+                    path = path[1:]
+                steps.append(path)
+            else:
+                steps.append(step)
+        return steps
+
+    def _extractActiveStepsFromJson(self, items):
+        """Extract active step paths from JSON items list.
+
+        For referenced groups, loads fresh step data from the source .scs file.
+        Falls back to embedded data if source file is not available.
+
+        Args:
+            items (list): List of item dicts (steps and groups)
+
+        Returns:
+            list: List of active step path strings
+        """
+        steps = []
+        for item in items:
+            item_type = item.get("type", "step")
+            if item_type == "step":
+                if item.get("active", True):
+                    path = item.get("path", "")
+                    if path:
+                        steps.append(path)
+            elif item_type == "group":
+                # Only process group items if the group itself is active
+                if item.get("active", True):
+                    # Check if this is a referenced group
+                    if item.get("referenced", False):
+                        group_items = self._loadReferencedGroupSteps(item)
+                    else:
+                        group_items = item.get("items", [])
+                    steps.extend(self._extractActiveStepsFromJson(group_items))
+        return steps
+
+    def _loadReferencedGroupSteps(self, group_item):
+        """Load step items from a referenced group's source file.
+
+        Tries to load fresh data from the source .scs file.
+        Falls back to embedded data if source file is not available.
+
+        Args:
+            group_item (dict): The group item dict with 'source_file' and 'name'
+
+        Returns:
+            list: List of step item dicts from source file or embedded data
+        """
+        source_file = group_item.get("source_file", "")
+        group_name = group_item.get("name", "")
+        embedded_items = group_item.get("items", [])
+
+        if not source_file:
+            return embedded_items
+
+        # Resolve the source file path
+        resolved_source = custom_step_widget._resolve_source_path(source_file)
+
+        if not os.path.exists(resolved_source):
+            mgear.log(
+                "Source file not found for referenced group '{}': {}. "
+                "Using embedded data.".format(group_name, resolved_source),
+                mgear.sev_warning
+            )
+            return embedded_items
+
+        # Try to load from source file
+        try:
+            with open(resolved_source, "r") as f:
+                config_dict = json.load(f)
+
+            # Find the matching group in the source file
+            for item_data in config_dict.get("items", []):
+                if item_data.get("type") == "group":
+                    if item_data.get("name") == group_name:
+                        mgear.log(
+                            "Loading referenced group '{}' from: {}".format(
+                                group_name, resolved_source
+                            )
+                        )
+                        return item_data.get("items", [])
+
+            mgear.log(
+                "Group '{}' not found in source file: {}. "
+                "Using embedded data.".format(group_name, resolved_source),
+                mgear.sev_warning
+            )
+            return embedded_items
+
+        except json.JSONDecodeError as e:
+            mgear.log(
+                "JSON error in source file {}: {}. "
+                "Using embedded data.".format(resolved_source, str(e)),
+                mgear.sev_warning
+            )
+            return embedded_items
+        except Exception as e:
+            mgear.log(
+                "Error loading referenced group '{}': {}. "
+                "Using embedded data.".format(group_name, str(e)),
+                mgear.sev_warning
+            )
+            return embedded_items
+
+    def from_dict_custom_step(self, options, pre=True):
+        """Execute custom steps from options dictionary.
+
+        Args:
+            options (dict): Options dictionary (can be merged options with
+                blueprint values or raw param_values from conf_dict)
+            pre (bool): If True, execute pre-build custom steps.
+                If False, execute post-build custom steps.
+        """
         if pre:
             pre_post = "doPreCustomStep"
             pre_post_path = "preCustomStep"
         else:
             pre_post = "doPostCustomStep"
             pre_post_path = "postCustomStep"
-        p_val = conf_dict["guide_root"]["param_values"]
-        if p_val[pre_post]:
-            customSteps = p_val[pre_post_path]
-            self.customStep(customSteps.split(","))
+
+        # Options can be passed directly (merged options) or need extraction
+        # from conf_dict structure for backward compatibility
+        if "guide_root" in options:
+            # Old format: conf_dict["guide_root"]["param_values"]
+            p_val = options["guide_root"]["param_values"]
+        else:
+            # New format: direct options dict (merged options)
+            p_val = options
+
+        if p_val.get(pre_post, False):
+            customSteps = p_val.get(pre_post_path, "")
+            if customSteps:
+                self.customStep(self._parseCustomSteps(customSteps))
 
     def customStep(self, customSteps=None):
+        """Execute custom steps.
+
+        Args:
+            customSteps (list): List of step path strings (e.g., ["_shared\\step.py"])
+        """
         if customSteps:
             for step in customSteps:
                 if not self.stopBuild:
-                    if step.startswith("*"):
-                        continue
-                    self.stopBuild = guide.helperSlots.runStep(
-                        step.split("|")[-1][1:], self.customStepDic
+                    self.stopBuild = custom_step_widget.runStep(
+                        step, self.customStepDic
                     )
                 else:
                     pm.displayWarning("Build Stopped")
@@ -337,17 +587,14 @@ class Rig(object):
             selection[0].hasAttr("ismodel")
             and selection[0].attr("doPreCustomStep").get()
         ):
-            customSteps = selection[0].attr("preCustomStep").get()
-            if customSteps:
+            customStepsStr = selection[0].attr("preCustomStep").get()
+            if customStepsStr:
                 mgear.log("\n" + "= PRE CUSTOM STEPS " + "=" * 46)
+                customSteps = self._parseCustomSteps(customStepsStr)
                 # use forward slash for OS compatibility
                 if sys.platform.startswith("darwin"):
-                    customSteps = [
-                        cs.replace("\\", "/") for cs in customSteps.split(",")
-                    ]
-                    self.customStep(customSteps)
-                else:
-                    self.customStep(customSteps.split(","))
+                    customSteps = [cs.replace("\\", "/") for cs in customSteps]
+                self.customStep(customSteps)
 
     def postCustomStep(self):
         customSteps = self.stepsList("doPostCustomStep", "postCustomStep")
@@ -358,7 +605,7 @@ class Rig(object):
                 customSteps = [cs.replace("\\", "/") for cs in customSteps]
             self.customStep(customSteps)
 
-    # @utils.timeFunc
+    # @core_utils.timeFunc
     def get_guide_data(self):
         """Get the guide data
 
@@ -414,9 +661,6 @@ class Rig(object):
         )
         self.gearVersion_att = attribute.addAttribute(
             self.model, "gear_version", "string", mgear.getVersion()
-        )
-        self.synoptic_att = attribute.addAttribute(
-            self.model, "synoptic", "string", str(self.options["synoptic"])
         )
         self.comments_att = attribute.addAttribute(
             self.model, "comments", "string", str(self.options["comments"])
@@ -505,7 +749,7 @@ class Rig(object):
         attribute.lockAttribute(self.setupWS)
         # --------------------------------------------------
         # Basic set of null
-        if self.options["joint_rig"] or self.options["joint_soup"]:
+        if self.options["joint_rig"]:
             self.root_joint = None
             self.jnt_org = primitive.addTransformFromPos(self.model, "jnt_org")
             if self.options["force_SSC"]:
@@ -515,47 +759,83 @@ class Rig(object):
     def processComponents(self):
         """
         Process the components of the rig, following the creation steps.
+
+        Can be cancelled by pressing ESC during execution.
         """
 
         # Init
         self.components_infos = {}
 
         for comp in self.guide.componentsIndex:
+            if self._checkBuildCancelled():
+                return
+
             guide_ = self.guides[comp]
             mgear.log("Init : " + guide_.fullName + " (" + guide_.type + ")")
 
-            module = importComponent(guide_.type)
-            Component = getattr(module, "Component")
+            try:
+                module = importComponent(guide_.type)
+                Component = getattr(module, "Component")
 
-            comp = Component(self, guide_)
-            if comp.fullName not in self.componentsIndex:
-                self.components[comp.fullName] = comp
-                self.componentsIndex.append(comp.fullName)
+                comp = Component(self, guide_)
+                if comp.fullName not in self.componentsIndex:
+                    self.components[comp.fullName] = comp
+                    self.componentsIndex.append(comp.fullName)
 
-                self.components_infos[comp.fullName] = [
-                    guide_.compType,
-                    guide_.getVersion(),
-                    guide_.author,
-                ]
+                    self.components_infos[comp.fullName] = [
+                        guide_.compType,
+                        guide_.getVersion(),
+                        guide_.author,
+                    ]
+            except Exception as e:
+                import traceback
+
+                mgear.log(
+                    "Error initializing {} ({})\n{}".format(
+                        guide_.fullName,
+                        guide_.type,
+                        traceback.format_exc(),
+                    ),
+                    mgear.sev_error,
+                )
 
         # Creation steps
         self.steps = component.Main.steps
         for i, name in enumerate(self.steps):
-            # for count, compName in enumerate(self.componentsIndex):
             for compName in self.componentsIndex:
+                if self._checkBuildCancelled():
+                    return
+
                 comp = self.components[compName]
                 mgear.log(
                     name + " : " + comp.fullName + " (" + comp.type + ")"
                 )
-                comp.stepMethods[i]()
-                if name == "Finalize":
-                    self.component_finalize = True
+                try:
+                    comp.stepMethods[i]()
+                except Exception as e:
+                    import traceback
+
+                    mgear.log(
+                        "Error in {} : {} ({})\n{}".format(
+                            name,
+                            comp.fullName,
+                            comp.type,
+                            traceback.format_exc(),
+                        ),
+                        mgear.sev_error,
+                    )
 
             if self.options["step"] >= 1 and i >= self.options["step"] - 1:
                 break
 
     def finalize(self):
-        """Finalize the rig."""
+        """Finalize the rig.
+
+        Can be cancelled by pressing ESC during execution.
+        """
+        if self._checkBuildCancelled():
+            return
+
         groupIdx = 0
 
         # Properties --------------------------------------
@@ -566,9 +846,16 @@ class Rig(object):
             mgear.log("Cleaning jnt org")
             jnt_org_child = dag.findChildrenPartial(self.jnt_org, "org")
             if jnt_org_child:
-                for jOrg in jnt_org_child:
-                    if not jOrg.listRelatives(c=True):
-                        pm.delete(jOrg)
+                # Use cmds for faster child checks
+                to_delete = [
+                    jOrg for jOrg in jnt_org_child
+                    if not cmds.listRelatives(jOrg.name(), c=True)
+                ]
+                if to_delete:
+                    pm.delete(to_delete)
+
+        if self._checkBuildCancelled():
+            return
 
         # Groups ------------------------------------------
         mgear.log("Creating groups")
@@ -579,6 +866,9 @@ class Rig(object):
                 self.addToGroup(objects, name)
             for name, objects in component_.subGroups.items():
                 self.addToSubGroup(objects, name)
+
+        if self._checkBuildCancelled():
+            return
 
         # Create master set to group all the groups
         masterSet = pm.sets(n=self.model.name() + "_sets_grp", em=True)
@@ -608,6 +898,9 @@ class Rig(object):
         masterSet.add(geoSet)
         groupIdx += 1
 
+        if self._checkBuildCancelled():
+            return
+
         # Bind pose ---------------------------------------
         # controls_grp = self.groups["controllers"]
         # pprint(controls_grp, stream=None, indent=1, width=100)
@@ -615,15 +908,24 @@ class Rig(object):
         pm.select(ctl_master_grp, replace=True)
         dag_node = pm.dagPose(save=True, selection=True)
         pm.connectAttr(dag_node.message, self.model.rigPoses[0])
-        print(dag_node)
+        pm.select(clear=True)
 
         # hide all DG nodes inputs in channel box -----------------------
         # only hides if components_finalize or All steps are done
-
-        if self.component_finalize:
-            for c in self.model.listHistory(ac=True, f=True):
-                if c.type() != "transform":
-                    c.isHistoricallyInteresting.set(False)
+        # if not WIP mode we will hide all the inputs
+        if not self.options["mode"]:
+            # Use cmds for history traversal and attribute setting
+            history_nodes = cmds.listHistory(
+                self.model.name(), ac=True, f=True
+            ) or []
+            for node_name in history_nodes:
+                if self._checkBuildCancelled():
+                    return
+                if cmds.nodeType(node_name) != "transform":
+                    try:
+                        cmds.setAttr(f"{node_name}.isHistoricallyInteresting", False)
+                    except RuntimeError:
+                        pass
             try:
                 # hide a guide if the guide_vis pram is turned off
                 if self.guide.model.hasAttr("guide_vis"):
@@ -654,7 +956,27 @@ class Rig(object):
         Returns:
             dict: The collected data
         """
-        self.build_data["MainSettings"] = self.options
+        # print("self.guide.guide_template_dict>>>>>>>>>>>>>>>>>")
+        # print(self.guide.guide_template_dict["guide_root"]["param_values"])
+        # options in dictionary form
+        # self.options_dict = self.guide.guide_template_dict["guide_root"]["param_values"]
+        # print(self.options)
+        # print(self.guide.guide_template_dict["guide_root"]["param_values"])
+        # print(self.options)
+        self.build_data["MainSettings"] = self.guide.guide_template_dict["guide_root"]["param_values"]
+        self.build_data["MainSettings"]["size"] = self.options["size"]
+        # print(self.build_data["MainSettings"])
+
+        # replace the MVector with his value in a list
+        # keys_to_update = [
+        #     'L_RGB_fk', 'L_RGB_ik',
+        #     'R_RGB_fk', 'R_RGB_ik',
+        #     'C_RGB_fk', 'C_RGB_ik'
+        #     ]
+        # for key in keys_to_update:
+        #     self.build_data["MainSettings"][key] == self.guide.guide_template_dict["guide_root"]["param_values"][key]
+        # print(self.build_data["MainSettings"])
+        # self.build_data["MainSettings"] = self.guide.guide_template_dict["guide_root"]["param_values"]
         self.build_data["Components"] = []
         for c, comp in self.customStepDic["mgearRun"].components.items():
             self.build_data["Components"].append(comp.build_data)
@@ -664,7 +986,6 @@ class Rig(object):
             self.add_collected_data_to_root_jnt(root_jnt=root_jnt)
         if self.options["data_collector"]:
             self.data_collector_output(self.options["data_collector_path"])
-
         return self.build_data
 
     def data_collector_output(self, file_path=None):
@@ -678,7 +999,6 @@ class Rig(object):
                 guide.DATA_COLLECTOR_EXT
             )
             file_path = pm.fileDialog2(fileMode=0, fileFilter=ext_filter)[0]
-
         with open(file_path, "w") as f:
             f.write(json.dumps(self.build_data, indent=4))
             file_path = None
@@ -733,11 +1053,11 @@ class Rig(object):
             dagNode: The Control.
 
         """
-        if "degree" not in kwargs.keys():
+        if "degree" not in kwargs:
             kwargs["degree"] = 1
 
         bufferName = name + "_controlBuffer"
-        if bufferName in self.guide.controllers.keys():
+        if bufferName in self.guide.controllers:
             ctl_ref = self.guide.controllers[bufferName]
             ctl = primitive.addTransform(parent, name, m)
             for shape in ctl_ref.getShapes():
@@ -784,10 +1104,7 @@ class Rig(object):
             objects = [objects]
 
         for name in names:
-            if name not in self.groups.keys():
-                self.groups[name] = []
-
-            self.groups[name].extend(objects)
+            self.groups.setdefault(name, []).extend(objects)
 
     def addToSubGroup(self, subGroups, parentGroups=["hidden"]):
         """Add the object in a collection for later SubGroup creation.
@@ -807,9 +1124,7 @@ class Rig(object):
             subGroups = [subGroups]
 
         for pg in parentGroups:
-            if pg not in self.subGroups.keys():
-                self.subGroups[pg] = []
-            self.subGroups[pg].extend(subGroups)
+            self.subGroups.setdefault(pg, []).extend(subGroups)
 
     def add_controller_tag(self, ctl, tagParent):
         ctt = node.add_controller_tag(ctl, tagParent)
@@ -880,7 +1195,7 @@ class Rig(object):
         if names:
             return names[1]
 
-    def findRelative(self, guideName, relatives_map={}):
+    def findRelative(self, guideName, relatives_map=None):
         """Return the objects in the rig matching the guide object.
 
         Args:
@@ -896,13 +1211,14 @@ class Rig(object):
         if guideName is None:
             return self.global_ctl
 
-        if guideName in relatives_map.keys():
+        relatives_map = relatives_map or {}
+        if guideName in relatives_map:
             return relatives_map[guideName]
 
         comp_name = self.getComponentName(guideName)
         relative_name = self.getRelativeName(guideName)
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return self.global_ctl
         return self.components[comp_name].getRelation(relative_name)
 
@@ -924,7 +1240,7 @@ class Rig(object):
         comp_name = self.getComponentName(guideName)
         relative_name = self.getRelativeName(guideName)
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return self.global_ctl
         return self.components[comp_name].getControlRelation(relative_name)
 
@@ -946,7 +1262,7 @@ class Rig(object):
         comp_name = self.getComponentName(guideName, False)
         # comp_name = "_".join(guideName.split("_")[:2])
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return None
 
         return self.components[comp_name]
@@ -968,7 +1284,7 @@ class Rig(object):
         comp_name = self.getComponentName(guideName, False)
         # comp_name = "_".join(guideName.split("_")[:2])
 
-        if comp_name not in self.components.keys():
+        if comp_name not in self.components:
             return self.ui
 
         if self.components[comp_name].ui is None:

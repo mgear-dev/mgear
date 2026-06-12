@@ -4,8 +4,11 @@ import json
 from mgear.core import pyqt
 
 
-import pymel.core as pm
-from pymel.core import datatypes
+from maya import cmds
+
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
+from mgear.core import curve
 from mgear.core import transform
 
 import mgear
@@ -56,6 +59,27 @@ def duplicate(sym, *args):
     else:
         mgear.log(
             "Select one component root to edit properties", mgear.sev_error
+        )
+
+
+def duplicate_multi(sym, *args):
+    """Duplicate a multiple component by drawing a new one and setting the same
+    properties values
+
+    Args:
+        sym (bool): If True, will create a symmetrical component
+        *args: None
+
+    """
+    oSel = pm.selected()
+    if oSel:
+        for root in oSel:
+            guide = shifter.guide.Rig()
+            guide.duplicate(root, sym)
+    else:
+        mgear.log(
+            "Select one or more component root to edit properties",
+            mgear.sev_error,
         )
 
 
@@ -118,50 +142,106 @@ def inspect_settings(tabIdx=0, *args):
 
 
 def extract_controls(*args):
-    """Extract the selected controls from the rig to use it in the new build
+    """Extract the selected controls from the rig to use in the new build.
 
-    The controls shapes are stored under the controller_org group.
-    The controls are renamed witht "_controlBuffer" suffix
+    For each selected control, only the transform itself is duplicated
+    (``parentOnly=True``), so the descendant hierarchy is never touched
+    -- extraction time is independent of how many children, joints,
+    constraints, or DG nodes hang under the control. NurbsCurve shapes
+    are then rebuilt directly under the new buffer transform with the
+    OpenMaya API (``MFnNurbsCurve.create``), which sidesteps the
+    ``cmds.duplicate`` shape machinery entirely.
+
+    Mesh, locator, and other non-curve shape types are filtered out
+    at the source-collection step. Intermediate shapes are filtered
+    too. Ghost controls (instanced/shared shapes) get an independent
+    copy automatically -- no instance survives into the buffer. The
+    buffer is removed from any objectSets the source belongs to.
 
     Args:
-        *args: None
+        *args: Ignored (Maya menu callback compatibility).
     """
-    oSel = pm.selected()
+    o_sel = pm.selected()
 
     try:
-        cGrp = pm.PyNode("controllers_org")
+        c_grp = pm.PyNode("controllers_org")
     except TypeError:
-        cGrp = False
-        mgear.log(
-            "Not controller group in the scene or the group is not unique",
-            mgear.sev_error,
+        pm.displayWarning(
+            "No controllers_org group in the scene or the group is not unique"
         )
-    for x in oSel:
-        if x.hasAttr("isCtl"):
-            try:
-                old = pm.PyNode(
-                    cGrp.name()
-                    + "|"
-                    + x.name().split("|")[-1]
-                    + "_controlBuffer"
-                )
-                pm.delete(old)
-            except TypeError:
-                pass
-            new = pm.duplicate(x)[0]
-            pm.parent(new, cGrp, a=True)
-            pm.rename(new, x.name() + "_controlBuffer")
-            toDel = new.getChildren(type="transform")
-            pm.delete(toDel)
-            try:
-                for s in x.instObjGroups[0].listConnections(type="objectSet"):
-                    pm.sets(s, remove=new)
-            except TypeError:
-                pass
-        else:
-            pm.displayWarning(
-                "{}: Is not a valid mGear control".format(x.name())
+        return
+
+    c_grp_name = c_grp.name()
+
+    for x in o_sel:
+        if not x.hasAttr("isCtl"):
+            pm.displayWarning("{}: Is not a valid mGear control".format(x.name()))
+            continue
+
+        ctl_path = x.longName()
+        short_name = ctl_path.split("|")[-1]
+        buffer_name = short_name + "_controlBuffer"
+
+        curve_shapes = (
+            cmds.listRelatives(
+                ctl_path,
+                shapes=True,
+                fullPath=True,
+                noIntermediate=True,
+                type="nurbsCurve",
             )
+            or []
+        )
+
+        # Skip before touching any existing buffer, so a control that
+        # temporarily lost its curve shapes does not lose its previous
+        # buffer with no replacement.
+        if not curve_shapes:
+            mgear.log(
+                "'{}': No NurbsCurve shapes found, "
+                "skipping extraction".format(short_name),
+                mgear.sev_warning,
+            )
+            continue
+
+        old_buffer = c_grp_name + "|" + buffer_name
+        if cmds.objExists(old_buffer):
+            cmds.delete(old_buffer)
+
+        for shape in curve_shapes:
+            if len(cmds.listRelatives(shape, allParents=True) or []) > 1:
+                mgear.log(
+                    "Instanced shape detected on '{}', "
+                    "creating independent copy".format(short_name),
+                    mgear.sev_warning,
+                )
+                break
+
+        dup = cmds.duplicate(ctl_path, parentOnly=True, returnRootsOnly=True)[0]
+        dup = cmds.parent(dup, c_grp_name)[0]
+        dup = cmds.rename(dup, buffer_name)
+        dup_path = cmds.ls(dup, long=True)[0]
+
+        for i, src_shape in enumerate(curve_shapes):
+            new_shape_path = curve.create_curve_shape_under(src_shape, dup_path)
+            curve.copy_curve_display_attrs(src_shape, new_shape_path)
+            new_name = (
+                buffer_name + "Shape" if i == 0 else "{}Shape{}".format(buffer_name, i)
+            )
+            cmds.rename(new_shape_path, new_name)
+
+        # objectSet membership is reachable only through instObjGroups[0]
+        # connections; drop the buffer from each set the source belonged to.
+        sets = (
+            cmds.listConnections(ctl_path + ".instObjGroups[0]", type="objectSet") or []
+        )
+        for s in sets:
+            try:
+                cmds.sets(dup_path, remove=s)
+            except RuntimeError:
+                pass
+
+        mgear.log("Extracted '{}' ({} shape(s))".format(short_name, len(curve_shapes)))
 
 
 # Extract guide from rigs

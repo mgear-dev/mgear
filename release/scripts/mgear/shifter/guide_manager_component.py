@@ -3,7 +3,7 @@ import sys
 import traceback
 from functools import partial
 
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear.core import pyqt
@@ -13,12 +13,16 @@ from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
 from mgear import shifter
 from mgear.shifter import guide_manager
 from mgear.shifter import guide_manager_component_ui as gmcUI
+from mgear.compatible import guide_manager_compatible_comp as gmcc
+
 import importlib
+
+importlib.reload(gmcc)
 
 PY2 = sys.version_info[0] == 2
 
-class GuideManagerComponentUI(QtWidgets.QDialog, gmcUI.Ui_Form):
 
+class GuideManagerComponentUI(QtWidgets.QDialog, gmcUI.Ui_Form):
     def __init__(self, parent=None):
         super(GuideManagerComponentUI, self).__init__(parent)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
@@ -34,7 +38,6 @@ class GuideManagerComponentUI(QtWidgets.QDialog, gmcUI.Ui_Form):
 
 
 class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
-
     def __init__(self, parent=None):
         self.toolName = "shifterComponentManager"
         super(GuideManagerComponent, self).__init__(parent=parent)
@@ -57,9 +60,9 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
     def eventFilter(self, watched, event):
 
-        if (event.type() == QtCore.QEvent.KeyPress
-                and event.matches(
-                    QtGui.QKeySequence.InsertParagraphSeparator)):
+        if event.type() == QtCore.QEvent.KeyPress and event.matches(
+            QtGui.QKeySequence.InsertParagraphSeparator
+        ):
             self.draw_component()
 
         return False
@@ -84,26 +87,28 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         compDir = shifter.getComponentDirectories()
         trackLoadComponent = []
         for path, comps in compDir.items():
-            pm.progressWindow(title='Loading Components',
-                              progress=0,
-                              max=len(comps))
+            pm.progressWindow(
+                title="Loading Components", progress=0, max=len(comps)
+            )
             for comp_name in comps:
-                pm.progressWindow(e=True,
-                                  step=1,
-                                  status='\nLoading: %s' % comp_name)
-                if comp_name == "__init__.py":
+                pm.progressWindow(
+                    e=True, step=1, status="\nLoading: %s" % comp_name
+                )
+                if comp_name in ["__init__.py", "__pycache__"]:
                     continue
                 elif comp_name in trackLoadComponent:
                     pm.displayWarning(
                         "Custom component name: %s, already in default "
                         "components. Names should be unique. This component is"
-                        " not loaded" % comp_name)
+                        " not loaded" % comp_name
+                    )
                     continue
                 else:
                     trackLoadComponent.append(comp_name)
 
-                if not os.path.exists(os.path.join(path,
-                                                   comp_name, "__init__.py")):
+                if not os.path.exists(
+                    os.path.join(path, comp_name, "__init__.py")
+                ):
                     continue
                 try:
                     module = shifter.importComponentGuide(comp_name)
@@ -114,8 +119,8 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                     comp_list.append(module.TYPE)
                 except Exception as e:
                     pm.displayWarning(
-                        "{} can't be load. Error at import".format(comp_name))
-                    pm.displayError(e)
+                        "{} can't be load. Error at import".format(comp_name)
+                    )
                     pm.displayError(traceback.format_exc())
 
         pm.progressWindow(e=True, endProgress=True)
@@ -130,8 +135,7 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.__proxyModel.setSourceModel(model)
 
     def _refreshList(self):
-        """Refresh listview content
-        """
+        """Refresh listview content"""
         model = QtGui.QStandardItemModel(self)
         for c_node in self.get_component_list():
             model.appendRow(QtGui.QStandardItem(c_node))
@@ -156,10 +160,15 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             return
         self.comp_menu = QtWidgets.QMenu()
         parentPosition = comp_widget.mapToGlobal(QtCore.QPoint(0, 0))
+        menu_item_00 = self.comp_menu.addAction(
+            "Syn The Selected Component Type To The Type Selected In The Manager"
+        )
+        self.comp_menu.addSeparator()
         menu_item_01 = self.comp_menu.addAction("Draw Component")
         self.comp_menu.addSeparator()
         menu_item_02 = self.comp_menu.addAction("Refresh List")
 
+        menu_item_00.triggered.connect(self.set_component)
         menu_item_01.triggered.connect(self.draw_component)
         menu_item_02.triggered.connect(self._refreshList)
 
@@ -183,38 +192,51 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
         # buttons
         self.gmcUIInst.settings_pushButton.clicked.connect(
-            guide_manager.inspect_settings)
+            guide_manager.inspect_settings
+        )
         self.gmcUIInst.build_pushButton.clicked.connect(
-            guide_manager.build_from_selection)
+            guide_manager.build_from_selection
+        )
         self.gmcUIInst.duplicate_pushButton.clicked.connect(
-            partial(guide_manager.duplicate, False))
+            partial(guide_manager.duplicate, False)
+        )
         self.gmcUIInst.dupSym_pushButton.clicked.connect(
-            partial(guide_manager.duplicate, True))
+            partial(guide_manager.duplicate, True)
+        )
         self.gmcUIInst.extrCtl_pushButton.clicked.connect(
-            guide_manager.extract_controls)
+            guide_manager.extract_controls
+        )
         self.gmcUIInst.draw_pushButton.clicked.connect(
-            self.draw_comp_doubleClick)
+            self.draw_comp_doubleClick
+        )
 
         # list view
-        self.gmcUIInst.search_lineEdit.textChanged.connect(
-            self.filter_changed)
+        self.gmcUIInst.search_lineEdit.textChanged.connect(self.filter_changed)
 
         self.gmcUIInst.component_listView.clicked.connect(self.update_info)
         self.selModel = self.gmcUIInst.component_listView.selectionModel()
         self.selModel.selectionChanged.connect(self.update_info)
         self.gmcUIInst.component_listView.doubleClicked.connect(
-            self.draw_comp_doubleClick)
+            self.draw_comp_doubleClick
+        )
 
         # connect menu
         self.gmcUIInst.component_listView.setContextMenuPolicy(
-            QtCore.Qt.CustomContextMenu)
+            QtCore.Qt.CustomContextMenu
+        )
         self.gmcUIInst.component_listView.customContextMenuRequested.connect(
-            self._component_menu)
+            self._component_menu
+        )
 
         self.gmcUIInst.search_lineEdit.setContextMenuPolicy(
-            QtCore.Qt.CustomContextMenu)
+            QtCore.Qt.CustomContextMenu
+        )
         self.gmcUIInst.search_lineEdit.customContextMenuRequested.connect(
-            self._search_menu)
+            self._search_menu
+        )
+        self.gmcUIInst.update_guide_checkBox.stateChanged.connect(
+            self.on_update_changed
+        )
 
     #############
     # SLOTS
@@ -257,18 +279,36 @@ class GuideManagerComponent(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
     def draw_component(self, parent=None):
         showUI = self.gmcUIInst.showUI_checkBox.checkState()
+        if hasattr(showUI, "value"):
+            showUI = showUI.value
+        showUI = bool(showUI)
         for x in self.gmcUIInst.component_listView.selectedIndexes():
             guide_manager.draw_comp(x.data(), parent, showUI)
 
-    def filter_changed(self, filter):
-        """Filter out the elements in the list view
+    def on_update_changed(self, state):
+        self.update_flag = self.gmcUIInst.update_guide_checkBox.isChecked()
 
-        """
-        regExp = QtCore.QRegExp(filter,
-                                QtCore.Qt.CaseSensitive,
-                                QtCore.QRegExp.Wildcard
-                                )
-        self.__proxyModel.setFilterRegExp(regExp)
+    def set_component(self):
+        self.update_flag = self.gmcUIInst.update_guide_checkBox.isChecked()
+        for x in self.gmcUIInst.component_listView.selectedIndexes():
+            gmcc.update_component_type_and_update_guide(x.data(), self.update_flag)
+
+    def filter_changed(self, filter_str):
+        """Filter out the elements in the list view"""
+        # pyside2
+        try:
+            reg_exp = QtCore.QRegExp(
+                filter_str, QtCore.Qt.CaseSensitive, QtCore.QRegExp.Wildcard
+            )
+            self.__proxyModel.setFilterRegExp(reg_exp)
+        except AttributeError:
+            pattern = filter_str.replace("*", ".*").replace("?", ".")
+            reg_exp = QtCore.QRegExp(pattern)
+            reg_exp.setPatternOptions(
+                QtCore.QRegExp.PatternOption.CaseInsensitiveOption
+            )
+            self.__proxyModel.setFilterRegularExpression(reg_exp)
+
         self.gmcUIInst.info_plainTextEdit.setPlainText("")
 
 

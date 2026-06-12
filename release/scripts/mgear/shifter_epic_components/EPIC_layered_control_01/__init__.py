@@ -29,7 +29,7 @@ from mgear.core import transform
 from mgear.core import primitive
 from mgear.core import applyop
 from mgear.core import node
-import pymel.core as pm
+import mgear.pymaya as pm
 
 #############################################
 # COMPONENT

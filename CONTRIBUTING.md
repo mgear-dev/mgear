@@ -1,5 +1,118 @@
 ## Contributing to mGear
 
+### Code Formatter: Black
+
+We use **Black** for code formatting with its default **88 character line length**.
+
+```bash
+# Format a file
+black myfile.py
+
+# Check without modifying
+black --check myfile.py
+```
+
+Write code in Black format from the start. Black handles:
+- Double quotes for strings
+- Trailing commas in multi-line structures
+- Consistent line breaking and indentation
+- Spaces around operators
+
+```python
+# Black multi-line style
+result = some_function(
+    argument_one,
+    argument_two,
+    argument_three,
+)
+
+data = {
+    "key1": "value1",
+    "key2": "value2",
+}
+```
+
+<br>
+
+### Imports
+
+**One import per line.** No grouping multiple names on the same line.
+
+**Wrong**
+
+```python
+from mgear.core import attribute, transform, primitive
+```
+
+**Right**
+
+```python
+from mgear.core import attribute
+from mgear.core import transform
+from mgear.core import primitive
+```
+
+**Import order** (separated by blank lines):
+
+```python
+"""Module docstring"""
+
+# Standard library
+import json
+import math
+import os
+from functools import partial
+# Maya
+from maya import cmds
+from maya import mel
+import maya.api.OpenMaya as om2
+
+# mGear vendor
+from mgear.vendor.Qt import QtWidgets
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtGui
+
+# mGear
+import mgear
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
+from mgear.core import attribute
+from mgear.core import transform
+from mgear.core import primitive
+
+
+
+# Relative imports (last)
+from . import setup
+```
+
+<br>
+
+### Avoid `import as`
+
+Where possible, avoid the use of `import ... as ...`.
+
+```python
+from mgear.core import rigbits as rb
+```
+
+This makes it more difficult to understand where a particular call is coming from, when read by someone who didn't initially make that import.
+
+```python
+swg.run_important_function()
+# What does this do? :O
+```
+
+**Allowed exceptions** (widely understood aliases):
+
+```python
+import mgear.pymaya as pm
+import maya.api.OpenMaya as om2
+from mgear.core import widgets as mwgt
+```
+
+<br>
+
 ### Argument shorthands
 
 In Maya, some arguments have a short equivalent. Don't use it.
@@ -16,7 +129,7 @@ pm.workspace(q=True, rd=True)
 pm.workspace(query=True, rootDirectory=True)
 ```
 
-The reason is readability. The second reason is that these shorthands are provided not to make *your* code shorter, but to reduce the filesize of Maya's own internal scene format, the `.ma` files. It's not Pythonic, it's an optimisation.
+The reason is readability. These shorthands exist to reduce the filesize of Maya's `.ma` files, not to make your Python code shorter.
 
 <br>
 
@@ -53,17 +166,7 @@ class MyClass(object):
         self.width = width
 ```
 
-The reason is discoverability. When members are attached to `self` in any subsequent method, it becomes difficult to tell whether it is being created, or modified. More importantly, it becomes impossible to tell which member is used externally.
-
-```python
-from mymodule import MyClass
-
-myclass = MyClass()
-myclass.width = 5
-print(myclass.other_member)
-```
-
-And at that point, impossible to maintain backwards compatibility should any of the methods creating new members be removed or refactored.
+The reason is discoverability. When members are attached to `self` in any subsequent method, it becomes difficult to tell whether it is being created, or modified.
 
 <br>
 
@@ -80,27 +183,10 @@ from mgear.core import rigbits
 **Right**
 
 ```python
-from .maya import rigbits
+from .core import rigbits
 ```
 
-This enables mgear to be bundled together with another library, e.g. `from .vendor.mgear import maya` and also avoids mgear being picked up from another location on a user's machine and PYTHONPATH. It also shortens the import line, which is always nice.
-
-<br>
-
-### Avoid `import as`
-
-Where possible, avoid the use of `import ... as ...`.
-
-```python
-from mgear.core import rigbits as rb
-```
-
-This makes it more difficult to understand where a particular call is coming from, when read by someone who didn't initially make that import.
-
-```python
-swg.run_important_function()
-# What does this do? :O
-```
+This enables mgear to be bundled together with another library and avoids mgear being picked up from another location on a user's PYTHONPATH.
 
 <br>
 
@@ -113,18 +199,7 @@ for item in ("good", "use", "of", "tuple"):
     pass
 ```
 
-Tuples will tell you and the user when used them in an unintended way.
-
-```python
-# You
-immutable = (1, 2, 3)
-
-# User
-immutable.append(4)
-# ERROR
-```
-
-Whereas a list would not, and cause a difficult-to-debug error. The fabled "Works on my machine (tm)".
+Tuples will tell you and the user when used in an unintended way, whereas a list would silently allow mutation.
 
 <br>
 
@@ -132,51 +207,90 @@ Whereas a list would not, and cause a difficult-to-debug error. The fabled "Work
 
 Never use a mutable object in an argument signature.
 
+**Wrong**
+
 ```python
 def function(wrong=[]):
     wrong.append(1)
     print(wrong)
-
-
-function()
-# [1]
-function()
-# [1, 1]
-function()
-# [1, 1, 1]
 ```
 
-The same goes for `{}`. Instead, pass `None` and convert internally.
+**Right**
 
 ```python
-def function(wrong=None):
-    wrong = wrong or []
-    wrong.append(1)
-    print(wrong)
+def function(items=None):
+    items = items or []
+    items.append(1)
+    print(items)
+```
 
-function()
-# [1]
-function()
-# [1]
-function()
-# [1]
+The same goes for `{}`. Pass `None` and convert internally.
+
+<br>
+
+### No type hints
+
+mGear does not use Python type hints. Document types in **docstrings only**.
+
+**Wrong**
+
+```python
+def create_shader(name: str, color: tuple) -> tuple:
+    ...
+```
+
+**Right**
+
+```python
+def create_shader(name, color):
+    """Create a shader.
+
+    Args:
+        name (str): Shader name.
+        color (tuple): RGB color (r, g, b) with values 0-1.
+
+    Returns:
+        tuple: Tuple of (shader_node, shading_group) names.
+    """
+    ...
+```
+
+<br>
+
+### No PyMEL
+
+Use `mgear.pymaya` instead of PyMEL.
+
+**Wrong**
+
+```python
+import pymel.core as pm
+```
+
+**Right**
+
+```python
+import mgear.pymaya as pm
 ```
 
 <br>
 
 ### Docstrings
 
-All docstrings are written in Google Napoleon format.
+All docstrings are written in Google style with `Args:` (not `Arguments:`).
 
 ```python
 def function(a, b=True):
-    """Summary here, no line breaks
+    """Summary here, no line breaks.
 
     Long description here.
 
-    Arguments:
-        a (str): A first argument, mandatory
-        b (bool, optional): A second argument
+    Args:
+        a (str): A first argument, mandatory.
+        b (bool, optional): A second argument.
+
+    Returns:
+        bool: The result value.
 
     Example:
         >>> print("A doctest")
@@ -187,66 +301,17 @@ def function(a, b=True):
 
 <br>
 
-### Quotation Marks
+### Naming Conventions
 
-Default to double-ticks, fallback to single-tick.
+mGear historically uses **camelCase**. For consistency:
 
-```python
-# Right
-side = "Right"
+| Code Context | Convention | Example |
+|--------------|------------|---------|
+| **Existing modules** (editing/extending) | camelCase | `getTranslation()`, `myValue` |
+| **New standalone tools** | PEP8 snake_case | `get_translation()`, `my_value` |
+| **New code in existing modules** | Match surrounding code | (usually camelCase) |
+| **Classes** | PascalCase | `SpringManager` |
+| **Constants** | UPPER_SNAKE_CASE | `FILE_EXT` |
+| **Private** | Leading underscore | `_getParent()` |
 
-# Wrong
-side = 'Left'
-
-# Right
-def function():
-    """It's a single tick"""
-
-# Wrong
-def function():
-    '''It's a single tick"""
-```
-
-<br>
-
-### Code Style
-
-We are refactoring all the code to [PEP8](https://www.python.org/dev/peps/pep-0008/)
-If you want to contribute please follow the PEP8 standard
-
-<br>
-
-#### Ignore PEP8 Errors
-
-"W503": [Break bfore or after binary operator](https://www.python.org/dev/peps/pep-0008/#should-a-line-break-before-or-after-a-binary-operator)
-
-#### Line break for long arguments
-
-```python
-
-# No
-function(arg1, arg2,
-         kwarg=False, kwarg2=True)
-
-# No
-function(
-    arg1, arg2,
-    kwarg=False, kwarg2=True)
-
-# Yes
-function(arg1,
-         arg2,
-         kwarg=False,
-         kwarg2=True)
-# Yes
-function(
-    arg1, arg2, kwarg=False, kwarg2=True)
-
-# OK
-function(
-    arg1,
-    arg2,
-    kwarg=False,
-    kwarg2=True)
-
-```
+Within a single file, use ONE consistent style. Don't mix conventions.

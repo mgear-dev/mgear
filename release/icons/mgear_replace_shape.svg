@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Original shape (circle) fading -->
+    <circle cx="8" cy="8" r="5" stroke-opacity="0.4"></circle>
+    <!-- Arrow indicating replacement -->
+    <path d="M14 10l4 4"></path>
+    <path d="M18 10v4h-4"></path>
+    <!-- New shape (square) -->
+    <rect x="13" y="13" width="8" height="8" rx="1"></rect>
+</svg>

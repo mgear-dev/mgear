@@ -1,7 +1,7 @@
 """Component Chain 01 module"""
 
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -159,6 +159,20 @@ class Component(component.Main):
             self.loc.append(loc)
             self.jnt_pos.append([loc, i, None, False])
 
+        # IK/FK Matching
+        if self.isFkIk:
+            for i, fk in enumerate(self.fk_ctl):
+                self.add_match_ref(fk,
+                                   self.chain[i],
+                                   f"{fk.name()}_mth")
+            self.add_match_ref(self.ik_ctl,
+                               self.fk_ctl[-1],
+                               "ik_mth")
+
+            self.add_match_ref(self.upv_ctl,
+                               self.fk_ctl[0],
+                               "upv_mth")
+
     # =====================================================
     # ATTRIBUTES
     # =====================================================
@@ -262,8 +276,8 @@ class Component(component.Main):
                 cns.interpType.set(0)
                 weight_att = pm.parentConstraint(
                     cns, query=True, weightAliasList=True)
-                pm.connectAttr(rev_node + ".outputX", weight_att[0])
-                pm.connectAttr(self.blend_att, weight_att[1])
+                pm.connectAttr(rev_node + ".outputX", cns + "." + weight_att[0])
+                pm.connectAttr(self.blend_att, cns + "." + weight_att[1])
 
                 # scaling
                 blend_node = pm.createNode("blendColors")

@@ -1,5 +1,5 @@
 from functools import partial
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.shifter.component import guide
 from mgear.core import transform, pyqt
@@ -70,6 +70,7 @@ class Guide(guide.ComponentGuide):
         self.dispcrv = self.addDispCurve("crv1", centers)
 
         self.blade = self.addBlade("blade", self.wrist, self.eff)
+        self.addUpvLocator(self.elbow, self.wrist, self.eff, float_value=0.8)
 
     def addParameters(self):
         """Add the configurations settings"""

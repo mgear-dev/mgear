@@ -4,7 +4,7 @@ from mgear.shifter import component
 
 from mgear.core import attribute, transform, primitive
 
-import pymel.core as pm
+import mgear.pymaya as pm
 
 #############################################
 # COMPONENT

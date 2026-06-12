@@ -161,7 +161,7 @@ class AnimClipWidget(QtWidgets.QFrame):
         main_layout.addLayout(clip_name_layout)
 
         self._delete_button = QtWidgets.QPushButton()
-        self._delete_button.setIcon(QtGui.QIcon(":trash.png"))
+        self._delete_button.setIcon(pyqt.get_icon("mgear_trash"))
         self._delete_button.setStatusTip("Delete Clip")
         self._delete_button.setMaximumSize(25, 25)
         set_transparent_button(self._delete_button)
@@ -188,14 +188,14 @@ class AnimClipWidget(QtWidgets.QFrame):
         clip_name_layout.addWidget(self._end_frame_box)
 
         self._set_range_button = QtWidgets.QPushButton()
-        self._set_range_button.setIcon(QtGui.QIcon(":adjustTimeline.png"))
+        self._set_range_button.setIcon(pyqt.get_icon("mgear_film"))
         self._set_range_button.setStatusTip("Set Frame Range")
         self._set_range_button.setMaximumSize(25, 25)
         set_transparent_button(self._set_range_button)
         clip_name_layout.addWidget(self._set_range_button)
 
         self._play_button = QtWidgets.QPushButton()
-        self._play_button.setIcon(QtGui.QIcon(":playClip.png"))
+        self._play_button.setIcon(pyqt.get_icon("mgear_play"))
         self._play_button.setStatusTip("Play Sequence")
         self._play_button.setMaximumSize(25, 25)
         set_transparent_button(self._play_button)

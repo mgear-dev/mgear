@@ -1,7 +1,7 @@
 from mgear.core import pyqt
 from mgear.vendor.Qt import QtCore, QtWidgets
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
-import pymel.core as pm
+import mgear.pymaya as pm
 
 
 class SpaceRecorderUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):

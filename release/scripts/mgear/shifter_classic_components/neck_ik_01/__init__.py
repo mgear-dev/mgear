@@ -1,7 +1,7 @@
 """Component Neck IK 01 module"""
 
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -28,24 +28,29 @@ class Component(component.Main):
         if self.settings["IKWorldOri"]:
             t = datatypes.TransformationMatrix()
         else:
-            t = transform.getTransformLookingAt(self.guide.pos["tan1"],
-                                                self.guide.pos["neck"],
-                                                self.normal,
-                                                "yx",
-                                                self.negate)
+            t = transform.getTransformLookingAt(
+                self.guide.pos["tan1"],
+                self.guide.pos["neck"],
+                self.normal,
+                "yx",
+                self.negate,
+            )
 
         t = transform.setMatrixPosition(t, self.guide.pos["neck"])
 
         self.ik_cns = primitive.addTransform(
-            self.root, self.getName("ik_cns"), t)
+            self.root, self.getName("ik_cns"), t
+        )
 
-        self.ik_ctl = self.addCtl(self.ik_cns,
-                                  "ik_ctl",
-                                  t,
-                                  self.color_ik,
-                                  "compas",
-                                  w=self.size * .5,
-                                  tp=self.parentCtlTag)
+        self.ik_ctl = self.addCtl(
+            self.ik_cns,
+            "ik_ctl",
+            t,
+            self.color_ik,
+            "compas",
+            w=self.size * 0.5,
+            tp=self.parentCtlTag,
+        )
 
         attribute.setKeyableAttributes(self.ik_ctl, self.tr_params)
         attribute.setRotOrder(self.ik_ctl, "ZXY")
@@ -56,40 +61,47 @@ class Component(component.Main):
             t = transform.setMatrixPosition(t, self.guide.pos["tan1"])
 
             self.tan1_loc = primitive.addTransform(
-                self.ik_ctl, self.getName("tan1_loc"), t)
+                self.ik_ctl, self.getName("tan1_loc"), t
+            )
 
-            self.tan1_ctl = self.addCtl(self.tan1_loc,
-                                        "tan1_ctl",
-                                        t,
-                                        self.color_ik,
-                                        "sphere",
-                                        w=self.size * .2,
-                                        tp=self.ik_ctl)
+            self.tan1_ctl = self.addCtl(
+                self.tan1_loc,
+                "tan1_ctl",
+                t,
+                self.color_ik,
+                "sphere",
+                w=self.size * 0.2,
+                tp=self.ik_ctl,
+            )
 
             attribute.setKeyableAttributes(self.tan1_ctl, self.t_params)
             attribute.setInvertMirror(self.tan1_ctl, ["tx"])
 
-            t = transform.getTransformLookingAt(self.guide.pos["root"],
-                                                self.guide.pos["tan0"],
-                                                self.normal,
-                                                "yx",
-                                                self.negate)
+            t = transform.getTransformLookingAt(
+                self.guide.pos["root"],
+                self.guide.pos["tan0"],
+                self.normal,
+                "yx",
+                self.negate,
+            )
 
             t = transform.setMatrixPosition(t, self.guide.pos["tan0"])
 
             self.tan0_loc = primitive.addTransform(
-                self.root, self.getName("tan0_loc"), t)
+                self.root, self.getName("tan0_loc"), t
+            )
 
-            self.tan0_ctl = self.addCtl(self.tan0_loc,
-                                        "tan0_ctl",
-                                        t,
-                                        self.color_ik,
-                                        "sphere",
-                                        w=self.size * .2,
-                                        tp=self.ik_ctl)
+            self.tan0_ctl = self.addCtl(
+                self.tan0_loc,
+                "tan0_ctl",
+                t,
+                self.color_ik,
+                "sphere",
+                w=self.size * 0.2,
+                tp=self.ik_ctl,
+            )
 
-            attribute.setKeyableAttributes(self.tan0_ctl,
-                                           self.t_params)
+            attribute.setKeyableAttributes(self.tan0_ctl, self.t_params)
             attribute.setInvertMirror(self.tan0_ctl, ["tx"])
 
             # Curves -------------------------------------------
@@ -97,44 +109,54 @@ class Component(component.Main):
                 self.root,
                 self.getName("mst_crv"),
                 [self.root, self.tan0_ctl, self.tan1_ctl, self.ik_ctl],
-                3)
+                3,
+            )
 
-            self.slv_crv = curve.addCurve(self.root,
-                                          self.getName("slv_crv"),
-                                          [datatypes.Vector()] * 10,
-                                          False,
-                                          3)
+            self.slv_crv = curve.addCurve(
+                self.root,
+                self.getName("slv_crv"),
+                [datatypes.Vector()] * 10,
+                False,
+                3,
+            )
 
             self.mst_crv.setAttr("visibility", False)
 
         else:
             t = transform.setMatrixPosition(t, self.guide.pos["tan1"])
             self.tan1_loc = primitive.addTransform(
-                self.ik_ctl, self.getName("tan1_loc"), t)
+                self.ik_ctl, self.getName("tan1_loc"), t
+            )
 
-            t = transform.getTransformLookingAt(self.guide.pos["root"],
-                                                self.guide.pos["tan0"],
-                                                self.normal,
-                                                "yx",
-                                                self.negate)
+            t = transform.getTransformLookingAt(
+                self.guide.pos["root"],
+                self.guide.pos["tan0"],
+                self.normal,
+                "yx",
+                self.negate,
+            )
 
             t = transform.setMatrixPosition(t, self.guide.pos["tan0"])
 
             self.tan0_loc = primitive.addTransform(
-                self.root, self.getName("tan0_loc"), t)
+                self.root, self.getName("tan0_loc"), t
+            )
 
             # Curves -------------------------------------------
             self.mst_crv = curve.addCnsCurve(
                 self.root,
                 self.getName("mst_crv"),
                 [self.root, self.tan0_loc, self.tan1_loc, self.ik_ctl],
-                3)
+                3,
+            )
 
-            self.slv_crv = curve.addCurve(self.root,
-                                          self.getName("slv_crv"),
-                                          [datatypes.Vector()] * 10,
-                                          False,
-                                          3)
+            self.slv_crv = curve.addCurve(
+                self.root,
+                self.getName("slv_crv"),
+                [datatypes.Vector()] * 10,
+                False,
+                3,
+            )
 
         self.mst_crv.setAttr("visibility", False)
         self.slv_crv.setAttr("visibility", False)
@@ -157,31 +179,37 @@ class Component(component.Main):
         parent_twistRef = primitive.addTransform(
             self.root,
             self.getName("reference"),
-            transform.getTransform(self.root))
+            transform.getTransform(self.root),
+        )
 
-        t = transform.getTransformLookingAt(self.guide.pos["root"],
-                                            self.guide.pos["neck"],
-                                            self.normal,
-                                            "yx",
-                                            self.negate)
+        t = transform.getTransformLookingAt(
+            self.guide.pos["root"],
+            self.guide.pos["neck"],
+            self.normal,
+            "yx",
+            self.negate,
+        )
 
         self.intMRef = primitive.addTransform(
-            self.root, self.getName("intMRef"), t)
+            self.root, self.getName("intMRef"), t
+        )
 
         self.previousCtlTag = self.parentCtlTag
         for i in range(self.divisions):
-
             # References
             div_cns = primitive.addTransform(
-                parentdiv, self.getName("%s_cns" % i), t)
+                parentdiv, self.getName("%s_cns" % i), t
+            )
 
             pm.setAttr(div_cns + ".inheritsTransform", False)
             self.div_cns.append(div_cns)
             parentdiv = div_cns
 
-            scl_npo = primitive.addTransform(parentctl,
-                                             self.getName("%s_scl_npo" % i),
-                                             transform.getTransform(parentctl))
+            scl_npo = primitive.addTransform(
+                parentctl,
+                self.getName("%s_scl_npo" % i),
+                transform.getTransform(parentctl),
+            )
 
             # Controlers (First and last one are fake)
 
@@ -189,24 +217,28 @@ class Component(component.Main):
                 fk_ctl = primitive.addTransform(
                     scl_npo,
                     self.getName("%s_loc" % i),
-                    transform.getTransform(parentctl))
+                    transform.getTransform(parentctl),
+                )
 
                 fk_npo = fk_ctl
             else:
                 fk_npo = primitive.addTransform(
                     scl_npo,
                     self.getName("fk%s_npo" % i),
-                    transform.getTransform(parentctl))
+                    transform.getTransform(parentctl),
+                )
 
-                fk_ctl = self.addCtl(fk_npo,
-                                     "fk%s_ctl" % i,
-                                     transform.getTransform(parentctl),
-                                     self.color_fk,
-                                     "cube",
-                                     w=self.size * .2,
-                                     h=self.size * .05,
-                                     d=self.size * .2,
-                                     tp=self.previousCtlTag)
+                fk_ctl = self.addCtl(
+                    fk_npo,
+                    "fk%s_ctl" % i,
+                    transform.getTransform(parentctl),
+                    self.color_fk,
+                    "cube",
+                    w=self.size * 0.2,
+                    h=self.size * 0.05,
+                    d=self.size * 0.2,
+                    tp=self.previousCtlTag,
+                )
 
                 attribute.setKeyableAttributes(self.fk_ctl)
                 attribute.setRotOrder(fk_ctl, "ZXY")
@@ -226,16 +258,20 @@ class Component(component.Main):
                 self.guide.pos["neck"],
                 self.guide.blades["blade"].z * -1,
                 "yx",
-                self.negate)
+                self.negate,
+            )
 
             twister = primitive.addTransform(
-                parent_twistRef, self.getName("%s_rot_ref" % i), t)
+                parent_twistRef, self.getName("%s_rot_ref" % i), t
+            )
 
             ref_twist = primitive.addTransform(
-                parent_twistRef, self.getName("%s_pos_ref" % i), t)
+                parent_twistRef, self.getName("%s_pos_ref" % i), t
+            )
 
             ref_twist.setTranslation(
-                datatypes.Vector(0.0, 0, 1.0), space="preTransform")
+                datatypes.Vector(0.0, 0, 1.0), space="preTransform"
+            )
 
             self.twister.append(twister)
             self.ref_twist.append(ref_twist)
@@ -244,27 +280,34 @@ class Component(component.Main):
             attribute.setInvertMirror(x, ["tx", "rz", "ry"])
 
         # Head ---------------------------------------------
-        t = transform.getTransformLookingAt(self.guide.pos["head"],
-                                            self.guide.pos["eff"],
-                                            self.normal,
-                                            "yx",
-                                            self.negate)
+        t = transform.getTransformLookingAt(
+            self.guide.pos["head"],
+            self.guide.pos["eff"],
+            self.normal,
+            "yx",
+            self.negate,
+        )
 
         self.head_cns = primitive.addTransform(
-            self.root, self.getName("head_cns"), t)
+            self.root, self.getName("head_cns"), t
+        )
 
-        dist = vector.getDistance(self.guide.pos["head"],
-                                  self.guide.pos["eff"])
+        dist = vector.getDistance(
+            self.guide.pos["head"], self.guide.pos["eff"]
+        )
 
-        self.head_ctl = self.addCtl(self.head_cns,
-                                    "head_ctl",
-                                    t,
-                                    self.color_fk,
-                                    "cube",
-                                    w=self.size * .5,
-                                    h=dist, d=self.size * .5,
-                                    po=datatypes.Vector(0, dist * .5, 0),
-                                    tp=self.previousCtlTag)
+        self.head_ctl = self.addCtl(
+            self.head_cns,
+            "head_ctl",
+            t,
+            self.color_fk,
+            "cube",
+            w=self.size * 0.5,
+            h=dist,
+            d=self.size * 0.5,
+            po=datatypes.Vector(0, dist * 0.5, 0),
+            tp=self.previousCtlTag,
+        )
 
         attribute.setRotOrder(self.head_ctl, "ZXY")
         attribute.setInvertMirror(self.head_ctl, ["tx", "rz", "ry"])
@@ -282,50 +325,53 @@ class Component(component.Main):
             "Max Stretch",
             "double",
             self.settings["maxstretch"],
-            1)
+            1,
+        )
 
-        self.maxsquash_att = self.addAnimParam("maxsquash",
-                                               "MaxSquash",
-                                               "double",
-                                               self.settings["maxsquash"],
-                                               0,
-                                               1)
+        self.maxsquash_att = self.addAnimParam(
+            "maxsquash",
+            "MaxSquash",
+            "double",
+            self.settings["maxsquash"],
+            0,
+            1,
+        )
 
-        self.softness_att = self.addAnimParam("softness",
-                                              "Softness",
-                                              "double",
-                                              self.settings["softness"],
-                                              0,
-                                              1)
+        self.softness_att = self.addAnimParam(
+            "softness", "Softness", "double", self.settings["softness"], 0, 1
+        )
 
         self.lock_ori_att = self.addAnimParam(
-            "lock_ori", "Lock Ori", "double", 1, 0, 1)
+            "lock_ori", "Lock Ori", "double", 1, 0, 1
+        )
 
         self.tan0_att = self.addAnimParam("tan0", "Tangent 0", "double", 1, 0)
         self.tan1_att = self.addAnimParam("tan1", "Tangent 1", "double", 1, 0)
 
         # Volume
         self.volume_att = self.addAnimParam(
-            "volume", "Volume", "double", 1, 0, 1)
+            "volume", "Volume", "double", 1, 0, 1
+        )
 
         # Ref
         if self.settings["ikrefarray"]:
             ref_names = self.get_valid_alias_list(
-                self.settings["ikrefarray"].split(","))
+                self.settings["ikrefarray"].split(",")
+            )
             if len(ref_names) > 1:
                 self.ikref_att = self.addAnimEnumParam(
-                    "ikref",
-                    "Ik Ref",
-                    0,
-                    ref_names)
+                    "ikref", "Ik Ref", 0, ref_names
+                )
 
         if self.settings["headrefarray"]:
             ref_names = self.get_valid_alias_list(
-                self.settings["headrefarray"].split(","))
+                self.settings["headrefarray"].split(",")
+            )
             if len(ref_names) > 1:
                 ref_names.insert(0, "self")
                 self.headref_att = self.addAnimEnumParam(
-                    "headref", "Head Ref", 0, ref_names)
+                    "headref", "Head Ref", 0, ref_names
+                )
 
         # Setup ------------------------------------------
         # Eval Fcurve
@@ -333,24 +379,36 @@ class Component(component.Main):
             self.st_value = self.guide.paramDefs["st_profile"].value
             self.sq_value = self.guide.paramDefs["sq_profile"].value
         else:
-            self.st_value = fcurve.getFCurveValues(self.settings["st_profile"],
-                                                   self.divisions)
-            self.sq_value = fcurve.getFCurveValues(self.settings["sq_profile"],
-                                                   self.divisions)
+            self.st_value = fcurve.getFCurveValues(
+                self.settings["st_profile"], self.divisions
+            )
+            self.sq_value = fcurve.getFCurveValues(
+                self.settings["sq_profile"], self.divisions
+            )
 
-        self.st_att = [self.addSetupParam("stretch_%s" % i,
-                                          "Stretch %s" % i,
-                                          "double",
-                                          self.st_value[i], -1, 0)
-                       for i in range(self.divisions)]
+        self.st_att = [
+            self.addSetupParam(
+                "stretch_%s" % i,
+                "Stretch %s" % i,
+                "double",
+                self.st_value[i],
+                -1,
+                0,
+            )
+            for i in range(self.divisions)
+        ]
 
-        self.sq_att = [self.addSetupParam("squash_%s" % i,
-                                          "Squash %s" % i,
-                                          "double",
-                                          self.sq_value[i],
-                                          0,
-                                          1)
-                       for i in range(self.divisions)]
+        self.sq_att = [
+            self.addSetupParam(
+                "squash_%s" % i,
+                "Squash %s" % i,
+                "double",
+                self.sq_value[i],
+                0,
+                1,
+            )
+            for i in range(self.divisions)
+        ]
 
     # =====================================================
     # OPERATORS
@@ -368,28 +426,35 @@ class Component(component.Main):
         d = vector.getDistance(self.guide.pos["root"], self.guide.pos["neck"])
         dist_node = node.createDistNode(self.root, self.ik_ctl)
         rootWorld_node = node.createDecomposeMatrixNode(
-            self.root.attr("worldMatrix"))
-        div_node = node.createDivNode(dist_node + ".distance",
-                                      rootWorld_node + ".outputScaleX")
+            self.root.attr("worldMatrix")
+        )
+        div_node = node.createDivNode(
+            dist_node + ".distance", rootWorld_node + ".outputScaleX"
+        )
         div_node = node.createDivNode(div_node + ".outputX", d)
 
         # tan0
-        mul_node = node.createMulNode(self.tan0_att,
-                                      self.tan0_loc.getAttr("ty"))
-        res_node = node.createMulNode(mul_node + ".outputX",
-                                      div_node + ".outputX")
+        mul_node = node.createMulNode(
+            self.tan0_att, self.tan0_loc.getAttr("ty")
+        )
+        res_node = node.createMulNode(
+            mul_node + ".outputX", div_node + ".outputX"
+        )
         pm.connectAttr(res_node + ".outputX", self.tan0_loc + ".ty")
 
         # tan1
-        mul_node = node.createMulNode(self.tan1_att,
-                                      self.tan1_loc.getAttr("ty"))
-        res_node = node.createMulNode(mul_node + ".outputX",
-                                      div_node + ".outputX")
+        mul_node = node.createMulNode(
+            self.tan1_att, self.tan1_loc.getAttr("ty")
+        )
+        res_node = node.createMulNode(
+            mul_node + ".outputX", div_node + ".outputX"
+        )
         pm.connectAttr(res_node + ".outputX", self.tan1_loc.attr("ty"))
 
         # Curves -------------------------------------------
         op = applyop.gear_curveslide2_op(
-            self.slv_crv, self.mst_crv, 0, 1.5, .5, .5)
+            self.slv_crv, self.mst_crv, 0, 1.5, 0.5, 0.5
+        )
         pm.connectAttr(self.maxstretch_att, op + ".maxstretch")
         pm.connectAttr(self.maxsquash_att, op + ".maxsquash")
         pm.connectAttr(self.softness_att, op + ".softness")
@@ -399,90 +464,101 @@ class Component(component.Main):
 
         # Division -----------------------------------------
         for i in range(self.divisions):
-
             # References
             u = i / (self.divisions - 1.0)
 
             cns = applyop.pathCns(
-                self.div_cns[i], self.slv_crv, False, u, True)
+                self.div_cns[i], self.slv_crv, False, u, True
+            )
             cns.setAttr("frontAxis", 1)  # front axis is 'Y'
             cns.setAttr("upAxis", 2)  # front axis is 'Z'
 
             # Roll
             intMatrix = applyop.gear_intmatrix_op(
-                self.intMRef + ".worldMatrix", self.ik_ctl + ".worldMatrix", u)
+                self.intMRef + ".worldMatrix", self.ik_ctl + ".worldMatrix", u
+            )
             dm_node = node.createDecomposeMatrixNode(intMatrix + ".output")
-            pm.connectAttr(dm_node + ".outputRotate",
-                           self.twister[i].attr("rotate"))
+            pm.connectAttr(
+                dm_node + ".outputRotate", self.twister[i].attr("rotate")
+            )
 
-            pm.parentConstraint(self.twister[i],
-                                self.ref_twist[i],
-                                maintainOffset=True)
+            pm.parentConstraint(
+                self.twister[i], self.ref_twist[i], maintainOffset=True
+            )
 
-            pm.connectAttr(self.ref_twist[i] + ".translate",
-                           cns + ".worldUpVector")
+            pm.connectAttr(
+                self.ref_twist[i] + ".translate", cns + ".worldUpVector"
+            )
 
             # Squash n Stretch
-            op = applyop.gear_squashstretch2_op(self.fk_npo[i],
-                                                self.root,
-                                                pm.arclen(self.slv_crv),
-                                                "y")
+            op = applyop.gear_squashstretch2_op(
+                self.fk_npo[i], self.root, pm.arclen(self.slv_crv), "y"
+            )
 
             pm.connectAttr(self.volume_att, op + ".blend")
             pm.connectAttr(crv_node + ".arcLength", op + ".driver")
             pm.connectAttr(self.st_att[i], op + ".stretch")
             pm.connectAttr(self.sq_att[i], op + ".squash")
-            op.setAttr("driver_min", .1)
+            op.setAttr("driver_min", 0.1)
 
             # scl compas
             if i != 0:
                 div_node = node.createDivNode(
                     [1, 1, 1],
-                    [self.fk_npo[i - 1] + ".sx",
-                     self.fk_npo[i - 1] + ".sy",
-                     self.fk_npo[i - 1] + ".sz"])
+                    [
+                        self.fk_npo[i - 1] + ".sx",
+                        self.fk_npo[i - 1] + ".sy",
+                        self.fk_npo[i - 1] + ".sz",
+                    ],
+                )
 
-                pm.connectAttr(div_node + ".output",
-                               self.scl_npo[i] + ".scale")
+                pm.connectAttr(
+                    div_node + ".output", self.scl_npo[i] + ".scale"
+                )
 
             # Controlers
             if i == 0:
                 mulmat_node = applyop.gear_mulmatrix_op(
                     self.div_cns[i].attr("worldMatrix"),
-                    self.root.attr("worldInverseMatrix"))
+                    self.root.attr("worldInverseMatrix"),
+                )
             else:
                 mulmat_node = applyop.gear_mulmatrix_op(
                     self.div_cns[i].attr("worldMatrix"),
-                    self.div_cns[i - 1].attr("worldInverseMatrix"))
+                    self.div_cns[i - 1].attr("worldInverseMatrix"),
+                )
 
             dm_node = node.createDecomposeMatrixNode(mulmat_node + ".output")
-            pm.connectAttr(dm_node + ".outputTranslate",
-                           self.fk_npo[i].attr("t"))
-            pm.connectAttr(dm_node + ".outputRotate",
-                           self.fk_npo[i].attr("r"))
+            pm.connectAttr(
+                dm_node + ".outputTranslate", self.fk_npo[i].attr("t")
+            )
+            pm.connectAttr(dm_node + ".outputRotate", self.fk_npo[i].attr("r"))
 
             # Orientation Lock
             if i == self.divisions - 1:
                 dm_node = node.createDecomposeMatrixNode(
-                    self.ik_ctl + ".worldMatrix")
+                    self.ik_ctl + ".worldMatrix"
+                )
                 blend_node = node.createBlendNode(
                     [dm_node + ".outputRotate%s" % s for s in "XYZ"],
                     [cns + ".rotate%s" % s for s in "XYZ"],
-                    self.lock_ori_att)
+                    self.lock_ori_att,
+                )
                 self.div_cns[i].attr("rotate").disconnect()
 
-                pm.connectAttr(blend_node + ".output",
-                               self.div_cns[i] + ".rotate")
+                pm.connectAttr(
+                    blend_node + ".output", self.div_cns[i] + ".rotate"
+                )
 
         # Head ---------------------------------------------
         self.fk_ctl[-1].addChild(self.head_cns)
 
         # scale compensation
         dm_node = node.createDecomposeMatrixNode(
-            self.scl_npo[0] + ".parentInverseMatrix")
+            self.scl_npo[0] + ".parentInverseMatrix"
+        )
 
-        pm.connectAttr(dm_node + ".outputScale",
-                       self.scl_npo[0] + ".scale")
+        pm.connectAttr(dm_node + ".outputScale", self.scl_npo[0] + ".scale")
 
     # =====================================================
     # CONNECTOR
@@ -519,7 +595,6 @@ class Component(component.Main):
         self.connect_standardWithIkRef()
 
     def connect_standardWithIkRef(self):
-
         self.parent.addChild(self.root)
 
         if self.settings["chickenStyleIK"]:
@@ -538,13 +613,16 @@ class Component(component.Main):
                 ref.append(self.rig.findRelative(ref_name))
 
             ref.append(self.head_cns)
-            cns_node = pm.parentConstraint(*ref,
-                                           skipTranslate="none",
-                                           maintainOffset=True)
+            cns_node = pm.parentConstraint(
+                *ref, skipTranslate="none", maintainOffset=True
+            )
 
-            cns_attr = pm.parentConstraint(cns_node,
-                                           query=True,
-                                           weightAliasList=True)
+            cns_attr_names = pm.parentConstraint(
+                cns_node, query=True, weightAliasList=True
+            )
+            cns_attr = []
+            for cname in cns_attr_names:
+                cns_attr.append("{}.{}".format(cns_node, cname))
             self.head_cns.attr("tx").disconnect()
             self.head_cns.attr("ty").disconnect()
             self.head_cns.attr("tz").disconnect()

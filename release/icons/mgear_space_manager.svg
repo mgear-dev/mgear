@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Space switching - multiple coordinate systems -->
+    <rect x="2" y="2" width="8" height="8" rx="1"></rect>
+    <rect x="14" y="14" width="8" height="8" rx="1"></rect>
+    <!-- Switch arrows -->
+    <path d="M12 6h4"></path>
+    <path d="M14 4l2 2-2 2"></path>
+    <path d="M12 18h-4"></path>
+    <path d="M10 16l-2 2 2 2"></path>
+    <!-- Settings gear indicator -->
+    <circle cx="18" cy="6" r="3"></circle>
+    <circle cx="18" cy="6" r="1" fill="white"></circle>
+</svg>

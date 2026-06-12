@@ -5,13 +5,13 @@ import sys
 
 import mgear
 import mgear.core.icon as ico
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear import shifter
 from mgear.core import transform, node, attribute, applyop, pyqt, utils, curve
 from mgear.vendor.Qt import QtCore, QtWidgets
-from pymel import versions
-from pymel.core import datatypes
+from mgear.pymaya import versions
+from mgear.pymaya import datatypes
 
 from mgear.core import string
 from mgear.simpleRig import simpleRigUI as srUI
@@ -20,11 +20,12 @@ CTL_TAG_ATTR = "is_simple_rig_ctl"
 RIG_ROOT = "rig"
 
 if sys.version_info[0] == 2:
-    string_types = (basestring, )
+    string_types = (basestring,)
 else:
-    string_types = (str, )
+    string_types = (str,)
 
 # driven attr ===========================================
+
 
 def _driven_attr(dagNode):
     """message attribute to store a list of object affected
@@ -37,7 +38,7 @@ def _driven_attr(dagNode):
         Attr: Attribute
     """
     if not dagNode.hasAttr("drivenElements"):
-        dagNode.addAttr("drivenElements", attributeType='message', multi=True)
+        dagNode.addAttr("drivenElements", attributeType="message", multi=True)
     return dagNode.attr("drivenElements")
 
 
@@ -57,11 +58,14 @@ def _add_to_driven_attr(dagNode, driven):
         if not _is_valid_ctl(d):
             _remove_from_driven_attr(d)
             ni = _get_driven_attr_next_available_index(d_attr)
-            pm.connectAttr(d.message,
-                           d_attr.attr("drivenElements[{}]".format(str(ni))))
+            pm.connectAttr(
+                d.message, d_attr.attr("drivenElements[{}]".format(str(ni)))
+            )
         else:
-            pm.displayWarning("{} is a simple rig control and can't be "
-                              " driven by another control".format(d))
+            pm.displayWarning(
+                "{} is a simple rig control and can't be "
+                " driven by another control".format(d)
+            )
 
 
 def _remove_from_driven_attr(driven):
@@ -107,17 +111,19 @@ def _get_driven_attr_next_available_index(d_attr):
 
 # creators ===========================================
 
-
-def _create_control(name,
-                    t,
-                    radio,
-                    parent=None,
-                    icon="circle",
-                    side="C",
-                    indx=0,
-                    color=17,
-                    driven=None,
-                    sets_config=None):
+# @utils.timeFunc
+def _create_control(
+    name,
+    t,
+    radio,
+    parent=None,
+    icon="circle",
+    side="C",
+    indx=0,
+    color=17,
+    driven=None,
+    sets_config=None,
+):
     """Crete control
 
     Args:
@@ -137,7 +143,7 @@ def _create_control(name,
         dagNode: New control
     """
     name = _validate_name(name)
-
+    # @utils.timeFunc
     def _set_name(extension):
         if side:
             fullName = "{}_{}{}_{}".format(name, side, str(indx), extension)
@@ -149,20 +155,22 @@ def _create_control(name,
             fullName = "{}_{}".format(name, extension)
         return fullName
 
-    npo = pm.createNode('transform', n=_set_name("npo"))
+    npo = pm.createNode("transform", n=_set_name("npo"))
     npo.setTransformation(t)
-    attribute.lockAttribute(npo)
     if parent:
         pm.parent(npo, parent)
+    attribute.lockAttribute(npo)
 
-    ctl = ico.create(npo,
-                     _set_name("ctl"),
-                     t,
-                     color,
-                     icon=icon,
-                     w=radio * 2,
-                     h=radio * 2,
-                     d=radio * 2)
+    ctl = ico.create(
+        npo,
+        _set_name("ctl"),
+        t,
+        color,
+        icon=icon,
+        w=radio * 2,
+        h=radio * 2,
+        d=radio * 2,
+    )
 
     attribute.addAttribute(ctl, "conf_icon", "string", icon)
     attribute.addAttribute(ctl, "conf_sets", "string", sets_config)
@@ -170,7 +178,7 @@ def _create_control(name,
     attribute.addAttribute(ctl, "conf_color", "long", color, keyable=False)
     attribute.addAttribute(ctl, CTL_TAG_ATTR, "bool", True, keyable=False)
     attribute.addAttribute(ctl, "edit_mode", "bool", False, keyable=False)
-    pm.parent(ctl, npo)
+    # pm.parent(ctl, npo)
     attribute.setKeyableAttributes(ctl)
 
     if driven:
@@ -198,7 +206,7 @@ def _create_base_structure(rigName):
         dagNode: rig root
     """
 
-    rig = pm.createNode('transform', n=rigName)
+    rig = pm.createNode("transform", n=rigName)
 
     attribute.addAttribute(rig, "is_rig", "bool", True, keyable=False)
     attribute.addAttribute(rig, "is_simple_rig", "bool", True, keyable=False)
@@ -207,10 +215,12 @@ def _create_base_structure(rigName):
     attribute.addAttribute(rig, "user", "string", getpass.getuser())
     attribute.addAttribute(rig, "date", "string", str(datetime.datetime.now()))
 
-    attribute.addAttribute(rig,
-                           "maya_version",
-                           "string",
-                           str(pm.mel.eval("getApplicationVersionAsFloat")))
+    attribute.addAttribute(
+        rig,
+        "maya_version",
+        "string",
+        str(pm.mel.eval("getApplicationVersionAsFloat")),
+    )
 
     attribute.addAttribute(rig, "gear_version", "string", mgear.getVersion())
     attribute.addAttribute(rig, "ctl_vis", "bool", True)
@@ -225,9 +235,9 @@ def _create_base_structure(rigName):
     attribute.addAttribute(rig, "synoptic", "string", "")
     attribute.addAttribute(rig, "comments", "string", "")
 
-    rig.addAttr("rigGroups", at='message', m=1)
-    rig.addAttr("rigPoses", at='message', m=1)
-    rig.addAttr("rigCtlTags", at='message', m=1)
+    rig.addAttr("rigGroups", at="message", m=1)
+    rig.addAttr("rigPoses", at="message", m=1)
+    rig.addAttr("rigCtlTags", at="message", m=1)
 
     # Create sets
     meshList = []
@@ -237,31 +247,33 @@ def _create_base_structure(rigName):
     deformersSet = pm.sets(meshList, n="{}_deformers_grp".format(rigName))
     compGroup = pm.sets(meshList, n="{}_componentsRoots_grp".format(rigName))
 
-    rigSets = pm.sets([ctlSet, deformersSet, compGroup],
-                      n="rig_sets_grp")
+    rigSets = pm.sets([ctlSet, deformersSet, compGroup], n="rig_sets_grp")
 
-    pm.connectAttr(rigSets.attr("message"),
-                   "{}.rigGroups[0]".format(rigName))
-    pm.connectAttr(ctlSet.attr("message"),
-                   "{}.rigGroups[2]".format(rigName))
-    pm.connectAttr(deformersSet.attr("message"),
-                   "{}.rigGroups[3]".format(rigName))
-    pm.connectAttr(compGroup.attr("message"),
-                   "{}.rigGroups[4]".format(rigName))
+    pm.connectAttr(rigSets.attr("message"), "{}.rigGroups[0]".format(rigName))
+    pm.connectAttr(ctlSet.attr("message"), "{}.rigGroups[2]".format(rigName))
+    pm.connectAttr(
+        deformersSet.attr("message"), "{}.rigGroups[3]".format(rigName)
+    )
+    pm.connectAttr(
+        compGroup.attr("message"), "{}.rigGroups[4]".format(rigName)
+    )
 
     return rig
 
 
 @utils.one_undo
-def _create_simple_rig_root(rigName=RIG_ROOT,
-                            selection=None,
-                            world_ctl=True,
-                            sets_config=None,
-                            ctl_wcm=False,
-                            fix_radio=False,
-                            radio_val=100,
-                            gl_shape="square",
-                            w_shape="circle"):
+# @utils.timeFunc
+def _create_simple_rig_root(
+    rigName=RIG_ROOT,
+    selection=None,
+    world_ctl=True,
+    sets_config=None,
+    ctl_wcm=False,
+    fix_radio=False,
+    radio_val=100,
+    gl_shape="square",
+    w_shape="circle",
+):
     """Create the simple rig root
 
     create the simple rig root
@@ -291,8 +303,10 @@ def _create_simple_rig_root(rigName=RIG_ROOT,
     # check if there is another rig root in the scene
     rig_models = _get_simple_rig_root()
     if rig_models:
-        pm.displayWarning("Simple rig root already exist in the "
-                          "scene: {}".format(str(rig_models)))
+        pm.displayWarning(
+            "Simple rig root already exist in the "
+            "scene: {}".format(str(rig_models))
+        )
         return
 
     if not selection:
@@ -320,16 +334,18 @@ def _create_simple_rig_root(rigName=RIG_ROOT,
     ctt = None
     # create world ctl
     if world_ctl:
-        world_ctl = _create_control("world",
-                                    t,
-                                    radio * 1.5,
-                                    parent=rig,
-                                    icon=w_shape,
-                                    side=None,
-                                    indx=0,
-                                    color=13,
-                                    driven=None,
-                                    sets_config=sets_config)
+        world_ctl = _create_control(
+            "world",
+            t,
+            radio * 1.5,
+            parent=rig,
+            icon=w_shape,
+            side=None,
+            indx=0,
+            color=13,
+            driven=None,
+            sets_config=sets_config,
+        )
         if versions.current() >= 201650:
             ctt = node.add_controller_tag(world_ctl, None)
             _connect_tag_to_rig(rig, ctt)
@@ -337,31 +353,35 @@ def _create_simple_rig_root(rigName=RIG_ROOT,
         world_ctl = rig
 
     # create global ctl
-    global_ctl = _create_control("global",
-                                 t,
-                                 radio * 1.1,
-                                 parent=world_ctl,
-                                 icon=gl_shape,
-                                 side="C",
-                                 indx=0,
-                                 color=17,
-                                 driven=None,
-                                 sets_config=sets_config)
+    global_ctl = _create_control(
+        "global",
+        t,
+        radio * 1.1,
+        parent=world_ctl,
+        icon=gl_shape,
+        side="C",
+        indx=0,
+        color=17,
+        driven=None,
+        sets_config=sets_config,
+    )
     if versions.current() >= 201650:
         ctt = node.add_controller_tag(global_ctl, ctt)
         _connect_tag_to_rig(rig, ctt)
 
     # create local ctl
-    local_ctl = _create_control("local",
-                                t,
-                                radio,
-                                parent=global_ctl,
-                                icon=gl_shape,
-                                side="C",
-                                indx=0,
-                                color=17,
-                                driven=selection,
-                                sets_config=sets_config)
+    local_ctl = _create_control(
+        "local",
+        t,
+        radio,
+        parent=global_ctl,
+        icon=gl_shape,
+        side="C",
+        indx=0,
+        color=17,
+        driven=selection,
+        sets_config=sets_config,
+    )
     if versions.current() >= 201650:
         ctt = node.add_controller_tag(local_ctl, ctt)
         _connect_tag_to_rig(rig, ctt)
@@ -370,13 +390,10 @@ def _create_simple_rig_root(rigName=RIG_ROOT,
 
 
 @utils.one_undo
-def _create_custom_pivot(name,
-                         side,
-                         icon,
-                         yZero,
-                         selection=None,
-                         parent=None,
-                         sets_config=None):
+# @utils.timeFunc
+def _create_custom_pivot(
+    name, side, icon, yZero, selection=None, parent=None, sets_config=None
+):
     """Create a custom pivot control
 
     Args:
@@ -412,8 +429,10 @@ def _create_custom_pivot(name,
             selection = selection[:-1]
 
         else:
-            pm.displayWarning("The latest selected element should be a CTL. "
-                              "PARENT is needed!")
+            pm.displayWarning(
+                "The latest selected element should be a CTL. "
+                "PARENT is needed!"
+            )
             return
 
     # handle the 3rd stat for yZero
@@ -430,16 +449,18 @@ def _create_custom_pivot(name,
         else:
             t = transform.getTransformFromPos(volCenter)
 
-        ctl = _create_control(name,
-                              t,
-                              radio,
-                              parent,
-                              icon,
-                              side,
-                              indx=0,
-                              color=14,
-                              driven=selection,
-                              sets_config=sets_config)
+        ctl = _create_control(
+            name,
+            t,
+            radio,
+            parent,
+            icon,
+            side,
+            indx=0,
+            color=14,
+            driven=selection,
+            sets_config=sets_config,
+        )
 
         # add ctl tag
         if versions.current() >= 201650:
@@ -452,6 +473,7 @@ def _create_custom_pivot(name,
 
 # Getters ===========================================
 
+
 def _get_simple_rig_root():
     """get the root from the scene.
 
@@ -461,8 +483,9 @@ def _get_simple_rig_root():
         dagNode: Rig root
     """
 
-    rig_models = [item for item in pm.ls(transforms=True)
-                  if _is_simple_rig_root(item)]
+    rig_models = [
+        item for item in pm.ls(transforms=True) if _is_simple_rig_root(item)
+    ]
     if rig_models:
         return rig_models[0]
 
@@ -476,12 +499,12 @@ def connect_selectable(rig, selection):
     """
     # configure selectable geo
     for e in selection:
-        pm.connectAttr(rig.geoUnselectable,
-                       e.attr("overrideEnabled"),
-                       force=True)
+        pm.connectAttr(
+            rig.geoUnselectable, e.attr("overrideEnabled"), force=True
+        )
         e.attr("overrideDisplayType").set(2)
 
-
+# @utils.timeFunc
 def _get_children(dagNode):
     """Get all children node
 
@@ -492,11 +515,10 @@ def _get_children(dagNode):
         list of dagNode: children dagNodes
     """
 
-    children = dagNode.listRelatives(allDescendents=True,
-                                     type="transform")
+    children = dagNode.listRelatives(allDescendents=True, type="transform")
     return children
 
-
+# @utils.timeFunc
 def _get_bbox_data(obj=None, yZero=True, *args):
     """Calculate the bounding box data
 
@@ -525,7 +547,7 @@ def _get_bbox_data(obj=None, yZero=True, *args):
         return volCenter, radio, bb
     return volCenter, None, None
 
-
+# @utils.timeFunc
 def _get_branch_bbox_data(selection=None, yZero=True, *args):
     """Get the bounding box from a hierachy branch
 
@@ -558,16 +580,26 @@ def _get_branch_bbox_data(selection=None, yZero=True, *args):
                 if not absBB:
                     absBB = bb
                 else:
-                    absBB = [[min(bb[0][0], absBB[0][0]),
-                              max(bb[0][1], absBB[0][1])],
-                             [min(bb[1][0], absBB[1][0]),
-                              max(bb[1][1], absBB[1][1])],
-                             [min(bb[2][0], absBB[2][0]),
-                              max(bb[2][1], absBB[2][1])]]
+                    absBB = [
+                        [
+                            min(bb[0][0], absBB[0][0]),
+                            max(bb[0][1], absBB[0][1]),
+                        ],
+                        [
+                            min(bb[1][0], absBB[1][0]),
+                            max(bb[1][1], absBB[1][1]),
+                        ],
+                        [
+                            min(bb[2][0], absBB[2][0]),
+                            max(bb[2][1], absBB[2][1]),
+                        ],
+                    ]
 
                 absCenter = [(axis[0] + axis[1]) / 2 for axis in absBB]
-                absRadio = max([absBB[0][1] - absBB[0][0],
-                                absBB[2][1] - absBB[2][0]]) / 1.7
+                absRadio = (
+                    max([absBB[0][1] - absBB[0][0], absBB[2][1] - absBB[2][0]])
+                    / 1.7
+                )
 
                 # set the cencter in the floor
                 if yZero:
@@ -577,6 +609,28 @@ def _get_branch_bbox_data(selection=None, yZero=True, *args):
 
 
 # Build and IO ===========================================
+
+
+def _ctl_depth(ctl):
+    """Count how many simple-rig control ancestors a control has.
+
+    Walks up the parent chain skipping npo transforms (parent of parent)
+    until the ancestor is no longer a simple-rig control. Used as a stable
+    sort key to order controls parent-first.
+
+    Args:
+        ctl (dagNode): Simple-rig control node.
+
+    Returns:
+        int: Number of simple-rig control ancestors above ctl.
+    """
+    depth = 0
+    p = ctl.getParent(2)
+    while p is not None and p.hasAttr("is_simple_rig_ctl"):
+        depth += 1
+        p = p.getParent(2)
+    return depth
+
 
 def _collect_configuration_from_rig():
     """Collects the configuration from the rig and create a dictionary with it
@@ -591,9 +645,14 @@ def _collect_configuration_from_rig():
     rig_root = _get_simple_rig_root()
 
     # get controls list in hierarchycal order
-    descendents = reversed(rig_root.listRelatives(allDescendents=True,
-                                                  type="transform"))
+    descendents = reversed(
+        rig_root.listRelatives(allDescendents=True, type="transform")
+    )
     ctl_list = [d for d in descendents if d.hasAttr("is_simple_rig_ctl")]
+    # Ensure strict parent-first order. Maya's allDescendents reversal is not a
+    # topological sort across sibling branches of unequal depth, which can leave
+    # a child ahead of its parent and break convert_to_shifter_guide lookups.
+    ctl_list.sort(key=_ctl_depth)
     ctl_names_list = []
     # get setting for each ctl
     for c in ctl_list:
@@ -627,24 +686,28 @@ def _collect_configuration_from_rig():
             driven_list = [n.name() for n in _get_from_driven_attr(c)]
 
         else:
-            pm.displayWarning("Configuration can not be collected for Ctl in "
-                              "edit pivot mode or not reset SRT "
-                              "Finish edit pivot for or reset "
-                              "SRT: {}".format(c))
+            pm.displayWarning(
+                "Configuration can not be collected for Ctl in "
+                "edit pivot mode or not reset SRT "
+                "Finish edit pivot for or reset "
+                "SRT: {}".format(c)
+            )
             return None
         shps = curve.collect_curve_data(c)
-        conf_ctl_dict = {"conf_icon": conf_icon,
-                         "conf_radio": conf_radio,
-                         "conf_color": conf_color,
-                         "ctl_color": ctl_color,
-                         "ctl_side": ctl_side,
-                         "ctl_shapes": shps,
-                         "ctl_index": ctl_index,
-                         "ctl_parent": ctl_parent,
-                         "ctl_transform": ctl_transform,
-                         "ctl_short_name": ctl_short_name,
-                         "driven_list": driven_list,
-                         "sets_list": conf_sets}
+        conf_ctl_dict = {
+            "conf_icon": conf_icon,
+            "conf_radio": conf_radio,
+            "conf_color": conf_color,
+            "ctl_color": ctl_color,
+            "ctl_side": ctl_side,
+            "ctl_shapes": shps,
+            "ctl_index": ctl_index,
+            "ctl_parent": ctl_parent,
+            "ctl_transform": ctl_transform,
+            "ctl_short_name": ctl_short_name,
+            "driven_list": driven_list,
+            "sets_list": conf_sets,
+        }
 
         ctl_settings[ctl_name] = conf_ctl_dict
 
@@ -656,16 +719,19 @@ def _collect_configuration_from_rig():
 
 
 # @utils.one_undo
-def _build_rig_from_model(dagNode,
-                          rigName=RIG_ROOT,
-                          suffix="geoRoot",
-                          sets_config=None,
-                          ctl_wcm=False,
-                          fix_radio=False,
-                          radio_val=100,
-                          gl_shape="square",
-                          world_ctl=True,
-                          w_shape="circle"):
+# @utils.timeFunc
+def _build_rig_from_model(
+    dagNode,
+    rigName=RIG_ROOT,
+    suffix="geoRoot",
+    sets_config=None,
+    ctl_wcm=False,
+    fix_radio=False,
+    radio_val=100,
+    gl_shape="square",
+    world_ctl=True,
+    w_shape="circle",
+):
     """Build a rig from a model structure.
 
      using suffix keyword from a given model build a rig.
@@ -691,17 +757,19 @@ def _build_rig_from_model(dagNode,
     pm.displayInfo("Searching elements using suffix: {}".format(suf))
 
     parent_dict = {}
-    local_ctl = _create_simple_rig_root(rigName,
-                                        sets_config=sets_config,
-                                        ctl_wcm=ctl_wcm,
-                                        fix_radio=fix_radio,
-                                        radio_val=radio_val,
-                                        gl_shape=gl_shape,
-                                        world_ctl=world_ctl,
-                                        w_shape=w_shape)
+    local_ctl = _create_simple_rig_root(
+        rigName,
+        sets_config=sets_config,
+        ctl_wcm=ctl_wcm,
+        fix_radio=fix_radio,
+        radio_val=radio_val,
+        gl_shape=gl_shape,
+        world_ctl=world_ctl,
+        w_shape=w_shape,
+    )
     if local_ctl:
-        descendents = reversed(dagNode.listRelatives(allDescendents=True,
-                                                     type="transform"))
+        descendents = dagNode.listRelatives(allDescendents=True, type="transform")
+
         suff_list = suffix.split(",")
         for d in descendents:
             if list(filter(d.name().endswith, suff_list)) != []:
@@ -711,13 +779,15 @@ def _build_rig_from_model(dagNode,
                 else:
                     parent = local_ctl
                 print(d)
-                ctl = _create_custom_pivot(name,
-                                           "C",
-                                           "circle",
-                                           True,
-                                           selection=d,
-                                           parent=parent,
-                                           sets_config=sets_config)
+                ctl = _create_custom_pivot(
+                    name,
+                    "C",
+                    "circle",
+                    True,
+                    selection=d,
+                    parent=parent,
+                    sets_config=sets_config,
+                )
                 parent_dict[d.name()] = ctl
 
 
@@ -736,19 +806,22 @@ def _build_rig_from_configuration(configDict):
             if obj:
                 driven.append(obj[0])
             else:
-                pm.displayWarning("Driven object {}: "
-                                  "Can't be found.".format(drv))
+                pm.displayWarning(
+                    "Driven object {}: " "Can't be found.".format(drv)
+                )
         t = datatypes.Matrix(ctl_conf["ctl_transform"])
-        _create_control(ctl_conf["ctl_short_name"],
-                        t,
-                        ctl_conf["conf_radio"],
-                        ctl_conf["ctl_parent"],
-                        ctl_conf["conf_icon"],
-                        ctl_conf["ctl_side"],
-                        indx=ctl_conf["ctl_index"],
-                        color=ctl_conf["ctl_color"],
-                        driven=driven,
-                        sets_config=ctl_conf["sets_list"])
+        _create_control(
+            ctl_conf["ctl_short_name"],
+            t,
+            ctl_conf["conf_radio"],
+            ctl_conf["ctl_parent"],
+            ctl_conf["conf_icon"],
+            ctl_conf["ctl_side"],
+            indx=ctl_conf["ctl_index"],
+            color=ctl_conf["ctl_color"],
+            driven=driven,
+            sets_config=ctl_conf["sets_list"],
+        )
         curve.update_curve_from_data(ctl_conf["ctl_shapes"])
         connect_selectable(rig, driven)
 
@@ -769,12 +842,13 @@ def export_configuration(filePath=None):
             dialogStyle=2,
             fileMode=0,
             startingDirectory=startDir,
-            fileFilter='Simple Rig Configuration .src (*%s)' % ".src")
+            fileFilter="Simple Rig Configuration .src (*%s)" % ".src",
+        )
     if not filePath:
         return
     if not isinstance(filePath, string_types):
         filePath = filePath[0]
-    f = open(filePath, 'w')
+    f = open(filePath, "w")
     f.write(data_string)
     f.close()
 
@@ -792,7 +866,8 @@ def import_configuration(filePath=None):
             dialogStyle=2,
             fileMode=1,
             startingDirectory=startDir,
-            fileFilter='Simple Rig Configuration .src (*%s)' % ".src")
+            fileFilter="Simple Rig Configuration .src (*%s)" % ".src",
+        )
     if not filePath:
         return
     if not isinstance(filePath, string_types):
@@ -802,6 +877,7 @@ def import_configuration(filePath=None):
 
 
 # Convert to SHIFTER  ===========================================
+
 
 def _shifter_init_guide(name, worldCtl=False):
     """Initialize shifter guide
@@ -823,13 +899,9 @@ def _shifter_init_guide(name, worldCtl=False):
     return guide
 
 
-def _shifter_control_component(name,
-                               side,
-                               indx,
-                               t,
-                               guide,
-                               parent=None,
-                               grps=""):
+def _shifter_control_component(
+    name, side, indx, t, guide, parent=None, grps=""
+):
     """creates shifter control_01 component and sets the correct settings
 
     Args:
@@ -907,13 +979,87 @@ def convert_to_shifter_guide():
                 int(ctl_conf["ctl_index"]),
                 t,
                 guide,
-                parent=parentRelation[ctl_conf["ctl_parent"]],
-                grps=grps)
+                parent=parentRelation.get(ctl_conf["ctl_parent"], guide.model),
+                grps=grps,
+            )
             parentRelation[c] = root
 
         return guide, configDict
     else:
         return None, None
+
+
+_SKINNABLE_SHAPE_TYPES = ("mesh", "nurbsSurface", "nurbsCurve")
+
+
+def _collect_skinnable_shapes(root, claimed):
+    """Collect skinnable shapes under root, respecting claim boundaries.
+
+    Walks the DAG under root in depth-first order. When a descendant
+    transform is present in claimed (i.e. is driven by another control),
+    the traversal stops at that transform so its subtree is left to the
+    owning control's joint.
+
+    Args:
+        root (dagNode): Driven node to walk from. May itself be a shape
+            transform (mesh/nurbs) or a plain group transform.
+        claimed (set): Set of PyNodes that are any control's driven. Used
+            to stop descent at other controls' driven roots.
+
+    Returns:
+        list: Non-intermediate shape nodes whose type is in
+            _SKINNABLE_SHAPE_TYPES.
+    """
+    shapes = []
+    stack = [(root, True)]
+    while stack:
+        node, is_root = stack.pop()
+        if not is_root and node in claimed:
+            continue
+        for shp in node.getShapes() or []:
+            if shp.type() not in _SKINNABLE_SHAPE_TYPES:
+                continue
+            if shp.attr("intermediateObject").get():
+                continue
+            shapes.append(shp)
+        for child in node.getChildren(type="transform") or []:
+            stack.append((child, False))
+    return shapes
+
+
+def _auto_skin_driven(driven, jnt, claimed):
+    """Bind every skinnable shape under driven to jnt.
+
+    Descent stops at transforms owned by other controls (present in
+    claimed), so nested controls keep their own sub-geometry. Each shape
+    gets its own skinCluster. Failures on a single shape are logged and
+    skipped; they do not prevent the remaining shapes from binding.
+
+    Args:
+        driven (dagNode): The driven node for this control.
+        jnt (dagNode): The joint that will bind the geometry.
+        claimed (set): Claim-set built across all controls.
+
+    Returns:
+        list: skinCluster nodes created by this call.
+    """
+    skins = []
+    for shp in _collect_skinnable_shapes(driven, claimed):
+        try:
+            sc = pm.skinCluster(
+                jnt,
+                shp,
+                tsb=True,
+                nw=2,
+                n="{}_skinCluster".format(shp.name()),
+            )
+            skins.append(sc)
+        except RuntimeError:
+            pm.displayWarning(
+                "Automatic skinning, can't be created for"
+                " {}. Skipped.".format(shp.name())
+            )
+    return skins
 
 
 # @utils.one_undo
@@ -929,16 +1075,24 @@ def convert_to_shifter_rig():
         guide, configDict = convert_to_shifter_guide()
         if guide:
             # ensure the objects are removed from the original rig
+            # and their matrix driver chain is cleaned up (3x
+            # mgear_mulMatrix + decomposeMatrix per driven).  Shifter
+            # takes over via skin, so the chain is dead weight once
+            # the simple rig is deleted.
             for c in configDict["ctl_list"]:
                 ctl_conf = configDict["ctl_settings"][c]
                 for d in ctl_conf["driven_list"]:
                     driven = pm.ls(d)
-                    if driven and driven[0].getParent(-1).hasAttr(
-                            "is_simple_rig"):
-                        pm.displayWarning("{}: cut for old rig hierarchy"
-                                          "to avoid delete it when delete "
-                                          "the old rig!!")
-                        pm.parent(driven, w=True)
+                    if not driven:
+                        continue
+                    if driven[0].getParent(-1).hasAttr("is_simple_rig"):
+                        pm.displayWarning(
+                            "{}: cut for old rig hierarchy"
+                            "to avoid delete it when delete "
+                            "the old rig!!"
+                        )
+                        pm.parent(driven[0], w=True)
+                    _disconnect_driven(driven[0])
 
             # delete original rig
             pm.delete(simple_rig_root)
@@ -951,6 +1105,16 @@ def convert_to_shifter_rig():
 
             attribute.addAttribute(rig.model, "geoUnselectable", "bool", True)
 
+            # Build the claim-set: every transform driven by any control.
+            # Used by _auto_skin_driven to stop descending into subtrees that
+            # belong to a deeper control's joint.
+            claimed = set()
+            for cc in configDict["ctl_list"]:
+                for dd in configDict["ctl_settings"][cc]["driven_list"]:
+                    nodes = pm.ls(dd)
+                    if nodes:
+                        claimed.add(nodes[0])
+
             # skin driven to new rig and  apply control shapes
             driven = None
             for c in configDict["ctl_list"]:
@@ -958,18 +1122,10 @@ def convert_to_shifter_rig():
                 for d in ctl_conf["driven_list"]:
                     driven = pm.ls(d)
                     jnt = pm.ls(c.replace("ctl", "0_jnt"))
+                    if not (driven and jnt):
+                        continue
                     connect_selectable(rig.model, [driven[0]])
-                    if driven and jnt:
-                        try:
-                            pm.skinCluster(jnt[0],
-                                           driven[0],
-                                           tsb=True,
-                                           nw=2,
-                                           n='{}_skinCluster'.format(d))
-                        except RuntimeError:
-                            pm.displayWarning("Automatic skinning, can't be "
-                                              "created for"
-                                              " {}. Skipped.".format(d))
+                    _auto_skin_driven(driven[0], jnt[0], claimed)
 
                 curve.update_curve_from_data(ctl_conf["ctl_shapes"])
 
@@ -984,6 +1140,7 @@ def convert_to_shifter_rig():
 
 # Edit ===========================================
 
+
 def _remove_element_from_ctl(ctl, dagNode):
     """Remove element from a rig control
 
@@ -996,8 +1153,9 @@ def _remove_element_from_ctl(ctl, dagNode):
     """
     # Check the ctl is reset
     if not _is_in_npo(ctl):
-        pm.displayWarning("{}: have SRT values. Reset, before edit "
-                          "elements".format(ctl))
+        pm.displayWarning(
+            "{}: have SRT values. Reset, before edit " "elements".format(ctl)
+        )
         return
 
     # get affected by pivot
@@ -1010,8 +1168,8 @@ def _remove_element_from_ctl(ctl, dagNode):
         _update_driven(ctl)
     else:
         pm.displayWarning(
-            "{} is is not connected to the ctl {}".format(dagNode,
-                                                          ctl))
+            "{} is is not connected to the ctl {}".format(dagNode, ctl)
+        )
 
 
 def _add_element_to_ctl(ctl, dagNode):
@@ -1026,8 +1184,9 @@ def _add_element_to_ctl(ctl, dagNode):
     driven = _get_from_driven_attr(ctl)
     # Check the ctl is reset
     if not _is_in_npo(ctl):
-        pm.displayWarning("{}: have SRT values. Reset, before edit "
-                          "elements".format(ctl))
+        pm.displayWarning(
+            "{}: have SRT values. Reset, before edit " "elements".format(ctl)
+        )
         return
     # if dagNode is not in affected by pivot disconnect
     if dagNode not in driven:
@@ -1053,8 +1212,10 @@ def _delete_pivot(dagNode):
         # get children pivots
         # Check the ctl is reset
         if not _is_in_npo(dagNode):
-            pm.displayWarning("{}: have SRT values. Reset, before edit "
-                              "elements".format(dagNode))
+            pm.displayWarning(
+                "{}: have SRT values. Reset, before edit "
+                "elements".format(dagNode)
+            )
             return
         children = dagNode.listRelatives(type="transform")
         if children:
@@ -1085,8 +1246,10 @@ def _parent_pivot(pivot, parent):
         if _is_valid_ctl(pivot):
             # Check the ctl is reset
             if not _is_in_npo(pivot):
-                pm.displayWarning("{}: have SRT values. Reset, before edit "
-                                  "elements".format(pivot))
+                pm.displayWarning(
+                    "{}: have SRT values. Reset, before edit "
+                    "elements".format(pivot)
+                )
             npo = pivot.getParent()
             attribute.unlockAttribute(npo)
             pm.parent(npo, parent)
@@ -1098,13 +1261,18 @@ def _parent_pivot(pivot, parent):
 
             pm.select(clear=True)
         else:
-            pm.displayWarning("The selected Pivot: {} is not a "
-                              "valid simple rig ctl.".format(parent.name()))
+            pm.displayWarning(
+                "The selected Pivot: {} is not a "
+                "valid simple rig ctl.".format(parent.name())
+            )
     else:
-        pm.displayWarning("The selected parent: {} is not a "
-                          "valid simple rig ctl.".format(parent.name()))
+        pm.displayWarning(
+            "The selected parent: {} is not a "
+            "valid simple rig ctl.".format(parent.name())
+        )
 
 
+@utils.one_undo
 def _edit_pivot_position(ctl):
     """Edit control pivot
 
@@ -1118,8 +1286,9 @@ def _edit_pivot_position(ctl):
     """
 
     if not _is_in_npo(ctl):
-        pm.displayWarning("The control: {} should be in reset"
-                          " position".format(ctl.name()))
+        pm.displayWarning(
+            "The control: {} should be in reset" " position".format(ctl.name())
+        )
         return
     if not ctl.attr("edit_mode").get():
         # move child to parent
@@ -1134,11 +1303,14 @@ def _edit_pivot_position(ctl):
             _disconnect_driven(d)
         pm.select(ctl)
     else:
-        pm.displayWarning("The control: {} Is already in"
-                          " Edit pivot Mode".format(ctl.name()))
+        pm.displayWarning(
+            "The control: {} Is already in"
+            " Edit pivot Mode".format(ctl.name())
+        )
         return
 
 
+@utils.one_undo
 def _consolidate_pivot_position(ctl):
     """Consolidate the pivot position after editing
 
@@ -1154,7 +1326,10 @@ def _consolidate_pivot_position(ctl):
         npo = ctl.getParent()
         attribute.unlockAttribute(npo)
         children = npo.listRelatives(type="transform")
-        pm.parent(children, rig)
+        if children:
+            for ch in children:
+                attribute.unlockAttribute(ch)
+            pm.parent(children, rig)
         # filter out the ctl
         children = [c for c in children if c != ctl]
         # set the npo to his position
@@ -1163,14 +1338,17 @@ def _consolidate_pivot_position(ctl):
         # reparent childrens
         if children:
             pm.parent(children, ctl)
+            for ch in children:
+                attribute.lockAttribute(ch)
         # re-connect/update driven elements
         _update_driven(ctl)
         ctl.attr("edit_mode").set(False)
         attribute.lockAttribute(npo)
         pm.select(ctl)
     else:
-        pm.displayWarning("The control: {} Is NOT in"
-                          " Edit pivot Mode".format(ctl.name()))
+        pm.displayWarning(
+            "The control: {} Is NOT in" " Edit pivot Mode".format(ctl.name())
+        )
 
 
 @utils.one_undo
@@ -1181,15 +1359,16 @@ def _delete_rig():
     """
     rig = _get_simple_rig_root()
     if rig:
-        confirm = pm.confirmDialog(title='Confirm Delete Simple Rig',
-                                   message='Are you sure?',
-                                   button=['Yes', 'No'],
-                                   defaultButton='Yes',
-                                   cancelButton='No',
-                                   dismissString='No')
+        confirm = pm.confirmDialog(
+            title="Confirm Delete Simple Rig",
+            message="Are you sure?",
+            button=["Yes", "No"],
+            defaultButton="Yes",
+            cancelButton="No",
+            dismissString="No",
+        )
         if confirm == "Yes":
-            children = rig.listRelatives(allDescendents=True,
-                                         type="transform")
+            children = rig.listRelatives(allDescendents=True, type="transform")
             to_delete = []
             not_npo = []
             for c in children:
@@ -1199,10 +1378,12 @@ def _delete_rig():
                     else:
                         not_npo.append(c.name())
             if not_npo:
-                pm.displayWarning("Please set all the controls to reset "
-                                  "position before delete rig. The following"
-                                  " controls are not "
-                                  "reset:{}".format(str(not_npo)))
+                pm.displayWarning(
+                    "Please set all the controls to reset "
+                    "position before delete rig. The following"
+                    " controls are not "
+                    "reset:{}".format(str(not_npo))
+                )
                 return
             for c in to_delete:
                 _delete_pivot(c)
@@ -1210,16 +1391,14 @@ def _delete_rig():
     else:
         pm.displayWarning("No rig found to delete!")
 
+
 # utils ===========================================
 
 
 def _connect_tag_to_rig(rig, ctt):
-    """Connect control tag
-
-    """
+    """Connect control tag"""
     ni = attribute.get_next_available_index(rig.rigCtlTags)
-    pm.connectAttr(ctt.message,
-                   rig.attr("rigCtlTags[{}]".format(str(ni))))
+    pm.connectAttr(ctt.message, rig.attr("rigCtlTags[{}]".format(str(ni))))
 
 
 def _validate_name(name):
@@ -1279,24 +1458,27 @@ def _is_in_npo(dagNode):
         val = dagNode.attr(axis).get()
         if val != 0.0:
             npo_status = False
-            pm.displayWarning("{}.{} is not neutral! Value is {}, "
-                              "but should be {}".format(dagNode.name(),
-                                                        axis,
-                                                        str(val),
-                                                        "0.0"))
+            pm.displayWarning(
+                "{}.{} is not neutral! Value is {}, "
+                "but should be {}".format(
+                    dagNode.name(), axis, str(val), "0.0"
+                )
+            )
     for axis in sAxis:
         val = dagNode.attr(axis).get()
         if val != 1.0:
             npo_status = False
-            pm.displayWarning("{}.{} is not neutral! Value is {}, "
-                              "but should be {}".format(dagNode.name(),
-                                                        axis,
-                                                        str(val),
-                                                        "1.0"))
+            pm.displayWarning(
+                "{}.{} is not neutral! Value is {}, "
+                "but should be {}".format(
+                    dagNode.name(), axis, str(val), "1.0"
+                )
+            )
     return npo_status
 
 
 # groups ==============================================
+
 
 def _get_sets_grp(grpName="controllers_grp"):
     """Get set group
@@ -1350,6 +1532,7 @@ def _extra_sets(sets_config):
 
 # Connect ===========================================
 
+
 def _connect_driven(driver, driven):
     """Connect the driven element with multiply matrix
 
@@ -1363,30 +1546,33 @@ def _connect_driven(driver, driven):
     """
 
     if _is_valid_ctl(driven):
-        pm.displayWarning("{} can't not be driven or connected to a ctl, "
-                          "because is a simple rig control".format(driven))
+        pm.displayWarning(
+            "{} can't not be driven or connected to a ctl, "
+            "because is a simple rig control".format(driven)
+        )
         return
 
-    # Check the ctl is reset
+        # Check the ctl is reset
         if not _is_in_npo(driver):
-            pm.displayWarning("{}: have SRT values. Reset, before connect "
-                              "elements".format(driver))
+            pm.displayWarning(
+                "{}: have SRT values. Reset, before connect "
+                "elements".format(driver)
+            )
     # connect message of the matrix mul nodes to the driven.
     # So later is easy to delete
     mOperatorNodes = "mOperatorNodes"
     if not driven.hasAttr(mOperatorNodes):
-        driven.addAttr(mOperatorNodes, attributeType='message', multi=True)
+        driven.addAttr(mOperatorNodes, attributeType="message", multi=True)
         # print driven.attr(mOperatorNodes)
     mOp_attr = driven.attr(mOperatorNodes)
     m = driven.worldMatrix.get()
 
     im = driver.worldMatrix.get().inverse()
-    mul_node0 = applyop.gear_mulmatrix_op(im,
-                                          driver.worldMatrix)
-    mul_node1 = applyop.gear_mulmatrix_op(m,
-                                          mul_node0.output)
-    mul_node2 = applyop.gear_mulmatrix_op(mul_node1.output,
-                                          driven.parentInverseMatrix)
+    mul_node0 = applyop.gear_mulmatrix_op(im, driver.worldMatrix)
+    mul_node1 = applyop.gear_mulmatrix_op(m, mul_node0.output)
+    mul_node2 = applyop.gear_mulmatrix_op(
+        mul_node1.output, driven.parentInverseMatrix
+    )
     dm_node = node.createDecomposeMatrixNode(mul_node2.output)
 
     pm.connectAttr(dm_node.outputTranslate, driven.t)
@@ -1394,14 +1580,18 @@ def _connect_driven(driver, driven):
     pm.connectAttr(dm_node.outputScale, driven.s)
     pm.connectAttr(dm_node.outputShear, driven.shear)
 
-    pm.connectAttr(mul_node0.message,
-                   mOp_attr.attr("{}[0]".format(mOperatorNodes)))
-    pm.connectAttr(mul_node1.message,
-                   mOp_attr.attr("{}[1]".format(mOperatorNodes)))
-    pm.connectAttr(mul_node2.message,
-                   mOp_attr.attr("{}[2]".format(mOperatorNodes)))
-    pm.connectAttr(dm_node.message,
-                   mOp_attr.attr("{}[3]".format(mOperatorNodes)))
+    pm.connectAttr(
+        mul_node0.message, mOp_attr.attr("{}[0]".format(mOperatorNodes))
+    )
+    pm.connectAttr(
+        mul_node1.message, mOp_attr.attr("{}[1]".format(mOperatorNodes))
+    )
+    pm.connectAttr(
+        mul_node2.message, mOp_attr.attr("{}[2]".format(mOperatorNodes))
+    )
+    pm.connectAttr(
+        dm_node.message, mOp_attr.attr("{}[3]".format(mOperatorNodes))
+    )
 
 
 def _disconnect_driven(driven):
@@ -1438,10 +1628,10 @@ def _update_driven(driver):
 # Simple Rig dialog
 ####################################
 
+
 class simpleRigUI(QtWidgets.QMainWindow, srUI.Ui_MainWindow):
 
-    """UI dialog
-    """
+    """UI dialog"""
 
     def __init__(self, parent=None):
         super(simpleRigUI, self).__init__(parent)
@@ -1492,9 +1682,11 @@ class simpleRigTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.srUIInst.createRoot_pushButton.clicked.connect(self.create_root)
         self.srUIInst.createCtl_pushButton.clicked.connect(self.create_ctl)
         self.srUIInst.selectAffected_pushButton.clicked.connect(
-            self.select_affected)
+            self.select_affected
+        )
         self.srUIInst.reParentPivot_pushButton.clicked.connect(
-            self.parent_pivot)
+            self.parent_pivot
+        )
         self.srUIInst.add_pushButton.clicked.connect(self.add_to_ctl)
         self.srUIInst.remove_pushButton.clicked.connect(self.remove_from_ctl)
         self.srUIInst.editPivot_pushButton.clicked.connect(self.edit_pivot)
@@ -1509,15 +1701,19 @@ class simpleRigTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.srUIInst.import_action.triggered.connect(self.import_config)
         # Shifter
         self.srUIInst.convertToShifterRig_action.triggered.connect(
-            self.shifter_rig)
+            self.shifter_rig
+        )
         self.srUIInst.createShifterGuide_action.triggered.connect(
-            self.shifter_guide)
+            self.shifter_guide
+        )
 
         # Misc
         self.srUIInst.rootName_lineEdit.textChanged.connect(
-            self.rootName_text_changed)
+            self.rootName_text_changed
+        )
         self.srUIInst.createCtl_lineEdit.textChanged.connect(
-            self.ctlName_text_changed)
+            self.ctlName_text_changed
+        )
 
     # ==============================================
     # Slots ========================================
@@ -1548,14 +1744,16 @@ class simpleRigTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         w_ctl = self.srUIInst.worldCtl_checkBox.isChecked()
         iconIdx = self.srUIInst.worldCtlShape_comboBox.currentIndex()
         w_icon = ["circle", "sphere"][iconIdx]
-        _create_simple_rig_root(name,
-                                sets_config=sets_config,
-                                ctl_wcm=ctl_wcm,
-                                fix_radio=fix_radio,
-                                radio_val=radio_val,
-                                gl_shape=icon,
-                                world_ctl=w_ctl,
-                                w_shape=w_icon)
+        _create_simple_rig_root(
+            name,
+            sets_config=sets_config,
+            ctl_wcm=ctl_wcm,
+            fix_radio=fix_radio,
+            radio_val=radio_val,
+            gl_shape=icon,
+            world_ctl=w_ctl,
+            w_shape=w_icon,
+        )
 
     def create_ctl(self):
         name = self.srUIInst.createCtl_lineEdit.text()
@@ -1567,7 +1765,8 @@ class simpleRigTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             position = self.srUIInst.position_comboBox.currentIndex()
             sets_config = self.srUIInst.extraSets_lineEdit.text()
             _create_custom_pivot(
-                name, side, icon, yZero=position, sets_config=sets_config)
+                name, side, icon, yZero=position, sets_config=sets_config
+            )
         else:
             pm.displayWarning("Name is not valid")
 
@@ -1625,6 +1824,7 @@ class simpleRigTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         _delete_rig()
 
     # @utils.one_undo
+    @utils.timeFunc
     def auto_rig(self):
         oSel = pm.selected()
         if oSel and len(oSel) == 1:
@@ -1639,16 +1839,18 @@ class simpleRigTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             w_ctl = self.srUIInst.worldCtl_checkBox.isChecked()
             iconIdx = self.srUIInst.worldCtlShape_comboBox.currentIndex()
             w_icon = ["circle", "sphere"][iconIdx]
-            _build_rig_from_model(oSel[0],
-                                  name,
-                                  suffix,
-                                  sets_config,
-                                  ctl_wcm=ctl_wcm,
-                                  fix_radio=fix_radio,
-                                  radio_val=radio_val,
-                                  gl_shape=icon,
-                                  world_ctl=w_ctl,
-                                  w_shape=w_icon)
+            _build_rig_from_model(
+                oSel[0],
+                name,
+                suffix,
+                sets_config,
+                ctl_wcm=ctl_wcm,
+                fix_radio=fix_radio,
+                radio_val=radio_val,
+                gl_shape=icon,
+                world_ctl=w_ctl,
+                w_shape=w_icon,
+            )
         else:
             pm.displayWarning("Please select root of the model")
 
@@ -1661,6 +1863,7 @@ class simpleRigTool(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
 def openSimpleRigUI(*args):
     pyqt.showDialog(simpleRigTool, dockable=True)
+
 
 ####################################
 

@@ -4,7 +4,7 @@ import traceback
 
 import maya.api.OpenMaya as om
 import maya.cmds as cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.shifter import io
 from mgear.shifter import guide_manager
@@ -111,7 +111,10 @@ class RigBuilder(object):
             validate (bool): Option to run Pyblish validators
             passed_only (bool): Option to publish only rigs that pass validation
         """
-        data = json.loads(json_data)
+        if type(json_data) is str:
+            data = json.loads(json_data)
+        else:
+            data = json_data
 
         data_rows = data.get("rows")
         if not data_rows:
@@ -125,6 +128,14 @@ class RigBuilder(object):
             output_folder = data.get("output_folder")
             if not output_folder:
                 output_folder = os.path.dirname(file_path)
+            
+            custom_output_path = row.get("custom_output_path")
+            
+            # if row has a custom path, override output folder with custom path
+            if custom_output_path:
+                print(f"custom output{custom_output_path}")
+                output_folder = custom_output_path
+                
 
             output_name = row.get("output_name")
             maya_file_name = "{}.ma".format(output_name)
@@ -133,11 +144,11 @@ class RigBuilder(object):
             pre_script_path = data.get("pre_script")
             if pre_script_path:
                 io.import_guide_template(file_path)
-                guide_root = cmds.ls('*.ismodel', objectsOnly=True, long=True)
+                guide_root = cmds.ls("*.ismodel", objectsOnly=True, long=True)
                 if guide_root:
                     guide_root = guide_root[0]
                     pm.displayInfo(
-                        "Updating the guide with: {}".format(pre_script_path)
+                        "Updating the guide with pre-script: {}".format(pre_script_path)
                     )
                     with open(pre_script_path, "r") as file:
                         try:
@@ -145,8 +156,12 @@ class RigBuilder(object):
                         except Exception as e:
                             error_message = str(e)
                             full_traceback = traceback.format_exc()
-                            pm.displayWarning("Update script failed, check error log")
-                            pm.displayError("Exception message:", error_message)
+                            pm.displayWarning(
+                                "Update script failed, check error log"
+                            )
+                            pm.displayError(
+                                "Exception message:", error_message
+                            )
                             pm.displayError("Full traceback:", full_traceback)
 
                     pm.select(guide_root, r=True)
@@ -154,12 +169,30 @@ class RigBuilder(object):
                     guide_manager.build_from_selection()
                     pm.delete(guide_root)
                 else:
-                    pm.displayWarning(
-                        "Guide not found."
-                    )
+                    pm.displayWarning("Guide not found.")
             else:
                 pm.displayInfo("Building rig '{}'...".format(output_name))
                 io.build_from_file(file_path)
+
+            post_script_path = data.get("post_script")
+            
+            if post_script_path:
+                pm.displayInfo(
+                        "Updating the guide with post-script: {}".format(post_script_path)
+                    )
+                with open(post_script_path, "r") as file:
+                    try:
+                        exec(file.read())
+                    except Exception as e:
+                        error_message = str(e)
+                        full_traceback = traceback.format_exc()
+                        pm.displayWarning(
+                            "Update script failed, check error log"
+                        )
+                        pm.displayError(
+                            "Exception message:", error_message
+                        )
+                        pm.displayError("Full traceback:", full_traceback)
 
             context = None
             save_build = True
@@ -188,3 +221,30 @@ class RigBuilder(object):
             pm.displayInfo(report_string)
 
         return self.results_dict
+
+    def build_from_file(self, file_path):
+        json_data = self.load_config_data_from_file(file_path)
+        self.execute_build_logic(json_data)
+
+    @classmethod
+    def write_config_data_to_file(cls, data_string):
+        file_path = pm.fileDialog2(fileMode=0, fileFilter="*.srb")[0]
+        if not file_path:
+            return
+
+        with open(file_path, "w") as fp:
+            fp.write(data_string)
+
+    @classmethod
+    def load_config_data_from_file(cls, file_path=""):
+        if not file_path:
+            file_path = pm.fileDialog2(fileMode=1, fileFilter="*.srb")[0]
+
+        if not file_path:
+            return
+
+        data = ""
+        with open(file_path, "r") as fp:
+            data = json.load(fp)
+
+        return data

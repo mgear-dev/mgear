@@ -1,11 +1,13 @@
-import pymel.core as pm
-from mgear.core import meshNavigation, curve, applyop, primitive, icon
-from mgear.core import transform, attribute, skin, vector, pickWalk, utils
-from pymel.core import datatypes
-from six import string_types
+import mgear.pymaya as pm
+
+from mgear.core import curve
+from mgear.core import applyop
+from mgear.pymaya import datatypes
+
+string_types = str
 
 
-##################
+# #################
 # Helper functions
 # ##################
 

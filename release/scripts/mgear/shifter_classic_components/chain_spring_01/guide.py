@@ -1,5 +1,7 @@
 """Guide Chain spring 01 module"""
 
+from functools import partial
+
 from mgear.shifter.component import guide
 from mgear.core import pyqt
 from mgear.vendor.Qt import QtWidgets, QtCore
@@ -7,11 +9,13 @@ from mgear.vendor.Qt import QtWidgets, QtCore
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from maya.app.general.mayaMixin import MayaQDockWidget
 
+from . import settingsUI as sui
+
 # guide info
 AUTHOR = "Jeremie Passerin, Miquel Campos"
 URL = ", www.mcsgear.com"
 EMAIL = ", "
-VERSION = [1, 0, 1]
+VERSION = [1, 0, 2]
 TYPE = "chain_spring_01"
 NAME = "chainSpring"
 DESCRIPTION = "FK chain with spring"
@@ -52,15 +56,22 @@ class Guide(guide.ComponentGuide):
 
     def addParameters(self):
         """Add the configurations settings"""
+        self.pMirrorBehaviour = self.addParam("mirrorBehaviour", "bool", False)
         self.pUseIndex = self.addParam("useIndex", "bool", False)
         self.pParentJointIndex = self.addParam(
             "parentJointIndex", "long", -1, None, None)
-        return
 
 
 ##########################################################
 # Setting Page
 ##########################################################
+
+
+class settingsTab(QtWidgets.QDialog, sui.Ui_Form):
+
+    def __init__(self, parent=None):
+        super(settingsTab, self).__init__(parent)
+        self.setupUi(self)
 
 
 class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
@@ -72,6 +83,7 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         pyqt.deleteInstances(self, MayaQDockWidget)
 
         super(componentSettings, self).__init__(parent=parent)
+        self.settingsTab = settingsTab()
 
         self.setup_componentSettingWindow()
         self.create_componentControls()
@@ -97,7 +109,12 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         component.
 
         """
-        return
+        # populate tab
+        self.tabs.insertTab(1, self.settingsTab, "Component Settings")
+
+        # populate component settings
+        self.populateCheck(self.settingsTab.mirrorBehaviour_checkBox,
+                           "mirrorBehaviour")
 
     def create_componentLayout(self):
 
@@ -108,7 +125,10 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         self.setLayout(self.settings_layout)
 
     def create_componentConnections(self):
-        return
+        self.settingsTab.mirrorBehaviour_checkBox.stateChanged.connect(
+            partial(self.updateCheck,
+                    self.settingsTab.mirrorBehaviour_checkBox,
+                    "mirrorBehaviour"))
 
     def dockCloseEventTriggered(self):
         pyqt.deleteInstances(self, MayaQDockWidget)

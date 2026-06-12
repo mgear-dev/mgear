@@ -1,6 +1,6 @@
 """Component Shoulder 01 module"""
-
-from pymel.core import datatypes
+import ast
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -35,9 +35,12 @@ class Component(component.Main):
         self.ctl_npo = primitive.addTransform(
             self.root, self.getName("ctl_npo"), t)
 
+        ctl_name = ast.literal_eval(
+            self.settings["ctlNamesDescription_custom"]
+        )[0]
         self.ctl = self.addCtl(
             self.ctl_npo,
-            "ctl",
+            ctl_name,
             t,
             self.color_fk,
             "cube",

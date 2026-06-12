@@ -2,8 +2,8 @@
 import math
 
 from functools import partial
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter.component import guide
 from mgear.core import (transform, pyqt, attribute,

@@ -1,7 +1,7 @@
 
 # imports
-from PySide2 import QtCore, QtWidgets
-
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtWidgets
 
 class QCollapse(QtWidgets.QWidget):
 
@@ -65,10 +65,10 @@ class QCollapse(QtWidgets.QWidget):
         # set arrow and animation direction state
         if self.arrow_button.isChecked():
             self.arrow_button.setArrowType(QtCore.Qt.DownArrow)
-            self.animation_group.setDirection(self.animation_group.Forward)
+            self.animation_group.setDirection(QtCore.QAbstractAnimation.Forward)
         else:
             self.arrow_button.setArrowType(QtCore.Qt.RightArrow)
-            self.animation_group.setDirection(self.animation_group.Backward)
+            self.animation_group.setDirection(QtCore.QAbstractAnimation.Backward)
 
         # starts animation
         self.animation_group.start()

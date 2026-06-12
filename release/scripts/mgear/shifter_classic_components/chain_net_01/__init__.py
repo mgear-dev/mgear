@@ -1,7 +1,7 @@
 """Component chain FK spline 01 module"""
 
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -305,7 +305,8 @@ class Component(component.Main):
                                               "float",
                                               self.settings["bias"],
                                               0,
-                                              1)
+                                              1,
+                                              uihost=self.fk_ctl[0])
             if self.settings["keepLength"]:
                 self.length_ratio_att = self.addAnimParam("length_ratio",
                                                           "Length Ratio",

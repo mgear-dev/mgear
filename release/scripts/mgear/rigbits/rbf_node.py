@@ -29,13 +29,13 @@ import math
 
 # core
 import maya.cmds as mc
-import pymel.core as pm
-import maya.OpenMaya as OpenMaya
+import mgear.pymaya as pm
+import maya.api.OpenMaya as om
 
 # mgear
 from mgear.core import transform, attribute
 from mgear.core import anim_utils
-from .six import PY2
+PY2 = False
 
 # =============================================================================
 # constants
@@ -49,19 +49,18 @@ TRANSFORM_SUFFIX = "_trfm"
 
 RBF_SETUP_ATTR = "rbf_setup_name"
 
-TRANSLATE_ATTRS = ["translateX",
-                   "translateY",
-                   "translateZ"]
+TRANSLATE_ATTRS = ["translateX", "translateY", "translateZ"]
 
-ROTATE_ATTRS = ["rotateX",
-                "rotateY",
-                "rotateZ"]
+ROTATE_ATTRS = ["rotateX", "rotateY", "rotateZ"]
 
-SCALE_ATTRS = ["scaleX",
-               "scaleY",
-               "scaleZ"]
+SCALE_ATTRS = ["scaleX", "scaleY", "scaleZ"]
 
-SUPPORTED_RBF_NODES = ("weightDriver",)
+# available_SHAPES_WD = mc.pluginInfo("weightDriver", q=True, loaded=True)
+# if available_SHAPES_WD:
+
+#     SUPPORTED_RBF_NODES = ("mGearWeightDriver", "weightDriver")
+# else:
+SUPPORTED_RBF_NODES = ("mGearWeightDriver",)
 
 GENERIC_SUFFIX = "_RBF"
 
@@ -147,18 +146,19 @@ def addDrivenGroup(node, drivenName=None):
     drivenName = drivenName or get_driven_group_name(node)
 
     if parentOfTarget is None:
-        parentOfTarget = pm.group(name=drivenName.replace(DRIVEN_SUFFIX,
-                                                          DRIVEN_PAR_SUFFIX),
-                                  w=True,
-                                  em=True)
+        parentOfTarget = pm.group(
+            name=drivenName.replace(DRIVEN_SUFFIX, DRIVEN_PAR_SUFFIX),
+            w=True,
+            em=True,
+        )
 
     else:
-        parentOfTarget = pm.group(name=drivenName.replace(DRIVEN_SUFFIX,
-                                                          DRIVEN_PAR_SUFFIX),
-                                  p=parentOfTarget,
-                                  em=True)
-    parentOfTarget.setMatrix(node.getMatrix(worldSpace=True),
-                             worldSpace=True)
+        parentOfTarget = pm.group(
+            name=drivenName.replace(DRIVEN_SUFFIX, DRIVEN_PAR_SUFFIX),
+            p=parentOfTarget,
+            em=True,
+        )
+    parentOfTarget.setMatrix(node.getMatrix(worldSpace=True), worldSpace=True)
     drivenName = pm.group(name=drivenName, p=parentOfTarget, em=True)
 
     attribute.add_mirror_config_channels(pm.PyNode(drivenName))
@@ -223,48 +223,45 @@ def removeCompensateLocator(node):
 
 
 def decompMatrix(node, matrix):
-    '''
-    Decomposes a MMatrix in new api. Returns an list of
-    translation,rotation,scale in world space.
+    """
+    Decomposes an MMatrix using the new maya.api.OpenMaya API.
+    Returns a list of translation, rotation, and scale in world space.
 
     Args:
-        node (str): name of node to query rotate order
-        matrix (MMatrix): mmatrix to decompos
+        node (str): Name of the node to query the rotation order from.
+        matrix (om.MMatrix): MMatrix to decompose.
 
     Returns:
-        TYPE: Description
-    '''
-    # Rotate order of object
-    rotOrder = mc.getAttr("{}.rotateOrder".format(node))
+        list: A list containing the translation (x, y, z), rotation (x, y, z
+        in degrees), and scale (x, y, z) in world space.
+    """
+    # Retrieve the rotation order of the node
+    rot_order = mc.getAttr("{}.rotateOrder".format(node))
 
-    # Puts matrix into transformation matrix
-    mTransformMtx = OpenMaya.MTransformationMatrix(matrix)
+    # Convert the MMatrix to an MTransformationMatrix
+    m_transform_mtx = om.MTransformationMatrix(matrix)
 
-    # Translation Values
-    trans = mTransformMtx.getTranslation(OpenMaya.MSpace.kPostTransform)
+    # Get translation values in world space
+    translation = m_transform_mtx.translation(om.MSpace.kWorld)
 
-    # Euler rotation value in radians
-    eulerRot = mTransformMtx.eulerRotation()
+    # Get Euler rotation values in radians
+    euler_rot = m_transform_mtx.rotation()
 
-    # Reorder rotation order based on ctrl.
-    eulerRot.reorderIt(rotOrder)
+    # Reorder rotation to match the node's rotation order
+    euler_rot.reorder(rot_order)
 
-    radian = 180.0 / math.pi
+    # Convert rotations from radians to degrees
+    rotations = [
+        math.degrees(euler_rot.x),
+        math.degrees(euler_rot.y),
+        math.degrees(euler_rot.z),
+    ]
 
-    rotations = [rot * radian for rot in [eulerRot.x, eulerRot.y, eulerRot.z]]
+    # Get scale values in world space
+    scale = m_transform_mtx.scale(om.MSpace.kWorld)
 
-    # Find world scale of our object.
-    # for scale we need to utilize MScriptUtil to deal with the native
-    # double pointers
-    scaleUtil = OpenMaya.MScriptUtil()
-    scaleUtil.createFromList([0, 0, 0], 3)
-    scaleVec = scaleUtil.asDoublePtr()
-    mTransformMtx.getScale(scaleVec, OpenMaya.MSpace.kPostTransform)
-    scale = [OpenMaya.MScriptUtil.getDoubleArrayItem(scaleVec, i)
-             for i in range(0, 3)]
-
-    # Return Values
-    return [trans.x, trans.y, trans.z], rotations, scale
+    # Return translation, rotation, and scale values
+    return [translation.x, translation.y, translation.z], rotations, scale
 
 
 def resetDrivenNodes(node):
@@ -304,7 +301,7 @@ def __getResultingMatrix(drivenNode, parentNode, absoluteWorld=True):
     nodeInverParMat = parentNode.getAttr("parentInverseMatrix")
     drivenMat = drivenNode.getMatrix(worldSpace=True)
     drivenMat_local = drivenNode.getMatrix(objectSpace=True)
-    defaultMat = OpenMaya.MMatrix()
+    defaultMat = om.MMatrix()
 
     if defaultMat.isEquivalent(drivenMat_local) and not absoluteWorld:
         totalMatrix = defaultMat
@@ -331,13 +328,13 @@ def getDrivenMatrix(node, absoluteWorld=True):
     controlNode = node.replace(DRIVEN_SUFFIX, CTL_SUFFIX)
     otherNode = node.replace(DRIVEN_SUFFIX, "")
     if mc.objExists(controlNode) and controlNode in children:
-        totalMatrix = __getResultingMatrix(controlNode,
-                                           node,
-                                           absoluteWorld=absoluteWorld)
+        totalMatrix = __getResultingMatrix(
+            controlNode, node, absoluteWorld=absoluteWorld
+        )
     elif mc.objExists(otherNode) and otherNode in children:
-        totalMatrix = __getResultingMatrix(otherNode,
-                                           node,
-                                           absoluteWorld=absoluteWorld)
+        totalMatrix = __getResultingMatrix(
+            otherNode, node, absoluteWorld=absoluteWorld
+        )
     elif mc.objExists("{}{}".format(node, RBF_LOCATOR_SUFFIX)):
         compoensateLoc = pm.PyNode("{}{}".format(node, RBF_LOCATOR_SUFFIX))
         nodeInverParMat = node.getAttr("parentInverseMatrix")
@@ -356,13 +353,9 @@ def createRBFToggleAttr(node):
         node (str): desired node to be tagged with attr
     """
     try:
-        mc.addAttr(node,
-                   ln=RBF_SCALE_ATTR,
-                   at="float",
-                   dv=1,
-                   min=0,
-                   max=1,
-                   k=True)
+        mc.addAttr(
+            node, ln=RBF_SCALE_ATTR, at="float", dv=1, min=0, max=1, k=True
+        )
     except RuntimeError:
         pass
 
@@ -443,9 +436,11 @@ def setDriverControlPoseAttr(node, poseInfo):
     """
     if not mc.attributeQuery(DRIVER_POSES_INFO_ATTR, n=node, ex=True):
         createDriverControlPoseAttr(node)
-    mc.setAttr("{}.{}".format(node, DRIVER_POSES_INFO_ATTR),
-               str(poseInfo),
-               type="string")
+    mc.setAttr(
+        "{}.{}".format(node, DRIVER_POSES_INFO_ATTR),
+        str(poseInfo),
+        type="string",
+    )
 
 
 def getDriverControlPoseAttr(node):
@@ -508,7 +503,11 @@ def recallDriverControlPose(driverControl, poseInfo, index):
             failed_attrs.append(attr)
     if failed_attrs:
         failed_attrs.insert(0, driverControl)
-        msg = "Pose cannot be applied to the following attributes: \n{}".format(failed_attrs)
+        msg = (
+            "Pose cannot be applied to the following attributes: \n{}".format(
+                failed_attrs
+            )
+        )
         print(msg)
 
 
@@ -541,7 +540,7 @@ def getDriverControlAttr(node):
 
 
 def setDriverControlAttr(node, controlName):
-    """ create and set attr with the driver animControl string
+    """create and set attr with the driver animControl string
 
     Args:
         node (str): name of rbfnode
@@ -549,9 +548,9 @@ def setDriverControlAttr(node, controlName):
     """
     if not mc.attributeQuery(DRIVER_CTL_ATTR_NAME, n=node, ex=True):
         createDriverControlAttr(node)
-    mc.setAttr("{}.{}".format(node, DRIVER_CTL_ATTR_NAME),
-               controlName,
-               type="string")
+    mc.setAttr(
+        "{}.{}".format(node, DRIVER_CTL_ATTR_NAME), controlName, type="string"
+    )
 
 
 def getSceneRBFNodes():
@@ -569,10 +568,25 @@ def getSceneSetupNodes():
     Returns:
         list: of rbf nodes with setup information
     """
-    nodes = set(mc.ls(type=SUPPORTED_RBF_NODES))
-    return [rbf for rbf in nodes if mc.attributeQuery(RBF_SETUP_ATTR,
-                                                      n=rbf,
-                                                      ex=True)]
+    global SUPPORTED_RBF_NODES
+
+    # Dynamically add "weightDriver" if the plugin is loaded
+    if mc.pluginInfo("weightDriver", q=True, loaded=True):
+        SUPPORTED_RBF_NODES = (
+            "mGearWeightDriver",
+            "weightDriver"
+        )
+
+    nodes = set()
+
+    for node_type in SUPPORTED_RBF_NODES:
+        if node_type in mc.ls(nodeTypes=True):
+            nodes.update(mc.ls(type=node_type))
+
+    return [
+        rbf for rbf in nodes
+        if mc.attributeQuery(RBF_SETUP_ATTR, n=rbf, ex=True)
+    ]
 
 
 def getRbfSceneSetupsInfo(includeEmpty=True):
@@ -666,8 +680,8 @@ class RBFNode(object):
             str: name of rbfNode node correctly formated
         """
         if PY2:
-            return unicode(self.name).encode('utf-8')
-        return str(self.name).encode('utf-8')
+            return unicode(self.name).encode("utf-8")
+        return str(self.name).encode("utf-8")
 
     def __str__(self):
         """overwritten so that the RBFNode instance can be treated as a pymal
@@ -680,8 +694,7 @@ class RBFNode(object):
 
     @staticmethod
     def nodeType_suffix():
-        """optional override with a module/node specific suffix for naming
-        """
+        """optional override with a module/node specific suffix for naming"""
         return GENERIC_SUFFIX
 
     @staticmethod
@@ -720,8 +733,7 @@ class RBFNode(object):
         raise NotImplementedError()
 
     def lengthenCompoundAttrs(self):
-        """convenience function, sanity check for zero'd compound attrs
-        """
+        """convenience function, sanity check for zero'd compound attrs"""
         pass
 
     def addPose(self, poseInput, poseValue, posesIndex=None):
@@ -869,7 +881,7 @@ class RBFNode(object):
         updateDriverControlPoseAttr(self.name, driverControl, posesIndex)
 
     def setDriverControlAttr(self, controlName):
-        """ create and set attr with the driver animControl string
+        """create and set attr with the driver animControl string
 
         Args:
             controlName (str): name of animControl(usually)
@@ -910,13 +922,13 @@ class RBFNode(object):
         attributeValue_dict = {}
         drivenNode = self.getDrivenNode()[0]
         drivenAttrs = self.getDrivenNodeAttributes()
-        if (mc.attributeQuery("matrix", n=drivenNode, ex=True) and
-                mc.attributeQuery("worldMatrix", n=drivenNode, ex=True)):
-            (trans,
-             rotate,
-             scale) = decompMatrix(drivenNode,
-                                   getDrivenMatrix(drivenNode,
-                                                   absoluteWorld=absoluteWorld))
+        if mc.attributeQuery(
+            "matrix", n=drivenNode, ex=True
+        ) and mc.attributeQuery("worldMatrix", n=drivenNode, ex=True):
+            (trans, rotate, scale) = decompMatrix(
+                drivenNode,
+                getDrivenMatrix(drivenNode, absoluteWorld=absoluteWorld),
+            )
         for attr in drivenAttrs:
             if attr in TRANSLATE_ATTRS:
                 index = TRANSLATE_ATTRS.index(attr)
@@ -942,8 +954,7 @@ class RBFNode(object):
         NotImplementedError()
 
     def getRBFToggleAttr(self):
-        """get the specific to the type, "envelope" attr for rbf node
-        """
+        """get the specific to the type, "envelope" attr for rbf node"""
         NotImplementedError()
         # return "scale"
 
@@ -996,15 +1007,19 @@ class RBFNode(object):
                 newPoseValues.append(1.0)
             else:
                 newPoseValues.append(0.0)
-        self.addPose(poseInput=poseInputs,
-                     poseValue=newPoseValues,
-                     posesIndex=posesIndex)
+        self.addPose(
+            poseInput=poseInputs,
+            poseValue=newPoseValues,
+            posesIndex=posesIndex,
+        )
 
     def compensateForDirectConnect(self):
         drivenNode = self.getDrivenNode()[0]
-        if (mc.nodeType(drivenNode) not in ["transform", "joint"] or
-                mc.objExists("{}{}".format(drivenNode, RBF_LOCATOR_SUFFIX)) or
-                drivenNode.endswith(DRIVEN_SUFFIX)):
+        if (
+            mc.nodeType(drivenNode) not in ["transform", "joint"]
+            or mc.objExists("{}{}".format(drivenNode, RBF_LOCATOR_SUFFIX))
+            or drivenNode.endswith(DRIVEN_SUFFIX)
+        ):
             return
         transformAttrs = set(TRANSLATE_ATTRS + ROTATE_ATTRS + SCALE_ATTRS)
         drivenAttrs = set(self.getDrivenNodeAttributes())

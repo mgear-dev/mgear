@@ -12,34 +12,48 @@ def install():
     cmds.setParent(mgear.menu_id, menu=True)
     cmds.menuItem(divider=True)
     commands = (
-        ("Apply ueGear Tag to selected nodes", str_auto_tag),
-        ("Remove ueGear Tags from selected nodes", str_remove_tag),
+        (
+            "Apply ueGear Tag to selected nodes",
+            str_auto_tag,
+            "mgear_ue_tag_add.svg",
+        ),
+        (
+            "Remove ueGear Tags from selected nodes",
+            str_remove_tag,
+            "mgear_ue_tag_remove.svg",
+        ),
         ("-----", None),
         (
             "Import Selected Assets from Unreal",
             str_import_selected_assets_from_unreal,
+            "mgear_ue_import.svg",
         ),
         (
             "Export Selected Assets to Unreal",
             str_export_selected_assets_to_unreal,
+            "mgear_ue_export.svg",
         ),
         ("-----", None),
         (
             "Import Selected Cameras from Sequencer",
             str_import_selected_cameras_from_unreal,
+            "mgear_ue_camera_import.svg",
         ),
         (
             "Update Sequencer Cameras from Maya Selection",
             str_update_sequencer_camera_from_maya,
+            "mgear_ue_camera_update.svg",
         ),
         ("-----", None),
         (
             "Import Selected Assets from Unreal Level",
             str_import_selected_assets_from_level_unreal,
+            "mgear_ue_level_import.svg",
         ),
         (
             "Update Unreal Assets from Maya Selection",
             str_update_unreal_Assets_from_Maya_Selection,
+            "mgear_ue_update.svg",
         ),
     )
 

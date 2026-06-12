@@ -16,7 +16,7 @@ from . import settingsUI as sui
 AUTHOR = "Miquel Campos"
 URL = "www.mcsgear.com"
 EMAIL = ""
-VERSION = [1, 1, 0]
+VERSION = [1, 1, 1]
 TYPE = "lite_chain_01"
 NAME = "chain"
 DESCRIPTION = "Super simple and light weight FK chain"
@@ -61,6 +61,7 @@ class Guide(guide.ComponentGuide):
 
         self.pNeutralPose = self.addParam("neutralpose", "bool", True)
         self.pOverrideNegate = self.addParam("overrideNegate", "bool", False)
+        self.pMirrorBehaviour = self.addParam("mirrorBehaviour", "bool", False)
         self.pAddJoints = self.addParam("addJoints", "bool", True)
         self.pUseIndex = self.addParam("useIndex", "bool", False)
         self.pParentJointIndex = self.addParam(
@@ -122,6 +123,8 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
                            "overrideNegate")
         self.populateCheck(self.settingsTab.addJoints_checkBox,
                            "addJoints")
+        self.populateCheck(self.settingsTab.mirrorBehaviour_checkBox,
+                           "mirrorBehaviour")
 
     def create_componentLayout(self):
 
@@ -146,7 +149,12 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         self.settingsTab.addJoints_checkBox.stateChanged.connect(
             partial(self.updateCheck,
                     self.settingsTab.addJoints_checkBox,
-                    "addJoints"))
+                    "addJoints"))\
+
+        self.settingsTab.mirrorBehaviour_checkBox.stateChanged.connect(
+            partial(self.updateCheck,
+                    self.settingsTab.mirrorBehaviour_checkBox,
+                    "mirrorBehaviour"))
 
     def dockCloseEventTriggered(self):
         pyqt.deleteInstances(self, MayaQDockWidget)

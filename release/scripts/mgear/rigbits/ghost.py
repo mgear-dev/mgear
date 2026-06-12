@@ -2,11 +2,11 @@
 
 Helper tools to create layered controls rigs
 """
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.core import node, primitive
 from mgear import rigbits
-from .six import string_types
+string_types = str
 
 
 def connect_matching_attrs(
@@ -69,17 +69,29 @@ def createGhostCtl(ctl, parent=None, connect=True):
     for shape in source2.getShapes():
         pm.parent(shape, newCtl, r=True, s=True)
         pm.rename(shape, newCtl.name() + "Shape")
-        pm.parent(shape, newCtl, r=True, s=True)
     pm.delete(source2)
+
+    # Reconnect visibility input connections from ghost shapes to new shapes
+    ghostShapes = ctl.getShapes()
+    newShapes = newCtl.getShapes()
+    for ghostShape, newShape in zip(ghostShapes, newShapes):
+        visInputs = pm.listConnections(
+            ghostShape.visibility, s=True, d=False, p=True
+        )
+        if visInputs:
+            pm.connectAttr(visInputs[0], newShape.visibility, force=True)
     if parent:
-        pm.parent(newCtl, parent)
         oTra = pm.createNode(
             "transform", n=newCtl.name() + "_npo", p=parent, ss=True
         )
         oTra.setMatrix(
             ctl.getParent().getMatrix(worldSpace=True), worldSpace=True
         )
-        pm.parent(newCtl, oTra)
+        # Relative reparent: newCtl already has the correct local TRS from
+        # duplicate(), and oTra sits at ctl's original parent world matrix,
+        # so r=True yields the correct world position without trying to
+        # modify TRS attrs (which may be locked on the source control).
+        pm.parent(newCtl, oTra, r=True)
     if connect:
         rigbits.connectLocalTransform([newCtl, ctl])
         rigbits.connectUserDefinedChannels(newCtl, ctl)

@@ -1,7 +1,7 @@
 """Rigbits tweaks rig module"""
 
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 from maya import cmds
 
 from mgear.core import skin, primitive, icon, transform, attribute
@@ -758,7 +758,7 @@ def create_proximity_tweak(
     )
 
     # in_trans
-    in_trans = pm.spaceLocator(name="inTrans_tempName")
+    in_trans = pm.spaceLocator(name="inTrans_tempName")[0]
     pm.xform(
         in_trans,
         translation=(center_position.x, center_position.y, center_position.z),

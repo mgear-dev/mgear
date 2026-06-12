@@ -2,15 +2,19 @@
 
 import math
 
-from pymel import util
-import pymel.core as pm
-from pymel.core import datatypes
-from pymel.core import nodetypes
+from mgear.pymaya import util
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
+from mgear.pymaya import nodetypes
 
 from mgear.core import vector
 
+import maya.cmds as cmds
+
 import maya.OpenMaya as om
 import maya.OpenMayaUI as omui
+
+import maya.api.OpenMaya as om2
 
 #############################################
 # TRANSFORM
@@ -145,6 +149,12 @@ def getTransformLookingAt(pos, lookat, normal, axis="xy", negate=False):
         X = -a
         Y = b
         Z = -c
+    elif axis == "-x-y":
+        X = -a
+        Y = -b
+        Z = c
+    else:
+        raise ValueError("Invalid axis argument: {}".format(axis))
 
     m = datatypes.Matrix()
     m[0] = [X[0], X[1], X[2], 0.0]
@@ -179,8 +189,7 @@ def getChainTransform(positions, normal, negate=False, axis="xz"):
 
         # Normal Offset
         if i > 0:
-            normal = vector.getTransposedVector(
-                normal, [v0, v1], [v1, v2])
+            normal = vector.getTransposedVector(normal, [v0, v1], [v1, v2])
 
         t = getTransformLookingAt(v1, v2, normal, axis, negate)
         transforms.append(t)
@@ -223,11 +232,12 @@ def getChainTransform2(positions, normal, negate=False, axis="xz"):
 
         # Normal Offset
         if i > 0 and i != len(positions) - 1:
-            normal = vector.getTransposedVector(
-                normal, [v0, v1], [v1, v2])
+            normal = vector.getTransposedVector(normal, [v0, v1], [v1, v2])
 
         if i == len(positions) - 1:
-            t = getTransformLookingAt(v1, v0, normal, "-{}".format(axis), negate)
+            t = getTransformLookingAt(
+                v1, v0, normal, "-{}".format(axis), negate
+            )
         else:
             t = getTransformLookingAt(v1, v2, normal, axis, negate)
         transforms.append(t)
@@ -362,10 +372,7 @@ def setMatrixScale(m, scl=[1, 1, 1]):
     return m
 
 
-def getFilteredTransform(m,
-                         translation=True,
-                         rotation=True,
-                         scaling=True):
+def getFilteredTransform(m, translation=True, rotation=True, scaling=True):
     """Retrieve a transformation filtered.
 
     Arguments:
@@ -397,13 +404,17 @@ def getFilteredTransform(m,
     elif rotation and not scaling:
         out = setMatrixRotation(out, [x.normal(), y.normal(), z.normal()])
     elif not rotation and scaling:
-        out = setMatrixRotation(out,
-                                [datatypes.Vector(1, 0, 0)
-                                 * x.length(), datatypes.Vector(0, 1, 0)
-                                 * y.length(), datatypes.Vector(0, 0, 1)
-                                 * z.length()])
+        out = setMatrixRotation(
+            out,
+            [
+                datatypes.Vector(1, 0, 0) * x.length(),
+                datatypes.Vector(0, 1, 0) * y.length(),
+                datatypes.Vector(0, 0, 1) * z.length(),
+            ],
+        )
 
     return out
+
 
 ##########################################################
 # ROTATION
@@ -455,6 +466,10 @@ def getRotationFromAxis(in_a, in_b, axis="xy", negate=False):
         x = a
         z = b
         y = -c
+    elif axis == "x-y":
+        x = a
+        y = -b
+        z = c
     elif axis == "yx":
         y = a
         x = b
@@ -494,21 +509,18 @@ def getSymmetricalTransform(t, axis="yz", fNegScale=False):
     """
 
     if axis == "yz":
-        mirror = datatypes.TransformationMatrix(-1, 0, 0, 0,
-                                                0, 1, 0, 0,
-                                                0, 0, 1, 0,
-                                                0, 0, 0, 1)
+        mirror = datatypes.TransformationMatrix(
+            -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+        )
 
     if axis == "xy":
-        mirror = datatypes.TransformationMatrix(1, 0, 0, 0,
-                                                0, 1, 0, 0,
-                                                0, 0, -1, 0,
-                                                0, 0, 0, 1)
+        mirror = datatypes.TransformationMatrix(
+            1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1
+        )
     if axis == "zx":
-        mirror = datatypes.TransformationMatrix(1, 0, 0, 0,
-                                                0, -1, 0, 0,
-                                                0, 0, 1, 0,
-                                                0, 0, 0, 1)
+        mirror = datatypes.TransformationMatrix(
+            1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+        )
     t *= mirror
 
     # TODO: add freeze negative scaling procedure.
@@ -532,15 +544,17 @@ def resetTransform(node, t=True, r=True, s=True):
     if isinstance(node, str):
         node = pm.PyNode(node)
 
-    trsDic = {"tx": 0,
-              "ty": 0,
-              "tz": 0,
-              "rx": 0,
-              "ry": 0,
-              "rz": 0,
-              "sx": 1,
-              "sy": 1,
-              "sz": 1}
+    trsDic = {
+        "tx": 0,
+        "ty": 0,
+        "tz": 0,
+        "rx": 0,
+        "ry": 0,
+        "rz": 0,
+        "sx": 1,
+        "sy": 1,
+        "sz": 1,
+    }
 
     tAxis = ["tx", "ty", "tz"]
     rAxis = ["rx", "ry", "rz"]
@@ -625,8 +639,9 @@ def quaternionSlerp(q1, q2, blend):
         w1 = 1.0 - blend
         w2 = blend
 
-    result = (datatypes.Quaternion(q1).scaleIt(w1)
-              + datatypes.Quaternion(q2).scaleIt(w2))
+    result = datatypes.Quaternion(q1).scaleIt(w1) + datatypes.Quaternion(
+        q2
+    ).scaleIt(w2)
 
     return result
 
@@ -652,7 +667,7 @@ def convert2TransformMatrix(tm):
     return tm
 
 
-def getInterpolateTransformMatrix(t1, t2, blend=.5):
+def getInterpolateTransformMatrix(t1, t2, blend=0.5):
     """Interpolate 2 matrix.
 
     Arguments:
@@ -672,15 +687,17 @@ def getInterpolateTransformMatrix(t1, t2, blend=.5):
     t1 = convert2TransformMatrix(t1)
     t2 = convert2TransformMatrix(t2)
 
-    if (blend == 1.0):
+    if blend == 1.0:
         return t2
-    elif (blend == 0.0):
+    elif blend == 0.0:
         return t1
 
     # translate
-    pos = vector.linearlyInterpolate(t1.getTranslation(space="world"),
-                                     t2.getTranslation(space="world"),
-                                     blend)
+    pos = vector.linearlyInterpolate(
+        t1.getTranslation(space="world"),
+        t2.getTranslation(space="world"),
+        blend,
+    )
 
     # scale
     scaleA = datatypes.Vector(*t1.getScale(space="world"))
@@ -689,9 +706,11 @@ def getInterpolateTransformMatrix(t1, t2, blend=.5):
     vs = vector.linearlyInterpolate(scaleA, scaleB, blend)
 
     # rotate
-    q = quaternionSlerp(datatypes.Quaternion(t1.getRotationQuaternion()),
-                        datatypes.Quaternion(t2.getRotationQuaternion()),
-                        blend)
+    q = quaternionSlerp(
+        datatypes.Quaternion(t1.getRotationQuaternion()),
+        datatypes.Quaternion(t2.getRotationQuaternion()),
+        blend,
+    )
 
     # out
     result = datatypes.TransformationMatrix()
@@ -774,7 +793,7 @@ def getClosestPolygonFromTransform(geo, loc):
 
     """
     if isinstance(loc, pm.nodetypes.Transform):
-        pos = loc.getTranslation(space='world')
+        pos = loc.getTranslation(space="world")
     else:
         pos = datatypes.Vector(loc[0], loc[1], loc[2])
 
@@ -785,8 +804,9 @@ def getClosestPolygonFromTransform(geo, loc):
         nodeDagPath = om.MDagPath()
         selectionList.getDagPath(0, nodeDagPath)
     except Exception as e:
-        raise RuntimeError("MDagPath failed "
-                           "on {}. \n {}".format(geo.name(), e))
+        raise RuntimeError(
+            "MDagPath failed " "on {}. \n {}".format(geo.name(), e)
+        )
 
     mfnMesh = om.MFnMesh(nodeDagPath)
 
@@ -858,10 +878,298 @@ def get_raycast_translation_from_mouse_click(mesh, mpx, mpy):
         None,
         None,
         None,
-        None)
+        None,
+    )
     if intersection:
         x = hitpoint.x
         y = hitpoint.y
         z = hitpoint.z
 
         return [x, y, z]
+
+
+# Offset Parent Matrix functions
+
+
+def set_offset_parent_matrix(node, world_matrix):
+    """
+    Sets the offset parent matrix of a given node.
+
+    Args:
+        node (str or pm.PyNode): The node to set the offset parent matrix for.
+        world_matrix (pm.datatypes.Matrix): The world matrix to set as the offset parent matrix.
+    """
+    if isinstance(node, str):
+        node = pm.PyNode(node)
+
+    offset_parent_matrix = pm.datatypes.Matrix(world_matrix)
+    node.offsetParentMatrix.set(offset_parent_matrix)
+
+
+def set_offset_parent_matrix_SRT(node, scale, rotate, translate):
+    """
+    Sets the offset parent matrix of a given node using scale, rotate, and translate values.
+
+    Args:
+        node (str or pm.PyNode): The node to set the offset parent matrix for.
+        scale (tuple): A tuple of three floats representing the scale values (sx, sy, sz).
+        rotate (tuple): A tuple of three floats representing the rotation values (rx, ry, rz) in degrees.
+        translate (tuple): A tuple of three floats representing the translation values (tx, ty, tz).
+    """
+    if isinstance(node, str):
+        node = pm.PyNode(node)
+
+    # Create transformation matrices
+    scale_matrix = pm.datatypes.Matrix()
+    rotate_matrix = pm.datatypes.EulerRotation(
+        rotate[0], rotate[1], rotate[2], unit="degrees"
+    ).asMatrix()
+    translate_matrix = pm.datatypes.Matrix()
+
+    # Set the scale values
+    scale_matrix[0, 0] = scale[0]
+    scale_matrix[1, 1] = scale[1]
+    scale_matrix[2, 2] = scale[2]
+
+    # Set the translation values
+    translate_matrix[3, 0] = translate[0]
+    translate_matrix[3, 1] = translate[1]
+    translate_matrix[3, 2] = translate[2]
+
+    # Combine the matrices
+    world_matrix = scale_matrix * rotate_matrix * translate_matrix
+
+    node.offsetParentMatrix.set(world_matrix)
+
+
+def bake_local_to_offset_parent_matrix(node):
+    """
+    Bakes the current local scale, rotate, and translate values to the offset
+    parent matrix, resetting the local values to neutral.
+
+    Args:
+        node (str): The name of the node to bake the local transforms for.
+    """
+    if not cmds.objExists(node):
+        raise ValueError("Node does not exist: {}".format(node))
+
+    # Get current local transform values
+    local_scale = cmds.getAttr("{}.scale".format(node))[0]
+    local_rotate = cmds.getAttr("{}.rotate".format(node))[0]
+    local_translate = cmds.getAttr("{}.translate".format(node))[0]
+
+    # Create a transformation matrix and set scale, rotation, and translation
+    transform_matrix = om2.MTransformationMatrix()
+
+    # Set the scale directly as a list, which is accepted by the new API
+    transform_matrix.setScale(local_scale, om2.MSpace.kTransform)
+
+    # Set the rotation
+    rotation = om2.MEulerRotation(
+        om2.MAngle(local_rotate[0], om2.MAngle.kDegrees).asRadians(),
+        om2.MAngle(local_rotate[1], om2.MAngle.kDegrees).asRadians(),
+        om2.MAngle(local_rotate[2], om2.MAngle.kDegrees).asRadians(),
+    )
+    transform_matrix.setRotation(rotation)
+
+    # Set the translation
+    translation = om2.MVector(local_translate)
+    transform_matrix.setTranslation(translation, om2.MSpace.kTransform)
+
+    # Convert the transformation matrix to MMatrix
+    local_matrix = transform_matrix.asMatrix()
+
+    # Get current offset parent matrix
+    current_offset_matrix = om2.MMatrix(
+        cmds.getAttr("{}.offsetParentMatrix".format(node))
+    )
+
+    # Combine the current offset parent matrix with the local matrix
+    new_offset_matrix = local_matrix * current_offset_matrix
+
+    # Set the new offset parent matrix
+    cmds.setAttr(
+        "{}.offsetParentMatrix".format(node), *new_offset_matrix, type="matrix"
+    )
+
+    # Reset local transform values to neutral
+    cmds.setAttr("{}.scale".format(node), 1, 1, 1, type="double3")
+    cmds.setAttr("{}.rotate".format(node), 0, 0, 0, type="double3")
+    cmds.setAttr("{}.translate".format(node), 0, 0, 0, type="double3")
+
+
+def rotate_180(axis="Y", rotation_order="XYZ", objects=None):
+    """
+    Rotates the selected objects 180 degrees around the specified axis.
+
+    Args:
+        axis (str): The axis to rotate around ('X', 'Y', or 'Z').
+        rotation_order (str): The rotation order (default is 'XYZ').
+        objects (list, optional): List of objects str name
+
+    Raises:
+        ValueError: If the axis is not 'X', 'Y', or 'Z'.
+
+    Returns:
+        TYPE: Description
+    """
+    if axis not in ["X", "Y", "Z"]:
+        raise ValueError("Axis must be 'X', 'Y', or 'Z'")
+
+    rotation_order_map = {
+        "XYZ": om.MEulerRotation.kXYZ,
+        "YZX": om.MEulerRotation.kYZX,
+        "ZXY": om.MEulerRotation.kZXY,
+        "XZY": om.MEulerRotation.kXZY,
+        "YXZ": om.MEulerRotation.kYXZ,
+        "ZYX": om.MEulerRotation.kZYX,
+    }
+
+    if rotation_order not in rotation_order_map:
+        raise ValueError(
+            "Invalid rotation order. Must be one of 'XYZ', 'YZX', 'ZXY', 'XZY', 'YXZ', or 'ZYX'"
+        )
+
+    if not objects:
+        objects = cmds.ls(selection=True)
+    if not objects:
+        cmds.warning("No objects selected.")
+        return
+
+    for obj in objects:
+        current_rotation = cmds.xform(obj, query=True, rotation=True, ws=True)
+        current_rotation_order = cmds.xform(obj, query=True, rotateOrder=True)
+
+        # Create an MEulerRotation
+        euler_rotation = om.MEulerRotation(
+            om.MAngle(current_rotation[0], om.MAngle.kDegrees).asRadians(),
+            om.MAngle(current_rotation[1], om.MAngle.kDegrees).asRadians(),
+            om.MAngle(current_rotation[2], om.MAngle.kDegrees).asRadians(),
+            rotation_order_map[rotation_order],
+        )
+
+        # Convert the Euler rotation to a quaternion
+        quaternion = om.MQuaternion(euler_rotation.asQuaternion())
+
+        # Create a quaternion for the 180-degree rotation around the specified axis
+        if axis == "X":
+            rotation_axis = om.MVector(1, 0, 0)
+        elif axis == "Y":
+            rotation_axis = om.MVector(0, 1, 0)
+        elif axis == "Z":
+            rotation_axis = om.MVector(0, 0, 1)
+        rotation_quaternion = om.MQuaternion(
+            om.MAngle(180, om.MAngle.kDegrees).asRadians(), rotation_axis
+        )
+
+        # Combine the quaternions
+        new_quaternion = rotation_quaternion * quaternion
+
+        # Convert quaternion back to Euler rotation
+        new_euler_rotation = om.MEulerRotation(
+            new_quaternion.asEulerRotation()
+        )
+        new_rotation = [
+            om.MAngle(new_euler_rotation.x).asDegrees(),
+            om.MAngle(new_euler_rotation.y).asDegrees(),
+            om.MAngle(new_euler_rotation.z).asDegrees(),
+        ]
+
+        # Apply the new rotation
+        cmds.xform(obj, rotation=new_rotation, ws=True)
+
+        # Restore the original rotation order
+        cmds.xform(obj, rotateOrder=current_rotation_order)
+
+
+# Wolrd Transform Functions: Transform data IO with pivot offset
+def apply_pivot_offset_to_translation(obj):
+    """Add the local rotate pivot to the object's current translation.
+
+    Args:
+        obj (str): Name of the object.
+
+    Raises:
+        RuntimeError: If the object does not exist.
+    """
+    if not cmds.objExists(obj):
+        raise RuntimeError("Object '{}' does not exist.".format(obj))
+
+    # Check if any component of .translate is locked or connected
+    for axis in ["X", "Y", "Z"]:
+        attr = "{}.translate{}".format(obj, axis)
+        if cmds.getAttr(attr, lock=True):
+            return
+
+    translation = cmds.getAttr(obj + ".translate")[0]
+    rotate_pivot = cmds.getAttr(obj + ".rotatePivot")[0]
+
+    new_translation = [t - rp for t, rp in zip(translation, rotate_pivot)]
+    cmds.setAttr(obj + ".translate", *new_translation, type="double3")
+
+def get_world_transform_data(obj):
+    """Get world transform matrix and pivot of a given object.
+
+    Args:
+        obj (str): Name of the source object.
+
+    Returns:
+        dict: {
+            'matrix': list of 16 floats for the world matrix,
+            'rotatePivot': list of 3 floats for the world-space pivot
+        }
+    """
+    if not cmds.objExists(obj):
+        raise RuntimeError("Object '{}' does not exist.".format(obj))
+
+    transform_data = {
+        'matrix': cmds.xform(obj, q=True, ws=True, m=True),
+        "translation": cmds.xform(obj, q=True, ws=True, t=True),
+        "rotation": cmds.xform(obj, q=True, ws=True, rotation=True),
+        "scale": cmds.xform(obj, q=True, ws=True, s=True),
+        "rotatePivot": cmds.xform(obj, q=True, ws=True, rotatePivot=True),
+    }
+    return transform_data
+
+
+def set_world_transform_data(obj, transform_data):
+    """Apply stored world matrix and pivot to a given object.
+
+    Args:
+        obj (str): Name of the target object.
+        transform_data (dict): {
+            'matrix': list of 16 floats,
+            'rotatePivot': list of 3 floats
+        }
+    """
+    if not cmds.objExists(obj):
+        raise RuntimeError("Object '{}' does not exist.".format(obj))
+
+    # matrix = transform_data.get('matrix')
+    # pivot = transform_data.get('rotatePivot')
+
+    if "matrix" in transform_data:
+        cmds.xform(obj, ws=True, m=transform_data["matrix"])
+        # reset rotatePivotTranslate to neutral value
+        cmds.setAttr(obj + ".rotatePivotTranslate", *[0,0,0], type="double3")
+    # re-apply the final position in world space
+    if "translation" in transform_data:
+        cmds.xform(
+            obj,
+            ws=True,
+            t=vector.subtract_3Dvectors_list(
+                transform_data["translation"], transform_data["rotatePivot"]
+            ),
+        )
+        v1 = vector.subtract_3Dvectors_list(
+            transform_data["rotatePivot"], transform_data["translation"]
+        )
+        v2 = vector.add_3Dvectors_list(transform_data["translation"], v1)
+        cmds.xform(obj, ws=True, t=v2)
+        apply_pivot_offset_to_translation(obj)
+    # if pivot:
+    #     # restore both rotate- and scale-pivot in world space
+    #     cmds.xform(obj, ws=True, rotatePivot=pivot)
+    #     cmds.xform(obj, ws=True, scalePivot=pivot)
+
+

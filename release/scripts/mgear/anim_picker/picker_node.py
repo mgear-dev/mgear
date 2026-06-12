@@ -9,7 +9,7 @@ import os
 
 # dcc
 from maya import cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 
 # anim picker
 import mgear.anim_picker
@@ -18,12 +18,11 @@ from .handlers import file_handlers
 
 
 def get_nodes():
-    '''Return data nodes found in scene
-    '''
+    """Return data nodes found in scene"""
     data_nodes = []
-    for maya_node in cmds.ls("*.{}".format(DataNode.__TAG__),
-                             o=True,
-                             r=True) or []:
+    for maya_node in (
+        cmds.ls("*.{}".format(DataNode.__TAG__), o=True, r=True) or []
+    ):
         data_node = DataNode(maya_node)
         data_node.read_data()
         data_nodes.append(data_node)
@@ -33,8 +32,7 @@ def get_nodes():
 
 
 def get_node_for_object(item):
-    '''Will try to return related picker data_node for specified object
-    '''
+    """Will try to return related picker data_node for specified object"""
     namespaces = []
 
     # No namespace case
@@ -50,10 +48,11 @@ def get_node_for_object(item):
 
     # Parse namespaces
     for namespace in namespaces:
-        for data_node in cmds.ls("{}*.{}".format(namespace, DataNode.__TAG__),
-                                 o=True) or []:
+        for data_node in (
+            cmds.ls("{}*.{}".format(namespace, DataNode.__TAG__), o=True) or []
+        ):
             data_node = DataNode(data_node)
-            if data_node.countains(item.replace(namespace[1:], '')):
+            if data_node.countains(item.replace(namespace[1:], "")):
                 return data_node
     return False
 
@@ -81,25 +80,23 @@ class DataNode(object):
             self.data = self.read_data()
 
     def __repr__(self):
-        return "{}.{}(u'{}')".format(self.__class__.__module__,
-                                     self.__class__.__name__,
-                                     self.name)
+        return "{}.{}(u'{}')".format(
+            self.__class__.__module__, self.__class__.__name__, self.name
+        )
 
     def __eq__(self, other):
-        '''Compare datas
-        '''
+        """Compare datas"""
         return self.data == other
 
     def __lt__(self, other):
-        '''Override for "sort" function
-        '''
+        """Override for "sort" function"""
         return self.name < other.name
 
     def __str__(self):
         return self.name
 
     def __melobject__(self):
-        '''Return maya mel friendly string result'''
+        """Return maya mel friendly string result"""
         return self.name
 
     def exists(self):
@@ -112,8 +109,12 @@ class DataNode(object):
         return cmds.referenceQuery(self.name, inr=True)
 
     def _assert_not_referenced(self):
-        assert self.is_referenced, "Data node '{}' is referenced, and can not \
-        be modified.".format(self.name)
+        assert (
+            self.is_referenced
+        ), "Data node '{}' is referenced, and can not \
+        be modified.".format(
+            self.name
+        )
 
     def create(self, node=None):
         """Will create the node data
@@ -130,7 +131,8 @@ class DataNode(object):
         if node:
             if node.hasAttr("picker_datas_node"):
                 pm.displayWarning(
-                    "{} have anim picker data".formant(node.name()))
+                    "{} have anim picker data".formant(node.name())
+                )
             else:
                 node = node.name()
 
@@ -166,52 +168,46 @@ class DataNode(object):
     # =========================================================================
     # Maya attributes
     def _get_attr(self, attr):
-        '''Return node's attribute value
-        '''
+        """Return node's attribute value"""
         self._assert_exists()
         if not cmds.attributeQuery(attr, n=self.name, ex=True):
             return
         return cmds.getAttr("{}.{}".format(self.name, attr)) or None
 
     def _add_str_attr(self, node, ln):
-        '''Add string attribute to data node
-        '''
+        """Add string attribute to data node"""
         self._assert_exists()
 
         cmds.addAttr(node, ln=ln, dt="string")
         cmds.setAttr("{}.{}".format(node, ln), k=False, l=False, type="string")
 
     def _set_str_attr(self, attr, value=None):
-        '''Set string attribute value
-        '''
+        """Set string attribute value"""
         # Sanity check
         self._assert_exists()
         self._assert_not_referenced()
 
         # Init value
         if not value:
-            value = ''
+            value = ""
 
         # Unlock attribute
         cmds.setAttr("{}.{}".format(self.name, attr), l=False, type="string")
 
         # Set value and re-lock attr
-        cmds.setAttr("{}.{}".format(self.name, attr),
-                     value,
-                     l=True,
-                     type="string")
+        cmds.setAttr(
+            "{}.{}".format(self.name, attr), value, l=True, type="string"
+        )
 
     def get_namespace(self):
-        '''Return namespace for current node
-        '''
+        """Return namespace for current node"""
         self._assert_exists()
         if not self.name.count(":"):
             return None
         return self.name.rsplit(":", 1)[0]
 
     def get_file_path(self):
-        '''Return stored file path
-        '''
+        """Return stored file path"""
         return self._get_attr(self.__FILE_ATTR__)
 
     # ==========================================================================
@@ -222,20 +218,16 @@ class DataNode(object):
     def set_data(self, data):
         self.data = data
 
-    def write_data(self,
-                   data=None,
-                   to_node=True,
-                   to_file=False,
-                   file_path=None):
-        '''Write data to data node and data file
-        '''
+    def write_data(
+        self, data=None, to_node=True, to_file=False, file_path=None
+    ):
+        """Write data to data node and data file"""
         if not data:
             data = self.data
 
         # Write data to file
         if to_file:
-            file_handlers.write_data_file(file_path=file_path,
-                                          data=data)
+            file_handlers.write_data_file(file_path, data=data)
             self._set_str_attr(self.__FILE_ATTR__, value=file_path)
 
         # Write data to node attribute
@@ -243,8 +235,7 @@ class DataNode(object):
             self._set_str_attr(self.__DATAS_ATTR__, value=data)
 
     def read_data_from_node(self):
-        '''Read data from data node or data file
-        '''
+        """Read data from data node or data file"""
         # Init data dict
         data = {}
 
@@ -256,19 +247,19 @@ class DataNode(object):
         return data
 
     def read_data_from_file(self):
-        '''Read data from specified file
-        '''
+        """Read data from specified file"""
         file_path = self.get_file_path()
         if not file_path:
             return
-        if not os.path.exists(file_path):
+        if not os.path.exists(
+            file_handlers.replace_token_with_path(file_path)
+        ):
             return
 
         return file_handlers.read_data_file(file_path)
 
     def read_data(self, from_file=True):
-        '''Read picker data
-        '''
+        """Read picker data"""
         self._assert_exists()
 
         # Init data dict
@@ -286,9 +277,9 @@ class DataNode(object):
         return data
 
     def countains(self, node):
-        '''Will return True if data_node contains selected node in
+        """Will return True if data_node contains selected node in
         related controls data
-        '''
+        """
         for tab_data in self.data["tabs"]:
             for item_data in tab_data.get("data", {}).get("items", []):
                 if not item_data:
@@ -300,8 +291,7 @@ class DataNode(object):
         return False
 
     def set_version(self, version=None):
-        '''Set node data version attribute
-        '''
+        """Set node data version attribute"""
         if not version:
             version = mgear.anim_picker.version.version
 

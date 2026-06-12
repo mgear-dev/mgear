@@ -9,9 +9,9 @@ Flex is the main module that allows you to run the update tool
 # imports
 from __future__ import absolute_import
 
-from PySide2 import QtWidgets
+from mgear.vendor.Qt import QtWidgets
+from mgear.vendor.Qt import QtCompat
 from maya import OpenMayaUI, cmds
-from shiboken2 import wrapInstance
 from mgear.flex import logger
 from mgear.flex.analyze import analyze_groups
 from mgear.flex.analyze_widget import FLEX_ANALYZE_NAME
@@ -124,7 +124,7 @@ class Flex(object):
             return
 
         # go through flex widgets to find analyze widget
-        qt_object = wrapInstance(long(widget), QtWidgets.QDialog)
+        qt_object = QtCompat.wrapInstance(long(widget), QtWidgets.QDialog)
         for child in qt_object.children():
             if child.objectName() == FLEX_ANALYZE_NAME:
                 Flex.__kill_widget(child)
@@ -140,7 +140,7 @@ class Flex(object):
         if not widget:
             return
 
-        qt_object = wrapInstance(long(widget), QtWidgets.QDialog)
+        qt_object = QtCompat.wrapInstance(long(widget), QtWidgets.QDialog)
         Flex.__kill_widget(qt_object)
 
     @staticmethod
@@ -287,7 +287,7 @@ class Flex(object):
 
         # gets Maya main window object
         maya_window = OpenMayaUI.MQtUtil.mainWindow()
-        return wrapInstance(long(maya_window), QtWidgets.QMainWindow)
+        return QtCompat.wrapInstance(long(maya_window), QtWidgets.QMainWindow)
 
     def analyze_groups(self, update_ui=False):
         """ Scans the shapes inside the source and target group

@@ -1,14 +1,15 @@
 import os
 from pprint import pprint
 
-from PySide2 import QtCore
-from PySide2 import QtUiTools
-from PySide2 import QtWidgets
-from PySide2 import QtGui
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtWidgets
+from mgear.vendor.Qt import QtGui
+
+from mgear.vendor.Qt import QtCompat
 
 from functools import partial
 
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.core import pyqt
 
@@ -51,11 +52,7 @@ class SDK_transfer(QtWidgets.QDialog):
         if not ui_path:
             ui_path = "{0}/SDK_transfer.ui".format(os.path.dirname(__file__))
 
-        f = QtCore.QFile(ui_path)
-        f.open(QtCore.QFile.ReadOnly)
-        # Load the .ui from file
-        loader = QtUiTools.QUiLoader()
-        self.ui = loader.load(f, parentWidget=None)
+            self.ui = QtCompat.loadUi(uifile=ui_path)
 
     def create_menu_bar_actions(self):
         """

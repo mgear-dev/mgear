@@ -1,7 +1,7 @@
 """Component Leg 2 joints 01 module"""
 
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -413,7 +413,7 @@ class Component(component.Main):
         self.readerB = primitive.addTransform(
             self.readerA, self.getName("readerB_loc"), t
         )
-        self.readerB.rotateOrder.set(2)
+        self.readerB.rotateOrder.set(3)
 
         # Divisions ----------------------------------------
         # We have at least one division at the start, the end and one for

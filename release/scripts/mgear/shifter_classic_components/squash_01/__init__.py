@@ -1,7 +1,7 @@
 """Component Squash 01 module"""
 
-import pymel.core as pm
-import pymel.core.datatypes as dt
+import mgear.pymaya as pm
+import mgear.pymaya.datatypes as dt
 
 from mgear.shifter import component
 

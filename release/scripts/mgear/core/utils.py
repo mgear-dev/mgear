@@ -1,16 +1,19 @@
-"""Utilitie functions"""
+"""Utility functions"""
 
 
+import datetime
+import getpass
 import os
 import sys
 import timeit
 from functools import wraps
 
 from maya import cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya import mel
 import maya.api.OpenMaya as OpenMaya
-from .six import string_types, PY2
+string_types = str
+PY2 = False
 
 import mgear
 
@@ -34,7 +37,7 @@ def as_pynode(obj):
     if isinstance(obj, str) or isinstance(obj, string_types):
         obj = pm.PyNode(obj)
 
-    if not isinstance(obj, pm.PyNode):
+    if not isinstance(obj, (pm.node._Node, pm.node._NodeTypes)):
         raise TypeError(
             "{} is type {} not str, unicode or PyNode".format(
                 str(obj), type(obj)
@@ -42,6 +45,30 @@ def as_pynode(obj):
         )
 
     return obj
+
+
+def ensure_pynode(func):
+    """Decorator to convert string args to PyNodes for Maya dag nodes.
+
+    Args:
+        func (callable): Function that accepts Maya node args.
+
+    Returns:
+        callable: Wrapped function where string args become PyNodes.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        new_args = []
+        for arg in args:
+            if isinstance(arg, str):
+                new_args.append(pm.PyNode(arg))
+            else:
+                new_args.append(arg)
+        for key, val in kwargs.items():
+            if isinstance(val, str):
+                kwargs[key] = pm.PyNode(val)
+        return func(*new_args, **kwargs)
+    return wrapper
 
 
 def is_odd(num):
@@ -132,12 +159,14 @@ def getModuleBasePath(directories, moduleName):
             moduleBasePath = basepath
             break
     else:
-        moduleBasePath = ""
-        message = "= GEAR RIG SYSTEM ======"
-        message += "component base directory not found " " for {}".format(
-            moduleName
-        )
-        mgear.log(message, mgear.sev_error)
+        message = (
+            "Component '{}' not found in any registered component directory.\n"
+            "Please check:\n"
+            "  1. The component is installed correctly\n"
+            "  2. The MGEAR_COMPONENTS_PATH environment variable includes the component's parent directory\n"
+            "  3. The component name is spelled correctly in the guide"
+        ).format(moduleName)
+        raise ImportError(message)
 
     return moduleBasePath
 
@@ -237,6 +266,35 @@ def one_undo(func):
 
         finally:
             cmds.undoInfo(closeChunk=True)
+
+    return wrap
+
+
+def undo_off(func):
+    """Decorator - Turn off Maya undo while func is running.
+
+    Disables the undo queue before executing the wrapped function and
+    re-enables it afterwards. If the function fails, undo is still
+    safely restored before the exception is raised.
+
+    type: (function) -> function
+
+    """
+
+    @wraps(func)
+    def wrap(*args, **kwargs):
+        # type: (*str, **str) -> None
+
+        try:
+            cmds.undoInfo(stateWithoutFlush=False)
+            pm.displayInfo("Undo off for: {}".format(func.__name__))
+            return func(*args, **kwargs)
+
+        except Exception as e:
+            raise e
+
+        finally:
+            cmds.undoInfo(stateWithoutFlush=True)
 
     return wrap
 
@@ -386,3 +444,17 @@ def get_maya_path():
     maya_path = os.environ['MAYA_LOCATION']
     maya_path = os.path.normpath(os.path.join(maya_path,"bin"))
     return maya_path
+
+
+def get_user_metadata():
+    """Get current user metadata.
+
+    Returns:
+        dict: Username, date, Maya version, and mGear version.
+    """
+    return {
+        "user": getpass.getuser(),
+        "date": str(datetime.datetime.now()),
+        "maya_version": str(mel.eval("getApplicationVersionAsFloat")),
+        "gear_version": mgear.getVersion(),
+    }

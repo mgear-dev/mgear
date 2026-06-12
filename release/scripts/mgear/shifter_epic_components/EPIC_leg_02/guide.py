@@ -85,6 +85,8 @@ class Guide(guide.ComponentGuide):
         centers = [self.root, self.knee, self.ankle, self.eff]
         self.dispcrv = self.addDispCurve("crv", centers)
 
+        self.addUpvLocator(self.knee, self.ankle, self.eff, float_value=0.8)
+
     def addParameters(self):
         """Add the configurations settings"""
 

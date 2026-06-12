@@ -1,6 +1,6 @@
 import string
 import re
-import pymel.core as pm
+import mgear.pymaya as pm
 
 # default fields/tokens
 NAMING_RULE_TOKENS = ["component",

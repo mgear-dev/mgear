@@ -1,6 +1,391 @@
 Release Log
 ===========
 
+
+5.3.3
+------
+**Enhancements**
+	* Core: Curve: Add public shape-copy helpers create_curve_shape_under, copy_curve_display_attrs, and CURVE_DISPLAY_ATTRS for geometry-level NurbsCurve copy via OpenMaya
+	* Core: Logging: mgear.log() handler exceptions now surface to stderr instead of being silently swallowed; remaining handlers still receive the message
+	* Solvers: Build: Add Maya 2022 support to Windows build script
+
+**Bug Fix**
+	* Shifter: Fix extract controls performance regression — slow on top-level controls with many descendants; now uses parentOnly duplicate + OpenMaya MFnNurbsCurve.create for constant-time-per-control extraction, while preserving the prior fix's safety guarantees (no child leaking, no mesh/locator shapes, ghost-control independence) and propagating display attributes to the buffer
+	* Shifter: Build Log: Fix custom step messages disappearing from the build log on the second and subsequent builds when the window was kept open; the window now reuses the live instance across builds (preserves filter buttons, font size, and search text), display hooks always bind to the live handler, and log content clears at the start of each new build
+	* SimpleRig: Convert to Shifter Rig now disconnects driven matrix chains (mgear_mulMatrix + decomposeMatrix) before deleting the simple-rig root, preventing orphaned utility nodes with broken driver inputs in the converted scene
+
+5.3.2
+------
+**Enhancements**
+	* Core: Skin: Add soft selection support to Copy Skin Partial — falloff vertices are blended proportional to Maya's rich-selection falloff instead of producing a hard seam at the selection boundary
+	* Rigbits: Evaluation Partition: Store short names in .evp configs (v2.0) for portability across scenes, namespaces and rig reorganizations, with explicit ambiguity errors and backwards-compatible v1.0 loading
+	* SimpleRig: Auto-skin walks the subtree under each driven, binding every mesh / NURBS descendant to the correct joint and respecting nested controls via a claim-set, so controls attached to plain transforms no longer skip their geometry
+	* Utilbits: Bookmarks: Store short names with namespace (v2.0), per-bookmark "Use Selected Object's Namespace" toggle to drive one bookmark across multiple rig instances, ambiguity detection, backwards-compatible v1.0 loading
+	* Utilbits: Random Colors: Remember original shading-group assignments for restoration, add Toggle and Remove operations, Apply-to-all (mesh + NURBS) option with NURBS surface support
+	* Docs: Rigbits: Add Evaluation Partition scripting examples (execute_from_file, execute_full_pipeline, per-step usage)
+	* Docs: SimpleRig: Add user documentation
+
+**Bug Fix**
+	* Anim Picker: Fix rendering with PySide6 / Linux #609, remove dead __USE_OPENGL__ code path #580
+	* SimpleRig: Fix KeyError in Convert to Shifter Rig when the control hierarchy has sibling branches of unequal depth (parent could be processed after child)
+	* Utilbits: Matcap Viewer: Fix shader restore and selection handling — skip intermediate shapes, match SG members via both short and full DAG paths for face-based restores, abort "Apply to Selected" on empty selection, and clear residual matcap_SG before restore
+
+5.3.1
+------
+**Enhancements**
+	* Rigbits: Proxy Slicer: Optimized with OpenMaya2 batch weight queries (5-10x faster), multi-selection support, proper transform lock handling, and deformer stack compatibility
+	* Shifter: Add progress bar during guide template export with per-component progress updates
+	* Shifter: Fix extract controls to prevent child object leaking and handle instanced/shared shapes (ghost controls)
+	* Utilbits: Matcap Viewer: Persist apply mode setting and fix toggle to track applied meshes correctly
+
+**Bug Fix**
+	* Maya 2027: mGearWeightDriver.mll fails to load with Error 127 Fixes #629
+
+5.3.0
+------
+**New Features**
+	* Core: Skin: Add localize_skin_clusters for floating-point precision fix when rigs are far from world origin
+	* Rigbits: Blendshape Setup Transfer: New tool for transferring blendshapes from multiple sources into a single target node with combo network rebuild, zero-delta cleanup, and .bst config support
+	* Rigbits: Evaluation Partition: New tool to split a mesh into polygon group partitions to optimize parallel evaluation #616
+	* Rigbits: SDK Creator: New tool for creating Set Driven Key setups from timeline poses with mirror support, .sdkc config export/import, and scripting API
+	* Shifter: Build Log Window: New Qt-based build log with color-coded output, severity filtering, search, font size control, log export and comparison, live progress during build, and right-click to open source files
+	* Shifter: Guide Template Manager: New browsable template manager with custom source folders, thumbnails, metadata, search, import/import-add/import-partial with component selection, drag-and-drop to viewport, and .sgtInfo sidecars
+	* Utilbits: Bookmarks: New selection and isolate bookmarks tool
+	* Utilbits: Matcap Viewer: New viewport matcap material preview tool
+
+**Enhancements**
+	* Core: Attribute: Add float2/float3 compound attribute support and str node input #628
+	* Core: Blendshape: Add transfer_blendshapes and combo utilities to core for reuse across tools
+	* Core: Node: Add createPlusMinusAverage3D and createBlendWeightedNode for utility node creation
+	* Maya 2027 support: Updated solvers, C++ acceleration modules, and .mod files for Maya 2027 (Python 3.13)
+	* Rigbits: Wire to Skinning: Add custom wire processing order with drag reorder, preserved across config export/import #611
+	* Shifter: Capture component build errors (AttributeError, etc.) in build log window
+	* Shifter: Data-Centric Folder Creator: Refactored UI with unified workflow, live folder preview tree, space-to-comma input normalization, .dcf config export/import, drag-and-drop config loading, SettingsMixin persistence, HDPI scaling, and input validation
+	* Shifter: Fix progress bar not updating during drag-and-drop guide import
+
+**Bug Fix**
+	* Core: Anim Utils: Fix IK/FK match for 3jnt leg and roll control #626
+	* Core: Attribute: Fix docstrings to use Google-style conventions
+	* Core: Fix invalid escape sequences in string.py docstrings causing SyntaxWarning in Python 3.12+
+	* Core: Remove six.py (Python 2/3 compat layer) and replace imp module with importlib for Python 3.12+/Maya 2027 compatibility
+	* Core: UPV Visualizer: Fix node naming using full DAG paths causing invalid character warnings
+	* Core: UPV Visualizer: Replace Maya 2024.2+ nodes with backwards-compatible equivalents for Maya 2022+ Closes #617
+	* Maya 2022/2023 backwards compatibility: Replaced Maya 2024.2+ only nodes (length, max, normalize, crossProduct) with universal equivalents (distanceBetween, condition chains, vectorProduct)
+	* Rigbits: Replace Shape: Fix connection direction when replacing control shapes #627
+	* Shifter: Blueprints: Fix build from serialized guide and squash and stretch sampling fix #621
+	* Shifter: Build Log: Fix recursion when display hooks installed twice
+	* Shifter: Component: Fix chain_whip_01
+	* Shifter: Data-Centric Folder Creator: Fix same-name folder bug
+	* Shifter: Fix native Qt signal collision (toggled, dataChanged) in custom step widgets causing TypeError in PySide2
+	* Shifter: Force refresh on the referenceGroups when UI is open
+	* Shifter: Guide Explorer: Fix Python 3.9 type hint (list[str]) compatibility for Maya 2022
+	* Shifter: Guide Export: Fix metadata not refreshing on .sgt export and speed up export
+	* Shifter: Guide Visualizer: Fix export storing full DAG paths and use .gvc extension
+	* Shifter: Lite_chain_01: When Neutral Pose is not active, the build is not correct. This issue was introduced with the mirror option added in the last update Fixes #619
+
+5.2.5
+------
+**Enhancements**
+	* Shifter: Auto Fit Guide: Added C++ acceleration, progress bar, skip orientation option, reference mesh support, and UI improvements #620
+
+5.2.4
+------
+**Enhancements**
+	* Core: Fix deformer is_deformer to support PyNode
+	* Core: Skin: importSkin now returns a list of objects that used volume based import skin #615
+
+5.2.3
+------
+**New Features**
+	* Rigbits: Wire to Skinning: New tool for converting wire deformers to skin clusters with UI, configuration export/import, drag-and-drop support #611
+	* Core: Skin: Add function to copy partial skin to selected vertex #614
+	* Core: Skin: Add support for volume skin weights import #615
+
+**Bug Fix**
+	* Chain_01: Fix IK FK match #610
+	* Shifter: Fix undo
+
+5.2.2
+------
+**Enhancements**
+	* Core: Added create_proximity_wrap function in core.deformer module
+	* Shifter: Custom Step Error: Update UI and improved feedback #601
+
+5.2.1
+------
+**Enhancements**
+	* Shifter: Spring_Gravity_01: General improvements and mirror behavior #581
+	* Shifter: chain_spring_01: Add mirror behavior #607
+	* Shifter: EPIC leg and arm 02: Add option to configure swing and twist of the first joint (arm/Thigh) #570
+	* Shifter: UPV Visualization for Arm/Leg Guides polish implementation #567
+	* Shifter: Initial refactor to change the settingsUI from QtDesigner to human editable, also now it can be subclassed for component variants
+	* Shifter: Add cancel build mechanism pressing ESC #606
+	* Shifter: Update message when component is not found and raise import error
+	* Shifter: Adding position and point connector to shifter components. Implemented on control_01
+	* Shifter: Guide settings UPDATE MRO #603
+	* Rigbits: Eye Rigger: Add option driven offset layers for automation #579
+	* Rigbits: Eye Rigger: Add option to control vertical offset when simplified #579
+	* Rigbits: CreateGhostCtl: Ensure visibility attr is also connected on shapes
+	* Core: Update pickwalk to work on Shifter Guides
+	* Core: Fix pickwalk to support joints and other type of objects
+
+**Bug Fix**
+	* Shifter: control_01 "orientation" connector broken. Fixed by using parentConstraint with skipTranslate #578
+	* Shifter: 3jnt leg flip on mGear 5.1 #577
+	* Shifter: EPIC_arm_01: Fix arm joint position offset when moving FK0_ctl control
+	* Shifter: EPIC_spine_02: Wrong joint orientation when spine is placed horizontal with IK World align setting activated #605
+	* Compatibility fixes for Python and PySide versions
+
+5.2.0
+------
+**New Features**
+	* Shifter: Blueprint Guide: New feature for defining standardized rig settings shared across multiple characters with per-section and per-component local override support. Includes Guide Explorer color coding for blueprint status visualization.
+	* Shifter: Custom Steps UI 2.0: Complete overhaul with drag and drop support, collapsible sections, custom step groups, config IO to JSON, multi-selection support, and improved visual styling #113
+	* Shifter: Custom Step Templates: Template selection dialog when creating new custom steps with pre-built templates for common tasks (Import Skin Pack, Import Guide Visualizer Config, Import RBF Config, Import SDK Config, Import Eye Rigger Config, Import Channel Master Config, Import Anim Picker)
+	* Shifter: Guide Explorer: New interface for exploring guides #592
+	* Shifter: Guide Tools: Initial implementation #588
+	* Utilbits: xPlorer: New tool with multi-selection, visibility toggle, attribute editor, search functionality, and arrow navigation #602
+	* Rigbits: Eye Rigger 2.1: Simplified options and miscellaneous improvements #579
+	* Rigbits: SDK Manager: Independent channel selection for Translate/Rotate/Scale with individual X, Y, Z axis checkboxes #604
+	* Mocap Tools: HumanIK Mapper: Batch Bake to Timeline button #590
+
+**Enhancements**
+	* Core: Icon: Adding Gear and mGear logo curve icons, update control_01 components
+	* Core: Utils: Added undo off decorator for performance optimization
+	* Shifter: Build speed optimization
+	* Shifter: Guide traversal support in core dag and component guide #584
+	* Shifter: Improving custom steps implementation and new method to run Sub-custom_Steps #601
+	* Shifter: Adding Duplicate Symmetry Status flag for postDraw method logic
+	* Shifter: Component creation and rename methods wrapped with single-undo decorator #589
+	* Shifter: Update Shifter templates menu with better description for UE templates
+	* Shifter: Update mannequin templates to use only EPIC components #58
+	* Shifter: lite_chain_01: Adding mirror behavior
+	* Channel Master: Update UI logic for slider sync behaviour #539 #593
+	* RBF Manager: Added option to use custom names on RBF setups #595
+	* RBF Manager: Better naming checker and logic when custom name is cancelled #595
+	* SDK Manager: Misc fixes and UI updates #587
+	* SDK Manager: Converted .ui file to pure Python for easier maintenance #604
+	* SDK Manager: Removed driver restriction - any transform can now be used as driver #604
+	* SDK Manager: Added documentation #604
+	* Rigbits: Added comprehensive user documentation for all tools #604
+	* Animbits: Added user documentation for Cache Manager, HumanIK Mapper, Space Recorder, Spring Manager #604
+	* PyMaya: node.addAttr return attr correctly
+	* PyMaya: Attr: added getRange() method
+	* PyMaya: Node: refactor sets members method to support Pymel like flatten flag query
+	* Core: Applyop: create_proximity_constraint now returns pyNode not string
+	* Utilbits: Update menu and adding random colors tool #602
+	* Allow underscores in rig_name property #558
+	* Quick function for setting and updating mGear component types #559
+
+**Bug Fix**
+	* Core: upv_visualizer: replace floatMath by multiplyDivide (floatMath node from lookDev toolkit not always loaded) #567
+	* Rigbits: Fix alignToPointsLoop
+	* Rigbits: Lip rigger autoSkin not working #533 #562
+	* Rigbits: Fix create_proximity_tweak
+	* Rigbits: Eye Rigger 2.1: add kwargs for old version config compatibility #579
+	* Shifter: Fix "Show Settings After Create New Component" checkbox being ignored in PySide6 #583
+	* Shifter: Fix broken error handling when opening Guide Manager #569
+	* Shifter: custom_step.py: fix dup method
+	* Shifter: Skeletal and Geometry root validation added #573
+	* SDK Manager: Fix issue with unitConversion nodes #587
+	* SDK Manager: Fix driver_attr_drop_down #587
+	* SDK Manager: sdk_io fix copySDKsNode #587
+	* PyMaya: Fix node.py listAttr
+	* RBF Manager: When driver is used to drive several setups, multiple poses added creating decomposition error on the solver #595
+	* Core: PickWalk: fix pickwalk up and down for non controls
+	* Ghost Slider Function erroring out (PyMaya compatibility) #513
+	* Knee Auto Thickness: Changes rotate order value on readerB to improve stability #529 #564
+	* Fix an error when generating diamond icon with pos offset #561
+	* SimpleRig: Fix issue with relatives reversed order at generation time
+	* Fix type hints #586
+	* FIX: adding stateChanged connection to import skin checkbox in guide settings #440
+
+**Solvers**
+	* Fix memory leak in rollSplineKine: replace dynamic MQuaternion array with local vars #572
+
+**ueGear**
+	* UE 5.6 - Metahuman DDC export has new joint naming #536 #568
+	* Remote Control ObjectPath defaults to 5.5+
+	* Fix update camera "FBX export" error
+
+5.1.0
+------
+**Enhancements**
+	* Core: Anim_utils: allow ParentSpaceTransfer to be executed outside anim_picker #552
+	* Rigbits: RBF Manager v2.0: new solver and misc updates #429 #514
+	* Shifter: EPIC_control_01: add backwards_ref_jnt setting #523
+	* Shifter: Improve IK/FK matching in arms and leg to support arbitrary length for FK sections and match with IK configuration #501
+
+
+**Bug Fix**
+	* Core: Right click dag menu fails to populate in all controls types #526
+	* Core: SKIN IO: Rounding issue with 10+ influences #538
+	* Rigbits: RBF Manager not working correctly with new weightDriver kernel. #514
+	* Shifter: Behavior on EPIC_spine_02 : controls are rotating in wrong axis when moving IK #510
+	* Shifter: Color settings aren’t working #511
+	* Shifter: Core: CustomPickwalk faling if not controls #524
+	* Shifter: EPIC_spine_02 : (UI bug) slider "Lock Orient Chest" and spin box aren't synced #516
+	* Shifter: Orientation control and joints issue with chain_02 #509
+	* Shifter: Rig not deleted when using confirmPop=False in delete_rig_keep_joints() #527
+	* Shifter: The "Draw Component" in the right-click menu of the Shifter Guide Manager was incorrect when no component was selected. #528
+
+
+**Deprecated**
+	* IMPORTANT: Dropping support for Maya 2020 and older Maya versions.
+	* IMPORTANT: Remove original weightDriver from SHAPES, been replaced by the mgearWeightDriver fork version. We can still use it on the weight driver but we need to install it separately
+
+**ueGear 1.0.4**
+	* Fixed remote control issue for UE 5.4+
+	* Improved Control Rig build times
+
+5.0.7
+------
+**Enhancements**
+ 	* Adding Maya 2026 OSX solvers (Note: RBF weightDriver not yet available in OSX)
+ 	* Flex: Add description in buttons for usage clarity #498
+ 	* Shifter: Chain_net_01: blend ui host is using the first FK control #504
+ 	* Shifter: Expose ctl name in shoulder components  #505
+ 	* Shifter:Data Centric folder creator, add support for "," separation on asset section #497
+
+**Bug Fix**
+	* Anim_picker: update metahuman picker
+	* Animbits: HumanIK Mapper Bake not working  #507
+	* Core: Anim_utils: Range Switch doesn't work for switching FK to IK overtime #488
+	* Core: Anim_Utils: remove getIKPoleVectorMatrices method. We will fall back to the mth node matching. #488
+	* Core: node.py createMultMatrixNode check if args are str and convert to PyNode
+	* PyMaya: cmd: Update listRelatives to return the shape of the geometry as parent of MeshEdge, MeshVertex, or MeshFace types # 263
+	* PyMaya: dag Node shortName now returns shortName. before was returning partilaPathName that can contain more than one "|" separator. #263
+	* PyMaya: Node child method implemented. #496
+	* Rigbits: Eye Rigger 2.0, Facial Rigger - no attribute ‘longName’. Adding longName method to MeshFace #506 #263
+	* Shifter Component Chain_02 rotation issue #478
+	* Shifter: EPIC leg 3jnt_01 Stretch broken when Full3bonesIK is 0  #479
+	* Shifter: IKFK match issues with split wrist build in EPIC_arm_02 and arm_2jnt_freeTangent_01 #491
+	* Shifter: Plebes Constrain to Rig not working  #502
+
+**Deprecated**
+	* Shifter: Remove MS components #503
+
+
+5.0.6
+------
+**Enhancements**
+	* PyMaya: Shifter: Collecting data only when will be stored. Removed the flush undo. Now we can undo rig builds. pymaya: Python wrapper for mGear #263
+	* Shifter: Adding new Shifter Templates + fix bug on EPIC_met_01 when no control added #306
+	* Shifter: Allow to connect to a non reset rotation joints.  #480
+	* Shifter: Data collector is production ready. Removed "Experimental" in UI #383
+	* Adding Maya 2026 windows solvers and Weightdriver
+
+**Bug Fix**
+	* Adjust ihi Behavior Based on Mode Type Instead of Step Type #472
+	* After setting up RBF, the RBF Manager2 window does not open again.  #471
+	* Anim_utils: IK/FK match set key automatically if any related control has already key. Previous fix was for ikFkMatch_with_namespace2, this fix is fro ikFkMatch_with_namespace #445
+	* Core: Anim_utils: space switch and range switch doesn't support rotation pivot offset  #487
+	* Core: Dagmenu: add neck ik control map for __switch_parent_callback #487
+	* CORE: Maya 2026 support to new addDoubleLinear node naming
+	* EPIC chain IK_FK_01 filing building using mode FK/IK.  #466
+	* EPIC_meta: fix control Relative relations
+	* Fixed missing "size" on Guide file builds #486
+	* Fixed rotation pymel bug, replaced all pymel commands
+	* PyMaya: fix error catch when name clashing in the guides #263
+	* PyMaya: fix SoftTweak error catching #263
+	* Rigbits: ProxySlice: Refactor to maya cmds. fixes #469
+	* Shifter Component 3jnt legs. Change component internal joint visibility to avoid hiding child components #483
+	* Shifter: Collect data fix WIP. Related with the new Pymaya wrapper and MVector parsing #263
+	* Shifter: Quadruped leg IK/FK offset bug, IK/FK match menu and misc IK/FK matching .Update EPIC_3jnt_leg and Classic 3_jnt_leg fixes #445
+	* Skin import issue (skinned NURBS curve) fixes #477
+	* UI_Slider_01 component fails during installation. fixes #464
+	* When using anim_utils.IkFkTransfer.execute(), only baking to FK works correctly ( includes possible fix ) fixes #406
+
+
+5.0.5
+------
+**Bug Fix**
+	* PyMaya: attr add index method #263
+	* Anim_utils: IK/FK fix error when not keyframes #445
+	* PyMaya: implementing pm.select() to support nested lists > This mimics pymel select() and fixed issue with custom pickwalk #263
+	* Anim_utils: update get_ik_conntorls_by_role #445
+	* Core: Transform: getTransformLookingAt add support for -x-y axis config
+	* PyMaya: cmd listrelatives parent return empty list if none. Before was returning a list with an empty string like [""] now returns [] #263
+
+
+5.0.4
+------
+**Bug Fix**
+	* Anim_utils: IK/FK matching and Range Transfer misc Fixes and enhancements #445
+	* PyMaya: PyMaya Node return implicit longName #263
+
+5.0.3
+------
+
+**Enhancements**
+	* Core: Skin IO: review logic to increase performance #456
+	* PyMaya: cmd update lazy import
+	* PyMaya: New List relatives implementation using api.OpenMaya #452
+	* PyMaya: Node get parent and list relatives update #452
+	* PyMaya: Node.attr: improve implementation to support compound attrs and indexed attrs #459
+	* PyMaya: optimize _obj_to_name and _name_to_obj #263
+	* SimpleRig: clean up  #452
+	* Vendor plugin: Update SHAPES weightdriver plugin to the latest kernel version: from Maya 2020 to 2025
+
+**Bug Fix**
+	* Core: anim_utils: Fix support for _switch space naming. for IK/FK match range #445
+	* Shifter: Delete Rig + Keep Joints functionality fails fixes #457
+	* Shifter: Pyside6 update: fix component settings import #409
+
+
+5.0.2
+------
+**Bug Fix**
+	* Shifter: Handle name clashing when parsing the guide to determine the parent component #454
+	* Core: Vector: Fix calculate pole vector #455
+
+
+
+5.0.1
+------
+**New Features**
+	* New animpicker template for Metahuman (Emilio Serrano Contribution)
+	* Shiter component: chain_spring_gravity_01 (Emilio Serrano Contribution)
+
+**Enhancements**
+	* AnimPicker: Add function to re-order tabs in edit mode#419
+	* Core: dagmenu.py enhancement. Reset to bindpose, reset all SRT #224
+	* Crank: add support to use existing blendshapes nodes or creating nodes in foc #416
+	* Removed Pymel dependency and new wrapper called pymaya (Big thanks to Kim Sol for all the hard work on the wrapper!!)
+	* SDK IO adding support to blendshape nodes #434
+	* Shifter: adding Edit button on message window when custom step fails #450
+	* Spring Manager: Only keyframe relevant attributes Rotate and translate.  #420
+
+**Bug Fix**
+	* Anim Picker: Lost any tabs that haven't been converted to nurbs when you switch back to picker data. #323
+	* anim_picker: Reading data file which uses ANIM_PICKER_PATH token is not working #210
+	* Metahuman template MISC bugs #426
+	* RBF manager uses f-strings which breaks compatibility with Maya 2020 #417
+	* RBF Manager: Mirror pose not working correctly #424
+	* Shifter foot: Toes do not scale together with the fk foot #320
+	* Shifter: Error using custom_step duplicate function #213
+
+**Removed Tools**
+	* Rigbits: PostSpring
+	* Rigbits: RBF manager v1
+	* Rigbits: Rope tool
+	* Synoptic picker
+
+
+4.2.4
+------
+
+**Enhancements**
+	* Shifter: Update data collector #383
+	* Shifter: New joint structure options: World oriented #384
+	* Crank: New functions and Crank channel box #386
+	* Shifter: Rig Builder: IO for configurations and option to run from script #388
+	* Shifter: Data Centric folder structure creator #390
+
+
+**Bug Fix**
+	* Crank: new targets are not keeping Edit on by default #386
+
 4.2.2
 ------
 **Bug Fix**

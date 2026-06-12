@@ -15,12 +15,12 @@ import json
 import sys
 
 import mgear.animbits.softTweakWindowUI as stUI
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear.core import pyqt, attribute, icon, node, primitive, applyop, skin
 from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
-from pymel.core import datatypes
-from pymel import versions
+from mgear.pymaya import datatypes
+from mgear.pymaya import versions
 from maya import cmds
 
 from mgear.core import string
@@ -56,13 +56,13 @@ def _createSoftTweakControls(
                 "unique name.".format(name)
             )
             return False, False
-    except pm.MayaNodeError:
+    except RuntimeError:
         if parent:
             try:
                 p = pm.PyNode(parent)
                 namespace = p.namespace()
 
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning(
                     "{} is not a valid parent or doesn't "
                     "exist".format(parent)
@@ -100,7 +100,7 @@ def _createSoftTweakControls(
                 try:
                     # try if exist
                     oGrp = pm.PyNode(grp)
-                except pm.MayaNodeError:
+                except RuntimeError:
                     # create a new grp if does't exist
                     if len(grp.split("_")) >= 3:  # check  name convention
                         name = grp
@@ -535,7 +535,7 @@ def _importConfiguration(configDict):
             for t in smConfig["affected"]:
                 try:
                     targets.append(pm.PyNode(t))
-                except pm.MayaNodeError:
+                except RuntimeError:
                     pm.displayWarning(
                         "{}: has not been found in the scene "
                         "and will be skipped".format(t)
@@ -674,7 +674,7 @@ class softTweakManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             try:
                 softMods.append(pm.PyNode(x.data()))
 
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning("{}  can't be find.".format(x.data()))
                 return False
         return softMods
@@ -824,7 +824,7 @@ class softTweakManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 p = pm.PyNode(parent)
                 trans = p.getMatrix(worldSpace=True)
 
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning(
                     "{} is not a valid parent or doesn't "
                     "exist".format(parent)
@@ -838,7 +838,7 @@ class softTweakManager(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 for x in pm.selected()
                 if x.getShape().type() in ["mesh", "nurbsSurface"]
             ]
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayError(
                 "Some objects on the current selection are "
                 "not valid. Please review the selection"

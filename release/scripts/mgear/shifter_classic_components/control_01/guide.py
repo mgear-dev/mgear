@@ -1,7 +1,7 @@
 """Guide Control 01 module"""
 
 from functools import partial
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.shifter.component import guide
 from mgear.core import transform, pyqt, attribute
@@ -43,7 +43,7 @@ class Guide(guide.ComponentGuide):
     email = EMAIL
     version = VERSION
 
-    connectors = ["orientation"]
+    connectors = ["orientation", "position", "point"]
     ctl_names_description = ["ctl"]
 
     # =====================================================
@@ -135,7 +135,10 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
                           'null',
                           'pyramid',
                           'sphere',
-                          'square']
+                          'square',
+                          'gear',
+                          'mgear',
+                          ]
 
         super(componentSettings, self).__init__(parent=parent)
         self.settingsTab = settingsTab()

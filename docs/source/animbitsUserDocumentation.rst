@@ -270,15 +270,181 @@ API
 	st.exportConfiguration(softtweaks)
 
 
-Smart reset Attribute/SRT
+Smart Reset Attribute/SRT
 =========================
 
-This command will reset the SRT (Scale, rotation and Translation of any selected object). If an attribute is higlighted in the Channel Box, will reset the channel instead.
+This command will reset the SRT (Scale, rotation and Translation of any selected object). If an attribute is highlighted in the Channel Box, will reset the channel instead.
 
 **TIP:** Set a hotkey for this command using mGear Hotkey creator in utilities menu.
 
 .. image:: images/animbits/smartReset_hotkey.png
     :align: center
     :scale: 95%
+
+
+Cache Manager
+=============
+
+Generate and manage GPU cache (Alembic) representations of rigged geometry to improve viewport performance in heavy scenes.
+
+**Key Features:**
+
+* Generate GPU caches for referenced rigs
+* Automatic rig unloading or hiding after cache generation
+* Filter and manage multiple rigs in a scene
+* Preference-based configuration saving
+
+**UI Options:**
+
+* **Rig Switch** - Choose to Unload or Hide rig after caching
+* **Model Group** - Target group containing shapes to cache
+* **GPU Path** - File destination for cache files
+* **Display Type** - Color display override or Keep current
+
+**Main Operations:**
+
+* **Cache** - Generate GPU cache for selected rig
+* **Reload Rig** - Reload previously unloaded/hidden rig
+* **Color** - Set display color override for cached geometry
+
+
+HumanIK Mapper
+==============
+
+Map and configure mocap skeleton to mGear rig controls with support for the HumanIK system, enabling batch baking and sub-IK control support.
+
+.. image:: images/animbits/humanIK_mapper.png
+    :align: center
+    :scale: 80%
+
+**Key Features:**
+
+* Initialize HIK character definitions from rig controls
+* Configure bone-to-control mappings for all body parts
+* Support for arm/leg roll controls and sub-IK bindings
+* Single and batch baking of HIK animation
+* Export/import character configuration as .hikm files
+* Mirror mapping support (Left/Right automation)
+
+Setup Tab
+---------
+
+**Workflow:**
+
+1. Click **Initialize** to create/setup HIK character from rig
+2. Use body part buttons (Head, Spine, Arms, Legs, Hands) to configure mappings
+3. Enable **Mirror** checkbox to automatically apply mappings to both sides
+4. Configure **Sub IK** controls if needed for additional animation layers
+5. Review mappings in the expandable Mapping Table section
+
+**Body Part Buttons:**
+
+* **Head** - Map head and neck controls
+* **Spine** - Map spine chain controls
+* **Left/Right Arm** - Map arm IK/FK controls
+* **Left/Right Leg** - Map leg IK/FK controls
+* **Arm/Leg Rolls** - Configure roll bone mappings
+* **Hands** - Map finger controls
+
+Batch Bake Tab
+--------------
+
+Process multiple animation files at once:
+
+* Add FBX/animation files to the batch list
+* **Batch Bake Layers** - Bake animations as animation layers
+* **Batch Bake Timeline** - Bake animations directly to timeline
+
+**Menus:**
+
+* **File Menu** - Import/Export HIK mapper configurations
+* **Bake Menu** - Bake, Bake to Timeline, Export/Import Batch Bake Config
+
+
+Space Recorder
+==============
+
+Record and apply world space transforms to selected objects across timeline ranges using 3 independent buffers.
+
+**Key Features:**
+
+* Record world space transforms of objects over time
+* 3 independent buffers (A, B, C) for different animation states
+* Apply recorded spaces to same objects or different selection
+* Non-destructive, constraint-free animation transfer
+
+**Workflow:**
+
+1. Select objects to record
+2. Click **Record Buffer** (A, B, or C)
+3. System records world matrix of each object across timeline
+4. **Apply Buffer** - Apply transforms back to original objects
+5. **Apply Sel Buffer** - Apply recorded transforms to current selection (different objects)
+
+**Use Cases:**
+
+* Copy animation between rigs without constraints
+* Transfer space data for animation matching
+* Store multiple animation states for comparison
+* Match character movement to objects
+
+
+Spring Manager
+==============
+
+Configure and manage spring dynamics nodes that create secondary motion and jiggle effects on rigged characters.
+
+.. image:: images/animbits/springManager.png
+    :align: center
+    :scale: 80%
+
+**Key Features:**
+
+* Configure spring parameters on Shifter spring nodes
+* Direction-based setup (X, Y, Z, -X, -Y, -Z)
+* Preset management system for saving/loading configurations
+* Batch operations for baking and deleting springs
+
+Spring Parameters
+-----------------
+
+* **Total Intensity** (0-1) - Overall spring effect strength
+* **Spring Rig Scale** (0-100) - Scale spring relative to rig size
+* **Translational Intensity** (0-1) - Translation motion strength
+* **Translational Damping** (0-1) - Translation friction/damping
+* **Translational Stiffness** (0-1) - Translation resistance to deformation
+* **Rotational Intensity** (0-1) - Rotation motion strength
+* **Rotational Damping** (0-1) - Rotation damping
+* **Rotational Stiffness** (0-1) - Rotation resistance
+
+**Direction Buttons:**
+
+Quick setup for directional springs: X, Y, Z, -X, -Y, -Z
+
+Preset System
+-------------
+
+* Store and load spring configurations as .spg files
+* Custom library path support
+* Search and organize presets
+* Reuse configurations across different rigs
+
+**Menus:**
+
+* **Bake** - Bake Selected, Bake All (convert dynamics to keyframes)
+* **Delete** - Delete Selected, Delete All
+* **Presets** - Set Library, Store Preset, Refresh, Delete Preset
+* **Select** - Select All Spring Targets
+
+
+Bake/Clear Spring Nodes
+=======================
+
+Utility commands for managing spring animation:
+
+* **Bake Spring Nodes** - Convert spring dynamics into baked keyframe animation
+* **Clear Baked Spring Nodes** - Remove baked keyframes, restore live spring simulation
+
+These commands work with Shifter spring components and are accessible from the Animbits menu.
 
 

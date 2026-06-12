@@ -1,5 +1,5 @@
 from maya import cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear
 import os
 
@@ -149,6 +149,10 @@ def install_main_menu():
     import mgear.cfxbits.menu
     mgear.cfxbits.menu.install()
 
+    # Install Utilsbits Menu
+    import mgear.utilbits.menu
+    mgear.utilbits.menu.install()
+
     # Install Crank Menu
     import mgear.crank.menu
     mgear.crank.menu.install()
@@ -156,10 +160,6 @@ def install_main_menu():
     # Install Anim Picker Menu
     import mgear.anim_picker.menu
     mgear.anim_picker.menu.install()
-
-    # Install Synoptic Menu
-    import mgear.synoptic.menu
-    mgear.synoptic.menu.install()
 
     # Install Flex Menu
     import mgear.flex.menu
@@ -198,7 +198,7 @@ webbrowser.open("http://forum.mgear-framework.com/")
 
 str_docs = """
 import webbrowser
-webbrowser.open("https://mgear4.readthedocs.io/en/latest/")
+webbrowser.open("https://mgear4.readthedocs.io/en/master/")
 """
 
 str_about = """

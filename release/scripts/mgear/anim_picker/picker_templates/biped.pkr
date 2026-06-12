@@ -5729,7 +5729,7 @@
                         "text_size": 10.0
                     }, 
                     {
-                        "action_script": "import pymel.core as pm\nif not __INIT__:\n    grp = \"rig_controllers_grp\"\n    if __NAMESPACE__:\n        grp = __NAMESPACE__ + \":\" + grp\n\n    members = pm.PyNode(grp).members()\n    pm.select(members, r=True)", 
+                        "action_script": "import mgear.pymaya as pm\nif not __INIT__:\n    grp = \"rig_controllers_grp\"\n    if __NAMESPACE__:\n        grp = __NAMESPACE__ + \":\" + grp\n\n    members = pm.PyNode(grp).members()\n    pm.select(members, r=True)",
                         "color": [
                             255, 
                             116, 
@@ -5769,7 +5769,7 @@
                         "text_size": 14.0
                     }, 
                     {
-                        "action_script": "import pymel.core as pm\nif not __INIT__:\n    grp = \"rig_controllers_grp\"\n    if __NAMESPACE__:\n        grp = __NAMESPACE__ + \":\" + grp\n\n    members = pm.PyNode(grp).members()\n    pm.setKeyframe(members)", 
+                        "action_script": "import mgear.pymaya as pm\nif not __INIT__:\n    grp = \"rig_controllers_grp\"\n    if __NAMESPACE__:\n        grp = __NAMESPACE__ + \":\" + grp\n\n    members = pm.PyNode(grp).members()\n    pm.setKeyframe(members)",
                         "color": [
                             85, 
                             170, 

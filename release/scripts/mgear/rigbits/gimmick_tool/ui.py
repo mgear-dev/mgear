@@ -8,7 +8,8 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PySide2 import QtCore, QtGui, QtWidgets
+import mgear.core.pyqt as gqt
+from mgear.vendor.Qt import QtCore, QtWidgets
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):

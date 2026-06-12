@@ -1,12 +1,26 @@
 import json
 import traceback
-from six import string_types
+
+string_types = str
 
 import mgear
-import pymel.core as pm
-from mgear.core import meshNavigation, curve, applyop, node, primitive, icon
-from mgear.core import transform, utils, attribute, skin, string
-from pymel.core import datatypes
+import mgear.pymaya as pm
+
+from maya import cmds
+
+from mgear.core import meshNavigation
+from mgear.core import curve
+from mgear.core import applyop
+from mgear.core import node
+from mgear.core import primitive
+from mgear.core import icon
+from mgear.core import transform
+from mgear.core import utils
+from mgear.core import attribute
+from mgear.core import skin
+from mgear.core import string
+
+from mgear.pymaya import datatypes
 
 from mgear import rigbits
 
@@ -21,7 +35,7 @@ from mgear import rigbits
 def rig(
     eyeMesh=None,
     edgeLoop="",
-    blinkH=20,
+    # blinkH=20,
     namePrefix="eye",
     offset=0.05,
     rigidLoops=2,
@@ -46,6 +60,10 @@ def rig(
     fixedJoints=False,
     fixedJointsNumber=3,
     orderFromCenter=False,
+    simplified=False,
+    ctl_size=1.0,
+    *args,
+    **kwargs
 ):
     """Create eyelid and eye rig
 
@@ -107,8 +125,8 @@ def rig(
             )
             return
 
-    # Convert data
-    blinkH = blinkH / 100.0
+    # # Convert data
+    # blinkH = blinkH / 100.0
 
     # Initial Data
     bboxCenter = meshNavigation.bboxCenter(eyeMesh)
@@ -145,7 +163,7 @@ def rig(
                     inPos = pm.PyNode(extCorner)
                 else:
                     inPos = pm.PyNode(intCorner)
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning("%s can not be found" % intCorner)
                 return
         else:
@@ -162,7 +180,7 @@ def rig(
                 else:
                     outPos = pm.PyNode(extCorner)
                     normalVec = bboxCenter - npw
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning("%s can not be found" % extCorner)
                 return
         else:
@@ -293,14 +311,14 @@ def rig(
         ctlSet = "rig_controllers_grp"
     try:
         ctlSet = pm.PyNode(ctlSet)
-    except pm.MayaNodeError:
+    except RuntimeError:
         pm.sets(n=ctlSet, em=True)
         ctlSet = pm.PyNode(ctlSet)
     if not defSet:
         defSet = "rig_deformers_grp"
     try:
         defset = pm.PyNode(defSet)
-    except pm.MayaNodeError:
+    except RuntimeError:
         pm.sets(n=defSet, em=True)
         defset = pm.PyNode(defSet)
 
@@ -359,7 +377,7 @@ def rig(
             setName("aim_%s" % ctlName),
             t_arrow,
             icon="arrow",
-            w=1,
+            w=1 * ctl_size,
             po=datatypes.Vector(0, 0, radius),
             color=4,
         )
@@ -398,18 +416,32 @@ def rig(
 
     # Blink driver controls
     if z_up:
-        trigger_axis = "tz"
+        trigger_axis = ["tz"]
+        extra_trigger_axis = ["tx", "ry"]
         ro_up = [0, 1.57079633 * 2, 1.57079633]
         ro_low = [0, 0, 1.57079633]
         po = [0, offset * -1, 0]
         low_pos = 2  # Z
     else:
-        trigger_axis = "ty"
-        ro_up = (1.57079633, 1.57079633, 0)
+        trigger_axis = ["ty"]
+        extra_trigger_axis = ["tx", "rz"]
+        ro_up = [1.57079633, 1.57079633, 0]
         ro_low = [1.57079633, 1.57079633, 1.57079633 * 2]
         po = [0, 0, offset]
         low_pos = 1  # Y
 
+    # TODO: Add other trigger_axis if self.simplified
+    if simplified:
+        ctl_shape = "square"
+        trigger_axis = trigger_axis + extra_trigger_axis
+        ro_up = [1.57079633, 0, 0]
+        ro_low = [1.57079633, 0, 0]
+        up_size = .6
+        low_size = .6
+    else:
+        ctl_shape = "arrow"
+        up_size = 2.5
+        low_size = 1.5
     # upper ctl
     # rest index in R side is 14
     if side == "R":
@@ -424,14 +456,14 @@ def rig(
         npo,
         setName("upBlink_ctl"),
         ut,
-        icon="arrow",
-        w=2.5,
-        d=2.5,
+        icon=ctl_shape,
+        w=up_size * ctl_size,
+        d=up_size * ctl_size,
         ro=datatypes.Vector(ro_up[0], ro_up[1], ro_up[2]),
         po=datatypes.Vector(po[0], po[1], po[2]),
         color=4,
     )
-    attribute.setKeyableAttributes(up_ctl, [trigger_axis])
+    attribute.setKeyableAttributes(up_ctl, trigger_axis)
     attribute.addAttribute(up_ctl, "isCtl", "bool", keyable=False)
     attribute.add_mirror_config_channels(up_ctl)
     pm.sets(ctlSet, add=up_ctl)
@@ -449,20 +481,21 @@ def rig(
         npo,
         setName("lowBlink_ctl"),
         lt,
-        icon="arrow",
-        w=1.5,
-        d=1.5,
+        icon=ctl_shape,
+        w=low_size * ctl_size,
+        d=low_size * ctl_size,
         ro=datatypes.Vector(ro_low[0], ro_low[1], ro_low[2]),
         po=datatypes.Vector(po[0], po[1], po[2]),
         color=4,
     )
-    attribute.setKeyableAttributes(low_ctl, [trigger_axis])
+    attribute.setKeyableAttributes(low_ctl, trigger_axis)
     pm.sets(ctlSet, add=low_ctl)
     attribute.addAttribute(low_ctl, "isCtl", "bool", keyable=False)
     attribute.add_mirror_config_channels(low_ctl)
 
     # Controls lists
     upControls = []
+    upMidControls = []
     trackLvl = []
     track_corner_lvl = []
     corner_ctl = []
@@ -478,12 +511,12 @@ def rig(
     for i, cv in enumerate(cvs):
         if utils.is_odd(i):
             color = 14
-            wd = 0.3
+            wd = 0.3 * ctl_size
             icon_shape = "circle"
             params = ["tx", "ty", "tz"]
         else:
             color = 4
-            wd = 0.6
+            wd = 0.6 * ctl_size
             icon_shape = "circle"
             params = [
                 "tx",
@@ -544,6 +577,7 @@ def rig(
             ghost_ctl.append(ctl_g)
             # connect local SRT
             rigbits.connectLocalTransform([ctl_g, ctl])
+            upMidControls.append(ctl_g)
         else:
             ctl = icon.create(
                 npo,
@@ -593,6 +627,7 @@ def rig(
     cns_node.interpType.set(0)
     # lower eyelid controls
     lowControls = [upControls[0]]
+    lowMidControls = []
     lowerCtlNames = [
         "inCorner",
         "lowInMid",
@@ -610,12 +645,12 @@ def rig(
             continue
         if utils.is_odd(i):
             color = 14
-            wd = 0.3
+            wd = 0.3 * ctl_size
             icon_shape = "circle"
             params = ["tx", "ty", "tz"]
         else:
             color = 4
-            wd = 0.6
+            wd = 0.6 * ctl_size
             icon_shape = "circle"
             params = [
                 "tx",
@@ -672,6 +707,7 @@ def rig(
             ghost_ctl.append(ctl_g)
             # connect local SRT
             rigbits.connectLocalTransform([ctl_g, ctl])
+            lowMidControls.append(ctl_g)
         else:
             ctl = icon.create(
                 npo,
@@ -809,18 +845,22 @@ def rig(
         n="closeTarget_blendShape",
     )
 
-    pm.connectAttr(
-        up_div_node.outputX,
-        bs_midUpDrive[0].attr(lowRest_target_crv.name()),
+    cmds.connectAttr(
+        "{}.outputX".format(up_div_node),
+        "{}.{}".format(bs_midUpDrive[0], lowRest_target_crv.name()),
     )
 
-    pm.connectAttr(
-        low_div_node.outputX,
-        bs_midLowDrive[0].attr(upRest_target_crv.name()),
+    cmds.connectAttr(
+        "{}.outputX".format(low_div_node),
+        "{}.{}".format(bs_midLowDrive[0], upRest_target_crv.name()),
     )
 
-    pm.setAttr(bs_closeTarget[0].attr(midUpDriver_crv.name()), 0.5)
-    pm.setAttr(bs_closeTarget[0].attr(midLowDriver_crv.name()), 0.5)
+    cmds.setAttr(
+        "{}.{}".format(bs_closeTarget[0], midUpDriver_crv.name()), 0.5
+    )
+    cmds.setAttr(
+        "{}.{}".format(bs_closeTarget[0], midLowDriver_crv.name()), 0.5
+    )
 
     # Main crv drivers
     bs_upBlink = pm.blendShape(
@@ -842,35 +882,41 @@ def rig(
     cond_node_up = node.createConditionNode(
         contact_div_node.outputX, 1, 3, 0, up_div_node.outputX
     )
-    pm.connectAttr(
-        cond_node_up.outColorR,
-        bs_upBlink[0].attr(lowRest_target_crv.name()),
+
+    cmds.connectAttr(
+        "{}.outColorR".format(cond_node_up),
+        "{}.{}".format(bs_upBlink[0], lowRest_target_crv.name()),
     )
 
     cond_node_low = node.createConditionNode(
         contact_div_node.outputX, 1, 3, 0, low_div_node.outputX
     )
-    pm.connectAttr(
-        cond_node_low.outColorR,
-        bs_lowBlink[0].attr(upRest_target_crv.name()),
+
+    cmds.connectAttr(
+        "{}.outColorR".format(cond_node_low),
+        "{}.{}".format(bs_lowBlink[0], upRest_target_crv.name()),
     )
 
     cond_node_close = node.createConditionNode(
         contact_div_node.outputX, 1, 2, 1, 0
     )
-    cond_node_close.colorIfFalseR.set(0)
-    pm.connectAttr(
-        cond_node_close.outColorR,
-        bs_upBlink[0].attr(closeTarget_crv.name()),
+
+    cmds.setAttr("{}.colorIfFalseR".format(cond_node_close), 0)
+
+    cmds.connectAttr(
+        "{}.outColorR".format(cond_node_close),
+        "{}.{}".format(bs_upBlink[0], closeTarget_crv.name()),
     )
 
-    pm.connectAttr(
-        cond_node_close.outColorR,
-        bs_lowBlink[0].attr(closeTarget_crv.name()),
+    cmds.connectAttr(
+        "{}.outColorR".format(cond_node_close),
+        "{}.{}".format(bs_lowBlink[0], closeTarget_crv.name()),
     )
 
-    pm.setAttr(bs_upBlink[0].attr(upProfile_target_crv.name()), 1)
-    pm.setAttr(bs_lowBlink[0].attr(lowProfile_target_crv.name()), 1)
+    cmds.setAttr("{}.{}".format(bs_upBlink[0], upProfile_target_crv.name()), 1)
+    cmds.setAttr(
+        "{}.{}".format(bs_lowBlink[0], lowProfile_target_crv.name()), 1
+    )
 
     # joints root
     jnt_root = primitive.addTransformFromPos(
@@ -887,7 +933,7 @@ def rig(
         try:
             headJnt = pm.PyNode(headJnt)
             jnt_base = headJnt
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning("Aborted can not find %s " % headJnt)
             return
     else:
@@ -1041,17 +1087,17 @@ def rig(
 
     # Adding channels for eye tracking
     upVTracking_att = attribute.addAttribute(
-        up_ctl, "vTracking", "float", upperVTrack, minValue=0
+        up_ctl, "vTracking", "float", upperVTrack, minValue=0, keyable=False, channelBox=True
     )
     upHTracking_att = attribute.addAttribute(
-        up_ctl, "hTracking", "float", upperHTrack, minValue=0
+        up_ctl, "hTracking", "float", upperHTrack, minValue=0, keyable=False, channelBox=True
     )
 
     lowVTracking_att = attribute.addAttribute(
-        low_ctl, "vTracking", "float", lowerVTrack, minValue=0
+        low_ctl, "vTracking", "float", lowerVTrack, minValue=0, keyable=False, channelBox=True
     )
     lowHTracking_att = attribute.addAttribute(
-        low_ctl, "hTracking", "float", lowerHTrack, minValue=0
+        low_ctl, "hTracking", "float", lowerHTrack, minValue=0, keyable=False, channelBox=True
     )
 
     # vertical tracking connect
@@ -1107,7 +1153,7 @@ def rig(
     # track_corner_lvl
     for i, ctl in enumerate(corner_ctl):
         VTracking_att = attribute.addAttribute(
-            ctl, "vTracking", "float", 0.1, minValue=0
+            ctl, "vTracking", "float", 0.1, minValue=0, keyable=False, channelBox=True
         )
         if z_up:
             mult_node = node.createMulNode(VTracking_att, up_ctl.tz)
@@ -1135,11 +1181,70 @@ def rig(
             if isinstance(parent_node, string_types):
                 parent_node = pm.PyNode(parent_node)
             parent_node.addChild(eye_root)
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "The eye rig can not be parent to: %s. Maybe "
                 "this object doesn't exist." % parent_node
             )
+
+    ###########################################
+    # Simplified
+    ###########################################
+    if simplified:
+
+        # connect blink to mid ctl
+        rigbits.connectLocalTransform([up_ctl, upMidControls[1]], s=False, r=True, t=False)
+        rigbits.connectLocalTransform([low_ctl, lowMidControls[1]], s=False, r=True, t=False)
+        up_ctl.tx >> upMidControls[1].tx
+        low_ctl.tx >> lowMidControls[1].tx
+
+        # add vis toggle for mid sides
+        rigbits.hide_shape([upMidControls[0], upMidControls[2]],
+                           "hide_mid_ctl",
+                           up_ctl,
+                           False
+                           )
+        rigbits.hide_shape([lowMidControls[0], lowMidControls[2]],
+                           "hide_mid_ctl",
+                           low_ctl,
+                           False
+                           )
+
+        # add vertical offset for mid sides
+        upperVerticalOffset_att = attribute.addAttribute(
+            up_ctl, "verticalOffset", "float", 0, minValue=-0.2, maxValue=.2, keyable=True, channelBox=True
+        )
+        lowerVerticalOffset_att = attribute.addAttribute(
+            low_ctl, "verticalOffset", "float", 0, minValue=-0.2, maxValue=.2, keyable=True, channelBox=True
+        )
+
+        # add driven attributes for external connections
+        upperDriven_atts = []
+        lowerDriven_atts = []
+        for i in range(3):
+            upperDriven_atts.append(attribute.addAttribute(
+                up_ctl, "upperDriven{}".format(i), "float", 0, keyable=False, channelBox=False
+            ))
+            lowerDriven_atts.append(attribute.addAttribute(
+                low_ctl, "lowerDriven{}".format(i), "float", 0, keyable=False, channelBox=False
+            ))
+
+        # sum driven values + offset for upper mid control
+        upperSum_node = pm.createNode("plusMinusAverage", n="{}_upperMidSum_pma".format(namePrefix))
+        upperVerticalOffset_att >> upperSum_node.input1D[0]
+        for i, att in enumerate(upperDriven_atts):
+            att >> upperSum_node.input1D[i + 1]
+        upperSum_node.output1D >> upMidControls[1].ty
+
+        # sum driven values + offset for lower mid control
+        lowerSum_node = pm.createNode("plusMinusAverage", n="{}_lowerMidSum_pma".format(namePrefix))
+        lowerVerticalOffset_att >> lowerSum_node.input1D[0]
+        for i, att in enumerate(lowerDriven_atts):
+            att >> lowerSum_node.input1D[i + 1]
+        lowerSum_node.output1D >> lowMidControls[1].ty
+
+        # lock and hide mid centers
+        rigbits.lock_hide_ctl([upMidControls[1], lowMidControls[1]])
 
     ###########################################
     # Auto Skinning
@@ -1182,7 +1287,7 @@ def rig(
         if not skinCluster:
             skinCluster = pm.skinCluster(
                 headJnt, geo, tsb=True, nw=2, n="skinClsEyelid"
-            )
+            )[0]
 
         eyelidJoints = upperEyelid_jnt + lowerEyelid_jnt
         pm.progressWindow(
@@ -1281,7 +1386,7 @@ def get_eye_mesh(eyeMesh):
         try:
             eyeMesh = pm.PyNode(eyeMesh)
             return eyeMesh
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "The object %s can not be found in the " "scene" % (eyeMesh)
             )
@@ -1293,3 +1398,4 @@ def get_eye_mesh(eyeMesh):
 # Build from json file.
 def rig_from_file(path):
     rig(**json.load(open(path)))
+

@@ -1,4 +1,4 @@
-import pymel.core as pm
+import mgear.pymaya as pm
 
 
 def getFCurveValues(fcv_node, division, factor=1):

@@ -1,7 +1,7 @@
 """Component Leg 3 joints 01 module"""
 import ast
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -71,8 +71,11 @@ class Component(component.Main):
             self.guide.apos[0:4],
             self.normal,
             False,
-            self.WIP,
+            True,
         )
+        if not self.WIP:
+            for b in self.legBones:
+                b.attr("drawStyle").set(2)
 
         # Leg chain FK ref
         self.legBonesFK = primitive.add2DChain(
@@ -531,7 +534,7 @@ class Component(component.Main):
         self.tws3_rot.setAttr("sx", 0.001)
 
         self.tws3_drv = primitive.addTransform(
-            self.legBones[2],
+            self.legBones[3],
             self.getName("tws3_drv"),
             transform.getTransform(self.legBones[3]),
         )
@@ -699,10 +702,12 @@ class Component(component.Main):
         )
 
         self.match_fk3 = self.add_match_ref(
-            self.fk_ctl[3], self.ik_ctl, "fk3_mth"
+            self.fk_ctl[3], self.legBonesIK[-1], "fk3_mth"
         )
 
         self.match_ik = self.add_match_ref(self.ik_ctl, self.fk3_ctl, "ik_mth")
+
+        self.match_roll = self.add_match_ref(self.roll_ctl, self.fk2_ctl, "roll_mth")
 
         self.match_ikUpv = self.add_match_ref(
             self.upv_ctl, self.fk0_ctl, "upv_mth"

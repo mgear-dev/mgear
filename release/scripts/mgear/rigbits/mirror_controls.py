@@ -1,4 +1,4 @@
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 import mgear
@@ -12,19 +12,27 @@ class MirrorController:
 
     @staticmethod
     def get_opposite_control(node):
-        side_l = node.attr("L_custom_side_label").get()
-        side_r = node.attr("R_custom_side_label").get()
-        side = node.attr("side_label").get()
+        try:
+            side_l = node.attr("L_custom_side_label").get()
+            side_r = node.attr("R_custom_side_label").get()
+            side = node.attr("side_label").get()
 
-        target_name = None
-        if side == "L":
-            target_name = node.name().replace(side_l, side_r)
-        elif side == "R":
-            target_name = node.name().replace(side_r, side_l)
+            target_name = None
+            if side == "L":
+                target_name = node.name().replace(side_l, side_r)
+            elif side == "R":
+                target_name = node.name().replace(side_r, side_l)
 
-        if target_name and pm.objExists(target_name):
-            return pm.PyNode(target_name)
-        return None
+            if target_name and pm.objExists(target_name):
+                return pm.PyNode(target_name)
+            return None
+        except pm.MayaAttributeError:
+            # try to get the opposite control using the old logic
+            target_name = mgear.core.string.convertRLName(node.name())
+            target = None
+            if pm.objExists(target_name):
+                target = pm.PyNode(target_name)
+            return target
 
     @staticmethod
     def get_specific_side_controls(side="L"):
@@ -74,7 +82,7 @@ class MirrorController:
             pm.select(clear=True)
 
             # Mirror a source copy under a group node
-            grp = pm.group(world=True)
+            grp = pm.group(em=True, world=True)
             pm.parent(source_copy, grp)
             grp.scaleX.set(-1)
 
@@ -152,7 +160,7 @@ class MirrorControlsUi(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.mirror_button.clicked.connect(self.mirror_button_pressed)
 
     def mirror_button_pressed(self):
-        pm.system.undoInfo(openChunk=True)
+        pm.undoInfo(openChunk=True)
 
         # Store selection
         selection = pm.selected()
@@ -167,7 +175,7 @@ class MirrorControlsUi(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         # Restore selection
         pm.select(selection)
 
-        pm.system.undoInfo(closeChunk=True)
+        pm.undoInfo(closeChunk=True)
 
 
 def show(*args):

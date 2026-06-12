@@ -3,10 +3,11 @@
 #############################################
 # GLOBAL
 #############################################
-import pymel.core as pm
+import mgear.pymaya as pm
+from maya import cmds
 import maya.OpenMaya as om
-import pymel.util as pmu
-from pymel.core import datatypes
+import mgear.pymaya.util as pmu
+from mgear.pymaya import datatypes
 from mgear.core import curve, attribute
 
 import math
@@ -18,12 +19,14 @@ import mgear
 #############################################
 
 
-def create(parent=None,
-           name="icon",
-           m=datatypes.Matrix(),
-           color=[0, 0, 0],
-           icon="cube",
-           **kwargs):
+def create(
+    parent=None,
+    name="icon",
+    m=datatypes.Matrix(),
+    color=(0, 0, 0),
+    icon="cube",
+    **kwargs
+):
     """Icon master function
 
     **Create icon master function.**
@@ -33,11 +36,11 @@ def create(parent=None,
         parent (dagNode): The parent for the new icon
         name (str): Name of the Icon.
         m (matrix): Transformation matrix of the icon
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         icon (str): Icon type. Options: "cube", "pyramid", "square",
             "flower", "circle", "cylinder", "compas", "diamond",
                     "cubewithpeak", "sphere", "arrow", "crossarrow",
-                    "cross", "null"
+                    "cross", "null", "gear", "mgear"
         kwargs: The keyword arguments can vary depending of the icon type.
                     Please refear to the specific icon method for more info.
 
@@ -45,142 +48,146 @@ def create(parent=None,
         dagNode: The newly created icon.
 
     """
-    if "w" not in kwargs.keys():
-        kwargs["w"] = 1
-    if "h" not in kwargs.keys():
-        kwargs["h"] = 1
-    if "d" not in kwargs.keys():
-        kwargs["d"] = 1
-    if "po" not in kwargs.keys():
-        kwargs["po"] = None
-    if "ro" not in kwargs.keys():
-        kwargs["ro"] = None
-    if "degree" not in kwargs.keys():
-        kwargs["degree"] = 3
+    kwargs.setdefault("w", 1)
+    kwargs.setdefault("h", 1)
+    kwargs.setdefault("d", 1)
+    kwargs.setdefault("po", None)
+    kwargs.setdefault("ro", None)
+    kwargs.setdefault("degree", 3)
 
     if icon == "cube":
-        ctl = cube(parent,
-                   name,
-                   kwargs["w"],
-                   kwargs["h"],
-                   kwargs["d"],
-                   color,
-                   m,
-                   kwargs["po"],
-                   kwargs["ro"])
+        ctl = cube(
+            parent,
+            name,
+            kwargs["w"],
+            kwargs["h"],
+            kwargs["d"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+        )
     elif icon == "pyramid":
-        ctl = pyramid(parent,
-                      name,
-                      kwargs["w"],
-                      kwargs["h"],
-                      kwargs["d"],
-                      color,
-                      m,
-                      kwargs["po"],
-                      kwargs["ro"])
+        ctl = pyramid(
+            parent,
+            name,
+            kwargs["w"],
+            kwargs["h"],
+            kwargs["d"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+        )
     elif icon == "square":
-        ctl = square(parent,
-                     name,
-                     kwargs["w"],
-                     kwargs["d"],
-                     color,
-                     m,
-                     kwargs["po"],
-                     kwargs["ro"])
+        ctl = square(
+            parent,
+            name,
+            kwargs["w"],
+            kwargs["d"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+        )
     elif icon == "flower":
-        ctl = flower(parent,
-                     name,
-                     kwargs["w"],
-                     color,
-                     m,
-                     kwargs["po"],
-                     kwargs["ro"],
-                     kwargs["degree"])
+        ctl = flower(
+            parent,
+            name,
+            kwargs["w"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+            kwargs["degree"],
+        )
     elif icon == "circle":
-        ctl = circle(parent,
-                     name,
-                     kwargs["w"],
-                     color,
-                     m,
-                     kwargs["po"],
-                     kwargs["ro"],
-                     kwargs["degree"])
+        ctl = circle(
+            parent,
+            name,
+            kwargs["w"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+            kwargs["degree"],
+        )
     elif icon == "cylinder":
-        ctl = cylinder(parent,
-                       name,
-                       kwargs["w"],
-                       kwargs["h"],
-                       color,
-                       m,
-                       kwargs["po"],
-                       kwargs["ro"],
-                       kwargs["degree"])
+        ctl = cylinder(
+            parent,
+            name,
+            kwargs["w"],
+            kwargs["h"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+            kwargs["degree"],
+        )
     elif icon == "compas":
-        ctl = compas(parent,
-                     name,
-                     kwargs["w"],
-                     color,
-                     m,
-                     kwargs["po"],
-                     kwargs["ro"],
-                     kwargs["degree"])
+        ctl = compas(
+            parent,
+            name,
+            kwargs["w"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+            kwargs["degree"],
+        )
     elif icon == "diamond":
-        ctl = diamond(parent,
-                      name,
-                      kwargs["w"],
-                      color,
-                      m,
-                      kwargs["po"],
-                      kwargs["ro"])
+        ctl = diamond(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
     elif icon == "cubewithpeak":
-        ctl = cubewithpeak(parent,
-                           name,
-                           kwargs["w"],
-                           color,
-                           m,
-                           kwargs["po"],
-                           kwargs["ro"])
+        ctl = cubewithpeak(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
     elif icon == "sphere":
-        ctl = sphere(parent,
-                     name,
-                     kwargs["w"],
-                     color,
-                     m,
-                     kwargs["po"],
-                     kwargs["ro"],
-                     kwargs["degree"])
+        ctl = sphere(
+            parent,
+            name,
+            kwargs["w"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+            kwargs["degree"],
+        )
     elif icon == "arrow":
-        ctl = arrow(parent,
-                    name,
-                    kwargs["w"],
-                    color,
-                    m,
-                    kwargs["po"],
-                    kwargs["ro"])
+        ctl = arrow(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
     elif icon == "crossarrow":
-        ctl = crossarrow(parent,
-                         name,
-                         kwargs["w"],
-                         color,
-                         m,
-                         kwargs["po"],
-                         kwargs["ro"])
+        ctl = crossarrow(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
     elif icon == "cross":
-        ctl = cross(parent,
-                    name,
-                    kwargs["w"],
-                    color,
-                    m,
-                    kwargs["po"],
-                    kwargs["ro"])
+        ctl = cross(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
     elif icon == "null":
-        ctl = null(parent,
-                   name,
-                   kwargs["w"],
-                   color,
-                   m,
-                   kwargs["po"],
-                   kwargs["ro"])
+        ctl = null(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
+    elif icon == "gear":
+        kwargs.setdefault("teeth", 8)
+        kwargs.setdefault("tooth_depth", 0.3)
+        ctl = gear(
+            parent,
+            name,
+            kwargs["w"],
+            color,
+            m,
+            kwargs["po"],
+            kwargs["ro"],
+            kwargs["teeth"],
+            kwargs["tooth_depth"],
+        )
+    elif icon == "mgear":
+        ctl = mgear_icon(
+            parent, name, kwargs["w"], color, m, kwargs["po"], kwargs["ro"]
+        )
 
     else:
         mgear.log("invalid type of ico", mgear.sev_error)
@@ -189,15 +196,17 @@ def create(parent=None,
     return ctl
 
 
-def cube(parent=None,
-         name="cube",
-         width=1,
-         height=1,
-         depth=1,
-         color=[0, 0, 0],
-         m=datatypes.Matrix(),
-         pos_offset=None,
-         rot_offset=None):
+def cube(
+    parent=None,
+    name="cube",
+    width=1,
+    height=1,
+    depth=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a CUBE shape.
 
     Arguments:
@@ -206,7 +215,7 @@ def cube(parent=None,
         width (float): Width of the shape.
         height (float): Height of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve
             from its center.
@@ -215,6 +224,7 @@ def cube(parent=None,
 
     Returns:
         dagNode: The newly created icon.
+
     """
     lenX = width * 0.5
     lenY = height * 0.5
@@ -230,12 +240,26 @@ def cube(parent=None,
     NpN = datatypes.Vector(lenX * -1, lenY, lenZ * -1)
     NNN = datatypes.Vector(lenX * -1, lenY * -1, lenZ * -1)
 
-    v_array = [ppp, ppN, NpN, NNN, NNp, Npp, NpN, Npp, ppp, pNp, NNp, pNp, pNN,
-               ppN, pNN, NNN]
+    v_array = [
+        ppp,
+        ppN,
+        NpN,
+        NNN,
+        NNp,
+        Npp,
+        NpN,
+        Npp,
+        ppp,
+        pNp,
+        NNp,
+        pNp,
+        pNN,
+        ppN,
+        pNN,
+        NNN,
+    ]
 
-    points = getPointArrayWithOffset(v_array,
-                                     pos_offset,
-                                     rot_offset)
+    points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
 
     node = curve.addCurve(parent, name, points, False, 1, m)
 
@@ -244,15 +268,17 @@ def cube(parent=None,
     return node
 
 
-def pyramid(parent=None,
-            name="pyramid",
-            width=1,
-            height=1,
-            depth=1,
-            color=[0, 0, 0],
-            m=datatypes.Matrix(),
-            pos_offset=None,
-            rot_offset=None):
+def pyramid(
+    parent=None,
+    name="pyramid",
+    width=1,
+    height=1,
+    depth=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a PYRAMIDE shape.
 
     Arguments:
@@ -261,7 +287,7 @@ def pyramid(parent=None,
         width (float): Width of the shape.
         height (float): Height of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve
             from its center.
@@ -294,14 +320,16 @@ def pyramid(parent=None,
     return node
 
 
-def square(parent=None,
-           name="square",
-           width=1,
-           depth=1,
-           color=[0, 0, 0],
-           m=datatypes.Matrix(),
-           pos_offset=None,
-           rot_offset=None):
+def square(
+    parent=None,
+    name="square",
+    width=1,
+    depth=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a SQUARE shape.
 
     Arguments:
@@ -309,7 +337,7 @@ def square(parent=None,
         name (str): Name of the curve.
         width (float): Width of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -337,21 +365,23 @@ def square(parent=None,
     return node
 
 
-def flower(parent=None,
-           name="flower",
-           width=1,
-           color=[0, 0, 0],
-           m=datatypes.Matrix(),
-           pos_offset=None,
-           rot_offset=None,
-           degree=3):
+def flower(
+    parent=None,
+    name="flower",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+    degree=3,
+):
     """Create a curve with a FLOWER shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -365,16 +395,17 @@ def flower(parent=None,
     dlen = width
 
     v0 = datatypes.Vector(0, -dlen, 0)
-    v1 = datatypes.Vector(-dlen * .4, dlen * .4, 0)
+    v1 = datatypes.Vector(-dlen * 0.4, dlen * 0.4, 0)
     v2 = datatypes.Vector(dlen, 0, 0)
-    v3 = datatypes.Vector(-dlen * .4, -dlen * .4, 0)
+    v3 = datatypes.Vector(-dlen * 0.4, -dlen * 0.4, 0)
     v4 = datatypes.Vector(0, dlen, 0)
-    v5 = datatypes.Vector(dlen * .4, -dlen * .4, 0)
+    v5 = datatypes.Vector(dlen * 0.4, -dlen * 0.4, 0)
     v6 = datatypes.Vector(-dlen, 0, 0)
-    v7 = datatypes.Vector(dlen * .4, dlen * .4, 0)
+    v7 = datatypes.Vector(dlen * 0.4, dlen * 0.4, 0)
 
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset)
+        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset
+    )
 
     node = curve.addCurve(parent, name, points, True, degree, m)
 
@@ -383,21 +414,23 @@ def flower(parent=None,
     return node
 
 
-def circle(parent=None,
-           name="circle",
-           width=1,
-           color=[0, 0, 0],
-           m=datatypes.Matrix(),
-           pos_offset=None,
-           rot_offset=None,
-           degree=3):
+def circle(
+    parent=None,
+    name="circle",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+    degree=3,
+):
     """Create a curve with a CIRCLE shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -411,16 +444,17 @@ def circle(parent=None,
     dlen = width * 0.5
 
     v0 = datatypes.Vector(0, 0, -dlen * 1.108)
-    v1 = datatypes.Vector(dlen * .78, 0, -dlen * .78)
+    v1 = datatypes.Vector(dlen * 0.78, 0, -dlen * 0.78)
     v2 = datatypes.Vector(dlen * 1.108, 0, 0)
-    v3 = datatypes.Vector(dlen * .78, 0, dlen * .78)
+    v3 = datatypes.Vector(dlen * 0.78, 0, dlen * 0.78)
     v4 = datatypes.Vector(0, 0, dlen * 1.108)
-    v5 = datatypes.Vector(-dlen * .78, 0, dlen * .78)
+    v5 = datatypes.Vector(-dlen * 0.78, 0, dlen * 0.78)
     v6 = datatypes.Vector(-dlen * 1.108, 0, 0)
-    v7 = datatypes.Vector(-dlen * .78, 0, -dlen * .78)
+    v7 = datatypes.Vector(-dlen * 0.78, 0, -dlen * 0.78)
 
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset)
+        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset
+    )
 
     node = curve.addCurve(parent, name, points, True, degree, m)
 
@@ -429,15 +463,17 @@ def circle(parent=None,
     return node
 
 
-def cylinder(parent=None,
-             name="cylinder",
-             width=1,
-             heigth=1,
-             color=[0, 0, 0],
-             m=datatypes.Matrix(),
-             pos_offset=None,
-             rot_offset=None,
-             degree=3):
+def cylinder(
+    parent=None,
+    name="cylinder",
+    width=1,
+    heigth=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+    degree=3,
+):
     """Create a curve with a CYLINDER shape.
 
     Arguments:
@@ -445,7 +481,7 @@ def cylinder(parent=None,
         name (str): Name of the curve.
         width (float): Width of the shape.
         height (float): Height of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -456,8 +492,8 @@ def cylinder(parent=None,
         dagNode: The newly created icon.
 
     """
-    dlen = width * .5
-    dhei = heigth * .5
+    dlen = width * 0.5
+    dhei = heigth * 0.5
 
     if degree == 3:
         offsetMult = 1
@@ -466,23 +502,23 @@ def cylinder(parent=None,
 
     # upper circle
     v0 = datatypes.Vector(0, dhei, -dlen * 1.108)
-    v1 = datatypes.Vector(dlen * .78, dhei, -dlen * .78)
+    v1 = datatypes.Vector(dlen * 0.78, dhei, -dlen * 0.78)
     v2 = datatypes.Vector(dlen * 1.108, dhei, 0)
-    v3 = datatypes.Vector(dlen * .78, dhei, dlen * .78)
+    v3 = datatypes.Vector(dlen * 0.78, dhei, dlen * 0.78)
     v4 = datatypes.Vector(0, dhei, dlen * 1.108)
-    v5 = datatypes.Vector(-dlen * .78, dhei, dlen * .78)
+    v5 = datatypes.Vector(-dlen * 0.78, dhei, dlen * 0.78)
     v6 = datatypes.Vector(-dlen * 1.108, dhei, 0)
-    v7 = datatypes.Vector(-dlen * .78, dhei, -dlen * .78)
+    v7 = datatypes.Vector(-dlen * 0.78, dhei, -dlen * 0.78)
 
     # lower circle
     v8 = datatypes.Vector(0, -dhei, -dlen * 1.108)
-    v9 = datatypes.Vector(dlen * .78, -dhei, -dlen * .78)
+    v9 = datatypes.Vector(dlen * 0.78, -dhei, -dlen * 0.78)
     v10 = datatypes.Vector(dlen * 1.108, -dhei, 0)
-    v11 = datatypes.Vector(dlen * .78, -dhei, dlen * .78)
+    v11 = datatypes.Vector(dlen * 0.78, -dhei, dlen * 0.78)
     v12 = datatypes.Vector(0, -dhei, dlen * 1.108)
-    v13 = datatypes.Vector(-dlen * .78, -dhei, dlen * .78)
+    v13 = datatypes.Vector(-dlen * 0.78, -dhei, dlen * 0.78)
     v14 = datatypes.Vector(-dlen * 1.108, -dhei, 0)
-    v15 = datatypes.Vector(-dlen * .78, -dhei, -dlen * .78)
+    v15 = datatypes.Vector(-dlen * 0.78, -dhei, -dlen * 0.78)
 
     # curves
     v16 = datatypes.Vector(0, dhei, -dlen * offsetMult)
@@ -492,15 +528,17 @@ def cylinder(parent=None,
 
     v20 = datatypes.Vector(dlen * offsetMult, dhei, 0)
     v21 = datatypes.Vector(dlen * offsetMult, -dhei, 0)
-    v22 = datatypes.Vector(-dlen * offsetMult, - dhei, 0)
+    v22 = datatypes.Vector(-dlen * offsetMult, -dhei, 0)
     v23 = datatypes.Vector(-dlen * offsetMult, dhei, 0)
 
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset)
+        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset
+    )
     node = curve.addCurve(parent, name, points, True, degree, m)
 
     points = getPointArrayWithOffset(
-        [v8, v9, v10, v11, v12, v13, v14, v15], pos_offset, rot_offset)
+        [v8, v9, v10, v11, v12, v13, v14, v15], pos_offset, rot_offset
+    )
     crv_0 = curve.addCurve(parent, node + "_0crv", points, True, degree, m)
 
     points = getPointArrayWithOffset([v16, v17], pos_offset, rot_offset)
@@ -525,21 +563,23 @@ def cylinder(parent=None,
     return node
 
 
-def compas(parent=None,
-           name="compas",
-           width=1,
-           color=[0, 0, 0],
-           m=datatypes.Matrix(),
-           pos_offset=None,
-           rot_offset=None,
-           degree=3):
+def compas(
+    parent=None,
+    name="compas",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+    degree=3,
+):
     """Create a curve with a COMPAS shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -559,7 +599,7 @@ def compas(parent=None,
 
     for i in range(division):
         if i == division / 2:
-            w = datatypes.Vector(v.x, v.y, v.z - dlen * .4)
+            w = datatypes.Vector(v.x, v.y, v.z - dlen * 0.4)
         else:
             w = datatypes.Vector(v.x, v.y, v.z)
         point_pos.append(w)
@@ -573,13 +613,15 @@ def compas(parent=None,
     return node
 
 
-def diamond(parent=None,
-            name="diamond",
-            width=1,
-            color=[0, 0, 0],
-            m=datatypes.Matrix(),
-            pos_offset=None,
-            rot_offset=None):
+def diamond(
+    parent=None,
+    name="diamond",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a DIAMOND shape.
 
     Arguments:
@@ -588,7 +630,7 @@ def diamond(parent=None,
         width (float): Width of the shape.
         height (float): Height of the shape.
         depth (float): Depth of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -606,10 +648,26 @@ def diamond(parent=None,
     pN = datatypes.Vector(dlen, 0, dlen * -1)
     Np = datatypes.Vector(dlen * -1, 0, dlen)
     NN = datatypes.Vector(dlen * -1, 0, dlen * -1)
-    bottom = (0, -dlen, 0)
+    bottom = datatypes.Vector(0, -dlen, 0)
 
-    v_array = [pp, top, pN, pp, Np, top, NN, Np, NN, pN, bottom, NN, bottom,
-               Np, bottom, pp]
+    v_array = [
+        pp,
+        top,
+        pN,
+        pp,
+        Np,
+        top,
+        NN,
+        Np,
+        NN,
+        pN,
+        bottom,
+        NN,
+        bottom,
+        Np,
+        bottom,
+        pp,
+    ]
 
     points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
 
@@ -620,20 +678,22 @@ def diamond(parent=None,
     return node
 
 
-def cubewithpeak(parent=None,
-                 name="cubewithpeak",
-                 width=1,
-                 color=[0, 0, 0],
-                 m=datatypes.Matrix(),
-                 pos_offset=None,
-                 rot_offset=None):
+def cubewithpeak(
+    parent=None,
+    name="cubewithpeak",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a CUBE WITH PEAK shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -656,8 +716,31 @@ def cubewithpeak(parent=None,
     NpN = datatypes.Vector(dlen * -1, dlen, dlen * -1)
     NNN = datatypes.Vector(dlen * -1, 0, dlen * -1)
 
-    v_array = [peak, ppp, ppN, peak, NpN, ppN, NpN, peak, Npp, NpN, NNN, NNp,
-               Npp, NpN, Npp, ppp, pNp, NNp, pNp, pNN, ppN, pNN, NNN]
+    v_array = [
+        peak,
+        ppp,
+        ppN,
+        peak,
+        NpN,
+        ppN,
+        NpN,
+        peak,
+        Npp,
+        NpN,
+        NNN,
+        NNp,
+        Npp,
+        NpN,
+        Npp,
+        ppp,
+        pNp,
+        NNp,
+        pNp,
+        pNN,
+        ppN,
+        pNN,
+        NNN,
+    ]
 
     points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
 
@@ -668,21 +751,23 @@ def cubewithpeak(parent=None,
     return node
 
 
-def sphere(parent=None,
-           name="sphere",
-           width=1,
-           color=[0, 0, 0],
-           m=datatypes.Matrix(),
-           pos_offset=None,
-           rot_offset=None,
-           degree=3):
+def sphere(
+    parent=None,
+    name="sphere",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+    degree=3,
+):
     """Create a curve with a SPHERE shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -693,21 +778,22 @@ def sphere(parent=None,
         dagNode: The newly created icon.
 
     """
-    dlen = width * .5
+    dlen = width * 0.5
 
     v0 = datatypes.Vector(0, 0, -dlen * 1.108)
-    v1 = datatypes.Vector(dlen * .78, 0, -dlen * .78)
+    v1 = datatypes.Vector(dlen * 0.78, 0, -dlen * 0.78)
     v2 = datatypes.Vector(dlen * 1.108, 0, 0)
-    v3 = datatypes.Vector(dlen * .78, 0, dlen * .78)
+    v3 = datatypes.Vector(dlen * 0.78, 0, dlen * 0.78)
     v4 = datatypes.Vector(0, 0, dlen * 1.108)
-    v5 = datatypes.Vector(-dlen * .78, 0, dlen * .78)
+    v5 = datatypes.Vector(-dlen * 0.78, 0, dlen * 0.78)
     v6 = datatypes.Vector(-dlen * 1.108, 0, 0)
-    v7 = datatypes.Vector(-dlen * .78, 0, -dlen * .78)
+    v7 = datatypes.Vector(-dlen * 0.78, 0, -dlen * 0.78)
 
     ro = datatypes.Vector([1.5708, 0, 0])
 
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset)
+        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset
+    )
     node = curve.addCurve(parent, name, points, True, degree, m)
 
     if rot_offset:
@@ -715,7 +801,8 @@ def sphere(parent=None,
     else:
         rot_offset = ro
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset)
+        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset
+    )
     crv_0 = curve.addCurve(parent, node + "_0crv", points, True, degree, m)
 
     ro = datatypes.Vector([1.5708, 0, 1.5708])
@@ -724,7 +811,8 @@ def sphere(parent=None,
     else:
         rot_offset = ro
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset + ro + ro)
+        [v0, v1, v2, v3, v4, v5, v6, v7], pos_offset, rot_offset + ro + ro
+    )
 
     crv_1 = curve.addCurve(parent, node + "_1crv", points, True, degree, m)
 
@@ -738,20 +826,22 @@ def sphere(parent=None,
     return node
 
 
-def arrow(parent=None,
-          name="arrow",
-          width=1,
-          color=[0, 0, 0],
-          m=datatypes.Matrix(),
-          pos_offset=None,
-          rot_offset=None):
+def arrow(
+    parent=None,
+    name="arrow",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a ARROW shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -773,7 +863,8 @@ def arrow(parent=None,
     v6 = datatypes.Vector(0, -0.3 * dlen, -dlen)
 
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4, v5, v6], pos_offset, rot_offset)
+        [v0, v1, v2, v3, v4, v5, v6], pos_offset, rot_offset
+    )
 
     node = curve.addCurve(parent, name, points, True, 1, m)
 
@@ -782,20 +873,22 @@ def arrow(parent=None,
     return node
 
 
-def crossarrow(parent=None,
-               name="crossArrow",
-               width=1,
-               color=[0, 0, 0],
-               m=datatypes.Matrix(),
-               pos_offset=None,
-               rot_offset=None):
+def crossarrow(
+    parent=None,
+    name="crossArrow",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a CROSS ARROW shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -833,8 +926,32 @@ def crossarrow(parent=None,
     v22 = datatypes.Vector(0.6 * dlen, 0, 0.4 * dlen)
     v23 = datatypes.Vector(0.6 * dlen, 0, 0.2 * dlen)
 
-    v_array = [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14,
-               v15, v16, v17, v18, v19, v20, v21, v22, v23]
+    v_array = [
+        v0,
+        v1,
+        v2,
+        v3,
+        v4,
+        v5,
+        v6,
+        v7,
+        v8,
+        v9,
+        v10,
+        v11,
+        v12,
+        v13,
+        v14,
+        v15,
+        v16,
+        v17,
+        v18,
+        v19,
+        v20,
+        v21,
+        v22,
+        v23,
+    ]
     points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
 
     node = curve.addCurve(parent, name, points, True, 1, m)
@@ -844,20 +961,22 @@ def crossarrow(parent=None,
     return node
 
 
-def cross(parent=None,
-          name="cross",
-          width=1,
-          color=[0, 0, 0],
-          m=datatypes.Matrix(),
-          pos_offset=None,
-          rot_offset=None):
+def cross(
+    parent=None,
+    name="cross",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a CROSS shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -869,7 +988,7 @@ def cross(parent=None,
 
     """
     width = width * 0.35
-    offset1 = width * .5
+    offset1 = width * 0.5
     offset2 = width * 1.5
 
     v0 = datatypes.Vector(width, offset2, 0)
@@ -891,7 +1010,8 @@ def cross(parent=None,
     points = getPointArrayWithOffset(
         [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11],
         pos_offset,
-        rot_offset)
+        rot_offset,
+    )
 
     node = curve.addCurve(parent, name, points, True, 1, m)
 
@@ -900,20 +1020,116 @@ def cross(parent=None,
     return node
 
 
-def null(parent=None,
-         name="null",
-         width=1,
-         color=[0, 0, 0],
-         m=datatypes.Matrix(),
-         pos_offset=None,
-         rot_offset=None):
-    """Create a curve with a NULL shape.
+def gear(
+    parent=None,
+    name="gear",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+    teeth=8,
+    tooth_depth=0.3,
+):
+    """Create a curve with a gear shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
+        m (matrix): The global transformation of the curve.
+        pos_offset (vector): The xyz position offset of the curve from
+            its center.
+        rot_offset (vector): The xyz rotation offset of the curve from
+            its center. xyz in radians
+        teeth (int): Number of teeth on the gear. Default is 8.
+        tooth_depth (float): Depth of the teeth as a ratio of the radius.
+            Default is 0.3. Range 0.0-1.0 where 0 is no teeth and 1 is
+            teeth reaching the center.
+
+    Returns:
+        dagNode: The newly created icon.
+
+    """
+    dlen = width * 0.5
+    tooth_depth = max(0.0, min(1.0, tooth_depth))  # Clamp between 0 and 1
+    inner_radius = dlen * (1.0 - tooth_depth)
+    outer_radius = dlen
+
+    v_array = []
+    teeth = max(3, teeth)  # Ensure at least 3 teeth
+    angle_per_tooth = (2 * math.pi) / teeth
+
+    for i in range(teeth):
+        # Start angle for this tooth
+        base_angle = i * angle_per_tooth
+
+        # Inner point (start of tooth)
+        angle1 = base_angle
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle1) * inner_radius,
+                0,
+                math.cos(angle1) * inner_radius,
+            )
+        )
+
+        # Outer point (first corner of tooth top)
+        angle2 = base_angle + angle_per_tooth * 0.15
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle2) * outer_radius,
+                0,
+                math.cos(angle2) * outer_radius,
+            )
+        )
+
+        # Outer point (second corner of tooth top)
+        angle3 = base_angle + angle_per_tooth * 0.35
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle3) * outer_radius,
+                0,
+                math.cos(angle3) * outer_radius,
+            )
+        )
+
+        # Inner point (end of tooth)
+        angle4 = base_angle + angle_per_tooth * 0.5
+        v_array.append(
+            datatypes.Vector(
+                math.sin(angle4) * inner_radius,
+                0,
+                math.cos(angle4) * inner_radius,
+            )
+        )
+
+    points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
+
+    node = curve.addCurve(parent, name, points, True, 1, m)
+
+    setcolor(node, color)
+
+    return node
+
+
+def mgear_icon(
+    parent=None,
+    name="mgear",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
+    """Create a curve with the MGEAR logo shape as a single  curve.
+
+    Arguments:
+        parent (dagNode): The parent object of the newly created curve.
+        name (str): Name of the curve.
+        width (float): Width of the shape.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -924,7 +1140,145 @@ def null(parent=None,
         dagNode: The newly created icon.
 
     """
-    dlen = width * .5
+    dlen = width * 0.5
+
+    cx, cy = 677.5, 678.5
+
+    svg_scale = 550.0
+
+    icx, icy = 657.783, 674.892
+    inner_r = 300.0
+
+    import math as _math
+
+    inner_circle_pts = []
+    start_angle = _math.radians(135)  # bottom-left of C
+    end_angle = _math.radians(-135)  # top-left where gap starts
+    num_inner_pts = 18
+    for i in range(num_inner_pts):
+        t = i / (num_inner_pts - 1)
+        angle = start_angle + t * (end_angle - start_angle)
+        px = icx + inner_r * _math.cos(angle)
+        py = icy + inner_r * _math.sin(angle)
+        inner_circle_pts.append((px, py))
+
+    svg_points = [
+        # M356.241,1095.8 - Start point
+        (356.241, 1095.8),
+        # C-body outer arc (bottom-left going to notch) - 3 pts
+        (250.0, 990.0),
+        (174.501, 860.748),
+        # L - notch
+        (272.058, 687.337),
+        (566.274, 687.337),
+        (446.906, 886.82),
+        # Inner circle (generated points)
+        *inner_circle_pts,
+        # Gap opening to tooth 2
+        (383.753, 554.6),
+        # L - tooth 2 (left)
+        (154.494, 553.394),
+        # Outer arc - 3 pts
+        (200.0, 420.0),
+        (280.0, 310.0),
+        (352.873, 256.473),
+        # Tooth 2 tip
+        (339.37, 153.042),
+        (463.408, 82.072),
+        # Tooth 3 base
+        (558.491, 166.665),
+        # Top outer edge - 3 pts
+        (610.0, 157.15),
+        (657.783, 157.15),
+        (710.0, 160.0),
+        (741.179, 163.831),
+        # Tooth 3 tip
+        (804.728, 82.679),
+        (942.291, 121.402),
+        # Tooth 4 base
+        (948.502, 246.407),
+        # Outer arc - 3 pts
+        (1000.0, 290.0),
+        (1050.0, 340.0),
+        (1078.72, 373.354),
+        # Tooth 4 tip
+        (1158.01, 353.698),
+        (1242.54, 468.925),
+        # Tooth 5 base
+        (1166.33, 577.058),
+        # Right outer edge - 3 pts
+        (1175.56, 630.0),
+        (1175.56, 674.926),
+        (1170.0, 720.0),
+        (1168.32, 761.715),
+        # Tooth 5 tip
+        (1247.19, 827.407),
+        (1204.32, 963.741),
+        # Tooth 6 base
+        (1086.04, 966.031),
+        # Bottom-right outer arc - 3 pts
+        (1040.0, 1020.0),
+        (990.0, 1070.0),
+        (953.021, 1100.33),
+        # Tooth 6 tip
+        (959.854, 1211.36),
+        (831.258, 1273.7),
+        # Back toward tooth 1
+        (744.737, 1185.42),
+        # Bottom outer edge - 3 pts
+        (700.0, 1192.69),
+        (657.783, 1192.69),
+        (610.0, 1190.0),
+        (559.465, 1183.37),
+        # Tooth 1 tip
+        (489.569, 1261.96),
+        (354.693, 1214.71),
+        # Z closes back to start
+    ]
+
+    v_array = []
+
+    for svg_x, svg_y in svg_points:
+        # Center the coordinates
+        x = (svg_x - cx) / svg_scale
+        z = (svg_y - cy) / svg_scale
+        v_array.append(datatypes.Vector(x * dlen, 0, -z * dlen))
+
+    points = getPointArrayWithOffset(v_array, pos_offset, rot_offset)
+    node = curve.addCurve(parent, name, points, True, 1, m)
+
+    setcolor(node, color)
+
+    return node
+
+
+def null(
+    parent=None,
+    name="null",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
+    """Create a curve with a NULL shape.
+
+    Arguments:
+        parent (dagNode): The parent object of the newly created curve.
+        name (str): Name of the curve.
+        width (float): Width of the shape.
+        color (int | list of float | tuple of float): The color in index base or RGB.
+        m (matrix): The global transformation of the curve.
+        pos_offset (vector): The xyz position offset of the curve from
+            its center.
+        rot_offset (vector): The xyz rotation offset of the curve from
+            its center. xyz in radians
+
+    Returns:
+        dagNode: The newly created icon.
+
+    """
+    dlen = width * 0.5
 
     v0 = datatypes.Vector(dlen, 0, 0)
     v1 = datatypes.Vector(-dlen, 0, 0)
@@ -952,20 +1306,22 @@ def null(parent=None,
     return node
 
 
-def axis(parent=None,
-         name="axis",
-         width=1,
-         color=[0, 0, 0],
-         m=datatypes.Matrix(),
-         pos_offset=None,
-         rot_offset=None):
+def axis(
+    parent=None,
+    name="axis",
+    width=1,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a AXIS shape.
 
     Arguments:
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -976,7 +1332,7 @@ def axis(parent=None,
         dagNode: The newly created icon.
 
     """
-    dlen = width * .5
+    dlen = width * 0.5
 
     v0 = datatypes.Vector(0, 0, 0)
     v1 = datatypes.Vector(dlen, 0, 0)
@@ -1027,18 +1383,88 @@ def connection_display_curve(name, centers=[], degree=1):
 
     return crv
 
+
+def direction_arrow(
+    axis="z", length=1, name="direction_arrow", parent_name=None
+):
+    """
+    Creates a curve shaped like an arrow, aligned with a specified axis and length.
+
+    Args:
+        parent_name (str): The name of the parent object. The arrow is created
+            relative to its local axis.
+        axis (str): The axis for the arrow direction ('x', 'y', 'z', '-x', '-y', '-z').
+        length (float): The length of the arrow.
+
+    Returns:
+        str: The name of the created arrow curve.
+
+    """
+    # Validate axis input
+    valid_axes = ["x", "y", "z", "-x", "-y", "-z"]
+    if axis not in valid_axes:
+        raise ValueError(
+            "Invalid axis '{}'. Must be one of: {}".format(axis, valid_axes)
+        )
+
+    # Define arrow points in local space
+    size_ratio = 0.9
+    tip = [0, 0, length]
+    base1 = [-0.1 * length, 0, size_ratio * length]
+    base2 = [0.1 * length, 0, size_ratio * length]
+    base3 = [-0.05 * length, 0, size_ratio * length]
+    base4 = [0.05 * length, 0, size_ratio * length]
+    shaft_start = [0, 0, 0]
+    shaft_end = [0, 0, size_ratio * length]
+
+    # Assemble the arrow shape
+    points = [
+        shaft_start,
+        shaft_end,
+        base4,
+        base2,
+        tip,
+        base1,
+        base3,
+        shaft_end,
+    ]
+
+    # Transform points to match the axis
+    for i in range(len(points)):
+        if axis == "x":
+            points[i] = [points[i][2], points[i][1], points[i][0]]
+        elif axis == "-x":
+            points[i] = [-points[i][2], points[i][1], points[i][0]]
+        elif axis == "y":
+            points[i] = [points[i][0], points[i][2], points[i][1]]
+        elif axis == "-y":
+            points[i] = [points[i][0], -points[i][2], points[i][1]]
+        elif axis == "-z":
+            points[i] = [points[i][0], points[i][1], -points[i][2]]
+
+    # Create the curve
+    arrow_curve = cmds.curve(p=points, d=1, n=name)
+
+    if parent_name:
+        cmds.parent(arrow_curve, parent_name)
+
+    return pm.PyNode(arrow_curve)
+
+
 ##########################################################
 # Guide Icons
 ##########################################################
 
 
-def guideRootIcon(parent=None,
-                  name="root",
-                  width=.5,
-                  color=[0, 0, 0],
-                  m=datatypes.Matrix(),
-                  pos_offset=None,
-                  rot_offset=None):
+def guideRootIcon(
+    parent=None,
+    name="root",
+    width=0.5,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a ROOT GUIDE shape.
 
     Note:
@@ -1048,7 +1474,7 @@ def guideRootIcon(parent=None,
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1061,15 +1487,17 @@ def guideRootIcon(parent=None,
     """
     rootIco = null(parent, name, width, color, m, pos_offset, rot_offset)
     cubeWidth = width / 2.0
-    cubeIco = cube(parent,
-                   name,
-                   cubeWidth,
-                   cubeWidth,
-                   cubeWidth,
-                   color,
-                   m,
-                   pos_offset,
-                   rot_offset)
+    cubeIco = cube(
+        parent,
+        name,
+        cubeWidth,
+        cubeWidth,
+        cubeWidth,
+        color,
+        m,
+        pos_offset,
+        rot_offset,
+    )
 
     for shp in cubeIco.listRelatives(shapes=True):
         rootIco.addChild(shp, add=True, shape=True)
@@ -1084,13 +1512,15 @@ def guideRootIcon(parent=None,
     return rootIco
 
 
-def guideRootIcon2D(parent=None,
-                    name="root",
-                    width=.5,
-                    color=[0, 0, 0],
-                    m=datatypes.Matrix(),
-                    pos_offset=None,
-                    rot_offset=None):
+def guideRootIcon2D(
+    parent=None,
+    name="root",
+    width=0.5,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a 2D ROOT GUIDE shape.
 
     Note:
@@ -1100,7 +1530,7 @@ def guideRootIcon2D(parent=None,
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1119,14 +1549,16 @@ def guideRootIcon2D(parent=None,
         rot_offset_orig.rotateBy(rot_offset)
 
     squareWidth = width / 2.0
-    squareIco = square(parent,
-                       name,
-                       squareWidth,
-                       squareWidth,
-                       color,
-                       m,
-                       pos_offset,
-                       rot_offset_orig)
+    squareIco = square(
+        parent,
+        name,
+        squareWidth,
+        squareWidth,
+        color,
+        m,
+        pos_offset,
+        rot_offset_orig,
+    )
 
     for shp in squareIco.listRelatives(shapes=True):
         rootIco.addChild(shp, add=True, shape=True)
@@ -1141,13 +1573,15 @@ def guideRootIcon2D(parent=None,
     return rootIco
 
 
-def guideLocatorIcon(parent=None,
-                     name="locator",
-                     width=.5,
-                     color=[0, 0, 0],
-                     m=datatypes.Matrix(),
-                     pos_offset=None,
-                     rot_offset=None):
+def guideLocatorIcon(
+    parent=None,
+    name="locator",
+    width=0.5,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a LOCATOR GUIDE shape.
 
     Note:
@@ -1157,7 +1591,7 @@ def guideLocatorIcon(parent=None,
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         width (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1166,12 +1600,14 @@ def guideLocatorIcon(parent=None,
 
     Returns:
         dagNode: The newly created icon.
+
     """
     rootIco = null(parent, name, width, color, m, pos_offset, rot_offset)
     spheWidth = width / 2.0
 
     sphereIco = sphere(
-        parent, name, spheWidth, color, m, pos_offset, rot_offset, degree=3)
+        parent, name, spheWidth, color, m, pos_offset, rot_offset, degree=3
+    )
 
     for shp in sphereIco.listRelatives(shapes=True):
         rootIco.addChild(shp, add=True, shape=True)
@@ -1186,13 +1622,15 @@ def guideLocatorIcon(parent=None,
     return rootIco
 
 
-def guideBladeIcon(parent=None,
-                   name="blade",
-                   lenX=1.0,
-                   color=[0, 0, 0],
-                   m=datatypes.Matrix(),
-                   pos_offset=None,
-                   rot_offset=None):
+def guideBladeIcon(
+    parent=None,
+    name="blade",
+    lenX=1.0,
+    color=(0, 0, 0),
+    m=datatypes.Matrix(),
+    pos_offset=None,
+    rot_offset=None,
+):
     """Create a curve with a BLADE GUIDE shape.
 
     Note:
@@ -1202,7 +1640,7 @@ def guideBladeIcon(parent=None,
         parent (dagNode): The parent object of the newly created curve.
         name (str): Name of the curve.
         lenX (float): Width of the shape.
-        color (int or list of float): The color in index base or RGB.
+        color (int | list of float | tuple of float): The color in index base or RGB.
         m (matrix): The global transformation of the curve.
         pos_offset (vector): The xyz position offset of the curve from
             its center.
@@ -1220,23 +1658,37 @@ def guideBladeIcon(parent=None,
     v4 = datatypes.Vector(0, lenX / 2, 0)
 
     points = getPointArrayWithOffset(
-        [v0, v1, v2, v3, v4], pos_offset, rot_offset)
+        [v0, v1, v2, v3, v4], pos_offset, rot_offset
+    )
 
     bladeIco = curve.addCurve(parent, name, points, True, 1, m)
 
     setcolor(bladeIco, color)
 
     attribute.setNotKeyableAttributes(bladeIco)
-    attribute.unlockAttribute(bladeIco, attributes=["tx", "ty", "tz",
-                                                    "rx", "ry", "rz",
-                                                    "sx", "sy", "sz",
-                                                    "v", "ro"])
+    attribute.unlockAttribute(
+        bladeIco,
+        attributes=[
+            "tx",
+            "ty",
+            "tz",
+            "rx",
+            "ry",
+            "rz",
+            "sx",
+            "sy",
+            "sz",
+            "v",
+            "ro",
+        ],
+    )
     # bladeIco.scale.set(1, 1, 1)
     # Set the control shapes isHistoricallyInteresting
     for oShape in bladeIco.getShapes():
         oShape.isHistoricallyInteresting.set(False)
 
     return bladeIco
+
 
 ##########################################################
 # MISC
@@ -1265,10 +1717,14 @@ def getPointArrayWithOffset(point_pos, pos_offset=None, rot_offset=None):
     for v in point_pos:
         if rot_offset:
             mv = om.MVector(v.x, v.y, v.z)
-            mv = mv.rotateBy(om.MEulerRotation(rot_offset.x,
-                                               rot_offset.y,
-                                               rot_offset.z,
-                                               om.MEulerRotation.kXYZ))
+            mv = mv.rotateBy(
+                om.MEulerRotation(
+                    rot_offset.x,
+                    rot_offset.y,
+                    rot_offset.z,
+                    om.MEulerRotation.kXYZ,
+                )
+            )
             v = datatypes.Vector(mv.x, mv.y, mv.z)
         if pos_offset:
             v = v + pos_offset
@@ -1283,8 +1739,7 @@ def setcolor(node, color):
 
     Arguments:
         node(dagNode): The object
-        color (int or list of float): The color in index base or RGB.
-
+        color (int | list of float | tuple of float): The color in index base or RGB.
 
     """
     # TODO: configure this funcion to work with RGB or Index color base

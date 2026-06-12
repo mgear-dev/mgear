@@ -1,7 +1,7 @@
 """Component Foot Banking 01 module"""
 
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 
@@ -443,9 +443,7 @@ class Component(component.Main):
         pm.parent(self.root, self.parent_comp.ik_ctl)
         pm.parent(self.parent_comp.ik_ref, self.bk_ctl[-1])
         pm.parent(self.parent_comp.match_fk2, self.bk_ctl[-1])
-        pm.parentConstraint(
-            self.parent_comp.tws2_rot, self.fk_ref, maintainOffset=True
-        )
+        pm.parent(self.fk_ref, self.parent_comp.tws2_rot)
 
         # add message connections to parent component.
         # this connection will be used to track the ctl relation when IK/FK
@@ -483,6 +481,12 @@ class Component(component.Main):
         )
         pm.connectAttr(self.parent_comp.blend_att, bc_node + ".blender")
 
+        # add message connections to parent component.
+        # this connection will be used to track the ctl relation when IK/FK
+        # match is performed
+        self.parent_comp.root.addAttr("footCnx", at="message", m=False)
+        self.root.message >> self.parent_comp.root.footCnx
+
         return
 
     def connect_leg_3jnt_01(self):
@@ -496,8 +500,15 @@ class Component(component.Main):
         pm.parent(self.root, self.parent_comp.ik_ctl)
         pm.parent(self.parent_comp.ik_ref, self.bk_ctl[-1])
         pm.parent(self.parent_comp.ik2b_ikCtl_ref, self.bk_ctl[-1])
+        pm.parent(self.parent_comp.match_fk3, self.bk_ctl[-1])
         pm.parentConstraint(
             self.parent_comp.tws3_rot, self.fk_ref, maintainOffset=True
         )
+
+        # add message connections to parent component.
+        # this connection will be used to track the ctl relation when IK/FK
+        # match is performed
+        self.parent_comp.root.addAttr("footCnx", at="message", m=False)
+        self.root.message >> self.parent_comp.root.footCnx
 
         return

@@ -1,8 +1,8 @@
 """Component UI Slider 01 module"""
 import math
 
-import pymel.core as pm
-import pymel.core.datatypes as dt
+import mgear.pymaya as pm
+import mgear.pymaya.datatypes as dt
 
 from mgear.shifter import component
 from mgear.core import attribute, transform, primitive
@@ -38,7 +38,7 @@ class Component(component.Main):
 
         margin = 0.1 * self.size
 
-        border_offset = dt.Point(minX + maxX, minY + maxY) * 0.5
+        border_offset = dt.Vector(minX + maxX, minY + maxY) * 0.5
 
         self.border = self.addCtl(self.root,
                                   "border", t,

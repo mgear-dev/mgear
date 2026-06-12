@@ -1,5 +1,5 @@
 import maya.cmds as cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 from mgear.core import pyqt
 from mgear.core import attribute
 from mgear.core import utils

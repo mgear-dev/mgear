@@ -1,14 +1,14 @@
 # Original design Krzysztof Marcinowski
 import json
 from functools import partial
-from six import string_types
+string_types = str
 
 
 import mgear.core.pyqt as gqt
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear.vendor.Qt import QtCore, QtWidgets
-from pymel.core import datatypes
+from mgear.pymaya import datatypes
 
 from mgear import rigbits
 from mgear.core import meshNavigation, curve, applyop, primitive, icon
@@ -62,7 +62,7 @@ def rig(edge_loop,
     if edge_loop:
         try:
             edge_loop = [pm.PyNode(e) for e in edge_loop.split(",")]
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "Some of the edges listed in edge loop can not be found")
             return
@@ -156,7 +156,7 @@ def rig(edge_loop,
     if parent_node:
         try:
             parent_node = pm.PyNode(parent_node)
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "Static rig parent: %s can not be found" % parent_node)
             return
@@ -165,7 +165,7 @@ def rig(edge_loop,
         try:
             brow_jnt_C = pm.PyNode(brow_jnt_C)
             joints_collect.append(brow_jnt_C)
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "Mid parent joint: %s can not be found" % brow_jnt_C)
             return
@@ -179,7 +179,7 @@ def rig(edge_loop,
             try:
                 brow_jnt_L = pm.PyNode(brow_jnt_L)
                 joints_collect.append(brow_jnt_L)
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning(
                     "Left parent joint: %s can not be found" % brow_jnt_L)
                 return
@@ -192,7 +192,7 @@ def rig(edge_loop,
             try:
                 brow_jnt_R = pm.PyNode(brow_jnt_R)
                 joints_collect.append(brow_jnt_R)
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning(
                     "Right parent joint: %s can not be found." % brow_jnt_R)
                 return
@@ -200,7 +200,7 @@ def rig(edge_loop,
             try:
                 brow_jnt_R = pickWalk.getMirror(brow_jnt_L)[0]
                 joints_collect.append(brow_jnt_R)
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning(
                     "Right parent joint: "
                     "%s can't be found. Please set it manually." % brow_jnt_R)
@@ -258,7 +258,7 @@ def rig(edge_loop,
             ctl_parent_L = pm.PyNode(ctl_parent_L)
             controls_collect.append(ctl_parent_L)
             parent_tag_L = ctl_parent_L
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "Right (Left) ctl: %s can not be found" % ctl_parent_L)
             return
@@ -272,7 +272,7 @@ def rig(edge_loop,
             ctl_parent_R = pm.PyNode(ctl_parent_R)
             controls_collect.append(ctl_parent_R)
             parent_tag_R = ctl_parent_R
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "Right ctl: %s can not be found" % ctl_parent_R)
             return
@@ -286,7 +286,7 @@ def rig(edge_loop,
             ctl_parent_C = pm.PyNode(ctl_parent_C)
             controls_collect.append(ctl_parent_C)
             parent_tag_C = ctl_parent_C
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning(
                 "Main ctl: %s can not be found" % ctl_parent_R)
             return
@@ -301,7 +301,7 @@ def rig(edge_loop,
                 ctl_parent_R = pm.PyNode(ctl_parent_R)
                 controls_collect.append(ctl_parent_R)
                 parent_tag_R = ctl_parent_R
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning(
                     "Right ctl: %s can not be found" % ctl_parent_R)
                 return
@@ -316,12 +316,12 @@ def rig(edge_loop,
     # TODO: the set name should not be hardcoded to "rig" name
     try:
         ctlSet = pm.PyNode("rig_controllers_grp")
-    except pm.MayaNodeError:
+    except RuntimeError:
         pm.sets(n="rig_controllers_grp", em=True)
         ctlSet = pm.PyNode("rig_controllers_grp")
     try:
         defset = pm.PyNode("rig_deformers_grp")
-    except pm.MayaNodeError:
+    except RuntimeError:
         pm.sets(n="rig_deformers_grp", em=True)
         defset = pm.PyNode("rig_deformers_grp")
 
@@ -383,14 +383,14 @@ def rig(edge_loop,
         # Get control positions
         #####################
         if symmetry_mode == 0:  # 0 means ON
-            if side is "C":  # middle segment should be divided into 3 points.
+            if side == "C":  # middle segment should be divided into 3 points.
                 mainCtrlPos = helpers.divideSegment(mainCurve, midDivisions)
                 # since the central part is process first we usen the main list
                 # to slice repeted vertex
                 closestVtxsList = closestVtxsList[1:mid_loop_len - 1]
             else:
                 mainCtrlPos = helpers.divideSegment(mainCurve, main_div)
-            if secondary_ctl_check and side is not "C":
+            if secondary_ctl_check and side != "C":
                 # get secondary controls position
                 secCtrlPos = helpers.divideSegment(mainCurve, sec_div)
 
@@ -412,44 +412,44 @@ def rig(edge_loop,
         for i, ctlPos in enumerate(mainCtrlPos):
             controlType = "square"
 
-            if i is 0:
-                if side is "L":
+            if i == 0:
+                if side == "L":
                     posPrefix = "in"
-                if side is "R":
+                if side == "R":
                     posPrefix = "out"
-                if side is "C":
+                if side == "C":
                     posPrefix = "out_R"
-                    if symmetry_mode is 0:
+                    if symmetry_mode == 0:
                         controlType = "npo"
 
-            elif i is (len(mainCtrlPos) - 1):
-                if side is "L":
+            elif i == (len(mainCtrlPos) - 1):
+                if side == "L":
                     posPrefix = "out"
-                if side is "R":
+                if side == "R":
                     posPrefix = "in"
-                if side is "C":
+                if side == "C":
                     posPrefix = "out_L"
                     if symmetry_mode == 0:
                         controlType = "npo"
             else:
                 posPrefix = "mid_0" + str(i)
-                if side is "R":
+                if side == "R":
                     posPrefix = "mid_0" + str(len(mainCtrlPos) - (i + 1))
             set_options = False  # when mirror is set we need to avoid the
             # tanget controls on the central part
 
-            if posPrefix is "in" or posPrefix is "out_R":
-                if side is "L":
+            if posPrefix == "in" or posPrefix == "out_R":
+                if side == "L":
                     tPrefix = [posPrefix + "_tangent", posPrefix]
                     tControlType = ["sphere", controlType]
                     tControlSize = [0.8, 1.0]
                     set_options = True
-                if side is "C" and symmetry_mode:
+                if side == "C" and symmetry_mode:
                     tPrefix = ["out_R_tangent", posPrefix]
                     tControlType = ["sphere", controlType]
                     tControlSize = [0.8, 1.0]
                     set_options = True
-                if side is "R":
+                if side == "R":
                     tPrefix = [posPrefix, posPrefix + "_tangent"]
                     tControlType = [controlType, "sphere"]
                     tControlSize = [1.0, 0.8]
@@ -473,18 +473,18 @@ def rig(edge_loop,
                                ctlPos]
                     mainCtrlOptions.append(options)
 
-            elif posPrefix is "out" or posPrefix is "out_L":
-                if side is "L":
+            elif posPrefix == "out" or posPrefix == "out_L":
+                if side == "L":
                     tPrefix = [posPrefix + "_tangent", posPrefix]
                     tControlType = ["sphere", controlType]
                     tControlSize = [0.8, 1.0]
                     set_options = True
-                if side is "C" and symmetry_mode:
+                if side == "C" and symmetry_mode:
                     tPrefix = ["out_L_tangent", posPrefix]
                     tControlType = ["sphere", controlType]
                     tControlSize = [0.8, 1.0]
                     set_options = True
-                if side is "R":
+                if side == "R":
                     tPrefix = [posPrefix, posPrefix + "_tangent"]
                     tControlType = [controlType, "sphere"]
                     tControlSize = [1.0, 0.8]
@@ -540,7 +540,7 @@ def rig(edge_loop,
                 for i, ctlPos in enumerate(secCtrlPos):
                     # invert the index naming only.
                     # if the full list is inver we generate another issues
-                    if side is "R":
+                    if side == "R":
                         i_name = sec_number_index - i
                     else:
                         i_name = i
@@ -570,7 +570,7 @@ def rig(edge_loop,
         # TODO: why is using test name for parent controls?
         for j, ctlOptions in enumerate(controlOptionList):
             # set status for main controllers
-            if j is 0:
+            if j == 0:
                 testName = setName("mainControls")
                 controlStatus = 0  # main controls
                 try:
@@ -611,7 +611,7 @@ def rig(edge_loop,
                     setName("%s_bufferNpo" % oName, oSide),
                     position)
                 # Create casual control
-                if o_icon is not "npo":
+                if o_icon != "npo":
                     if o_icon == "sphere":
                         rot_offset = None
                     else:
@@ -663,11 +663,11 @@ def rig(edge_loop,
                     npo.attr("sx").set(-1)
 
                 # collect hook npos'
-                if side is "L" and "in" in oName:
+                if side == "L" and "in" in oName:
                     l_hookMem.append(ctl)
-                if side is "R" and "in" in oName:
+                if side == "R" and "in" in oName:
                     r_hookMem.append(ctl)
-                if side is "C":
+                if side == "C":
                     c_hookMem.append(ctl)
 
             pm.progressWindow(e=True, endProgress=True)
@@ -783,7 +783,7 @@ def rig(edge_loop,
             if isinstance(parent_node, string_types):
                 parent_node = pm.PyNode(parent_node)
             parent_node.addChild(brows_root)
-        except pm.MayaNodeError:
+        except RuntimeError:
             pm.displayWarning("The brow rig can not be parent to: %s. Maybe "
                               "this object doesn't exist." % parent_node)
 
@@ -793,7 +793,7 @@ def rig(edge_loop,
         tag_parent = None
         ctl_side = getSide(ctl)
 
-        if ctl_side is "L":
+        if ctl_side == "L":
             if "in_tangent_ctl" in ctl.name():
                 t_inL = ctl
             if "in_ctl" in ctl.name():
@@ -804,7 +804,7 @@ def rig(edge_loop,
                 c_outL = ctl
             tag_parent = parent_tag_L
 
-        if ctl_side is "R":
+        if ctl_side == "R":
             if "in_tangent_ctl" in ctl.name():
                 t_inR = ctl
             if "in_ctl" in ctl.name():
@@ -816,7 +816,7 @@ def rig(edge_loop,
             tag_parent = parent_tag_R
 
         if symmetry_mode == 0:  # 0 means ON
-            if ctl_side is "C":
+            if ctl_side == "C":
                 if "R_HookNpo" in ctl.name():
                     h_outR = ctl
                 if "L_HookNpo" in ctl.name():
@@ -825,7 +825,7 @@ def rig(edge_loop,
                     c_mid = ctl
                 tag_parent = parent_tag_L
         else:
-            if ctl_side is "C":
+            if ctl_side == "C":
                 if "out_R_ctl" in ctl.name():
                     c_outR = ctl
                 if "out_L_ctl" in ctl.name():
@@ -872,24 +872,24 @@ def rig(edge_loop,
         for ctl in mainControls:
             ctl_side = getSide(ctl)
 
-            if ctl_side is "L" and "_tangent" not in ctl.name():
+            if ctl_side == "L" and "_tangent" not in ctl.name():
                 pm.parent(ctl.getParent(2), ctl_parent_L)
 
-            if ctl_side is "R" and "_tangent" not in ctl.name():
+            if ctl_side == "R" and "_tangent" not in ctl.name():
                 pm.parent(ctl.getParent(2), ctl_parent_R)
 
     else:
         ctl_side = getSide(mainControls[0])
 
-        if ctl_side is "L":
+        if ctl_side == "L":
             pm.parent(t_inL.getParent(2), c_inL)
             pm.parent(t_outL.getParent(2), c_outL)
             ctl_parent = ctl_parent_L
-        if ctl_side is "R":
+        if ctl_side == "R":
             pm.parent(t_inR.getParent(2), c_inR)
             pm.parent(t_outR.getParent(2), c_outR)
             ctl_parent = ctl_parent_R
-        if ctl_side is "C":
+        if ctl_side == "C":
             pm.parent(t_outR.getParent(2), c_outR)
             pm.parent(t_outL.getParent(2), c_outL)
             ctl_parent = ctl_parent_C
@@ -909,7 +909,7 @@ def rig(edge_loop,
             rightSec = []
             for secCtl in secondaryControls:
                 # tag_parent = None
-                if getSide(secCtl) is "L":
+                if getSide(secCtl) == "L":
                     # connect secondary controla rotate/scale to ctl_parent_L.
                     constraints.matrixConstraint(ctl_parent_L,
                                                  secCtl.getParent(2),
@@ -918,7 +918,7 @@ def rig(edge_loop,
                     leftSec.append(secCtl)
                     tag_parent = parent_tag_L
 
-                if getSide(secCtl) is "R":
+                if getSide(secCtl) == "R":
                     # connect secondary controla rotate/scale to ctl_parent_L.
                     constraints.matrixConstraint(ctl_parent_R,
                                                  secCtl.getParent(2),
@@ -1018,9 +1018,9 @@ def rig(edge_loop,
 
     # set drivers
     crvDrivers = []
-    if secondary_ctl_check is True:
+    if secondary_ctl_check:
         if symmetry_mode == 0:
-            crv = [crv for crv in mainCtlCurves if getSide(crv) is "C"]
+            crv = [crv for crv in mainCtlCurves if getSide(crv) == "C"]
             crvDrivers.append(crv[0])
 
             crvDrivers = crvDrivers + secondaryCurves
@@ -1045,17 +1045,17 @@ def rig(edge_loop,
         side = getSide(crv)
 
         if symmetry_mode == 0:  # 0 means ON
-            if side is "L":
+            if side == "L":
                 browJoint = brow_jnt_L
-            if side is "R":
+            if side == "R":
                 browJoint = brow_jnt_R
-            if side is "C":
+            if side == "C":
                 browJoint = brow_jnt_C
         else:
             browJoint = brow_jnt_C
 
         for i, cv in enumerate(cvs):
-            if symmetry_mode == 0 and side is "C":
+            if symmetry_mode == 0 and side == "C":
 
                 if i == 0 or i >= mid_loop_len - 1:
                     continue
@@ -1119,7 +1119,7 @@ def rig(edge_loop,
         if brow_jnt_C:
             try:
                 brow_jnt_C = pm.PyNode(brow_jnt_C)
-            except pm.MayaNodeError:
+            except RuntimeError:
                 pm.displayWarning(
                     "Auto skin aborted can not find %s " % brow_jnt_C)
                 return

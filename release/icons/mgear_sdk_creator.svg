@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- SDK curve -->
+    <path d="M2 18C5 18 7 6 11 6s5 12 8 12"></path>
+    <!-- Keyframe diamond -->
+    <rect x="9" y="4" width="4" height="4" rx="0.5" transform="rotate(45 11 6)"></rect>
+    <!-- Plus sign (create) -->
+    <line x1="20" y1="3" x2="20" y2="11"></line>
+    <line x1="16" y1="7" x2="24" y2="7"></line>
+</svg>

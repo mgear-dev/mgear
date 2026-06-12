@@ -1,6 +1,6 @@
-import pymel.core as pm
+import mgear.pymaya as pm
 import ast
-from pymel.core import datatypes
+from mgear.pymaya import datatypes
 
 from mgear.shifter import component
 

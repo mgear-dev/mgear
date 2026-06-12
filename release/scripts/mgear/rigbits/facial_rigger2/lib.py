@@ -1,6 +1,6 @@
 import json
-from six import string_types
-import pymel.core
+string_types = str
+import mgear.pymaya
 
 from mgear.vendor.Qt import QtWidgets
 
@@ -69,7 +69,7 @@ def get_file_path(filter, mode):
     if mode == "save":
         filemode = 0
 
-    file_path = pymel.core.fileDialog2(
+    file_path = mgear.pymaya.fileDialog2(
         fileMode=filemode,
         fileFilter=filter
     )
@@ -82,20 +82,20 @@ def get_file_path(filter, mode):
 
 
 def get_edge_loop_from_selection():
-    selection = pymel.core.selected(fl=1)
+    selection = mgear.pymaya.selected(fl=1)
     if selection:
         edge_list = ""
         separator = ""
         for edge in selection:
-            if isinstance(edge, pymel.core.MeshEdge):
+            if isinstance(edge, mgear.pymaya.MeshEdge):
                 if edge_list:
                     separator = ","
                 edge_list = edge_list + separator + str(edge)
         if not edge_list:
-            pymel.core.displayWarning("Please select first the edge loop.")
+            mgear.pymaya.displayWarning("Please select first the edge loop.")
         elif len(edge_list.split(",")) < 4:
-            pymel.core.displayWarning("The minimun edge count is 4")
+            mgear.pymaya.displayWarning("The minimun edge count is 4")
         else:
             return edge_list
     else:
-        pymel.core.displayWarning("Please select first the edge loop.")
+        mgear.pymaya.displayWarning("Please select first the edge loop.")

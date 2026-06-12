@@ -7,8 +7,8 @@ import json
 from contextlib import contextmanager
 from maya import cmds, mel, OpenMayaUI
 from maya.app.renderSetup.model import renderSetup, renderLayer, typeIDs
-from PySide2 import QtWidgets
-from shiboken2 import wrapInstance
+from mgear.vendor.Qt import QtWidgets
+from mgear.vendor.Qt import QtCompat
 from mgear.animbits.cache_manager.query import (
     _MANAGER_PREFERENCE_PATH,
     get_preference_file,
@@ -214,7 +214,7 @@ def kill_ui(name):
         return
 
     # wraps the widget into a qt object
-    qt_object = wrapInstance(long(widget), QtWidgets.QDialog)
+    qt_object = QtCompat.wrapInstance(long(widget), QtWidgets.QDialog)
 
     # sets the widget parent to none
     qt_object.setParent(None)

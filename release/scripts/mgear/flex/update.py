@@ -35,7 +35,7 @@ from mgear.flex.update_utils import create_deformers_backups
 from mgear.flex.update_utils import delete_transform_from_nodes
 from mgear.flex.update_utils import set_deformer_state
 from mgear.flex.update_utils import update_shape
-import pymel.core as pm
+import mgear.pymaya as pm
 
 
 def update_attribute(source, target, attribute_name):

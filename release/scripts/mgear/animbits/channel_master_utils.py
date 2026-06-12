@@ -1,5 +1,5 @@
 import maya.cmds as cmds
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.core import attribute
 
@@ -167,7 +167,7 @@ def reset_attribute(attr_config, namespace=None):
     Args:
         attr_config (dict): Attribute configuration
     """
-    ctl = get_ctl_with_namespace(attr_config, namespace=None)
+    ctl = get_ctl_with_namespace(attr_config, namespace=namespace)
     obj = pm.PyNode(ctl)
     attr = attr_config["longName"]
 
@@ -180,7 +180,7 @@ def reset_creation_value_attribute(attr_config, namespace=None):
     Args:
         attr_config (dict): Attribute configuration
     """
-    ctl = get_ctl_with_namespace(attr_config, namespace=None)
+    ctl = get_ctl_with_namespace(attr_config, namespace=namespace)
     attr = attr_config["longName"]
     fullname_attr = "{}.{}".format(ctl, attr)
     if "creationValue" in attr_config.keys():

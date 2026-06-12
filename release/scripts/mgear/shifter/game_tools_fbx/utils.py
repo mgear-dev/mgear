@@ -6,7 +6,7 @@ import traceback
 import subprocess
 import tempfile
 
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.cmds as cmds
 import maya.mel as mel
 import maya.api.OpenMaya as om

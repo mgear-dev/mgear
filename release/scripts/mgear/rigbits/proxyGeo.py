@@ -2,10 +2,10 @@ import os
 import json
 
 
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.cmds as cmds
-from pymel.core import datatypes
-from pymel.core import nodetypes
+from mgear.pymaya import datatypes
+from mgear.pymaya import nodetypes
 
 
 from mgear.core import attribute
@@ -19,13 +19,15 @@ from mgear.core import pyqt
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear.core import widgets as mwgt
 
-# from mgear.vendor.Qt import QtWidgets
-# from mgear.vendor.Qt import QtCore
-# from mgear.vendor.Qt import QtGui
-# TODO: comment out later. using direct import for better auto completion
-from PySide2 import QtCore
-from PySide2 import QtGui
-from PySide2 import QtWidgets
+from mgear.vendor.Qt import QtWidgets
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtGui
+
+# NOTE: using direct import for better auto completion
+# TODO: comment out for release.
+# from PySide6 import QtCore
+# from PySide6 import QtGui
+# from PySide6 import QtWidgets
 
 
 PROXY_SUFFIX = "proxy"

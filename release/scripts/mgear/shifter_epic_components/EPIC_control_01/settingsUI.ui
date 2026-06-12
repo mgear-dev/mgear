@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>591</width>
-    <height>713</height>
+    <height>805</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -217,7 +217,7 @@
      </layout>
     </widget>
    </item>
-   <item row="1" column="0">
+   <item row="2" column="0">
     <widget class="QGroupBox" name="keyable_groupBox">
      <property name="title">
       <string>Keyable</string>
@@ -405,7 +405,7 @@
      </layout>
     </widget>
    </item>
-   <item row="2" column="0">
+   <item row="3" column="0">
     <widget class="QGroupBox" name="ikRefArray_groupBox">
      <property name="title">
       <string>IK Reference Array</string>
@@ -469,6 +469,52 @@
            </spacer>
           </item>
          </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="groupBox_4">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="title">
+      <string>UE Control Rig Settings</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5">
+      <item row="0" column="0">
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="label_2">
+          <property name="toolTip">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specifies the fallback reference joint to use for Unreal Control Rig backward solve when the control has no associated joint.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string>Backward Solve Reference Joint</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="backwards_ref_jnt_lineEdit">
+          <property name="toolTip">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specifies the fallback reference joint to use for Unreal Control Rig backward solve when the control has no associated joint.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="backwards_ref_jnt_pushButton">
+          <property name="toolTip">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specifies the fallback reference joint to use for Unreal Control Rig backward solve when the control has no associated joint.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
         </item>
        </layout>
       </item>

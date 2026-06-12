@@ -48,8 +48,8 @@ import copy
 # dcc
 import maya.OpenMaya as OpenMaya
 from maya import cmds
-import pymel.core as pm
-import pymel.core.datatypes as dt
+import mgear.pymaya as pm
+import mgear.pymaya.datatypes as dt
 
 # mgear
 from mgear.shifter import io

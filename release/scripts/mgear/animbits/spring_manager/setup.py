@@ -1,6 +1,6 @@
 import json
 
-import pymel.core as pm
+import mgear.pymaya as pm
 import math
 
 import mgear
@@ -8,6 +8,7 @@ from mgear.core import attribute
 from mgear.core import transform
 from mgear.core import primitive
 from mgear.core import applyop
+from mgear.core import icon
 from mgear.core import node as cNode
 from mgear import rigbits
 from mgear.core.utils import one_undo, viewport_off
@@ -25,6 +26,7 @@ SPRING_ATTRS = [
     "springConfig",
     "springTranslation",
     "springRotation",
+    "springDirectionVis",
 ]
 
 SPRING_PRESET_EXTENSION = ".spg"
@@ -134,6 +136,12 @@ def create_settings_attr(node, config):
         minValue=0,
         maxValue=1,
     )
+
+    # direction visibility Attr
+    attr_name = "springDirectionVis"
+    attribute.addAttribute(node, attr_name, "bool", True)
+    node.setAttr(attr_name, channelBox=channelBox, keyable=keyable)
+
     # add message attr to node
     node.addAttr("springSetupMembers", at="message", m=True)
 
@@ -229,10 +237,10 @@ def get_name(node, name):
     Return a name composed of the node name + name.
     """
 
-    if isinstance(node, pm.PyNode):
-        node_name = node.name()
-    else:
+    if isinstance(node, str):
         node_name = node
+    else:
+        node_name = node.name()
     return node_name + "_" + name
 
 
@@ -242,7 +250,7 @@ def create_spring(node=None, config=None):
     if node is None and config is not None:
         node = config["node"]
 
-    if not isinstance(node, pm.PyNode):
+    if isinstance(node, str):
         node = pm.PyNode(node)
 
     def get_name(name, node=node):
@@ -250,10 +258,10 @@ def create_spring(node=None, config=None):
         Return a name composed of the node name + name.
         """
 
-        if isinstance(node, pm.PyNode):
-            node_name = node.name()
-        else:
+        if isinstance(node, str):
             node_name = node
+        else:
+            node_name = node.name()
         return node_name + "_" + name
 
     # add settings attr
@@ -356,12 +364,32 @@ def create_spring(node=None, config=None):
         ],
     )
 
+    # add direction visual arrow
+
+    arrow = icon.direction_arrow(
+        axis=config["direction"],
+        name=get_name("sprg_arrowDirection"),
+        parent_name=driver.name()
+    )
+    transform.resetTransform(arrow)
+    arrow.attr("overrideEnabled").set(1)
+    arrow.attr("overrideDisplayType").set(1)
+    # connect arrow scale
+    pm.connectAttr(node.attr(SPRING_ATTRS[1]), arrow.sx)
+    pm.connectAttr(node.attr(SPRING_ATTRS[1]), arrow.sy)
+    pm.connectAttr(node.attr(SPRING_ATTRS[1]), arrow.sz)
+    # connect arrow vis
+    for shp in arrow.getShapes():
+        pm.connectAttr(node.springDirectionVis, shp.visibility)
+
     # move animation curvers
     move_animation_curves(node, root)
 
     # connect driver to node
     cns = applyop.parentCns(driver, node, maintain_offset=False)
     cns.isHistoricallyInteresting.set(False)
+
+    pm.select(cl=True)
 
     return driver, node
 
@@ -386,7 +414,7 @@ config = {
 
 def init_config(node, direction, scale):
     # if node is pynode get node str name
-    if isinstance(node, pm.PyNode):
+    if not isinstance(node, str):
         node = node.name()
     config = {
         "node": node,
@@ -399,6 +427,7 @@ def init_config(node, direction, scale):
         "springRotationalIntensity": 1,
         "springRotationalDamping": 0.5,
         "springRotationalStiffness": 0.5,
+        "springDirectionVis": True,
     }
     return config
 
@@ -469,8 +498,8 @@ def get_rig_scale_value(child_node):
 
 def get_config(node):
     # get config dict from node attrs
-    if isinstance(node, pm.PyNode):
-        node_name = node.name(stripNamespace=True)
+    if not isinstance(node, str):
+        node_name = node.stripNamespace()
     else:
         node_name = node
     # TODO: get child node name from the spring members
@@ -481,7 +510,6 @@ def get_config(node):
     child_node = pm.listConnections(node.springSetupMembers[2])[0]
     direction = get_child_axis_direction(child_node)
     scale = get_rig_scale_value(child_node)
-    print(scale)
     config = {
         "node": node_name,
         "namespace": node.namespace(),
@@ -496,9 +524,7 @@ def get_config(node):
 def store_preset(nodes, filePath=None):
     preset_dic = {}
     preset_dic["nodes"] = [node.name() for node in nodes]
-    preset_dic["namespaces"] = list(
-        {node.namespace(root=True) for node in nodes}
-    )
+    preset_dic["namespaces"] = list({node.namespace() for node in nodes})
     preset_dic["configs"] = {}
 
     for node in nodes:
@@ -542,7 +568,7 @@ def apply_preset(preset_file_path, namespace_cb):
     replace_namespace = False
     # check if selection namespace matches with preset namespace
     if check_for_remap:
-        selection_namespace = selection[-1].namespace(root=True)
+        selection_namespace = selection[-1].namespace()
         if selection_namespace != preset_namespace:
             if namespace_cb(preset_namespace, selection_namespace):
                 replace_namespace = True
@@ -565,7 +591,7 @@ def apply_preset(preset_file_path, namespace_cb):
         result = create_spring(node=node, config=config)
         if result is not False:
             affected_nodes.append(result[1])
-
+    pm.select(cl=True)
     return affected_nodes
 
 
@@ -576,13 +602,15 @@ def get_preset_targets(preset_file_path, namespace_cb=None):
         if namespace_cb:
             # if there's only one namespace, check if user wants to apply to all nodes with the same name
             selection = pm.ls(sl=1)
-            check_for_remap = len(preset_dic["namespaces"]) == 1 and len(selection) > 0
+            check_for_remap = (
+                len(preset_dic["namespaces"]) == 1 and len(selection) > 0
+            )
             preset_namespace = preset_dic["namespaces"][0]
             selection_namespace = ""
 
             # check if selection namespace matches with preset namespace
             if check_for_remap:
-                selection_namespace = selection[-1].namespace(root=True)
+                selection_namespace = selection[-1].namespace()
                 if selection_namespace != preset_namespace:
                     if namespace_cb(preset_namespace, selection_namespace):
                         replace_namespace = True
@@ -610,8 +638,12 @@ def get_preset_targets(preset_file_path, namespace_cb=None):
 @viewport_off
 def bake(nodes=None):
     """
-    Bakes the animation of all selected objects within the current time range
-    using specific settings.
+    Bakes the rotation and translation animation of the specified or selected
+    objects within the current time range, filtering nodes based on custom
+    spring attributes.
+
+    Args:
+        nodes (list): List of nodes to bake. If None, uses the selected nodes.
 
     Returns:
         bool: True if successful, False otherwise.
@@ -631,11 +663,53 @@ def bake(nodes=None):
         print("No objects selected.")
         return False
 
-    # Perform the bake operation with explicit settings
+    # Initialize attributes to bake
+    attributes_to_bake = []
+
+    # Filter nodes and determine attributes to bake
+    nodes_to_bake = []
+    for node in nodes:
+        has_spring = (
+            node.hasAttr("springTotalIntensity")
+            and node.attr("springTotalIntensity").get() > 0
+        )
+
+        if has_spring:
+            # Check individual spring attributes
+            if (
+                node.hasAttr("springTranslationalIntensity")
+                and node.attr("springTranslationalIntensity").get() > 0
+            ):
+                if "translateX" not in attributes_to_bake:
+                    attributes_to_bake.extend(
+                        ["translateX", "translateY", "translateZ"]
+                    )
+
+            if (
+                node.hasAttr("springRotationalIntensity")
+                and node.attr("springRotationalIntensity").get() > 0
+            ):
+                if "rotateX" not in attributes_to_bake:
+                    attributes_to_bake.extend(
+                        ["rotateX", "rotateY", "rotateZ"]
+                    )
+
+            # # Stop checking if both translation and rotation are already added
+            # if {"translateX", "rotateX"}.issubset(attributes_to_bake):
+            #     break
+
+            nodes_to_bake.append(node)
+
+    # Perform the bake operation if there are nodes to process
+    if not nodes_to_bake:
+        print("No nodes meet the criteria for baking.")
+        return False
+
     try:
         pm.bakeResults(
-            nodes,
+            nodes_to_bake,
             time=(start_time, end_time),
+            attribute=attributes_to_bake,
             simulation=True,
             sampleBy=1,
             oversamplingRate=1,
@@ -649,13 +723,15 @@ def bake(nodes=None):
             controlPoints=False,
             shape=True,
         )
-        delete_spring_setup(nodes, transfer_animation=False)
-        for node in nodes:
+        delete_spring_setup(nodes_to_bake, transfer_animation=False)
+        for node in nodes_to_bake:
             remove_settings_attr(node)
-        print("Successfully baked selected objects.")
+        print("Successfully baked filtered nodes.")
+        pm.select(cl=True)
         return True
     except Exception as e:
-        print("Failed to bake selected objects: {}".format(e))
+        print("Failed to bake filtered nodes: {}".format(e))
+        pm.select(cl=True)
         return False
 
 

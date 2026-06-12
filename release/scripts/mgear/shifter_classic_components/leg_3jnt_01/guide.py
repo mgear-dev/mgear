@@ -3,7 +3,7 @@
 from functools import partial
 
 from mgear.shifter.component import guide
-from mgear.core import transform, pyqt, attribute
+from mgear.core import transform, pyqt, attribute, upv_visualizer
 from mgear.vendor.Qt import QtWidgets, QtCore
 
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
@@ -59,6 +59,8 @@ class Guide(guide.ComponentGuide):
 
         centers = [self.root, self.knee, self.ankle, self.foot, self.eff]
         self.dispcrv = self.addDispCurve("crv1", centers)
+
+        self.addUpvLocator(self.knee, self.ankle, self.eff)
 
     def addParameters(self):
         """Add the configurations settings"""

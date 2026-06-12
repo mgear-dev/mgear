@@ -11,15 +11,17 @@ __email__ = "rav@ravrigs.com"
 """
 # python
 import json
-from .six import PY2
+PY2 = False
 
 # core
 import maya.cmds as mc
 
 # RBF setups
 if PY2:
+    import mGearWeightNode_io
     import weightNode_io
 else:
+    from . import mGearWeightNode_io
     from . import weightNode_io
 
 # debug
@@ -30,7 +32,10 @@ else:
 RBF_FILE_EXTENSION = ".rbf"
 
 # Additional node support should be added here
-RBF_MODULES = {"weightDriver": weightNode_io}
+RBF_MODULES = {
+    "mGearWeightDriver": mGearWeightNode_io,
+    "weightDriver": weightNode_io,
+}
 
 
 # =============================================================================
@@ -47,9 +52,11 @@ def fileDialog(startDir=None, mode=0):
         str: path selected by user
     """
     ext = RBF_FILE_EXTENSION
-    fPath = mc.fileDialog2(fileMode=mode,
-                           startingDirectory=startDir,
-                           fileFilter="mGear RBF (*{})".format(ext))
+    fPath = mc.fileDialog2(
+        fileMode=mode,
+        startingDirectory=startDir,
+        fileFilter="mGear RBF (*{})".format(ext),
+    )
     if fPath is not None:
         fPath = fPath[0]
     return fPath

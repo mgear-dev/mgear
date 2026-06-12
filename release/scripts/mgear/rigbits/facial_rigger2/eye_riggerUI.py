@@ -3,8 +3,9 @@
 import json
 from functools import partial
 
+from maya import cmds
 import mgear.core.pyqt as gqt
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from mgear.vendor.Qt import QtCore, QtWidgets
 
@@ -31,7 +32,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 
     def create(self):
 
-        self.setWindowTitle("Eye Rigger 2.0")
+        self.setWindowTitle("Eye Rigger 2.1")
         self.setWindowFlags(QtCore.Qt.Window)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, 1)
 
@@ -45,33 +46,36 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.geometryInput_group = QtWidgets.QGroupBox("Geometry Input")
         self.eyeball_label = QtWidgets.QLabel("Eyeball:")
         self.eyeMesh = QtWidgets.QLineEdit()
-        self.eyeball_button = QtWidgets.QPushButton("<<")
+        self.eyeball_button = QtWidgets.QPushButton("<< Set")
         self.edgeloop_label = QtWidgets.QLabel("Edge Loop:")
         self.edgeLoop = QtWidgets.QLineEdit()
-        self.edgeloop_button = QtWidgets.QPushButton("<<")
+        self.edgeloop_button = QtWidgets.QPushButton("<< Set")
+        self.sel_edgeloop_button = QtWidgets.QPushButton("select")
         # Manual corners
         self.manualCorners_group = QtWidgets.QGroupBox("Custom Eye Corners")
         self.customCorner = QtWidgets.QCheckBox("Set Manual Vertex Corners")
         self.customCorner.setChecked(False)
         self.intCorner_label = QtWidgets.QLabel("Internal Corner")
         self.intCorner = QtWidgets.QLineEdit()
-        self.intCorner_button = QtWidgets.QPushButton("<<")
+        self.intCorner_button = QtWidgets.QPushButton("<< Set")
+        self.sel_intCorner_button = QtWidgets.QPushButton("Select")
         self.extCorner_label = QtWidgets.QLabel("External Corner")
         self.extCorner = QtWidgets.QLineEdit()
-        self.extCorner_button = QtWidgets.QPushButton("<<")
+        self.extCorner_button = QtWidgets.QPushButton("<< Set")
+        self.sel_extCorner_button = QtWidgets.QPushButton("Select")
 
-        # Blink heigh slider
-        self.blinkHeight_group = QtWidgets.QGroupBox("Blink Height")
-        self.blinkH = QtWidgets.QSpinBox()
-        self.blinkH.setRange(0, 100)
-        self.blinkH.setSingleStep(10)
-        self.blinkH.setValue(20)
-        self.blinkHeight_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.blinkHeight_slider.setRange(0, 100)
-        self.blinkHeight_slider.setSingleStep(
-            self.blinkHeight_slider.maximum() / 10.0
-        )
-        self.blinkHeight_slider.setValue(20)
+        # # Blink heigh slider
+        # self.blinkHeight_group = QtWidgets.QGroupBox("Blink Height")
+        # self.blinkH = QtWidgets.QSpinBox()
+        # self.blinkH.setRange(0, 100)
+        # self.blinkH.setSingleStep(10)
+        # self.blinkH.setValue(20)
+        # self.blinkHeight_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        # self.blinkHeight_slider.setRange(0, 100)
+        # self.blinkHeight_slider.setSingleStep(
+        #     self.blinkHeight_slider.maximum() / 10.0
+        # )
+        # self.blinkHeight_slider.setValue(20)
 
         # vTrack and hTrack
         self.tracking_group = QtWidgets.QGroupBox("Tracking")
@@ -96,7 +100,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.joints_group = QtWidgets.QGroupBox("Joints")
         self.headJnt_label = QtWidgets.QLabel("Head or Eye area Joint:")
         self.headJnt = QtWidgets.QLineEdit()
-        self.headJnt_button = QtWidgets.QPushButton("<<")
+        self.headJnt_button = QtWidgets.QPushButton("<< Set")
         self.everyNVertex_label = QtWidgets.QLabel(
             "Create Joint evey N number of Vertex:"
         )
@@ -141,31 +145,41 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.options_group = QtWidgets.QGroupBox("Options")
         self.parent_label = QtWidgets.QLabel("Rig Parent:")
         self.parent_node = QtWidgets.QLineEdit()
-        self.parent_button = QtWidgets.QPushButton("<<")
+        self.parent_button = QtWidgets.QPushButton("<< Set")
         self.aim_controller_label = QtWidgets.QLabel("Aim Controller:")
         self.aim_controller = QtWidgets.QLineEdit()
-        self.aim_controller_button = QtWidgets.QPushButton("<<")
+        self.aim_controller_button = QtWidgets.QPushButton("<< Set")
         self.ctlShapeOffset_label = QtWidgets.QLabel("Controls Offset:")
         self.offset = QtWidgets.QDoubleSpinBox()
         self.offset.setRange(0, 10)
         self.offset.setSingleStep(0.05)
         self.offset.setValue(0.05)
+        self.ctl_size_label = QtWidgets.QLabel("Controls Size:")
+        self.ctl_size = QtWidgets.QDoubleSpinBox()
+        self.ctl_size.setRange(0.1, 10)
+        self.ctl_size.setSingleStep(0.05)
+        self.ctl_size.setValue(1.0)
         self.sideRange = QtWidgets.QCheckBox(
             "Use Z axis for wide calculation (i.e: Horse and fish side eyes)"
         )
         self.sideRange.setChecked(False)
 
+        self.simplified = QtWidgets.QCheckBox(
+            "Simplified controls. If Checked reduce the eyelid controls number"
+        )
+        self.simplified.setChecked(False)
+
         self.ctlSet_label = QtWidgets.QLabel("Controls Set:")
         self.ctlSet = QtWidgets.QLineEdit()
-        self.ctlSet_button = QtWidgets.QPushButton("<<")
+        self.ctlSet_button = QtWidgets.QPushButton("<< Set")
 
         self.deformersSet_label = QtWidgets.QLabel("Deformers Set:")
         self.defSet = QtWidgets.QLineEdit()
-        self.deformersSet_button = QtWidgets.QPushButton("<<")
+        self.deformersSet_button = QtWidgets.QPushButton("<< Set")
 
         self.deformers_group_label = QtWidgets.QLabel("Static Rig Parent:")
         self.deformers_group = QtWidgets.QLineEdit()
-        self.deformers_group_button = QtWidgets.QPushButton("<<")
+        self.deformers_group_button = QtWidgets.QPushButton("<< Set")
 
         # Main buttons
         self.build_button = QtWidgets.QPushButton("Build Eye Rig")
@@ -187,6 +201,7 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         edgeloop_layout.addWidget(self.edgeloop_label)
         edgeloop_layout.addWidget(self.edgeLoop)
         edgeloop_layout.addWidget(self.edgeloop_button)
+        edgeloop_layout.addWidget(self.sel_edgeloop_button)
 
         # Geometry Input Layout
         geometryInput_layout = QtWidgets.QVBoxLayout()
@@ -195,12 +210,12 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         geometryInput_layout.addLayout(edgeloop_layout)
         self.geometryInput_group.setLayout(geometryInput_layout)
 
-        # Blink Height Layout
-        blinkHeight_layout = QtWidgets.QHBoxLayout()
-        blinkHeight_layout.setContentsMargins(1, 1, 1, 1)
-        blinkHeight_layout.addWidget(self.blinkH)
-        blinkHeight_layout.addWidget(self.blinkHeight_slider)
-        self.blinkHeight_group.setLayout(blinkHeight_layout)
+        # # Blink Height Layout
+        # blinkHeight_layout = QtWidgets.QHBoxLayout()
+        # blinkHeight_layout.setContentsMargins(1, 1, 1, 1)
+        # blinkHeight_layout.addWidget(self.blinkH)
+        # blinkHeight_layout.addWidget(self.blinkHeight_slider)
+        # self.blinkHeight_group.setLayout(blinkHeight_layout)
 
         # Tracking Layout
         tracking_layout = QtWidgets.QVBoxLayout()
@@ -258,11 +273,13 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         intCorner_layout.addWidget(self.intCorner_label)
         intCorner_layout.addWidget(self.intCorner)
         intCorner_layout.addWidget(self.intCorner_button)
+        intCorner_layout.addWidget(self.sel_intCorner_button)
 
         extCorner_layout = QtWidgets.QHBoxLayout()
         extCorner_layout.addWidget(self.extCorner_label)
         extCorner_layout.addWidget(self.extCorner)
         extCorner_layout.addWidget(self.extCorner_button)
+        extCorner_layout.addWidget(self.sel_extCorner_button)
 
         manualCorners_layout = QtWidgets.QVBoxLayout()
         manualCorners_layout.setContentsMargins(6, 4, 6, 4)
@@ -284,6 +301,9 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         offset_layout = QtWidgets.QHBoxLayout()
         offset_layout.addWidget(self.ctlShapeOffset_label)
         offset_layout.addWidget(self.offset)
+        ctl_size_layout = QtWidgets.QHBoxLayout()
+        ctl_size_layout.addWidget(self.ctl_size_label)
+        ctl_size_layout.addWidget(self.ctl_size)
         ctlSet_layout = QtWidgets.QHBoxLayout()
         ctlSet_layout.addWidget(self.ctlSet_label)
         ctlSet_layout.addWidget(self.ctlSet)
@@ -300,9 +320,11 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         options_layout.setContentsMargins(6, 1, 6, 2)
         options_layout.addLayout(parent_layout)
         options_layout.addLayout(offset_layout)
-        options_layout.addWidget(self.blinkHeight_group)
+        options_layout.addLayout(ctl_size_layout)
+        # options_layout.addWidget(self.blinkHeight_group)
         options_layout.addWidget(self.tracking_group)
         options_layout.addWidget(self.sideRange)
+        options_layout.addWidget(self.simplified)
         options_layout.addLayout(ctlSet_layout)
         options_layout.addLayout(deformersGrp_layout)
         self.options_group.setLayout(options_layout)
@@ -336,8 +358,8 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.setLayout(main_layout)
 
     def create_connections(self):
-        self.blinkH.valueChanged[int].connect(self.blinkHeight_slider.setValue)
-        self.blinkHeight_slider.valueChanged[int].connect(self.blinkH.setValue)
+        # self.blinkH.valueChanged[int].connect(self.blinkHeight_slider.setValue)
+        # self.blinkHeight_slider.valueChanged[int].connect(self.blinkH.setValue)
 
         self.eyeball_button.clicked.connect(
             partial(self.populate_object, self.eyeMesh)
@@ -353,6 +375,9 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         )
 
         self.edgeloop_button.clicked.connect(self.populate_edgeloop)
+        self.sel_edgeloop_button.clicked.connect(
+            partial(self.select_components_from_lineEdit, self.edgeLoop)
+        )
 
         self.build_button.clicked.connect(self.build_rig)
         self.import_button.clicked.connect(self.import_settings)
@@ -361,8 +386,14 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         self.intCorner_button.clicked.connect(
             partial(self.populate_element, self.intCorner, "vertex")
         )
+        self.sel_intCorner_button.clicked.connect(
+            partial(self.select_components_from_lineEdit, self.intCorner)
+        )
         self.extCorner_button.clicked.connect(
             partial(self.populate_element, self.extCorner, "vertex")
+        )
+        self.sel_extCorner_button.clicked.connect(
+            partial(self.select_components_from_lineEdit, self.extCorner)
         )
 
         self.ctlSet_button.clicked.connect(
@@ -436,6 +467,30 @@ class ui(MayaQWidgetDockableMixin, QtWidgets.QDialog):
             return
 
         lib.import_settings_from_file(file_path, self)
+
+    def select_components_from_lineEdit(self, lEdit):
+        """Select components (edges, vertices, etc.) from a lineEdit.
+
+        """
+        comp_str = lEdit.text()
+        if not comp_str:
+            print("No component string provided. Maybe lineEdit is empty.")
+            return
+
+        # Split and clean
+        comp_list = [x.strip() for x in comp_str.split(",") if x.strip()]
+
+        if not comp_list:
+            print("No valid components found.")
+            return
+
+        # Select components
+        try:
+            cmds.select(comp_list, r=True)
+            print("Selected {} components.".format(len(comp_list)))
+        except Exception as e:
+            print("Error selecting components: {}".format(e))
+
 
 
 # Build from json file.

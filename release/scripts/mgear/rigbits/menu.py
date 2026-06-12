@@ -1,4 +1,4 @@
-import pymel.core as pm
+import mgear.pymaya as pm
 import mgear
 
 from mgear.core import string
@@ -12,44 +12,45 @@ def install():
     pm.setParent(mgear.menu_id, menu=True)
     pm.menuItem(divider=True)
     commands = (
-        ("Add NPO", str_add_NPO),
+        ("Add NPO", str_add_NPO, "mgear_add_npo.svg"),
         ("-----", None),
         (None, gimmick_submenu),
         # ("Gimmick Setup Tool", str_gimmick_tool),
         ("-----", None),
-        ("Mirror Controls Shape", str_mirror_ctls),
-        ("Replace Shape", str_replace_shape),
+        ("Mirror Controls Shape", str_mirror_ctls, "mgear_mirror_controls.svg"),
+        ("Replace Shape", str_replace_shape, "mgear_replace_shape.svg"),
         ("-----", None),
-        ("Match All Transform", str_matchWorldXform),
-        ("Match Pos with BBox", str_matchPosfromBBox),
-        ("Align Ref Axis", str_alignToPointsLoop),
+        ("Match All Transform", str_matchWorldXform, "mgear_match_transform.svg"),
+        ("Match Pos with BBox", str_matchPosfromBBox, "mgear_match_bbox.svg"),
+        ("Align Ref Axis", str_alignToPointsLoop, "mgear_align_ref_axis.svg"),
         ("-----", None),
         (None, pCtl_sub),
         (None, cCtl_sub),
         ("-----", None),
-        ("Duplicate symmetrical", str_duplicateSym),
+        ("Duplicate symmetrical", str_duplicateSym, "mgear_duplicate_sym.svg"),
         ("-----", None),
-        ("RBF Manager", str_rbf_manager_ui),
-        ("RBF Manager2", str_rbf_manager2_ui),
-        ("SDK Manager (BETA)", str_SDK_manager_ui),
+        ("RBF Manager 2.1", str_rbf_manager2_ui, "mgear_rbf_manager.svg"),
+        ("SDK Manager", str_SDK_manager_ui, "mgear_sdk_manager.svg"),
+        ("SDK Creator", str_sdk_creator, "mgear_sdk_creator.svg"),
         ("-----", None),
-        ("Space Manager", str_space_manager),
+        ("Space Manager", str_space_manager, "mgear_space_manager.svg"),
         ("-----", None),
-        ("Space Jumper", str_spaceJump),
-        ("Interpolated Transform", str_createInterpolateTransform),
+        ("Space Jumper", str_spaceJump, "mgear_space_jumper.svg"),
+        ("Interpolated Transform", str_createInterpolateTransform, "mgear_interpolate_transform.svg"),
         (None, connect_submenu),
         ("-----", None),
-        ("Spring", str_spring_UI),
-        ("Rope", str_rope_UI),
+        ("Channel Wrangler", str_openChannelWrangler, "mgear_channel_wrangler.svg"),
         ("-----", None),
-        ("Channel Wrangler", str_openChannelWrangler),
+        ("Eyelid Rigger 2.1", str_eye_rigger, "mgear_eye_rigger.svg"),
+        ("Facial Rigger 1.0 (Legacy)", str_facial_rigger, "mgear_facial_rigger.svg"),
         ("-----", None),
-        ("Facial Rigger", str_facial_rigger),
-        ("Eyelid Rigger 2.0", str_eye_rigger),
+        ("Wire to Skinning", str_wire_to_skinning, "mgear_wire_to_skinning.svg"),
+        ("Evaluation Partition", str_evaluation_partition, "mgear_evaluation_partition.svg"),
+        ("Blendshape Setup Transfer", str_blendshape_transfer, "mgear_copy.svg"),
         ("-----", None),
         ("Proxy Geo", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
-        ("Proxy Slicer", str_proxySlicer),
-        ("Proxy Slicer Parenting", str_proxySlicer_parent),
+        ("Proxy Slicer", str_proxySlicer, "mgear_proxy_slicer.svg"),
+        ("Proxy Slicer Parenting", str_proxySlicer_parent, "mgear_proxy_slicer.svg"),
     )
 
     mgear.menu.install(menuID, commands, image="mgear_rigbits.svg")
@@ -187,11 +188,6 @@ from mgear import rigbits
 rigbits.duplicateSym()
 """
 
-str_rbf_manager_ui = """
-from mgear.rigbits import rbf_manager_ui
-rbf_manager_ui.show()
-"""
-
 str_rbf_manager2_ui = """
 from mgear.rigbits.rbf_manager2 import rbf_manager_ui
 rbf_manager_ui.show()
@@ -201,6 +197,12 @@ str_SDK_manager_ui = """
 from mgear.rigbits.sdk_manager import SDK_manager_ui
 SDK_manager_ui.show()
 """
+
+str_sdk_creator = """
+from mgear.rigbits import sdk_creator
+sdk_creator.show()
+"""
+
 str_space_manager = """
 from mgear.rigbits.space_manager import spaceManagerUtils
 spacemanager = spaceManagerUtils.SpaceManager()
@@ -217,24 +219,9 @@ from mgear import rigbits
 rigbits.createInterpolateTransform()
 """
 
-str_spring_UI = """
-from mgear.rigbits import postSpring
-postSpring.spring_UI()
-"""
-
-str_rope_UI = """
-from mgear.rigbits import rope
-rope.rope_UI()
-"""
-
 str_openChannelWrangler = """
 from mgear.rigbits import channelWrangler
 channelWrangler.openChannelWrangler()
-"""
-
-str_facial_rigger = """
-from mgear.rigbits import facial_rigger
-facial_rigger.show()
 """
 
 str_proxyGeo = """
@@ -274,12 +261,31 @@ from mgear import rigbits
 rigbits.connectLocalTransform(None, 0, 0, 1)
 """
 
+str_facial_rigger = """
+from mgear.rigbits import facial_rigger
+facial_rigger.show()
+"""
 
 # eye rigger 2.0 str commands
 
 str_eye_rigger = """
 from mgear.rigbits import facial_rigger2
 facial_rigger2.eye_riggerUI.show()
+"""
+
+str_wire_to_skinning = """
+from mgear.rigbits import wire_to_skinning
+wire_to_skinning.show()
+"""
+
+str_evaluation_partition = """
+from mgear.rigbits import evaluation_partition
+evaluation_partition.show()
+"""
+
+str_blendshape_transfer = """
+from mgear.rigbits import blendshape_transfer
+blendshape_transfer.show()
 """
 
 # Gimmick joints str commands

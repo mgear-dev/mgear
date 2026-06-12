@@ -14,6 +14,6 @@ print(r"""
 
 
 if not cmds.about(batch=True):
-    from pymel import mayautils
+    import maya.utils
     import mgear.menu
-    mayautils.executeDeferred(mgear.menu.install_main_menu)
+    maya.utils.executeDeferred(mgear.menu.install_main_menu)

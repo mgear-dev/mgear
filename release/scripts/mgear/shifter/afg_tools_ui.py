@@ -5,7 +5,6 @@ bipded and other types of morphology.
 
 Attributes:
     AFB_FILE_EXTENSION (str): Auto fit biped desired extension name
-    DANCE_EMOTICON (list): emoticon for loading animation
     RELATIVE_FILE_EXTENSION (str): extension name for relative guide placement
     WINDOW_TITLE (str): Name of the ui housing both tabs
 
@@ -22,13 +21,13 @@ from __future__ import generators
 from __future__ import division
 
 # standard
+import json
 import os
 import copy
 import pprint
-import itertools
 
 # dcc
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.cmds as cmds
 
 # mgear
@@ -39,6 +38,7 @@ from mgear.shifter import io
 from mgear.shifter import afg_tools
 from mgear.shifter import relative_guide_placement
 from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtWidgets
 
 # For debugging
@@ -49,16 +49,9 @@ from mgear.vendor.Qt import QtWidgets
 # reload(relative_guide_placement)
 
 # constants -------------------------------------------------------------------
-WINDOW_TITLE = "Auto Fit Guide Tools (AFG) (BETA)"
+WINDOW_TITLE = "Auto Fit Guide Tools (AFG)"
 AFB_FILE_EXTENSION = "afg"
 RELATIVE_FILE_EXTENSION = "rgp"
-DANCE_EMOTICON = ["v(._.)v",
-                  "<(*-* <)",
-                  "^(*-*)^",
-                  "(>._.)>",
-                  "<(._.)v",
-                  "^(*-*)v",
-                  "(>._.)v"]
 
 
 def get_top_level_widgets(class_name=None, object_name=None):
@@ -197,6 +190,7 @@ class PathObjectExistsEdit(QtWidgets.QLineEdit):
             parent=parent)
 
         self.validate_mode = validate_mode
+        self.default_value = None
         self.export_path = False
         self.setFocusPolicy(QtCore.Qt.NoFocus)
 
@@ -294,12 +288,10 @@ class SelectComboBoxRefreshWidget(QtWidgets.QWidget):
         self.select_src_mesh_btn = QtWidgets.QPushButton()
         self.select_src_mesh_btn.setStatusTip("Select Source Mesh")
         self.select_src_mesh_btn.setToolTip("Select Source Mesh")
-        reload_btn = pyqt.get_icon("mouse-pointer")
-        self.select_src_mesh_btn.setIcon(reload_btn)
-        self.select_src_mesh_btn.setMinimumHeight(24)
-        self.select_src_mesh_btn.setMaximumHeight(24)
-        self.select_src_mesh_btn.setMinimumWidth(24)
-        self.select_src_mesh_btn.setMaximumWidth(24)
+        icon_pixmap = pyqt.get_icon("mouse-pointer", 18)
+        self.select_src_mesh_btn.setIcon(QtGui.QIcon(icon_pixmap))
+        self.select_src_mesh_btn.setIconSize(QtCore.QSize(18, 18))
+        self.select_src_mesh_btn.setFixedSize(24, 24)
         self.mainLayout.addWidget(QtWidgets.QLabel(label_text))
         self.mainLayout.addWidget(self.selected_mesh_ledit, 1)
         self.mainLayout.addWidget(self.select_src_mesh_btn)
@@ -308,10 +300,11 @@ class SelectComboBoxRefreshWidget(QtWidgets.QWidget):
         self.connectSignals()
 
     def connectSignals(self):
-        """Connect all UI signals in a single function
-        """
-        self.select_src_mesh_btn.clicked.connect(self.addSelection)
-        self.selected_mesh_ledit.focusedIn.connect(self.refreshMeshList)
+        """Connect all UI signals in a single function."""
+        self.select_src_mesh_btn.clicked.connect(
+            lambda: self.addSelection())
+        self.selected_mesh_ledit.focusedIn.connect(
+            lambda: self.refreshMeshList())
 
     def addSelection(self):
         selected = cmds.ls(sl=True)
@@ -329,6 +322,7 @@ class SelectComboBoxRefreshWidget(QtWidgets.QWidget):
 
         if node is not None:
             self.selected_mesh_ledit.setText(node)
+            self.selected_mesh_ledit.visualizeValidation()
 
     def refreshMeshList(self):
         # self.selected_mesh_ledit.clear()
@@ -478,10 +472,8 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
             self.applyDefaultAssociation)
         self.mirror_association_btn.clicked.connect(
             self._mirrorAssociationInfo)
-        self.import_association_btn.clicked.connect(self.importAssociation)
         self.clear_association_btn.clicked.connect(self._clearUserAssociations)
         self.print_association_btn.clicked.connect(self._printUserAssociation)
-        self.export_association_btn.clicked.connect(self.exportAssociation)
 
     def importDefaultGuide(self):
         """import mgear template biped
@@ -948,7 +940,7 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         return widget
 
     def exportEmbedInfoWidget(self):
-        widget = QtWidgets.QGroupBox("Create/Export Association Info")
+        widget = QtWidgets.QGroupBox("Association Info")
         layout = QtWidgets.QVBoxLayout()
         layout.setAlignment(QtCore.Qt.AlignTop)
         widget.setLayout(layout)
@@ -978,8 +970,6 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         self.apply_default_association_btn.setStatusTip(msg)
         self.window()._toolTip_widgets.append(
             self.apply_default_association_btn)
-        msg = "Import Guide Associations"
-        self.import_association_btn = QtWidgets.QPushButton(msg)
         msg = "Clear Associations"
         self.clear_association_btn = QtWidgets.QPushButton(msg)
         msg = "Print Association info"
@@ -991,17 +981,12 @@ class AutoFitBipedWidget(QtWidgets.QWidget):
         association_btn_layout.addWidget(self.enable_association_btn)
         association_btn_layout.addWidget(self.mirror_association_btn)
         association_btn_layout.addWidget(self.apply_default_association_btn)
-        association_btn_layout.addWidget(self.import_association_btn)
         association_btn_layout.addWidget(self.clear_association_btn)
         association_btn_layout.addWidget(self.print_association_btn)
         #  -------------------------------------------------------------------
-        msg = "Export Association"
-        self.export_association_btn = QtWidgets.QPushButton(msg)
-        self.export_association_btn.setStatusTip("Export association to file")
         association_list_layout.addWidget(self.association_list_widget)
         association_list_layout.addLayout(association_btn_layout)
         layout.addLayout(association_list_layout)
-        layout.addWidget(self.export_association_btn)
         self.visualizeAssociationEntry()
         return widget
 
@@ -1021,22 +1006,26 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.connectSignals()
 
     def connectSignals(self):
-        """Connect all UI signals in a single function
-        """
+        """Connect all UI signals in a single function."""
         self.record_placement_btn.clicked.connect(
             self.recordInitialGuidePlacement)
         self.update_placement_btn.clicked.connect(self.updateGuidePlacement)
         self.add_skip_nodes_btn.clicked.connect(self.addSkipNodes)
         self.remove_skip_nodes_btn.clicked.connect(self.removeSkipNodes)
         self.default_skip_nodes_btn.clicked.connect(self.defaultSkipNodes)
-        self.import_placement_btn.clicked.connect(self._importGuidePlacement)
-        self.export_placement_btn.clicked.connect(self._exportGuidePlacement)
+        self.add_skip_orient_btn.clicked.connect(self.addSkipOrientNodes)
+        self.remove_skip_orient_btn.clicked.connect(
+            self.removeSkipOrientNodes)
 
     def addSkipNodes(self, nodes=None):
-        """Add remove nodes to skip hierarchy crawl during relative placement
+        """Add nodes to skip hierarchy crawl during relative placement.
+
+        Enforces mutual exclusivity: removes nodes from
+        SKIP_ORIENTATION_NODES if they were there.
 
         Args:
-            nodes (list, optional): of nodes to ski
+            nodes (list, optional): Nodes to add. Uses Maya selection
+                if None.
         """
         if not nodes:
             nodes = cmds.ls(sl=True, type="transform")
@@ -1048,7 +1037,12 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         tmp.sort()
         tmp = [x for x in tmp if cmds.objExists("{}.isGearGuide".format(x))]
         relative_guide_placement.SKIP_CRAWL_NODES = tmp
+        # Mutual exclusivity: remove from skip orientation
+        for node in tmp:
+            if node in relative_guide_placement.SKIP_ORIENTATION_NODES:
+                relative_guide_placement.SKIP_ORIENTATION_NODES.remove(node)
         self.refreshSkipList()
+        self.refreshSkipOrientList()
 
     def removeSkipNodes(self, nodes=None):
         """Add remove nodes to skip hierarchy crawl during relative placement
@@ -1073,16 +1067,15 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.refreshSkipList()
 
     def defaultSkipNodes(self):
-        """Add remove nodes to skip hierarchy crawl during relative placement
-
-        Args:
-            nodes (list, optional): of nodes to ski
-        """
-        tmp = list(relative_guide_placement.DEFAULT_SKIP_CRAWL_NODES)
-        relative_guide_placement.SKIP_CRAWL_NODES = tmp
-        tmp = list(relative_guide_placement.DEFAULT_SKIP_PLACEMENT_NODES)
-        relative_guide_placement.SKIP_PLACEMENT_NODES = tmp
+        """Reset all skip node lists to their defaults."""
+        relative_guide_placement.SKIP_CRAWL_NODES = list(
+            relative_guide_placement.DEFAULT_SKIP_CRAWL_NODES)
+        relative_guide_placement.SKIP_PLACEMENT_NODES = list(
+            relative_guide_placement.DEFAULT_SKIP_PLACEMENT_NODES)
+        relative_guide_placement.SKIP_ORIENTATION_NODES = list(
+            relative_guide_placement.DEFAULT_SKIP_ORIENTATION_NODES)
         self.refreshSkipList()
+        self.refreshSkipOrientList()
 
     def getSkipNodes(self):
         """get list of skip nodes from the UI
@@ -1098,11 +1091,13 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
     @utils.viewport_off
     @utils.one_undo
     def recordInitialGuidePlacement(self):
-        """Record te initial placement of the guides as it relates to the
-        closest point on mesh
+        """Record the initial placement of the guides as it relates to the
+        closest point on mesh.
+
+        Uses Maya's main progress bar to show recording progress.
 
         Raises:
-            ValueError: Raise error if no source mesh provided
+            ValueError: Raise error if no source mesh provided.
         """
         reference_mesh = self.src_geo_widget.text
         if reference_mesh == "" or not cmds.objExists(reference_mesh):
@@ -1115,63 +1110,121 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
                                                 ordered_hierarchy,
                                                 self.getSkipNodes())
         reference_mesh = pm.PyNode(reference_mesh)
-        increment_value = 100 / len(ordered_hierarchy)
-        starting_val = 0
-        dance = itertools.cycle(DANCE_EMOTICON)
+        total = len(ordered_hierarchy)
 
+        sample_count = self.sample_count_sb.value()
         gen = relative_guide_placement.yieldGuideRelativeDictionary(
             reference_mesh,
             ordered_hierarchy,
-            relativeGuide_dict)
-        for result in gen:
-            msg = "{}% completed... {}".format(int(starting_val), next(dance))
-            self.window().statusBar().showMessage(msg)
-            starting_val = starting_val + increment_value
+            relativeGuide_dict,
+            sample_count=sample_count)
+
+        # Maya main progress bar
+        gMainProgressBar = pm.mel.eval("$tmp = $gMainProgressBar")
+        cmds.progressBar(
+            gMainProgressBar,
+            edit=True,
+            beginProgress=True,
+            isInterruptable=False,
+            status="Recording guide placement...",
+            maxValue=max(total, 1),
+        )
+        try:
+            for i, result in enumerate(gen):
+                pct = int((i + 1) * 100 / total) if total else 100
+                guide_name = ordered_hierarchy[i] if i < total else ""
+                short = guide_name.rsplit("|", 1)[-1] if guide_name else ""
+                msg = "Recording {}/{} - {} ({}%)".format(
+                    i + 1, total, short, pct)
+                self.window().statusBar().showMessage(msg)
+                cmds.progressBar(gMainProgressBar, edit=True, step=1)
+        finally:
+            cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
 
         self.relativeGuide_dict = relativeGuide_dict
         self.ordered_hierarchy = ordered_hierarchy
-        msg = "Initial Guide Placement Recorded!"
+        msg = "Initial Guide Placement Recorded! ({} guides)".format(total)
         self.window().statusBar().showMessage(msg, 3000)
+        pm.displayInfo(msg)
 
     @utils.viewport_off
     @utils.one_undo
     def updateGuidePlacement(self):
         """Move guides into position based on the recorded info
-        while updating the UI
+        while updating the UI.
+
+        Uses Maya's main progress bar to show update progress.
 
         Raises:
-            ValueError: raise error if no guide placement is loaded
+            ValueError: raise error if no guide placement is loaded.
         """
         if not self.ordered_hierarchy:
             msg = "Record initial Placement first!"
             self.window().statusBar().showMessage(msg, 3000)
             raise ValueError(msg)
 
-        increment_value = 100 / len(self.ordered_hierarchy)
-        starting_val = 0
-        dance = itertools.cycle(DANCE_EMOTICON)
+        total = len(self.ordered_hierarchy)
         reset_scale = self.rgp_scale_cb.isChecked()
-        for x in relative_guide_placement.updateGuidePlacement(
-                self.ordered_hierarchy,
-                self.relativeGuide_dict,
-                reset_scale=reset_scale):
-            msg = "{}% completed... {}".format(int(starting_val), next(dance))
-            self.window().statusBar().showMessage(msg)
-            starting_val = starting_val + increment_value
+        reference_mesh = self.src_geo_widget.text
+        if not reference_mesh or not cmds.objExists(reference_mesh):
+            reference_mesh = None
 
-        self.window().statusBar().showMessage("Guides plcement updated!", 3000)
+        skip_orient = self.getSkipOrientNodes()
+
+        # Maya main progress bar
+        gMainProgressBar = pm.mel.eval("$tmp = $gMainProgressBar")
+        cmds.progressBar(
+            gMainProgressBar,
+            edit=True,
+            beginProgress=True,
+            isInterruptable=False,
+            status="Updating guide placement...",
+            maxValue=max(total, 1),
+        )
+        processed = 0
+        try:
+            for guide_name in relative_guide_placement.updateGuidePlacement(
+                    self.ordered_hierarchy,
+                    self.relativeGuide_dict,
+                    reset_scale=reset_scale,
+                    reference_mesh=reference_mesh,
+                    skip_orientation_nodes=skip_orient):
+                processed += 1
+                pct = int(processed * 100 / total) if total else 100
+                short = guide_name.rsplit("|", 1)[-1] if guide_name else ""
+                msg = "Updating {}/{} - {} ({}%)".format(
+                    processed, total, short, pct)
+                self.window().statusBar().showMessage(msg)
+                cmds.progressBar(gMainProgressBar, edit=True, step=1)
+        finally:
+            cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
+
+        msg = "Guide placement updated! ({} guides)".format(processed)
+        self.window().statusBar().showMessage(msg, 3000)
+        pm.displayInfo(msg)
 
     def _importGuidePlacement(self):
-        """Fildialog for importing initial guide placement files
+        """File dialog for importing initial guide placement files.
+
+        Uses the source mesh set in the UI when available, otherwise
+        falls back to the mesh name embedded in the file.
         """
         tmp = " ".join(["*.{}".format(x) for x in [RELATIVE_FILE_EXTENSION]])
-        # TODO Make the file extension here more verbose
         all_exts = ["Relative Placement Guides Files ({})".format(
             tmp), "All Files (*.*)"]
         all_exts = ";;".join(all_exts)
         file_path = fileDialog("/", ext=all_exts, mode=1)
+        if not file_path:
+            return
+        reference_mesh = self.src_geo_widget.text
+        if not reference_mesh or not cmds.objExists(reference_mesh):
+            reference_mesh = None
         (self.relativeGuide_dict,
-         self.ordered_hierarchy) = relative_guide_placement.importGuidePlacement(file_path)
+         self.ordered_hierarchy) = relative_guide_placement.importGuidePlacement(
+            file_path, reference_mesh=reference_mesh)
+        # Refresh skip lists from module-level vars updated by import
+        self.refreshSkipList()
+        self.refreshSkipOrientList()
         print("Relative Guide Placement Imported: {}".format(file_path))
 
     def _exportGuidePlacement(self):
@@ -1197,13 +1250,75 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
             raise ValueError(msg)
             return
         data = {}
+        data["version"] = 2
+        data["sample_count"] = self.sample_count_sb.value()
         data["relativeGuide_dict"] = self.relativeGuide_dict
         data["ordered_hierarchy"] = self.ordered_hierarchy
+        data["skip_crawl_nodes"] = list(
+            relative_guide_placement.SKIP_CRAWL_NODES)
+        data["skip_placement_nodes"] = list(
+            relative_guide_placement.SKIP_PLACEMENT_NODES)
+        data["skip_orientation_nodes"] = list(
+            relative_guide_placement.SKIP_ORIENTATION_NODES)
         relative_guide_placement._exportData(data, file_path)
         msg = "Relative Guide position exported: {}".format(file_path)
         print(msg)
         self.window().statusBar().showMessage(msg)
         return self.relativeGuide_dict, self.ordered_hierarchy, file_path
+
+    def _exportSkipConfig(self):
+        """Export skip nodes and skip orientation configuration to a
+        .srgp JSON file.
+        """
+        all_exts = ";;".join([
+            "Skip RGP Config Files (*.srgp)",
+            "All Files (*.*)"
+        ])
+        file_path = fileDialog("/", ext=all_exts, mode=0)
+        if not file_path:
+            return
+        data = {
+            "version": 1,
+            "skip_crawl_nodes": list(
+                relative_guide_placement.SKIP_CRAWL_NODES),
+            "skip_placement_nodes": list(
+                relative_guide_placement.SKIP_PLACEMENT_NODES),
+            "skip_orientation_nodes": list(
+                relative_guide_placement.SKIP_ORIENTATION_NODES),
+        }
+        relative_guide_placement._exportData(data, file_path)
+        msg = "Skip config exported: {}".format(file_path)
+        print(msg)
+        self.window().statusBar().showMessage(msg)
+
+    def _importSkipConfig(self):
+        """Import skip nodes and skip orientation configuration from a
+        .srgp JSON file.
+        """
+        all_exts = ";;".join([
+            "Skip RGP Config Files (*.srgp)",
+            "All Files (*.*)"
+        ])
+        file_path = fileDialog("/", ext=all_exts, mode=1)
+        if not file_path:
+            return
+        data = relative_guide_placement._importData(file_path)
+        if not data:
+            return
+        if "skip_crawl_nodes" in data:
+            relative_guide_placement.SKIP_CRAWL_NODES = list(
+                data["skip_crawl_nodes"])
+        if "skip_placement_nodes" in data:
+            relative_guide_placement.SKIP_PLACEMENT_NODES = list(
+                data["skip_placement_nodes"])
+        if "skip_orientation_nodes" in data:
+            relative_guide_placement.SKIP_ORIENTATION_NODES = list(
+                data["skip_orientation_nodes"])
+        self.refreshSkipList()
+        self.refreshSkipOrientList()
+        msg = "Skip config imported: {}".format(file_path)
+        print(msg)
+        self.window().statusBar().showMessage(msg)
 
     def refreshSkipList(self):
         """refresh skip node list widget
@@ -1212,6 +1327,76 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         nodes = relative_guide_placement.SKIP_CRAWL_NODES
         nodes.sort()
         self.skip_crawl_list.addItems(nodes)
+
+    def refreshSkipOrientList(self):
+        """Refresh skip orientation node list widget."""
+        self.skip_orient_list.clear()
+        nodes = relative_guide_placement.SKIP_ORIENTATION_NODES
+        nodes.sort()
+        self.skip_orient_list.addItems(nodes)
+
+    def addSkipOrientNodes(self, nodes=None):
+        """Add nodes to skip orientation list.
+
+        Enforces mutual exclusivity: removes nodes from
+        SKIP_CRAWL_NODES if they were there.
+
+        Args:
+            nodes (list, optional): Nodes to add. Uses Maya selection
+                if None.
+        """
+        if not nodes:
+            nodes = cmds.ls(sl=True, type="transform")
+        if not nodes:
+            return
+        nodes = [x for x in nodes
+                 if cmds.objExists("{}.isGearGuide".format(x))]
+        if not nodes:
+            return
+        # Mutual exclusivity: remove from skip crawl/placement
+        for node in nodes:
+            if node in relative_guide_placement.SKIP_CRAWL_NODES:
+                relative_guide_placement.SKIP_CRAWL_NODES.remove(node)
+            if node in relative_guide_placement.SKIP_PLACEMENT_NODES:
+                relative_guide_placement.SKIP_PLACEMENT_NODES.remove(node)
+        relative_guide_placement.SKIP_ORIENTATION_NODES.extend(nodes)
+        tmp = list(set(relative_guide_placement.SKIP_ORIENTATION_NODES))
+        tmp.sort()
+        relative_guide_placement.SKIP_ORIENTATION_NODES = tmp
+        self.refreshSkipList()
+        self.refreshSkipOrientList()
+
+    def removeSkipOrientNodes(self, nodes=None):
+        """Remove nodes from skip orientation list.
+
+        Args:
+            nodes (list, optional): Nodes to remove. Uses list selection
+                if None.
+        """
+        removed_items = []
+        if nodes:
+            for i in range(self.skip_orient_list.count()):
+                item = self.skip_orient_list.item(i)
+                if item.text() in nodes:
+                    removed_items.append(item.text())
+        else:
+            item = self.skip_orient_list.currentItem()
+            if item:
+                removed_items.append(item.text())
+        for item in removed_items:
+            relative_guide_placement.SKIP_ORIENTATION_NODES.remove(item)
+        self.refreshSkipOrientList()
+
+    def getSkipOrientNodes(self):
+        """Get list of skip orientation nodes from the UI.
+
+        Returns:
+            list: Node names from the skip orientation list widget.
+        """
+        items = []
+        for i in range(self.skip_orient_list.count()):
+            items.append(self.skip_orient_list.item(i).text())
+        return items
 
     def ui(self):
         widget = QtWidgets.QGroupBox("Relative Guide Placement Settings")
@@ -1222,35 +1407,75 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.window()._toolTip_widgets.append(
             self.src_geo_widget.select_src_mesh_btn)
 
-        list_layout_01 = QtWidgets.QHBoxLayout()
-        list_layout_02 = QtWidgets.QVBoxLayout()
-        list_layout_03 = QtWidgets.QVBoxLayout()
-        list_layout_03.setAlignment(QtCore.Qt.AlignTop)
+        # Sample count spinbox
+        sample_layout = QtWidgets.QHBoxLayout()
+        sample_label = QtWidgets.QLabel("Sample Vertices:")
+        self.sample_count_sb = QtWidgets.QSpinBox()
+        self.sample_count_sb.setRange(1, 128)
+        self.sample_count_sb.setValue(
+            relative_guide_placement.DEFAULT_SAMPLE_COUNT
+        )
+        msg = (
+            "Number of nearby vertices to sample per guide node. "
+            "Higher values produce more stable placement but slower "
+            "recording. Use 1 for legacy single-vertex behavior."
+        )
+        self.sample_count_sb.setToolTip(msg)
+        self.sample_count_sb.setStatusTip(msg)
+        self.window()._toolTip_widgets.append(self.sample_count_sb)
+        sample_layout.addWidget(sample_label)
+        sample_layout.addWidget(self.sample_count_sb)
+
+        # --- Skip Nodes group ---
+        skip_nodes_grp = QtWidgets.QGroupBox("Skip Nodes")
+        skip_nodes_main = QtWidgets.QHBoxLayout()
+        skip_nodes_grp.setLayout(skip_nodes_main)
+
         self.skip_crawl_list = QtWidgets.QListWidget()
-        self.skip_crawl_list.setToolTip("Skip node hierarchy crawling")
-        self.skip_crawl_list.setStatusTip("Skip node hierarchy crawling")
+        msg = "Nodes skipped during hierarchy crawl and placement update"
+        self.skip_crawl_list.setToolTip(msg)
+        self.skip_crawl_list.setStatusTip(msg)
         self.window()._toolTip_widgets.append(self.skip_crawl_list)
         self.refreshSkipList()
-        self.skip_crawl_list.setMaximumWidth(125)
-        self.skip_crawl_list.setMaximumHeight(200)
-        self.add_skip_nodes_btn = QtWidgets.QPushButton("< Add Skip Node")
-        self.remove_skip_nodes_btn = QtWidgets.QPushButton("< Remove Node")
-        self.default_skip_nodes_btn = QtWidgets.QPushButton(
-            "< Set Default nodes")
-        list_layout_02.addWidget(self.skip_crawl_list)
-        list_layout_03.addWidget(self.add_skip_nodes_btn)
-        list_layout_01.addLayout(list_layout_02)
-        list_layout_01.addLayout(list_layout_03)
-        list_layout_03.addWidget(self.remove_skip_nodes_btn)
-        list_layout_03.addWidget(self.default_skip_nodes_btn)
 
-        io_layout = QtWidgets.QHBoxLayout()
+        skip_nodes_btn_layout = QtWidgets.QVBoxLayout()
+        skip_nodes_btn_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.add_skip_nodes_btn = QtWidgets.QPushButton("Add")
+        self.remove_skip_nodes_btn = QtWidgets.QPushButton("Remove")
+        skip_nodes_btn_layout.addWidget(self.add_skip_nodes_btn)
+        skip_nodes_btn_layout.addWidget(self.remove_skip_nodes_btn)
+
+        skip_nodes_main.addWidget(self.skip_crawl_list)
+        skip_nodes_main.addLayout(skip_nodes_btn_layout)
+
+        # --- Skip Orientation group ---
+        skip_orient_grp = QtWidgets.QGroupBox("Skip Orientation")
+        skip_orient_main = QtWidgets.QHBoxLayout()
+        skip_orient_grp.setLayout(skip_orient_main)
+
+        self.skip_orient_list = QtWidgets.QListWidget()
+        msg = "Nodes that update position only, preserving orientation"
+        self.skip_orient_list.setToolTip(msg)
+        self.skip_orient_list.setStatusTip(msg)
+        self.window()._toolTip_widgets.append(self.skip_orient_list)
+        self.refreshSkipOrientList()
+
+        skip_orient_btn_layout = QtWidgets.QVBoxLayout()
+        skip_orient_btn_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.add_skip_orient_btn = QtWidgets.QPushButton("Add")
+        self.remove_skip_orient_btn = QtWidgets.QPushButton("Remove")
+        skip_orient_btn_layout.addWidget(self.add_skip_orient_btn)
+        skip_orient_btn_layout.addWidget(self.remove_skip_orient_btn)
+
+        skip_orient_main.addWidget(self.skip_orient_list)
+        skip_orient_main.addLayout(skip_orient_btn_layout)
+
+        # --- Shared reset button ---
+        self.default_skip_nodes_btn = QtWidgets.QPushButton("Reset Defaults")
+
+        # --- Action buttons ---
         msg = "Record\nRelative Guide Placement"
         self.record_placement_btn = QtWidgets.QPushButton(msg)
-        msg = "Import\nRelative Guide Placement"
-        self.import_placement_btn = QtWidgets.QPushButton(msg)
-        io_layout.addWidget(self.record_placement_btn)
-        io_layout.addWidget(self.import_placement_btn)
         self.rgp_scale_cb = QtWidgets.QCheckBox("Reset Default Scale")
         msg = "Apply Default scale of 1, 1, 1"
         self.rgp_scale_cb.setToolTip(msg)
@@ -1258,15 +1483,16 @@ class RelativeGuidePlacementWidget(QtWidgets.QWidget):
         self.window()._toolTip_widgets.append(self.rgp_scale_cb)
         msg = "Update\nGuide Placement"
         self.update_placement_btn = QtWidgets.QPushButton(msg)
-        msg = "Export Guide Placement"
-        self.export_placement_btn = QtWidgets.QPushButton(msg)
 
+        # --- Assemble layout ---
         layout.addWidget(self.src_geo_widget)
-        layout.addLayout(list_layout_01)
-        layout.addLayout(io_layout)
+        layout.addLayout(sample_layout)
+        layout.addWidget(skip_nodes_grp)
+        layout.addWidget(skip_orient_grp)
+        layout.addWidget(self.default_skip_nodes_btn)
+        layout.addWidget(self.record_placement_btn)
         layout.addWidget(self.rgp_scale_cb)
         layout.addWidget(self.update_placement_btn)
-        layout.addWidget(self.export_placement_btn)
         return widget
 
 
@@ -1287,9 +1513,9 @@ class AutoFitGuideToolWidget(QtWidgets.QWidget):
         self.afb_widget = AutoFitBipedWidget(parent=parent)
         self.relative_placement_widget = RelativeGuidePlacementWidget(
             parent=parent)
-        self.afg_tab_widget.addTab(self.afb_widget, "Auto Fit Biped")
         self.afg_tab_widget.addTab(self.relative_placement_widget,
                                    "Relative Guide Placement")
+        self.afg_tab_widget.addTab(self.afb_widget, "Auto Fit Biped")
 
     def loadSettingsWidget(self):
         self.load_settings_widget = QtWidgets.QGroupBox("Load Model | Guide")
@@ -1338,10 +1564,112 @@ class AutoFitGuideTool(QtWidgets.QMainWindow):
         self.statusBar().showMessage("Starting up...", 3000)
         self.setCentralWidget(AutoFitGuideToolWidget(parent=self))
         self.connectToolTips()
+        self._createMenuBar()
         settings = QtCore.QSettings("mGear's", "AutoFitGuideTool")
         if settings:
             self.restoreGeometry(settings.value("geometry"))
             self.restoreState(settings.value("windowState"))
+            self._restoreSkipConfig(settings)
+
+    def _createMenuBar(self):
+        """Create the menu bar with File menu for import/export."""
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("File")
+
+        central = self.centralWidget()
+
+        export_rgp_action = file_menu.addAction(
+            "Export Relative Placement (.rgp)"
+        )
+        import_rgp_action = file_menu.addAction(
+            "Import Relative Placement (.rgp)"
+        )
+
+        file_menu.addSeparator()
+
+        export_afg_action = file_menu.addAction(
+            "Export AFG Association (.afg)"
+        )
+        import_afg_action = file_menu.addAction(
+            "Import AFG Association (.afg)"
+        )
+
+        file_menu.addSeparator()
+
+        export_skip_action = file_menu.addAction(
+            "Export Skip Config (.srgp)"
+        )
+        import_skip_action = file_menu.addAction(
+            "Import Skip Config (.srgp)"
+        )
+
+        export_rgp_action.triggered.connect(
+            central.relative_placement_widget._exportGuidePlacement
+        )
+        import_rgp_action.triggered.connect(
+            central.relative_placement_widget._importGuidePlacement
+        )
+        export_afg_action.triggered.connect(
+            central.afb_widget.exportAssociation
+        )
+        import_afg_action.triggered.connect(
+            central.afb_widget.importAssociation
+        )
+        export_skip_action.triggered.connect(
+            central.relative_placement_widget._exportSkipConfig
+        )
+        import_skip_action.triggered.connect(
+            central.relative_placement_widget._importSkipConfig
+        )
+
+    def _saveSkipConfig(self, settings):
+        """Save skip node configuration to QSettings.
+
+        Args:
+            settings (QSettings): Settings object to write to.
+        """
+        settings.setValue(
+            "skip_crawl_nodes",
+            json.dumps(list(relative_guide_placement.SKIP_CRAWL_NODES))
+        )
+        settings.setValue(
+            "skip_placement_nodes",
+            json.dumps(list(relative_guide_placement.SKIP_PLACEMENT_NODES))
+        )
+        settings.setValue(
+            "skip_orientation_nodes",
+            json.dumps(list(relative_guide_placement.SKIP_ORIENTATION_NODES))
+        )
+
+    def _restoreSkipConfig(self, settings):
+        """Restore skip node configuration from QSettings.
+
+        Args:
+            settings (QSettings): Settings object to read from.
+        """
+        central = self.centralWidget()
+        rgp = central.relative_placement_widget
+        val = settings.value("skip_crawl_nodes")
+        if val:
+            try:
+                relative_guide_placement.SKIP_CRAWL_NODES = json.loads(val)
+            except (ValueError, TypeError):
+                pass
+        val = settings.value("skip_placement_nodes")
+        if val:
+            try:
+                relative_guide_placement.SKIP_PLACEMENT_NODES = json.loads(val)
+            except (ValueError, TypeError):
+                pass
+        val = settings.value("skip_orientation_nodes")
+        if val:
+            try:
+                relative_guide_placement.SKIP_ORIENTATION_NODES = json.loads(
+                    val)
+            except (ValueError, TypeError):
+                pass
+        rgp.refreshSkipList()
+        rgp.refreshSkipOrientList()
 
     def connectToolTips(self):
         """make all widgets in the list have their tooltip show up on the
@@ -1377,6 +1705,7 @@ class AutoFitGuideTool(QtWidgets.QMainWindow):
         settings = QtCore.QSettings("mGear's", "AutoFitGuideTool")
         settings.setValue("windowState", self.saveState())
         settings.setValue("geometry", self.saveGeometry())
+        self._saveSkipConfig(settings)
         for manager in getattr(self, "afg_callback_managers", []):
             manager.removeAllManagedCB()
         try:

@@ -12,11 +12,15 @@ Operators are any node that connected to other nodes creates a rig behaviour::
 #############################################
 # GLOBAL
 #############################################
-import pymel.core as pm
-from pymel.core import datatypes
+import mgear.pymaya as pm
+from maya import cmds
+from mgear.pymaya import datatypes
 
 import maya.api.OpenMaya as om
-from .six import string_types
+string_types = str
+
+from mgear.core import attribute
+from mgear.core import surface
 
 #############################################
 # BUILT IN NODES
@@ -67,7 +71,6 @@ def parentCns(driver, driven, maintain_offset=True, **kwargs):
 
 
 def curvecns_op(crv, inputs=[]):
-
     for i, item in enumerate(inputs):
         node = pm.createNode("decomposeMatrix")
         pm.connectAttr(item + ".worldMatrix[0]", node + ".inputMatrix")
@@ -294,7 +297,6 @@ def aimCns(
             "upVectorZ",
         ]
     ):
-
         pm.setAttr(node + "." + name, a[i])
 
     return node
@@ -342,6 +344,7 @@ def gear_matrix_cns(
     rot_off=[0, 0, 0],
     rot_mult=[1, 1, 1],
     scl_mult=[1, 1, 1],
+    maintainRotOffset=True,
 ):
     """Create and connect matrix constraint node
 
@@ -357,7 +360,7 @@ def gear_matrix_cns(
         PyNode: The matrix constraint node
     """
     node = pm.createNode("mgear_matrixConstraint")
-    if isinstance(in_obj, pm.PyNode) and in_obj.type() == "matrix":
+    if isinstance(in_obj, pm.node._NodeTypes) and in_obj.type() == "matrix":
         pm.connectAttr(in_obj, node + ".driverMatrix", force=True)
     else:
         pm.connectAttr(
@@ -384,13 +387,18 @@ def gear_matrix_cns(
             force=True,
         )
 
-        # calculate rest pose
-        # we use the  outputDriverOffsetMatrix to have in account the offset
-        # rotation when the rest pose is calculated
-        driver_m = om.MMatrix(pm.getAttr(node + ".outputDriverOffsetMatrix"))
-        driven_m = om.MMatrix(pm.getAttr(out_obj + ".parentInverseMatrix[0]"))
-        mult = driver_m * driven_m
-        pm.setAttr(node + ".drivenRestMatrix", mult, type="matrix")
+        if maintainRotOffset:
+            # calculate rotation rest pose
+            # we use the  outputDriverOffsetMatrix to have in account the offset
+            # rotation when the rest pose is calculated
+            driver_m = om.MMatrix(
+                pm.getAttr(node + ".outputDriverOffsetMatrix")
+            )
+            driven_m = om.MMatrix(
+                pm.getAttr(out_obj + ".parentInverseMatrix[0]")
+            )
+            mult = driver_m * driven_m
+            pm.setAttr(node + ".drivenRestMatrix", mult, type="matrix")
 
         # connect srt (scale, rotation, translation)
         if "t" in connect_srt:
@@ -404,12 +412,13 @@ def gear_matrix_cns(
     return node
 
 
-def gear_spring_op(in_obj, goal=False):
+def gear_spring_op(in_obj, goal=False, solver="mgear_springNode"):
     """Apply mGear spring node.
 
     Arguments:
         in_obj (dagNode): Constrained object.
         goal (dagNode): By default is False.
+        solver (str, optional): Spring solver
 
     Returns:
         pyNode: Newly created node
@@ -417,7 +426,7 @@ def gear_spring_op(in_obj, goal=False):
     if not goal:
         goal = in_obj
 
-    node = pm.createNode("mgear_springNode")
+    node = pm.createNode(solver)
 
     pm.connectAttr("time1.outTime", node + ".time")
     dm_node = pm.createNode("decomposeMatrix")
@@ -442,6 +451,20 @@ def gear_spring_op(in_obj, goal=False):
     return node
 
 
+def gear_spring_gravity_op(in_obj, goal=False):
+    """Apply mGear spring Gravity  node.
+
+    Arguments:
+        in_obj (dagNode): Constrained object.
+        goal (dagNode): By default is False.
+
+    Returns:
+        pyNode: Newly created node
+    """
+
+    return gear_spring_op(in_obj, goal=goal, solver="mgear_springGravityNode")
+
+
 def gear_mulmatrix_op(mA, mB, target=False, transform="srt"):
     """Create mGear multiply Matrix node.
 
@@ -463,7 +486,9 @@ def gear_mulmatrix_op(mA, mB, target=False, transform="srt"):
     node = pm.createNode("mgear_mulMatrix")
     for m, mi in zip([mA, mB], ["matrixA", "matrixB"]):
         if isinstance(m, datatypes.Matrix):
-            pm.setAttr(node.attr(mi), m)
+            # pm.setAttr(node.attr(mi), m)
+            flat_list = [item for row in m.get() for item in row]
+            cmds.setAttr(node.attr(mi).name(), flat_list, type="matrix")
         else:
             pm.connectAttr(m, node.attr(mi))
     if target:
@@ -828,72 +853,100 @@ def gear_inverseRotorder_op(out_obj, in_obj):
     return node
 
 
-def create_proximity_constraint(shape, in_trans, existing_pin=None):
+def create_proximity_constraint(shape,
+                                in_trans,
+                                existing_pin=None,
+                                mtx_connect=True,
+                                out_trans=None,
+                                **kwargs):
     """Create a proximity constraint between a shape and a transform.
 
     Args:
-        shape (PyNode or str): Driver shape
-        in_trans (PyNode or str): in transform
-        existing_pin (PyNode, optional): Existing proximityPin node to connect to. Defaults to None.
+        shape (str): Shape node name.
+        in_trans (str): Input transform.
+        existing_pin (str, optional): Existing proximityPin node.
+        mtx_connect (bool): Whether to connect matrix or set value.
+        out_trans (str, optional): Output transform node.
 
     Returns:
-        Tuple[PyNode, PyNode]: out_trans, pin
+        tuple: (output transform, proximityPin node)
     """
 
-    def find_next_available_index(node, attribute):
-        """Find the next available index for a multi-attribute on a node."""
-        idx = 0
-        while node.attr(attribute)[idx].isConnected():
-            idx += 1
-        return idx
+    if not cmds.objExists(shape):
+        raise RuntimeError("Shape '{}' does not exist.".format(shape))
+    if not cmds.objExists(in_trans):
+        raise RuntimeError("Transform '{}' does not exist.".format(in_trans))
 
-    # Convert shape to PyNode if necessary
-    if isinstance(shape, str):
-        shape = pm.PyNode(shape)
-    if isinstance(in_trans, str):
-        in_trans = pm.PyNode(in_trans)
+    # Check inMesh connection to determine if intermediate exists
+    shape_attrs = cmds.listConnections(shape + ".inMesh", d=True) or []
 
-    # Try to get the original shape node
-    shape_orig_connections = shape.inMesh.listConnections(d=True)
-    if not shape_orig_connections:
-        # If there's no original shape node, create one
-        dup = pm.duplicate(shape, n="{}OrigTrans".format(shape), rc=True)[0]
-        shape_orig = pm.listRelatives(dup, s=True)[0]
-        shape_orig.rename("{}Orig".format(shape))
-        dup.visibility.set(0)
-        shape_orig.intermediateObject.set(1)
-        shape_orig.worldMesh[0] >> shape.inMesh
+    if not shape_attrs:
+        dup = cmds.duplicate(shape,
+                             n="{}OrigTrans".format(shape),
+                             rc=True)[0]
+
+        shape_orig = cmds.listRelatives(dup,
+                                        s=True,
+                                        f=True)[0]
+
+        shape_orig = cmds.rename(shape_orig, "{}Orig".format(shape))
+
+        cmds.parent(shape_orig, shape, shape=True, add=True)
+        cmds.delete(dup)
+
+        cmds.setAttr(shape_orig + ".intermediateObject", 1)
+
+        cmds.connectAttr(shape_orig + ".worldMesh[0]",
+                         shape + ".inMesh",
+                         f=True)
     else:
-        shape_orig = shape_orig_connections[0]
-        if not isinstance(shape_orig, pm.nt.Mesh):
-            shape_orig = shape_orig.originalGeometry[0].listConnections(
-                d=True, sh=True
-            )[0]
+        shape_orig = shape_attrs[0]
+        # Try get the shape from a transform, if needed
+        shapes = cmds.listRelatives(shape_orig, s=True, f=True)
+        if shapes:
+            shape_orig = shapes[0]
+        else:
+            orig_geom = cmds.listConnections(shape_orig +
+                                             ".originalGeometry",
+                                             d=True,
+                                             s=True) or []
+            if orig_geom:
+                shape_orig = orig_geom[0]
 
     if existing_pin:
         pin = existing_pin
-        idx = find_next_available_index(pin, "inputMatrix")
+        inputs = cmds.getAttr(pin + ".inputMatrix", mi=True) or []
+        idx = max(inputs) + 1 if inputs else 0
     else:
-        # Create a new proximity pin node
-        pin = pm.createNode("proximityPin", n="{}_proximityPin".format(shape))
+        pin = cmds.createNode("proximityPin",
+                              n="{}_proximityPin".format(shape))
         idx = 0
+        cmds.connectAttr(shape + ".worldMesh[0]",
+                         pin + ".deformedGeometry",
+                         f=True)
+        cmds.connectAttr(shape_orig + ".outMesh",
+                         pin + ".originalGeometry",
+                         f=True)
 
-        # Set the input connections for the proximity pin
-        shape.worldMesh[0] >> pin.deformedGeometry
-        shape_orig.outMesh >> pin.originalGeometry
+    if mtx_connect:
+        cmds.connectAttr(in_trans + ".matrix",
+                         "{}.inputMatrix[{}]".format(pin, idx),
+                         f=True)
+    else:
+        mat = cmds.getAttr(in_trans + ".matrix")
+        cmds.setAttr("{}.inputMatrix[{}]".format(pin, idx),
+                     *mat,
+                     type="matrix")
 
-    # Connect in_trans to the found or default idx
-    in_trans.matrix >> pin.inputMatrix[idx]
+    if not out_trans:
+        out_trans = cmds.createNode("transform",
+                                    n="{}_pinTrans{}".format(shape, idx))
 
-    # Create the output transform
-    out_trans = pm.createNode(
-        "transform", n="{}_pinTrans{}".format(shape, idx)
-    )
+    cmds.connectAttr("{}.outputMatrix[{}]".format(pin, idx),
+                     out_trans + ".offsetParentMatrix",
+                     f=True)
 
-    # Set the input connections for the output transform
-    pin.outputMatrix[idx] >> out_trans.offsetParentMatrix
-
-    return out_trans, pin
+    return pm.PyNode(out_trans), pm.PyNode(pin)
 
 
 def create_proximity_constraints(shape, in_trans_list):
@@ -953,3 +1006,97 @@ def create_proximity_constraints(shape, in_trans_list):
         out_trans_list.append(out_trans)
 
     return out_trans_list
+
+
+def create_uv_pin_constraint(shape,
+                             in_trans,
+                             existing_pin=None,
+                             out_trans=None,
+                             **kwargs):
+    """Create a UV pin constraint between a shape and a transform.
+
+    Args:
+        shape (str): Shape node name (nurbsSurface).
+        in_trans (str): Transform to constrain.
+        existing_pin (str, optional): Existing uvPin node.
+        out_trans (str, optional): Output transform node.
+
+    Returns:
+        tuple: (output transform, uvPin node)
+    """
+    if not cmds.objExists(shape):
+        raise RuntimeError("Shape '{}' does not exist.".format(shape))
+    if not cmds.objExists(in_trans):
+        raise RuntimeError("Transform '{}' does not exist.".format(in_trans))
+
+    # Check if deformedGeometry is connected
+    shape_attrs = cmds.listConnections(shape + ".worldSpace[0]", d=True) or []
+
+    if not shape_attrs:
+        dup = cmds.duplicate(shape,
+                             n="{}OrigTrans".format(shape),
+                             rc=True)[0]
+        shape_orig = cmds.listRelatives(dup,
+                                        s=True,
+                                        f=True)[0]
+        shape_orig = cmds.rename(shape_orig, "{}Orig".format(shape))
+        cmds.parent(shape_orig, shape, shape=True, add=True)
+        cmds.delete(dup)
+        cmds.setAttr(shape_orig + ".intermediateObject", 1)
+    else:
+        shape_orig = shape_attrs[0]
+        shapes = cmds.listRelatives(shape_orig, s=True, f=True)
+        if shapes:
+            shape_orig = shapes[0]
+        else:
+            orig_geom = cmds.listConnections(shape_orig +
+                                             ".originalGeometry",
+                                             d=True,
+                                             s=True) or []
+            if orig_geom:
+                shape_orig = orig_geom[0]
+
+    if existing_pin:
+        pin = existing_pin
+        inputs = cmds.getAttr(pin + ".outputMatrix", mi=True) or []
+        idx = max(inputs) + 1 if inputs else 0
+    else:
+        pin = cmds.createNode("uvPin",
+                              n="{}_uvPin".format(shape))
+        idx = 0
+        cmds.connectAttr(shape + ".worldSpace[0]",
+                         pin + ".deformedGeometry",
+                         f=True)
+        cmds.connectAttr(shape_orig + ".worldSpace[0]",
+                         pin + ".originalGeometry",
+                         f=True)
+
+    # Query world position of the input transform
+    position = cmds.xform(in_trans,
+                          q=True,
+                          ws=True,
+                          t=True)
+
+    # Create closestPointOnSurface node to find UV
+    cps_node = cmds.createNode("closestPointOnSurface")
+    cmds.connectAttr(shape + ".local", cps_node + ".inputSurface", f=True)
+    cmds.setAttr(cps_node + ".inPositionX", position[0])
+    cmds.setAttr(cps_node + ".inPositionY", position[1])
+    cmds.setAttr(cps_node + ".inPositionZ", position[2])
+    u_val = cmds.getAttr(cps_node + ".parameterU")
+    v_val = cmds.getAttr(cps_node + ".parameterV")
+    cmds.delete(cps_node)
+
+    # Set UV coordinate
+    cmds.setAttr("{}.coordinate[{}].coordinateU".format(pin, idx), u_val)
+    cmds.setAttr("{}.coordinate[{}].coordinateV".format(pin, idx), v_val)
+
+    if not out_trans:
+        out_trans = cmds.createNode("transform",
+                                    n="{}_pinTrans{}".format(shape, idx))
+
+    cmds.connectAttr("{}.outputMatrix[{}]".format(pin, idx),
+                     out_trans + ".offsetParentMatrix",
+                     f=True)
+
+    return out_trans, pin

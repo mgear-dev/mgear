@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Hair/fur strands -->
+    <path d="M6 20c0-8 1-14 2-16"></path>
+    <path d="M10 20c0-10 1-16 2-18"></path>
+    <path d="M14 20c0-10-1-16-2-18"></path>
+    <path d="M18 20c0-8-1-14-2-16"></path>
+    <!-- Boost arrow -->
+    <path d="M20 10l2-4-4 0"></path>
+    <line x1="16" y1="14" x2="22" y2="6"></line>
+</svg>

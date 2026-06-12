@@ -7,13 +7,65 @@
     <x>0</x>
     <y>0</y>
     <width>750</width>
-    <height>1324</height>
+    <height>1104</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_2">
+   <item row="4" column="0">
+    <widget class="QGroupBox" name="groupBox_3">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="title">
+      <string>Joint Settings</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5">
+      <item row="1" column="0">
+       <widget class="QCheckBox" name="jointWorldOri_checkBox">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Force all the joint to be oriented in World Space&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Force World Oriented</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QCheckBox" name="connect_joints_checkBox">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;When this option is active, mGear Shifter will try to connect to existing joints in the scene&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;WARNING&lt;/span&gt;: The joints need to have the rotation values freeze to 0, 0, 0. &lt;/p&gt;&lt;p&gt;Use Maya's Modify &amp;gt;&amp;gt; Freeze Transformation command to Freeze rotation. Open the command options and ensure only Rotation is freeze, before execute the command&lt;/p&gt;&lt;p&gt;Freeze joint rotations steps:&lt;/p&gt;&lt;p&gt;1. Select all joints to freeze&lt;/p&gt;&lt;p&gt;2. Open Maya's Modify &amp;gt;&amp;gt; Freeze Transformation options and ensure only rotation is checked&lt;/p&gt;&lt;p&gt;3. Apply Modify &amp;gt;&amp;gt; Freeze Transformation&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Connect to existing joints.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QCheckBox" name="force_uniScale_checkBox">
+        <property name="text">
+         <string>Force uniform scaling in all joints by connection all axis to Z axis</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QCheckBox" name="jointRig_checkBox">
+        <property name="text">
+         <string>Separated Joint Structure</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
    <item row="1" column="0">
     <widget class="QGroupBox" name="groupBox_6">
      <property name="title">
@@ -44,65 +96,6 @@
         </property>
         <property name="text">
          <string>Use Component Instance Name for Attributes Prefix</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="4" column="0">
-    <widget class="QGroupBox" name="groupBox_3">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="title">
-      <string>Joint Settings</string>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_5">
-      <item row="4" column="0">
-       <widget class="QCheckBox" name="force_SSC_joints_checkBox">
-        <property name="toolTip">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;WARNING: Only works in Maya 2020 or later&lt;/span&gt;&lt;/p&gt;&lt;p&gt;Use SSC (Segment Scale Compensation) NOTE: UE5 supports SSC, but Unity doesn't &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-        </property>
-        <property name="text">
-         <string>Use SSC (Segment Scale Compensation) NOTE: UE5 supports SSC, but Unity doesn't </string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0">
-       <widget class="QCheckBox" name="connect_joints_checkBox">
-        <property name="toolTip">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;When this option is active, mGear Shifter will try to connect to existing joints in the scene&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;WARNING&lt;/span&gt;: The joints need to have the rotation values freeze to 0, 0, 0. &lt;/p&gt;&lt;p&gt;Use Maya's Modify &amp;gt;&amp;gt; Freeze Transformation command to Freeze rotation. Open the command options and ensure only Rotation is freeze, before execute the command&lt;/p&gt;&lt;p&gt;Freeze joint rotations steps:&lt;/p&gt;&lt;p&gt;1. Select all joints to freeze&lt;/p&gt;&lt;p&gt;2. Open Maya's Modify &amp;gt;&amp;gt; Freeze Transformation options and ensure only rotation is checked&lt;/p&gt;&lt;p&gt;3. Apply Modify &amp;gt;&amp;gt; Freeze Transformation&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-        </property>
-        <property name="text">
-         <string>Connect to existing joints. NOTE: Joints need to have freezed rotations values.</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QCheckBox" name="force_uniScale_checkBox">
-        <property name="text">
-         <string>Force uniform scaling in all joints by connection all axis to Z axis</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QCheckBox" name="jointRig_checkBox">
-        <property name="text">
-         <string>Separated Joint Structure</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QCheckBox" name="jointSoup_checkBox">
-        <property name="toolTip">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;When this option is checked, Shifter will create a joint structure where all the joints are child of the root joint and align with the world axis&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-        </property>
-        <property name="text">
-         <string>Joint Soup + World Oriented (NOTE: This Will Override Separated Joint Structure Option)</string>
         </property>
        </widget>
       </item>
@@ -199,6 +192,38 @@
      </layout>
     </widget>
    </item>
+   <item row="2" column="0">
+    <widget class="QGroupBox" name="groupBox_7">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="title">
+      <string>Base Rig Control</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_9">
+      <item>
+       <widget class="QCheckBox" name="worldCtl_checkBox">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Shifter creates by default a Base control called &amp;quot;&lt;span style=&quot; font-weight:600;&quot;&gt;global_C0_ctl&lt;/span&gt;&amp;quot;. &lt;/p&gt;&lt;p&gt;Since this control is not accesible from any guide locator. Is not possible to add it as a space reference.&lt;/p&gt;&lt;p&gt;If this option is active, The base control will be named &amp;quot;&lt;span style=&quot; font-weight:600;&quot;&gt;world_ctl&lt;/span&gt;&amp;quot; and we can add &amp;quot;&lt;span style=&quot; font-weight:600;&quot;&gt;global_C0_ctl&lt;/span&gt;&amp;quot; as a regular &amp;quot;Control_01&amp;quot; component. &lt;/p&gt;&lt;p&gt;This way we can use it as space reference.&lt;/p&gt;&lt;p&gt;The biped guide template is configured with this structure.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Use World Ctl or Custom Name</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="worldCtl_lineEdit">
+        <property name="text">
+         <string>world_ctl</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
    <item row="3" column="0">
     <widget class="QGroupBox" name="groupBox_2">
      <property name="title">
@@ -240,171 +265,7 @@
      </layout>
     </widget>
    </item>
-   <item row="2" column="0">
-    <widget class="QGroupBox" name="groupBox_7">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="title">
-      <string>Base Rig Control</string>
-     </property>
-     <layout class="QHBoxLayout" name="horizontalLayout_9">
-      <item>
-       <widget class="QCheckBox" name="worldCtl_checkBox">
-        <property name="toolTip">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Shifter creates by default a Base control called &amp;quot;&lt;span style=&quot; font-weight:600;&quot;&gt;global_C0_ctl&lt;/span&gt;&amp;quot;. &lt;/p&gt;&lt;p&gt;Since this control is not accesible from any guide locator. Is not possible to add it as a space reference.&lt;/p&gt;&lt;p&gt;If this option is active, The base control will be named &amp;quot;&lt;span style=&quot; font-weight:600;&quot;&gt;world_ctl&lt;/span&gt;&amp;quot; and we can add &amp;quot;&lt;span style=&quot; font-weight:600;&quot;&gt;global_C0_ctl&lt;/span&gt;&amp;quot; as a regular &amp;quot;Control_01&amp;quot; component. &lt;/p&gt;&lt;p&gt;This way we can use it as space reference.&lt;/p&gt;&lt;p&gt;The biped guide template is configured with this structure.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-        </property>
-        <property name="text">
-         <string>Use World Ctl or Custom Name</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLineEdit" name="worldCtl_lineEdit">
-        <property name="text">
-         <string>world_ctl</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
    <item row="6" column="0">
-    <widget class="QGroupBox" name="groupBox_4">
-     <property name="title">
-      <string>Synoptic Settings</string>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_6">
-      <item row="0" column="0">
-       <layout class="QHBoxLayout" name="horizontalLayout_2">
-        <item>
-         <layout class="QVBoxLayout" name="verticalLayout_3">
-          <item>
-           <widget class="QLabel" name="rigTabs_label">
-            <property name="text">
-             <string>Rig Tabs</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QListWidget" name="rigTabs_listWidget">
-            <property name="dragDropOverwriteMode">
-             <bool>true</bool>
-            </property>
-            <property name="dragDropMode">
-             <enum>QAbstractItemView::InternalMove</enum>
-            </property>
-            <property name="defaultDropAction">
-             <enum>Qt::MoveAction</enum>
-            </property>
-            <property name="alternatingRowColors">
-             <bool>true</bool>
-            </property>
-            <property name="selectionMode">
-             <enum>QAbstractItemView::ExtendedSelection</enum>
-            </property>
-            <property name="selectionRectVisible">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <layout class="QVBoxLayout" name="verticalLayout_4">
-          <property name="sizeConstraint">
-           <enum>QLayout::SetDefaultConstraint</enum>
-          </property>
-          <item>
-           <spacer name="verticalSpacer_2">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-          <item>
-           <widget class="QPushButton" name="addTab_pushButton">
-            <property name="text">
-             <string>&lt;&lt;</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="removeTab_pushButton">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>&gt;&gt;</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
-          <item>
-           <widget class="QLabel" name="available_label">
-            <property name="text">
-             <string>Available Tabs</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QListWidget" name="available_listWidget">
-            <property name="dragDropOverwriteMode">
-             <bool>true</bool>
-            </property>
-            <property name="dragDropMode">
-             <enum>QAbstractItemView::NoDragDrop</enum>
-            </property>
-            <property name="defaultDropAction">
-             <enum>Qt::IgnoreAction</enum>
-            </property>
-            <property name="alternatingRowColors">
-             <bool>true</bool>
-            </property>
-            <property name="selectionMode">
-             <enum>QAbstractItemView::ExtendedSelection</enum>
-            </property>
-            <property name="selectionRectVisible">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-       </layout>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="7" column="0">
     <widget class="QGroupBox" name="groupBox_5">
      <property name="title">
       <string>Color Settings</string>
@@ -916,7 +777,7 @@
    <item row="5" column="0">
     <widget class="QGroupBox" name="groupBox_8">
      <property name="title">
-      <string>Post Build Data Collector (Experimental)</string>
+      <string>Post Build Data Collector</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_12">
       <item row="0" column="0">
@@ -992,8 +853,38 @@
      </layout>
     </widget>
    </item>
+   <item row="7" column="0">
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
   </layout>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>jointRig_checkBox</sender>
+   <signal>clicked(bool)</signal>
+   <receiver>jointWorldOri_checkBox</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>39</x>
+     <y>555</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>44</x>
+     <y>584</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>

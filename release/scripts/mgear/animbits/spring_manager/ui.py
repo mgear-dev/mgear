@@ -4,7 +4,7 @@ from mgear.core import widgets as mwgt
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
-import pymel.core as pm
+import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from functools import partial
 import os

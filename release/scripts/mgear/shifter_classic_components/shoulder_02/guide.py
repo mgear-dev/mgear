@@ -40,6 +40,8 @@ class Guide(guide.ComponentGuide):
     email = EMAIL
     version = VERSION
 
+    ctl_names_description = ["ctl"]
+
     def postInit(self):
         """Initialize the position for the guide"""
         self.save_transform = ["root", "tip", "orbit"]

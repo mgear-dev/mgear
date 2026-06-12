@@ -11,7 +11,7 @@ import logging
 
 __author__ = 'Jerome Drese'
 __email__ = 'jeromed@gmail.com'
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 
 logger = logging.getLogger("mGear.flex")
 logger.setLevel(logging.DEBUG)

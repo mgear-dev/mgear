@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Eye shape -->
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+    <!-- Iris -->
+    <circle cx="12" cy="12" r="3"></circle>
+    <!-- Pupil -->
+    <circle cx="12" cy="12" r="1" fill="white"></circle>
+    <!-- Eyelid curves for rigging -->
+    <path d="M5 8c2-2 5-3 7-3s5 1 7 3" stroke-opacity="0.5"></path>
+    <path d="M5 16c2 2 5 3 7 3s5-1 7-3" stroke-opacity="0.5"></path>
+</svg>

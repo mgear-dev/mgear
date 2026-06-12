@@ -4,11 +4,14 @@
 # GLOBAL
 #############################################
 import collections
-import mgear
-import pymel.core as pm
+
 import maya.cmds as cmds
-import pymel.core.datatypes as datatypes
-from .six import string_types
+from maya.api import OpenMaya
+
+import mgear
+import mgear.pymaya as pm
+import mgear.pymaya.datatypes as datatypes
+string_types = str
 
 #############################################
 # NODE
@@ -31,28 +34,38 @@ def addAttribute(
     channelBox=False,
     softMinValue=None,
     softMaxValue=None,
+    usedAsColor=None,
+    childSuffixes=None,
 ):
-    """Add attribute to a node
+    """Add attribute to a node.
 
-    Arguments:
-        node (dagNode): The object to add the new attribute.
+    Args:
+        node (dagNode or str): The object to add the new attribute.
         longName (str): The attribute name.
         attributeType (str): The Attribute Type. Exp: 'string', 'bool',
-            'long', etc..
-        value (float or int): The default value.
-        niceName (str): The attribute nice name. (optional)
-        shortName (str): The attribute short name. (optional)
-        minValue (float or int): minimum value. (optional)
-        maxValue (float or int): maximum value. (optional)
-        keyable (bool): Set if the attribute is keyable or not. (optional)
-        readable (bool): Set if the attribute is readable or not. (optional)
-        storable (bool): Set if the attribute is storable or not. (optional)
-        writable (bool): Set if the attribute is writable or not. (optional)
-        channelBox (bool): Set if the attribute is in the channelBox or not,
-            when the attribute is not keyable. (optional)
+            'long', etc.
+        value (float or int or bool or list): The default value.
+        niceName (str, optional): The attribute nice name.
+        shortName (str, optional): The attribute short name.
+        minValue (float or int, optional): Minimum value.
+        maxValue (float or int, optional): Maximum value.
+        keyable (bool): Set if the attribute is keyable or not.
+        readable (bool): Set if the attribute is readable or not.
+        storable (bool): Set if the attribute is storable or not.
+        writable (bool): Set if the attribute is writable or not.
+        channelBox (bool): Set if the attribute is in the channelBox
+            or not, when the attribute is not keyable.
+        softMinValue (float, optional): Lower limit of Maya Attribute
+            Editor sliders.
+        softMaxValue (float, optional): Upper limit of Maya Attribute
+            Editor sliders.
+        usedAsColor (bool, optional): Whether the attribute is a color.
+        childSuffixes (list of str, optional): Child attribute suffixes
+            for compound attributes. Default is XYZ, or RGB if
+            usedAsColor is True.
 
     Returns:
-        str: The long name of the new attribute
+        pm.Attribute: The new attribute.
     """
     if isinstance(node, str):
         try:
@@ -84,15 +97,49 @@ def addAttribute(
     if softMaxValue is not None and softMaxValue is not False:
         data["softMaxValue"] = softMaxValue
 
+    if usedAsColor is not None:
+        data["usedAsColor"] = usedAsColor
+
     data["keyable"] = keyable
     data["readable"] = readable
     data["storable"] = storable
     data["writable"] = writable
 
-    if value is not None and attributeType not in ["string"]:
+    compoundTypes = [
+        "float2",
+        "float3",
+        "double2",
+        "double3",
+        "long2",
+        "long3",
+        "short2",
+        "short3",
+    ]
+
+    if (value is not None) and (attributeType not in compoundTypes + ["string"]):
         data["defaultValue"] = value
 
     node.addAttr(longName, **data)
+
+    # Add compound children.
+    if attributeType in compoundTypes:
+        compoundSize = int(attributeType[-1])
+        childType = attributeType[:-1]
+        childValues = value
+
+        # Resolve defaults if not specified.
+        if value is None:
+            childValues = [None] * compoundSize
+        if childSuffixes is None:
+            childSuffixes = "RGB" if usedAsColor else "XYZ"
+            childSuffixes = list(childSuffixes[:compoundSize])
+
+        for childSuffix, childValue in zip(childSuffixes, childValues):
+            childAttr = f"{longName}{childSuffix}"
+            childData = {"attributeType": childType, "parent": longName}
+            if childValue is not None:
+                childData["defaultValue"] = childValue
+            node.addAttr(childAttr, **childData)
 
     if value is not None:
         node.setAttr(longName, value)
@@ -112,29 +159,32 @@ def addVector3Attribute(
     writable=True,
     niceName=None,
     shortName=None,
-    childLabels=["X", "Y", "Z"],
+    childLabels=("X", "Y", "Z"),
     usedAsColor=False,
     attributeType="float3",
 ):
-    """
-    Add a vector3 attribute to a node
+    """Add a vector3 attribute to a node.
 
-    Arguments:
-        node (dagNode): The object to add the new attribute.
+    Args:
+        node (dagNode or str): The object to add the new attribute.
         longName (str): The attribute name.
-        value (list of flotat): The default value in a list for RGB.
-            exp [1.0, 0.99, 0.13].
-        keyable (bool): Set if the attribute is keyable or not. (optional)
-        readable (bool): Set if the attribute is readable or not. (optional)
-        storable (bool): Set if the attribute is storable or not. (optional)
-        writable (bool): Set if the attribute is writable or not. (optional)
-        niceName (str): The attribute nice name. (optional)
-        shortName (str): The attribute short name. (optional)
+        value (list of float): The default value in a list for RGB.
+            Exp: [1.0, 0.99, 0.13].
+        keyable (bool): Set if the attribute is keyable or not.
+        readable (bool): Set if the attribute is readable or not.
+        storable (bool): Set if the attribute is storable or not.
+        writable (bool): Set if the attribute is writable or not.
+        niceName (str, optional): The attribute nice name.
+        shortName (str, optional): The attribute short name.
 
     Returns:
-        str: The long name of the new attribute
-
+        pm.Attribute: The new attribute.
     """
+    if isinstance(node, str):
+        try:
+            node = pm.PyNode(node)
+        except pm.MayaNodeError:
+            pm.displayError("{} doesn't exist or is not unique".format(node))
     if node.hasAttr(longName):
         mgear.log("Attribute already exists", mgear.sev_error)
         return
@@ -248,9 +298,7 @@ def addEnumAttribute(
     """
 
     if node.hasAttr(longName):
-        mgear.log(
-            "Attribute '" + longName + "' already exists", mgear.sev_warning
-        )
+        mgear.log("Attribute '" + longName + "' already exists", mgear.sev_warning)
         return
 
     data = {}
@@ -302,17 +350,21 @@ def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
         sourceAttrs = [sourceAttrs]
     for sourceAttr in sourceAttrs:
         for target in targets:
-            attrName = sourceAttr.longName()
-            if target.hasAttr(sourceAttr.longName()):
+            base_name = sourceAttr.longName()
+            attrName = base_name
+            if target.hasAttr(base_name):
                 if duplicatedPolicy == "index":
-                    i = 0
-                    while target.hasAttr(sourceAttr.longName() + str(i)):
-                        i += 1
-                    attrName = sourceAttr.longName() + str(i)
-                elif duplicatedPolicy == "fullName":
-                    attrName = "{}_{}".format(
-                        sourceAttr.nodeName(), sourceAttr.longName()
+                    # Cache existing attrs for faster lookup
+                    target_name = (
+                        target.name() if hasattr(target, "name") else str(target)
                     )
+                    existing_attrs = set(cmds.listAttr(target_name) or [])
+                    i = 0
+                    while f"{base_name}{i}" in existing_attrs:
+                        i += 1
+                    attrName = f"{base_name}{i}"
+                elif duplicatedPolicy == "fullName":
+                    attrName = f"{sourceAttr.nodeName()}_{base_name}"
 
             if not target.hasAttr(attrName):
                 target.addAttr(attrName, pxy=sourceAttr)
@@ -323,7 +375,9 @@ def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
                 )
 
 
-def moveChannel(attr, sourceNode, targetNode, duplicatedPolicy=None):
+def moveChannel(
+    attr, sourceNode, targetNode, duplicatedPolicy=None, forceFullName=False
+):
     """Move channels  keeping the output connections.
     Duplicated channel policy, stablish the rule in case the channel already
     exist on the target.
@@ -370,20 +424,25 @@ def moveChannel(attr, sourceNode, targetNode, duplicatedPolicy=None):
 
         newAtt = None
         attrName = attr
-        nName = pm.attributeQuery(
-            at.shortName(), node=at.node(), niceName=True
-        )
+        nName = pm.attributeQuery(at.shortName(), node=at.node(), niceName=True)
         # define duplicated attribute policy
         if sourceNode.name() != targetNode.name():
             # this policy doesn't apply for rearrange channels
             if pm.attributeQuery(attr, node=targetNode, exists=True):
                 if duplicatedPolicy == "index":
+                    # Cache existing attrs for faster lookup
+                    target_name = (
+                        targetNode.name()
+                        if hasattr(targetNode, "name")
+                        else str(targetNode)
+                    )
+                    existing_attrs = set(cmds.listAttr(target_name) or [])
                     i = 0
-                    while targetNode.hasAttr(attr + str(i)):
+                    while f"{attr}{i}" in existing_attrs:
                         i += 1
-                    attrName = attr + str(i)
+                    attrName = f"{attr}{i}"
                 elif duplicatedPolicy == "fullName":
-                    attrName = "{}_{}".format(sourceNode.name(), attr)
+                    attrName = f"{sourceNode.name()}_{attr}"
 
                 elif duplicatedPolicy == "merge":
                     newAtt = pm.PyNode(".".join([targetNode.name(), attr]))
@@ -396,6 +455,10 @@ def moveChannel(attr, sourceNode, targetNode, duplicatedPolicy=None):
                         "the target."
                     )
                     return False
+
+        if forceFullName:
+            attrName = "{}_{}".format(sourceNode.name(), attr)
+            nName = "{}_{}".format(sourceNode.name(), nName)
 
         outcnx = at.listConnections(p=True)
         if not newAtt:
@@ -411,9 +474,7 @@ def moveChannel(attr, sourceNode, targetNode, duplicatedPolicy=None):
                     kwargs["max"] = max
             elif atType == "enum":
                 en = at.getEnums()
-                oEn = collections.OrderedDict(
-                    sorted(en.items(), key=lambda t: t[1])
-                )
+                oEn = collections.OrderedDict(sorted(en.items(), key=lambda t: t[1]))
                 enStr = ":".join([n for n in oEn])
 
             # delete old attr
@@ -428,7 +489,7 @@ def moveChannel(attr, sourceNode, targetNode, duplicatedPolicy=None):
                     at=atType,
                     dv=value,
                     k=True,
-                    **kwargs
+                    **kwargs,
                 )
             elif atType == "enum":
                 pm.addAttr(
@@ -457,6 +518,7 @@ def moveChannel(attr, sourceNode, targetNode, duplicatedPolicy=None):
         for cnx in outcnx:
             try:
                 pm.connectAttr(newAtt, cnx, f=True)
+                return newAtt
             except RuntimeError:
                 pm.displayError(
                     "There is a problem connecting the "
@@ -541,31 +603,23 @@ def setKeyableAttributes(
 
     """
 
-    localParams = [
-        "tx",
-        "ty",
-        "tz",
-        "ro",
-        "rx",
-        "ry",
-        "rz",
-        "sx",
-        "sy",
-        "sz",
-        "v",
-    ]
+    localParams = {"tx", "ty", "tz", "ro", "rx", "ry", "rz", "sx", "sy", "sz", "v"}
 
     if not isinstance(nodes, list):
         nodes = [nodes]
 
-    for attr_name in params:
-        for node in nodes:
-            node.setAttr(attr_name, lock=False, keyable=True)
+    # Convert params to set for O(1) lookup
+    params_set = set(params)
+    # Pre-compute which attrs to lock (those in localParams but not in params)
+    attrs_to_lock = localParams - params_set
 
-    for attr_name in localParams:
-        if attr_name not in params:
-            for node in nodes:
-                node.setAttr(attr_name, lock=True, keyable=False)
+    # Use cmds for faster attribute setting
+    for node in nodes:
+        node_name = node.name() if hasattr(node, "name") else str(node)
+        for attr_name in params:
+            cmds.setAttr(f"{node_name}.{attr_name}", lock=False, keyable=True)
+        for attr_name in attrs_to_lock:
+            cmds.setAttr(f"{node_name}.{attr_name}", lock=True, keyable=False)
 
 
 def setNotKeyableAttributes(
@@ -596,9 +650,26 @@ def setNotKeyableAttributes(
     if not isinstance(nodes, list):
         nodes = [nodes]
 
-    for attr_name in attributes:
-        for node in nodes:
-            node.setAttr(attr_name, lock=False, keyable=False, cb=True)
+    # Use cmds for faster attribute setting
+    for node in nodes:
+        node_name = node.name() if hasattr(node, "name") else str(node)
+        for attr_name in attributes:
+            cmds.setAttr(f"{node_name}.{attr_name}", lock=False, keyable=False, cb=True)
+
+
+# Rotation order lookup dictionary for O(1) access
+_ROT_ORDER_MAP = {
+    "XYZ": OpenMaya.MEulerRotation.kXYZ,
+    "YZX": OpenMaya.MEulerRotation.kYZX,
+    "ZXY": OpenMaya.MEulerRotation.kZXY,
+    "XZY": OpenMaya.MEulerRotation.kXZY,
+    "YXZ": OpenMaya.MEulerRotation.kYXZ,
+    "ZYX": OpenMaya.MEulerRotation.kZYX,
+}
+
+
+def _to_rot_od(ordstr):
+    return _ROT_ORDER_MAP.get(ordstr, OpenMaya.MEulerRotation.kXYZ)
 
 
 def setRotOrder(node, s="XYZ"):
@@ -622,19 +693,30 @@ def setRotOrder(node, s="XYZ"):
 
     er = datatypes.EulerRotation(
         [
-            pm.getAttr(node + ".rx"),
-            pm.getAttr(node + ".ry"),
-            pm.getAttr(node + ".rz"),
+            OpenMaya.MAngle(
+                pm.getAttr(node + ".rx"), OpenMaya.MAngle.kDegrees
+            ).asRadians(),
+            OpenMaya.MAngle(
+                pm.getAttr(node + ".ry"), OpenMaya.MAngle.kDegrees
+            ).asRadians(),
+            OpenMaya.MAngle(
+                pm.getAttr(node + ".rz"), OpenMaya.MAngle.kDegrees
+            ).asRadians(),
         ],
-        unit="degrees",
+        _to_rot_od(a[node.getAttr("ro")]),
     )
-    er.reorderIt(s)
+    er.reorderIt(_to_rot_od(s))
 
     if node.hasAttr("rotate_order"):
         change_default_value(node.rotate_order, a.index(s))
 
     node.setAttr("ro", a.index(s))
-    node.setAttr("rotate", er.x, er.y, er.z)
+    node.setAttr(
+        "rotate",
+        OpenMaya.MAngle(er.x).asDegrees(),
+        OpenMaya.MAngle(er.y).asDegrees(),
+        OpenMaya.MAngle(er.z).asDegrees(),
+    )
 
 
 def setInvertMirror(node, invList=None):
@@ -642,6 +724,10 @@ def setInvertMirror(node, invList=None):
 
     Arguments:
         node (dagNode): The object to set invert mirror Values
+        invList (list, optional): list of axis to invert ["tx", "tz"]
+
+    i.e: attribute.setInvertMirror(ctl_pyNode, invList=["tx", "tz"] )
+
 
     """
 
@@ -784,6 +870,39 @@ def move_output_connections(source, target, type_filter=None):
         at_name = i[0].shortName()
         pm.disconnectAttr(i[0])
         pm.connectAttr(target.attr(at_name), i[1])
+
+
+def get_attr_info(node, attr):
+    """
+    Returns default, min, and max values of an attribute.
+
+    Args:
+        node (str): Node name, e.g. "control_C1_ctl"
+        attr (str): Attribute name, e.g. "arm_slide"
+
+    Returns:
+        dict: { "default": value or None,
+                "min": value or None,
+                "max": value or None }
+    """
+    info = {"default": None, "min": None, "max": None}
+
+    # Default
+    default = cmds.attributeQuery(attr, node=node, listDefault=True)
+    if default:
+        info["default"] = default[0]
+
+    # Min
+    minimum = cmds.attributeQuery(attr, node=node, minimum=True)
+    if minimum:
+        info["min"] = minimum[0]
+
+    # Max
+    maximum = cmds.attributeQuery(attr, node=node, maximum=True)
+    if maximum:
+        info["max"] = maximum[0]
+
+    return info
 
 
 ##########################################################
@@ -930,9 +1049,7 @@ class FCurveParamDef(ParamDef):
 
     """
 
-    def __init__(
-        self, scriptName, keys=None, interpolation=0, extrapolation=0
-    ):
+    def __init__(self, scriptName, keys=None, interpolation=0, extrapolation=0):
 
         self.scriptName = scriptName
         self.keys = keys
@@ -951,14 +1068,10 @@ class FCurveParamDef(ParamDef):
         """
         attr_name = addAttribute(node, self.scriptName, "double", 0)
 
-        attrDummy_name = addAttribute(
-            node, self.scriptName + "_dummy", "double", 0
-        )
+        attrDummy_name = addAttribute(node, self.scriptName + "_dummy", "double", 0)
 
         for key in self.keys:
-            pm.setDrivenKeyframe(
-                attr_name, cd=attrDummy_name, dv=key[0], v=key[1]
-            )
+            pm.setDrivenKeyframe(attr_name, cd=attrDummy_name, dv=key[0], v=key[1])
 
         # clean dummy attr
         pm.deleteAttr(attrDummy_name)
@@ -1017,6 +1130,8 @@ class colorParamDef(ParamDef):
     def get_as_dict(self):
 
         self.param_dict["scriptName"] = self.scriptName
+        if isinstance(self.value, OpenMaya.MVector):
+            self.value = [self.value.x, self.value.y, self.value.z]
         self.param_dict["value"] = self.value
 
         return self.param_dict
@@ -1100,7 +1215,7 @@ def set_default_value(node, attribute):
         node (str, PyNode): The object with the attribute to reset
         attribute (str): The attribute to reset
     """
-    if not isinstance(node, pm.PyNode):
+    if isinstance(node, string_types):
         node = pm.PyNode(node)
 
     defVal = get_default_value(node, attribute)
@@ -1126,7 +1241,7 @@ def set_default_value(node, attribute):
                 # node.attr(attribute).set(defVal)
         else:
             node.attr(attribute).set(defVal)
-    except RuntimeError:
+    except (RuntimeError, pm.MayaAttributeError):
         # print("Failed to reset: {}".format(attribute))
         pass
 
@@ -1270,9 +1385,7 @@ def get_selected_channels_full_path():
     if node:
         node = node[0]
 
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, sma=True)
-        )
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, sma=True))
 
         # if the attr is from shape node, we need to search in all shapes
         collect_attrs(
@@ -1282,12 +1395,8 @@ def get_selected_channels_full_path():
             shapes=True,
         )
 
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, sha=True)
-        )
-        collect_attrs(
-            node, attrs, pm.channelBox(get_channelBox(), q=True, soa=True)
-        )
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, sha=True))
+        collect_attrs(node, attrs, pm.channelBox(get_channelBox(), q=True, soa=True))
 
     return attrs
 
@@ -1333,8 +1442,7 @@ def getSelectedObjectChannels(oSel=None, userDefine=False, animatable=False):
         oSel = pm.selected()[0]
 
     channels = [
-        x.name().rsplit(".", 1)[1]
-        for x in oSel.listAttr(ud=userDefine, k=animatable)
+        x.name().rsplit(".", 1)[1] for x in oSel.listAttr(ud=userDefine, k=animatable)
     ]
 
     return channels
@@ -1507,6 +1615,23 @@ def get_next_available_index(attr):
                 return e
 
 
+def find_next_available_index(node, attribute):
+    """Find the next available index for a multi-attribute on a given node.
+    This function ins similar to get_next_available_index but with 2 args
+
+    Args:
+        node (PyNode): Node with multi-attribute.
+        attribute (str): Multi-attribute name.
+
+    Returns:
+        int: Next available index.
+    """
+    idx = 0
+    while node.attr(attribute)[idx].isConnected():
+        idx += 1
+    return idx
+
+
 def connect_message(source, attr):
     """
     Connects the 'message' attribute of one or more source nodes to a
@@ -1527,8 +1652,8 @@ def connect_message(source, attr):
         idx = get_next_available_index(attr)
         attr_name = "{}[{}]".format(attr, idx)
 
-        src_str = str(src) if isinstance(src, pm.PyNode) else src
-        attr_str = str(attr) if isinstance(attr, pm.PyNode) else attr
+        src_str = src if isinstance(src, str) else str(src)
+        attr_str = attr if isinstance(attr, str) else str(attr)
 
         source_attr_type = pm.attributeQuery(
             "message", node=src_str.split(".")[0], attributeType=True
@@ -1543,11 +1668,74 @@ def connect_message(source, attr):
             raise TypeError("Source attribute is not a message attribute.")
 
         if dest_attr_type != "message":
-            raise TypeError(
-                "Destination attribute is not a message attribute."
-            )
+            raise TypeError("Destination attribute is not a message attribute.")
 
         pm.connectAttr("{}.message".format(src_str), attr_name)
+
+
+def resolve_alias_attr(full_attr_name):
+    """
+    Resolves the real name of an attribute if it is an alias.
+
+    Args:
+        full_attr_name (str): The fully qualified alias attribute name (e.g., "blendShape1.pCube1").
+
+    Returns:
+        str: The real attribute name if it's an alias, or the original name if not.
+    """
+    # Split the full attribute into node and alias attribute
+    if "." not in full_attr_name:
+        raise ValueError(
+            "Input must be a fully qualified attribute (e.g., 'node.attr')"
+        )
+
+    node, alias_attr = full_attr_name.split(".", 1)
+
+    # Get all aliases for the node
+    aliases = cmds.aliasAttr(node, query=True) or []
+
+    # aliases is a flat list: [alias1, realAttr1, alias2, realAttr2, ...]
+    alias_dict = dict(zip(aliases[::2], aliases[1::2]))
+
+    # Check if the alias_attr is in the alias list
+    if alias_attr in alias_dict:
+        real_attr = "{}.{}".format(node, alias_dict[alias_attr])
+        return real_attr  # Return the fully qualified real attribute name
+    else:
+        return full_attr_name  # Not an alias, return as is
+
+
+def get_alias_for_attr(full_attr_name):
+    """
+    Gets the alias name for a real attribute, if it exists.
+
+    Args:
+        full_attr_name (str): The fully qualified real attribute name
+            (e.g., "blendShape1.weight[0]").
+
+    Returns:
+        str: The alias name if it exists, or the original name if no alias exists.
+    """
+    # Split the full attribute into node and real attribute
+    if "." not in full_attr_name:
+        raise ValueError(
+            "Input must be a fully qualified attribute (e.g., 'node.attr')"
+        )
+
+    node, real_attr = full_attr_name.split(".", 1)
+
+    # Get all aliases for the node
+    aliases = cmds.aliasAttr(node, query=True) or []
+
+    # aliases is a flat list: [alias1, realAttr1, alias2, realAttr2, ...]
+    alias_dict = dict(zip(aliases[1::2], aliases[::2]))  # Reverse mapping
+
+    # Check if the real_attr is in the alias dictionary
+    if real_attr in alias_dict:
+        alias_attr = "{}.{}".format(node, alias_dict[real_attr])
+        return alias_attr  # Return the fully qualified alias name
+    else:
+        return full_attr_name  # No alias exists, return as is
 
 
 ##########################################################

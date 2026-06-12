@@ -11,7 +11,7 @@ from maya.app.general.mayaMixin import MayaQDockWidget
 
 from . import settingsUI as sui
 
-import pymel.core as pm
+import mgear.pymaya as pm
 
 
 # guide info

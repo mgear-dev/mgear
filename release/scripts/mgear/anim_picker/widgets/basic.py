@@ -5,11 +5,9 @@ from __future__ import unicode_literals
 
 # python
 import os
-import platform
 
 # dcc
 import maya.cmds as cmds
-from pymel import versions
 
 # mgear
 from mgear.vendor.Qt import QtGui
@@ -25,34 +23,18 @@ from mgear.vendor.Qt import QtWidgets
 from mgear.core import pyqt
 from mgear.anim_picker.handlers import __EDIT_MODE__
 
-# Some platforms have issue with OpenGl and PySide2-2.0.0.alpha
-platform_name = platform.system()
-if platform_name == "Windows":
-    if versions.current() >= 20220000:
-        __USE_OPENGL__ = False
-    else:
-        __USE_OPENGL__ = True
-elif platform_name == "Linux":
-    __USE_OPENGL__ = True
-elif platform_name == "Darwin":
-    __USE_OPENGL__ = False
-else:
-    __USE_OPENGL__ = False
-
 # =============================================================================
 # generic functions
 # =============================================================================
 
 
 def get_module_path():
-    '''Return the folder path for this module
-    '''
+    """Return the folder path for this module"""
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_images_folder_path():
-    '''Return path for package images folder
-    '''
+    """Return path for package images folder"""
     # Get the path to this file
     module_path = os.path.dirname(get_module_path())
     return os.path.join(module_path, "images")
@@ -72,8 +54,9 @@ def promptAcceptance(parent, descriptionA, descriptionB):
     msgBox = QtWidgets.QMessageBox(parent)
     msgBox.setText(descriptionA)
     msgBox.setInformativeText(descriptionB)
-    msgBox.setStandardButtons(QtWidgets.QMessageBox.Ok |
-                              QtWidgets.QMessageBox.Cancel)
+    msgBox.setStandardButtons(
+        QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel
+    )
     msgBox.setDefaultButton(QtWidgets.QMessageBox.Cancel)
     decision = msgBox.exec_()
     return decision
@@ -83,8 +66,7 @@ def promptAcceptance(parent, descriptionA, descriptionB):
 # Custom Widgets ---
 # =============================================================================
 class CallbackButton(QtWidgets.QPushButton):
-    '''Dynamic callback button
-    '''
+    """Dynamic callback button"""
 
     def __init__(self, callback=None, *args, **kwargs):
         QtWidgets.QPushButton.__init__(self)
@@ -106,8 +88,7 @@ class CallbackButton(QtWidgets.QPushButton):
 
 
 class CallbackComboBox(QtWidgets.QComboBox):
-    '''Dynamic combo box object
-    '''
+    """Dynamic combo box object"""
 
     def __init__(self, callback=None, status_tip=None, *args, **kwargs):
         QtWidgets.QComboBox.__init__(self)
@@ -126,7 +107,6 @@ class CallbackComboBox(QtWidgets.QComboBox):
 
 
 class CallBackSpinBox(QtWidgets.QSpinBox):
-
     def __init__(self, callback, value=0, min=0, max=9999, *args, **kwargs):
         QtWidgets.QSpinBox.__init__(self)
         self.callback = callback
@@ -147,7 +127,6 @@ class CallBackSpinBox(QtWidgets.QSpinBox):
 
 
 class CallBackDoubleSpinBox(QtWidgets.QDoubleSpinBox):
-
     def __init__(self, callback, value=0, min=0, max=9999, *args, **kwargs):
         QtWidgets.QDoubleSpinBox.__init__(self)
         self.callback = callback
@@ -168,7 +147,6 @@ class CallBackDoubleSpinBox(QtWidgets.QDoubleSpinBox):
 
 
 class CallbackLineEdit(QtWidgets.QLineEdit):
-
     def __init__(self, callback, text=None, *args, **kwargs):
         QtWidgets.QLineEdit.__init__(self)
         self.callback = callback
@@ -183,14 +161,12 @@ class CallbackLineEdit(QtWidgets.QLineEdit):
         self.returnPressed.connect(self.return_pressed_event)
 
     def return_pressed_event(self):
-        '''Will return text on return press
-        '''
+        """Will return text on return press"""
         self.callback(text=self.text(), *self.args, **self.kwargs)
 
 
 class CallbackListWidget(QtWidgets.QListWidget):
-    '''Dynamic List Widget object
-    '''
+    """Dynamic List Widget object"""
 
     def __init__(self, callback=None, *args, **kwargs):
         QtWidgets.QListWidget.__init__(self)
@@ -201,7 +177,7 @@ class CallbackListWidget(QtWidgets.QListWidget):
         self.itemDoubleClicked.connect(self.double_click_event)
 
         # Set selection mode to multi
-        self.setSelectionMode(self.ExtendedSelection)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
     def double_click_event(self, item):
         if not self.callback:
@@ -210,15 +186,11 @@ class CallbackListWidget(QtWidgets.QListWidget):
 
 
 class CallbackCheckBoxWidget(QtWidgets.QCheckBox):
-    '''Dynamic CheckBox Widget object
-    '''
+    """Dynamic CheckBox Widget object"""
 
-    def __init__(self,
-                 callback=None,
-                 value=False,
-                 label=None,
-                 *args,
-                 **kwargs):
+    def __init__(
+        self, callback=None, value=False, label=None, *args, **kwargs
+    ):
         QtWidgets.QCheckBox.__init__(self)
         self.callback = callback
         self.args = args
@@ -239,8 +211,7 @@ class CallbackCheckBoxWidget(QtWidgets.QCheckBox):
 
 
 class CallbackRadioButtonWidget(QtWidgets.QRadioButton):
-    '''Dynamic callback radioButton
-    '''
+    """Dynamic callback radioButton"""
 
     def __init__(self, name_value, callback, checked=False):
         QtWidgets.QRadioButton.__init__(self)
@@ -256,10 +227,10 @@ class CallbackRadioButtonWidget(QtWidgets.QRadioButton):
 
 
 class CtrlListWidgetItem(QtWidgets.QListWidgetItem):
-    '''
+    """
     List widget item for influence list
     will handle checks, color feedbacks and edits
-    '''
+    """
 
     def __init__(self, index=0, text=None):
         QtWidgets.QListWidgetItem.__init__(self)
@@ -269,8 +240,7 @@ class CtrlListWidgetItem(QtWidgets.QListWidgetItem):
             self.setText(text)
 
     def setText(self, text):
-        '''Overwrite default setText with auto color status check
-        '''
+        """Overwrite default setText with auto color status check"""
         # Skip if name hasn't changed
         if text == self.text():
             return None
@@ -284,18 +254,15 @@ class CtrlListWidgetItem(QtWidgets.QListWidgetItem):
         return text
 
     def node(self):
-        '''Return a usable string for maya instead of a QString
-        '''
+        """Return a usable string for maya instead of a QString"""
         return str(self.text())
 
     def node_exists(self):
-        '''Will check that the node from "text" exists
-        '''
+        """Will check that the node from "text" exists"""
         return cmds.objExists(self.node())
 
     def set_color_status(self):
-        '''Set the color to red/green based on node existence status
-        '''
+        """Set the color to red/green based on node existence status"""
         color = QtGui.QColor()
 
         # Exists case
@@ -314,11 +281,9 @@ class CtrlListWidgetItem(QtWidgets.QListWidgetItem):
 
 
 class BackgroundWidget(QtWidgets.QLabel):
-    '''QLabel widget to support background options for tabs.
-    '''
+    """QLabel widget to support background options for tabs."""
 
-    def __init__(self,
-                 parent=None):
+    def __init__(self, parent=None):
         QtWidgets.QLabel.__init__(self, parent)
 
         self.setBackgroundRole(QtGui.QPalette.Base)
@@ -332,24 +297,25 @@ class BackgroundWidget(QtWidgets.QLabel):
         self._set_stylesheet_background()
 
     def _set_stylesheet_background(self):
-        '''
+        """
         Will set proper sylesheet based on edit status to have
         fixed size background in edit mode and stretchable in anim mode
-        '''
+        """
         if not self.background:
             self.setStyleSheet("")
             return
 
         bg = self.background
         if __EDIT_MODE__.get():
-            edit_css = "QLabel {background-image: url('{}'); background-repeat: no repeat;}".format(bg)
+            edit_css = "QLabel {background-image: url('{}'); background-repeat: no repeat;}".format(
+                bg
+            )
             self.setStyleSheet(edit_css)
         else:
             self.setStyleSheet("QLabel {border-image: url('{}');}".format(bg))
 
     def set_background(self, path=None):
-        '''Set character snapshot picture
-        '''
+        """Set character snapshot picture"""
         if not (path and os.path.exists(path)):
             path = None
             self.background = None
@@ -360,12 +326,11 @@ class BackgroundWidget(QtWidgets.QLabel):
         self._set_stylesheet_background()
 
     def file_dialog(self):
-        '''Get file dialog window starting in default folder
-        '''
+        """Get file dialog window starting in default folder"""
         imgs_dir = get_images_folder_path()
-        file_path = QtWidgets.QFileDialog.getOpenFileName(self,
-                                                          'Choose picture',
-                                                          imgs_dir)
+        file_path = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Choose picture", imgs_dir
+        )
         # Filter return result (based on qt version)
         if isinstance(file_path, tuple):
             file_path = file_path[0]
@@ -377,8 +342,7 @@ class BackgroundWidget(QtWidgets.QLabel):
 
 
 class SnapshotWidget(BackgroundWidget):
-    '''Top right character "snapshot" widget, to display character picture
-    '''
+    """Top right character "snapshot" widget, to display character picture"""
 
     def __init__(self, parent=None):
         BackgroundWidget.__init__(self, parent)
@@ -392,8 +356,7 @@ class SnapshotWidget(BackgroundWidget):
         self.setToolTip("Click here to Open About/Help window")
 
     def _get_default_snapshot(self, name="undefined"):
-        '''Return default snapshot
-        '''
+        """Return default snapshot"""
         # Define image path
         folder_path = get_images_folder_path()
         image_path = os.path.join(folder_path, "{}.png".format(name))
@@ -404,8 +367,7 @@ class SnapshotWidget(BackgroundWidget):
         return image_path
 
     def set_background(self, path=None):
-        '''Set character snapshot picture
-        '''
+        """Set character snapshot picture"""
         if not (path and os.path.exists(path)):
             path = self._get_default_snapshot()
             self.background = None
@@ -417,8 +379,7 @@ class SnapshotWidget(BackgroundWidget):
         self.setPixmap(QtGui.QPixmap.fromImage(image))
 
     def contextMenuEvent(self, event):
-        '''Right click menu options
-        '''
+        """Right click menu options"""
         # Abort in non edit mode
         if not __EDIT_MODE__.get():
             return
@@ -441,8 +402,7 @@ class SnapshotWidget(BackgroundWidget):
             menu.exec_(self.mapToGlobal(event.pos()))
 
     def select_image(self):
-        '''Pick/set snapshot image
-        '''
+        """Pick/set snapshot image"""
         # Open file dialog
         file_name = self.file_dialog()
 
@@ -454,19 +414,18 @@ class SnapshotWidget(BackgroundWidget):
         self.set_background(file_name)
 
     def reset_image(self):
-        '''Reset snapshot image to default
-        '''
+        """Reset snapshot image to default"""
         # Reset background
         self.set_background()
 
     def get_data(self):
-        '''Return snapshot picture path
-        '''
+        """Return snapshot picture path"""
         return self.background
 
 
 class BackgroundOptionsDialog(QtWidgets.QDialog):
     """minimal ui for adjusting the background image"""
+
     def __init__(self, tabWidget, parent=None):
         super(BackgroundOptionsDialog, self).__init__(parent)
         self.setWindowTitle("Set background size")
@@ -526,13 +485,15 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
 
     def update_background_width(self):
         gfx_view = self.tabWidget.currentWidget()
-        gfx_view.set_background_width(int(self.width_box.text()),
-                                      keepAspectRatio=self.keep_aspect_ratio)
+        gfx_view.set_background_width(
+            int(self.width_box.text()), keepAspectRatio=self.keep_aspect_ratio
+        )
 
     def update_background_height(self):
         gfx_view = self.tabWidget.currentWidget()
-        gfx_view.set_background_height(int(self.height_box.text()),
-                                       keepAspectRatio=self.keep_aspect_ratio)
+        gfx_view.set_background_height(
+            int(self.height_box.text()), keepAspectRatio=self.keep_aspect_ratio
+        )
 
     def toggle_aspect_value(self):
         self.keep_aspect_ratio = not self.keep_aspect_ratio

@@ -7,6 +7,12 @@ def install():
     """Install Shifter submenu"""
     commands = (
         ("Guide Manager", str_show_guide_manager, "mgear_list.svg"),
+        (
+            "Guide Template Manager",
+            str_template_manager,
+            "mgear_users.svg",
+        ),
+        (None, guide_utils_submenu),
         ("-----", None),
         (None, game_submenu),
         ("-----", None),
@@ -44,14 +50,13 @@ def install():
             "mgear_download.svg",
         ),
         ("-----", None),
-        (None, guide_template_samples_submenu),
         (
             "Match Guide to Selected Joint Hierarchy",
             str_matchGuide,
             "mgear_crosshair.svg",
         ),
         ("-----", None),
-        ("Auto Fit Guide (BETA)", str_auto_fit_guide),
+        ("Auto Fit Guide", str_auto_fit_guide, "mgear_afg.svg"),
         ("-----", None),
         ("Plebes...", str_plebes),
         (None, mocap_submenu),
@@ -59,6 +64,12 @@ def install():
         ("Update Guide", str_updateGuide, "mgear_loader.svg"),
         ("-----", None),
         ("Reload Components", str_reloadComponents, "mgear_refresh-cw.svg"),
+        ("-----", None),
+        (
+            "Data-Centric Folders Creator",
+            str_dataCentricFolders,
+            "mgear_folder.svg",
+        ),
         ("-----", None),
         (None, log_submenu),
     )
@@ -133,12 +144,84 @@ def mocap_submenu(parent_menu_id):
     commands = (
         ("Human IK Mapper", str_mocap_humanIKMapper, "mgear_mocap.svg"),
         ("-----", None),
-        ("Import Mocap Skeleton Biped (Legacy)", str_mocap_importSkeletonBiped),
+        (
+            "Import Mocap Skeleton Biped (Legacy)",
+            str_mocap_importSkeletonBiped,
+        ),
         ("Characterize Biped (Legacy)", str_mocap_characterizeBiped),
         ("Bake Mocap Biped (Legacy)", str_mocap_bakeMocap),
     )
 
     mgear.menu.install("Mocap", commands, parent_menu_id)
+
+
+def _has_bindplane_component():
+    """Check if any bindPlane/bindControl component type is available.
+
+    Returns:
+        bool: True if a bindPlane component exists in available components.
+    """
+    from mgear import shifter
+    import os
+
+    comp_dirs = shifter.getComponentDirectories()
+    for path, comps in comp_dirs.items():
+        for comp_name in comps:
+            if comp_name in ["__init__.py", "__pycache__"]:
+                continue
+            # Check if component name contains bindPlane or bindControl
+            if "bindPlane" in comp_name or "bindControl" in comp_name:
+                # Verify it's a valid component directory
+                if os.path.exists(os.path.join(path, comp_name, "__init__.py")):
+                    return True
+    return False
+
+
+def guide_utils_submenu(parent_menu_id):
+    """Create the guide utils submenu
+
+    Args:
+        parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
+    """
+    commands = [
+        (
+            "Guide Visualizer",
+            str_guide_visualizer,
+            "mgear_guide_visualizer.svg",
+        ),
+        (
+            "Guide Symmetry Tool",
+            str_guide_symmetry_tool,
+            "mgear_guide_symmetry.svg",
+        ),
+        (
+            "Component Type Lister",
+            str_component_type_lister,
+            "mgear_component_type_lister.svg",
+        ),
+        (
+            "Chain Utils",
+            str_chain_utils,
+            "mgear_chain_utils.svg",
+        ),
+    ]
+
+    # Only add BindPlane Control Utils if bindPlane component is available
+    if _has_bindplane_component():
+        commands.append(
+            (
+                "BindPlane Control Utils",
+                str_bindplane_control_utils,
+                "mgear_bindplane_control.svg",
+            )
+        )
+
+    mgear.menu.install(
+        "Guide Utils",
+        tuple(commands),
+        parent_menu_id,
+        image="mgear_guide_utils.svg",
+    )
 
 
 def game_submenu(parent_menu_id):
@@ -148,7 +231,7 @@ def game_submenu(parent_menu_id):
         parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
     """
     commands = (
-        ("FBX Export (Beta)", str_game_fbx_export),
+        ("FBX Export", str_game_fbx_export),
         ("-----", None),
         ("Disconnect Joints", str_game_disconnet),
         ("Connect Joints", str_game_connect),
@@ -164,32 +247,6 @@ def game_submenu(parent_menu_id):
         image="mgear_game.svg",
     )
 
-
-def guide_template_samples_submenu(parent_menu_id):
-    """Create the guide sample templates submenu
-
-    Args:
-        parent_menu_id (str): Parent menu. i.e: "MayaWindow|mGear|menuItem355"
-    """
-    commands = (
-        ("Biped Template, Y-up", str_biped_template),
-        ("Quadruped Template, Y-up", str_quadruped_template),
-        ("Game Biped Template, Y-up", str_game_biped_template),
-        ("-----", None),
-        ("EPIC MetaHuman Template, Z-up", str_epic_metahuman_z_template),
-        ("EPIC Mannequin Template, Z-up", str_epic_mannequin_z_template),
-        ("EPIC MetaHuman Template, Y-up", str_epic_metahuman_y_template),
-        ("EPIC Mannequin Template, Y-up", str_epic_mannequin_y_template),
-        ("-----", None),
-        ("EPIC MetaHuman Snap", str_epic_metahuman_snap),
-    )
-
-    mgear.menu.install(
-        "Guide Template Samples",
-        commands,
-        parent_menu_id,
-        image="mgear_users.svg",
-    )
 
 
 str_show_guide_manager = """
@@ -242,6 +299,11 @@ from mgear.shifter import plebes
 plebes.plebes_gui()
 """
 
+str_template_manager = """
+from mgear.shifter import guide_template_manager
+guide_template_manager.show()
+"""
+
 str_auto_fit_guide = """
 from mgear.shifter import afg_tools_ui
 afg_tools_ui.show()
@@ -277,46 +339,6 @@ from mgear import shifter
 shifter.reloadComponents()
 """
 
-str_biped_template = """
-from mgear.shifter import io
-io.import_sample_template("biped.sgt")
-"""
-
-str_quadruped_template = """
-from mgear.shifter import io
-io.import_sample_template("quadruped.sgt")
-"""
-
-str_epic_metahuman_z_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_metahuman_z_up.sgt")
-io.metahuman_snap()
-"""
-str_epic_mannequin_z_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_mannequin_z_up.sgt")
-"""
-
-str_epic_metahuman_y_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_metahuman_y_up.sgt")
-io.metahuman_snap()
-"""
-
-str_epic_mannequin_y_template = """
-from mgear.shifter import io
-io.import_sample_template("EPIC_mannequin_y_up.sgt")
-"""
-
-str_epic_metahuman_snap = """
-from mgear.shifter import io
-io.metahuman_snap()
-"""
-
-str_game_biped_template = """
-from mgear.shifter import io
-io.import_sample_template("game_biped.sgt")
-"""
 
 str_mocap_importSkeletonBiped = """
 from mgear.shifter import mocap_tools
@@ -374,4 +396,34 @@ ui.openRigBuilderUI()
 str_matchGuide = """
 from mgear.shifter import guide_manager
 guide_manager.snap_guide_to_root_joint()
+"""
+
+str_dataCentricFolders = """
+import mgear.shifter.data_centric_folder_creator as dcfc
+dcfc.openFolderStructureCreator()
+"""
+
+str_guide_visualizer = """
+from mgear.shifter.guide_tools import guide_visualizer
+guide_visualizer.show()
+"""
+
+str_guide_symmetry_tool = """
+from mgear.shifter.guide_tools import guide_symmetry_tool
+guide_symmetry_tool.open_shifter_mirror_checker()
+"""
+
+str_component_type_lister = """
+from mgear.shifter.guide_tools import component_type_lister
+component_type_lister.show()
+"""
+
+str_bindplane_control_utils = """
+from mgear.shifter.guide_tools import bindPlane_control_utils_tool
+bindPlane_control_utils_tool.show_bind_group_browser()
+"""
+
+str_chain_utils = """
+from mgear.shifter.guide_tools import chain_utils
+chain_utils.open_chain_utils()
 """

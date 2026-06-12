@@ -1,7 +1,7 @@
 """Guide Arm 2 joints 01 module"""
 
 from functools import partial
-import pymel.core as pm
+import mgear.pymaya as pm
 
 from mgear.shifter.component import guide
 from mgear.core import transform, pyqt
@@ -60,6 +60,8 @@ class Guide(guide.ComponentGuide):
         self.dispcrv = self.addDispCurve(
             "crv",
             [self.root, self.elbow, self.wrist, self.eff])
+
+        self.addUpvLocator(self.elbow, self.wrist, self.eff)
 
     def addParameters(self):
         """Add the configurations settings"""

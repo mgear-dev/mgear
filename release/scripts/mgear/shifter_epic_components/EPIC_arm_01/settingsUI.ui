@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>242</width>
-    <height>722</height>
+    <width>359</width>
+    <height>1028</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -197,16 +197,16 @@
         <item>
          <widget class="QCheckBox" name="useBlade_checkBox">
           <property name="toolTip">
-           <string extracomment="This option set the axis of the mid CTL (elbow) and the up vector control to move in a mirror behaviour ">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;If checked, the Rest pose for  FK controls will be in T Pose&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;If checked, will use a blade to control the wrist joint orientation. This doesn't affect the controls that are align with the arm plane.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
           </property>
           <property name="statusTip">
-           <string extracomment="This option set the axis of the mid CTL (elbow) and the up vector control to move in a mirror behaviour ">This option set the axis of the mid CTL (elbow) and the up vector control to move in a mirror behaviour </string>
+           <string extracomment="This option set the axis of the mid CTL (elbow) and the up vector control to move in a mirror behaviour "/>
           </property>
           <property name="whatsThis">
-           <string>This option set the axis of the mid CTL (elbow) and the up vector control to move in a mirror behaviour </string>
+           <string/>
           </property>
           <property name="text">
-           <string>Use Wrist Blade</string>
+           <string>Use Wrist Blade to orient wrist joint</string>
           </property>
          </widget>
         </item>

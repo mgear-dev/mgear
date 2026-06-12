@@ -7,8 +7,8 @@ import os
 import traceback
 import contextlib
 import maya.OpenMayaUI as omui
-import pymel.core as pm
-from pymel import versions
+import mgear.pymaya as pm
+from mgear.pymaya import versions
 from maya import cmds
 
 from mgear.vendor.Qt import QtWidgets
@@ -16,7 +16,15 @@ from mgear.vendor.Qt import QtCompat
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtSvg
 from mgear.vendor.Qt import QtCore
-from .six import PY2
+PY2 = False
+
+# Try importing PySide6, fall back to PySide2 if not available
+try:
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtCore import QPoint
+except ImportError:
+    from PySide2.QtGui import QGuiApplication
+    from PySide2.QtCore import QPoint
 
 UI_EXT = "ui"
 
@@ -37,6 +45,14 @@ def _qt_import(binding, shi=False, cui=False):
         from PySide2 import QtGui, QtCore, QtWidgets
         import shiboken2 as shiboken
         from shiboken2 import wrapInstance
+
+        if versions.current() < 20220000:
+            from pyside2uic import compileUi
+
+    elif binding == "PySide6":
+        from PySide6 import QtGui, QtCore, QtWidgets
+        import shiboken6 as shiboken
+        from shiboken6 import wrapInstance
 
         if versions.current() < 20220000:
             from pyside2uic import compileUi
@@ -77,7 +93,7 @@ def qt_import(shi=False, cui=False):
         multi: QtGui, QtCore, QtWidgets, wrapInstance
 
     """
-    lookup = ["PySide2", "PySide", "PyQt4"]
+    lookup = ["PySide6", "PySide2", "PySide", "PyQt4"]
 
     preferredBinding = os.environ.get("MGEAR_PYTHON_QT_BINDING", None)
     if preferredBinding is not None and preferredBinding in lookup:
@@ -143,6 +159,31 @@ def maya_main_window():
     return QtCompat.wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
 
 
+def center_window_on_screen(window):
+    """Center the given window on the primary screen.
+
+    Args:
+        window (QWidget): The window to center.
+    """
+    # Get the primary screen (compatible with PySide2 and PySide6)
+    screen = QGuiApplication.primaryScreen()
+
+    # Get the screen's rectangle (geometry)
+    screen_geometry = screen.geometry()
+
+    # Get the center point of the screen
+    screen_center = screen_geometry.center()
+
+    # Get the rectangle of the window
+    window_geometry = window.frameGeometry()
+
+    # Get the center point of the window
+    window_center = window_geometry.center()
+
+    # Move the window to the center of the screen
+    window.move(QPoint(screen_center - window_center))
+
+
 def showDialog(dialog, dInst=True, dockable=False, *args):
     """
     Show the defined dialog window
@@ -172,11 +213,12 @@ def showDialog(dialog, dInst=True, dockable=False, *args):
         if pm.workspaceControl(control, q=True, exists=True):
             pm.workspaceControl(control, e=True, close=True)
             pm.deleteUI(control, control=True)
-    desktop = QtWidgets.QApplication.desktop()
-    screen = desktop.screen()
-    screen_center = screen.rect().center()
-    windw_center = windw.rect().center()
-    windw.move(screen_center - windw_center)
+    # desktop = QtWidgets.QApplication.desktop()
+    # screen = desktop.screen()
+    # screen_center = screen.rect().center()
+    # windw_center = windw.rect().center()
+    # windw.move(screen_center - windw_center)
+    center_window_on_screen(windw)
 
     # Delete the UI if errors occur to avoid causing winEvent
     # and event errors (in Maya 2014)
@@ -325,7 +367,9 @@ def block_signals(widget, children=False):
     blocked = widget.signalsBlocked()
     blocked_children = list()
     widget.blockSignals(True)
-    child_widgets = widget.findChildren(QtWidgets.QWidget) if children else list()
+    child_widgets = (
+        widget.findChildren(QtWidgets.QWidget) if children else list()
+    )
     for child_widget in child_widgets:
         blocked_children.append(child_widget.signalsBlocked())
         child_widget.blockSignals(True)
@@ -416,16 +460,28 @@ class SettingsMixin(object):
 
     def load_settings(self):
         for key, (widget, default_value) in self.user_settings.items():
-            value = self.settings.value(
-                key, defaultValue=default_value
-            )
-            # in Maya using python 2 will return string and we need to conver to  bool
-            if value in ['true', 'True']:
-                value = True
-            elif value in ['false', 'False']:
-                value = False
-            else:
-                value = False
+            value = self.settings.value(key, defaultValue=default_value)
+            # Convert string values to appropriate types based on widget
+            if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QAction)):
+                # For checkboxes/actions, convert string to bool
+                if value in ["true", "True", True]:
+                    value = True
+                elif value in ["false", "False", False]:
+                    value = False
+                else:
+                    value = bool(default_value)
+            elif isinstance(widget, QtWidgets.QComboBox):
+                # For combo boxes, ensure integer
+                try:
+                    value = int(value)
+                except (ValueError, TypeError):
+                    value = int(default_value) if default_value else 0
+            elif isinstance(widget, QtWidgets.QLineEdit):
+                # For line edits, ensure string
+                if value is None:
+                    value = str(default_value) if default_value else ""
+                else:
+                    value = str(value)
             self._set_widget_value(widget, value)
             self._connect_widget_signal(widget)
 

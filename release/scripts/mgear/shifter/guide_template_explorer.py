@@ -1,4 +1,4 @@
-import pymel.core as pm
+import mgear.pymaya as pm
 
 
 import mgear.shifter.guide_template_explorer_ui as gteUI

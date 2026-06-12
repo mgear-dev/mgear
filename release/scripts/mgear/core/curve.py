@@ -6,19 +6,20 @@
 # GLOBAL
 #############################################
 from functools import wraps
-import pymel.core as pm
+import mgear.pymaya as pm
 import maya.cmds as cmds
-from pymel.core import datatypes
+from mgear.pymaya import datatypes
 import json
 import maya.mel as mel
 
 import maya.OpenMaya as om
+import maya.api.OpenMaya as om2
 
 from mgear.core import applyop
 from mgear.core import utils
 from mgear.core import transform
 
-from .six import string_types
+string_types = str
 
 #############################################
 # CURVE
@@ -63,18 +64,25 @@ def addCurve(
     Arguments:
         parent (dagNode): Parent object.
         name (str): Name
-        points (list of float): points of the curve in a one dimension array
+        points (list of float | list of datatypes.Vector | list of om2.MPoint):
+            points of the curve in a one dimension array
             [point0X, point0Y, point0Z, 1, point1X, point1Y, point1Z, 1, ...].
         close (bool): True to close the curve.
-        degree (bool): 1 for linear curve, 3 for Cubic.
+        degree (int): 1 for linear curve, 3 for Cubic.
         m (matrix): Global transform.
         op (bool, optional): If True will add a curve that pass over the points
                             This is equivalent of using"editPoint " flag
 
-    No Longer Returned:
+    Returns:
         dagNode: The newly created curve.
     """
-    kwargs = {"n": name, "d": degree}
+    # Check and convert only if the item is an MPoint
+    points = [
+        [point.x, point.y, point.z] if isinstance(point, om2.MPoint) else point
+        for point in points
+    ]
+
+    kwargs = {"name": name, "d": degree}
     if close:
         points.extend(points[:degree])
         knots = range(len(points) + degree - 1)
@@ -167,8 +175,12 @@ def createCuveFromEdges(
         axis = 1
     else:
         axis = 2
-
-    vList = pm.polyListComponentConversion(edgeList, fe=True, tv=True)
+    # conver MesEdge object to str
+    string_edge_list = [
+        str(edge) if not isinstance(edge, str) else edge for edge in edgeList
+    ]
+    vList = cmds.polyListComponentConversion(string_edge_list, fe=True, tv=True)
+    vList = cmds.ls(vList, flatten=True)
 
     centers = []
     centersOrdered = []
@@ -357,6 +369,127 @@ def findLenghtFromParam(crv, param):
 # ========================================
 
 
+def getCurveInfo(curve):
+    """Get curve information including CVs, degree, and knots using OpenMaya API.
+
+    This function provides reliable curve information using OpenMaya API v2,
+    which handles edge cases better than cmds queries.
+
+    Args:
+        curve (str): Name of the curve transform or shape.
+
+    Returns:
+        dict: Dictionary with curve information, or None if failed.
+            Keys:
+                - shape (str): Curve shape name
+                - degree (int): Curve degree
+                - spans (int): Number of spans
+                - num_cvs (int): Number of control vertices
+                - cvs (list): List of CV positions as [x, y, z]
+                - knots (list): Full knot vector
+                - min_param (float): Minimum parameter value
+                - max_param (float): Maximum parameter value
+
+    Example:
+        >>> info = getCurveInfo("curve1")
+        >>> print(info["degree"])
+        3
+        >>> print(info["num_cvs"])
+        8
+    """
+    if not curve or not cmds.objExists(curve):
+        cmds.warning("Curve does not exist: {}".format(curve))
+        return None
+
+    curve_shape = None
+    node_type = cmds.nodeType(curve)
+
+    if node_type == "nurbsCurve":
+        curve_shape = curve
+    elif node_type == "transform":
+        shapes = cmds.listRelatives(
+            curve, shapes=True, type="nurbsCurve", fullPath=True
+        )
+        if shapes:
+            curve_shape = shapes[0]
+    else:
+        shapes = cmds.listRelatives(curve, shapes=True, fullPath=True)
+        if shapes:
+            for shape in shapes:
+                if cmds.nodeType(shape) == "nurbsCurve":
+                    curve_shape = shape
+                    break
+
+    if not curve_shape:
+        cmds.warning("Could not find nurbsCurve shape for: {}".format(curve))
+        return None
+
+    try:
+        # Use OpenMaya API v2 for reliable curve info retrieval
+        sel_list = om2.MSelectionList()
+        sel_list.add(curve_shape)
+        dag_path = sel_list.getDagPath(0)
+        curve_fn = om2.MFnNurbsCurve(dag_path)
+
+        degree = curve_fn.degree
+        num_cvs = curve_fn.numCVs
+        spans = curve_fn.numSpans
+
+        # Get CVs in world space
+        cvs = []
+        cv_positions = curve_fn.cvPositions(om2.MSpace.kWorld)
+        for i in range(num_cvs):
+            pos = cv_positions[i]
+            cvs.append([pos.x, pos.y, pos.z])
+
+        # Get parameter range
+        min_param = curve_fn.knotDomain[0]
+        max_param = curve_fn.knotDomain[1]
+
+        # Get knots from Maya
+        # MFnNurbsCurve.knots() returns n + p - 1 knots
+        # Full knot vector should have n + p + 1 knots
+        maya_knots = list(curve_fn.knots())
+        expected_length = num_cvs + degree + 1
+
+        if len(maya_knots) == num_cvs + degree - 1:
+            # Add the missing endpoint knots
+            knots = [maya_knots[0]] + maya_knots + [maya_knots[-1]]
+        elif len(maya_knots) == expected_length:
+            knots = maya_knots
+        else:
+            # Build uniform knot vector as fallback
+            print(
+                "Building uniform knot vector. Maya returned {} knots, "
+                "expected {}".format(len(maya_knots), expected_length)
+            )
+            knots = []
+            for i in range(expected_length):
+                if i <= degree:
+                    knots.append(min_param)
+                elif i >= num_cvs:
+                    knots.append(max_param)
+                else:
+                    t = (i - degree) / float(spans)
+                    knots.append(min_param + t * (max_param - min_param))
+
+        return {
+            "shape": curve_shape,
+            "degree": degree,
+            "spans": spans,
+            "num_cvs": num_cvs,
+            "cvs": cvs,
+            "knots": knots,
+            "min_param": min_param,
+            "max_param": max_param,
+        }
+    except Exception as e:
+        cmds.warning(
+            "Error getting curve info for {}: {}".format(curve_shape, str(e))
+        )
+        return None
+
+
 def get_color(node):
     """Get the color from shape node
 
@@ -370,6 +503,7 @@ def get_color(node):
     if shp:
         if shp.overrideRGBColors.get():
             color = shp.overrideColorRGB.get()
+            color = [color.x, color.y, color.z]
         else:
             color = shp.overrideColor.get()
 
@@ -421,7 +555,8 @@ def collect_curve_shapes(crv, rplStr=["", ""]):
     shapes_names = []
     shapesDict = {}
     for shape in crv.getShapes():
-        shapes_names.append(shape.name().replace(rplStr[0], rplStr[1]))
+        shape_name = shape.name()
+        shapes_names.append(shape_name.replace(rplStr[0], rplStr[1]))
         c_form = shape.form()
         degree = shape.degree()
         knots = list(shape.getKnots())
@@ -429,7 +564,7 @@ def collect_curve_shapes(crv, rplStr=["", ""]):
         form_id = c_form.index
         pnts = [[cv.x, cv.y, cv.z] for cv in shape.getCVs(space="object")]
         lineWidth = shape.lineWidth.get()
-        shapesDict[shape.name()] = {
+        shapesDict[shape_name] = {
             "points": pnts,
             "degree": degree,
             "form": form,
@@ -621,7 +756,7 @@ def create_curve_from_data_by_name(
         )
         set_color(obj, color)
         # check for backwards compatibility
-        if "line_width" in shp_dict[sh].keys():
+        if "line_width" in shp_dict[sh]:
             lineWidth = shp_dict[sh]["line_width"]
             set_thickness(obj, lineWidth)
 
@@ -727,7 +862,7 @@ def update_curve_from_data(data, rplStr=["", ""]):
             )
             set_color(obj, color)
             # check for backwards compatibility
-            if "line_width" in shp_dict[sh].keys():
+            if "line_width" in shp_dict[sh]:
                 lineWidth = shp_dict[sh]["line_width"]
                 set_thickness(obj, lineWidth)
 
@@ -877,7 +1012,7 @@ def keep_point_0_cnx_state(func):
 def lock_length(crv, lock=True):
     crv_shape = crv.getShape()
     if not crv_shape.hasAttr("lockLength"):
-        crv_shape.addAttr("lockLength", at=bool)
+        crv_shape.addAttr("lockLength", at="bool")
     crv_shape.lockLength.set(lock)
     return crv_shape.lockLength
 
@@ -1192,3 +1327,78 @@ def add_linear_skinning_to_curve(curve_name, joint_list):
             )
 
     return skin_cluster
+
+
+# ========================================
+# Shape copy helpers
+# ========================================
+
+
+CURVE_DISPLAY_ATTRS = (
+    "overrideEnabled",
+    "overrideDisplayType",
+    "overrideRGBColors",
+    "overrideColor",
+    "overrideColorR",
+    "overrideColorG",
+    "overrideColorB",
+    "overrideColorA",
+    "lineWidth",
+    "alwaysDrawOnTop",
+)
+
+
+def create_curve_shape_under(src_shape_path, dst_xform_path):
+    """Build an independent NurbsCurve shape under ``dst_xform_path``
+    that is a geometry-level copy of ``src_shape_path``, using the
+    OpenMaya API directly.
+
+    Bypasses ``cmds.duplicate`` entirely -- there is no temporary
+    transform to delete and no descendant hierarchy to walk, so the
+    cost is constant per shape regardless of where the source lives
+    in the DAG. The result is independent of any instancing on the
+    source.
+
+    Args:
+        src_shape_path (str): Full DAG path to a NurbsCurve shape.
+        dst_xform_path (str): Full DAG path to the parent transform.
+
+    Returns:
+        str: Full DAG path of the newly created shape.
+    """
+    src_curve = om2.MFnNurbsCurve(utils.get_dag_path(src_shape_path))
+
+    dst_sel = om2.MSelectionList()
+    dst_sel.add(dst_xform_path)
+    dst_obj = dst_sel.getDependNode(0)
+
+    new_curve = om2.MFnNurbsCurve()
+    new_obj = new_curve.create(
+        src_curve.cvPositions(om2.MSpace.kObject),
+        src_curve.knots(),
+        src_curve.degree,
+        src_curve.form,
+        False,  # create2D
+        True,  # rational
+        dst_obj,
+    )
+    return om2.MFnDagNode(new_obj).fullPathName()
+
+
+def copy_curve_display_attrs(src_shape, dst_shape):
+    """Best-effort copy of curve display attributes (color, line
+    width, override flags) from ``src_shape`` to ``dst_shape``. The
+    set of attributes copied is :data:`CURVE_DISPLAY_ATTRS`.
+
+    Missing or locked attributes are skipped silently so the copy
+    succeeds even if the source has unusual attribute state.
+
+    Args:
+        src_shape (str): Path to the source shape.
+        dst_shape (str): Path to the destination shape.
+    """
+    for attr in CURVE_DISPLAY_ATTRS:
+        try:
+            cmds.setAttr(dst_shape + "." + attr, cmds.getAttr(src_shape + "." + attr))
+        except (RuntimeError, ValueError):
+            pass
