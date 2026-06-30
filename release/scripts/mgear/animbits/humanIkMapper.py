@@ -634,7 +634,6 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
         # self.func = MirrorController()
 
         self.setWindowTitle("HumanIK Mapper")
-        self.setWindowFlags(QtCore.Qt.Window)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, 1)
         self.setMinimumSize(QtCore.QSize(0, 0))
         default_w = 300
@@ -998,7 +997,9 @@ class HumanIKMapperUI(MayaQWidgetDockableMixin, QtWidgets.QDialog):
                 pm.error("HumanIK character is not initialized, aborting.")
                 return
             dialog = BoneListDialog(
-                self, bone_list, self.mirror_checkbox.isChecked()
+                pyqt.maya_main_window(),
+                bone_list,
+                self.mirror_checkbox.isChecked(),
             )
             dialog.show()
 
@@ -1123,7 +1124,8 @@ class BoneListDialog(QtWidgets.QDialog):
         # self.func = MirrorController()
 
         self.setWindowTitle("Limb Selection Order")
-        self.setWindowFlags(QtCore.Qt.Window)
+        # Qt.Tool keeps this above its parent.
+        self.setWindowFlags(QtCore.Qt.Tool)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, 1)
         self.setMinimumSize(QtCore.QSize(350, 250))
 
@@ -1201,7 +1203,7 @@ class LockedCtrlsDialog(QtWidgets.QDialog):
         super(LockedCtrlsDialog, self).__init__(parent)
 
         self.setWindowTitle("Locked attributes detected")
-        self.setWindowFlags(QtCore.Qt.Window)
+        self.setWindowFlags(QtCore.Qt.Tool)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, 1)
         self.setMinimumSize(QtCore.QSize(350, 250))
 
