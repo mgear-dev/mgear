@@ -1,13 +1,8 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
-
 import os
 import json
 import functools
 
+import mgear
 from mgear.core import pyqt
 from mgear.core import string
 from mgear.vendor.Qt import QtWidgets
@@ -25,7 +20,10 @@ def _importData(file_path):
             data = json.load(f)
             return data
     except Exception as e:
-        print(e)
+        mgear.log(
+            "anim_picker: failed to read '{}': {}".format(file_path, e),
+            mgear.sev_error,
+        )
 
 
 def _exportData(data, file_path):
@@ -33,7 +31,10 @@ def _exportData(data, file_path):
         with open(file_path, "w") as f:
             json.dump(data, f, sort_keys=False, indent=4)
     except Exception as e:
-        print(e)
+        mgear.log(
+            "anim_picker: failed to write '{}': {}".format(file_path, e),
+            mgear.sev_error,
+        )
 
 
 def replace_token_with_path(file_path):

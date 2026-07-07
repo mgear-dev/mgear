@@ -1,9 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
-
 import re
 import copy
 import uuid
@@ -18,11 +12,6 @@ from mgear.core import pyqt
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
-
-# debugging
-# from PySide2 import QtGui
-# from PySide2 import QtCore
-# from PySide2 import QtWidgets
 
 from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.handlers import (
@@ -1473,8 +1462,6 @@ class PointHandle(DefaultPolygon):
     def shape(self):
         """Return default handle square shape based on specified size"""
         path = QtGui.QPainterPath()
-        # TODO some ints are being set to negative, make sure it survived the
-        # pep8
         rectangle = QtCore.QRectF(
             QtCore.QPointF(-self.size / 2.0, self.size / 2.0),
             QtCore.QPointF(self.size / 2.0, -self.size / 2.0),
@@ -1923,7 +1910,7 @@ class PickerItem(DefaultPolygon):
         if __EDIT_MODE__.get():
             text = "\n".join(self.get_controls())
             self.setToolTip(text)
-        super(PickerItem, self).hoverEnterEvent(event)
+        super().hoverEnterEvent(event)
 
     def mouseMoveEvent_offset(self, event):
         self.setPos(event.scenePos() + self.cursor_delta)
@@ -1936,7 +1923,7 @@ class PickerItem(DefaultPolygon):
                     item.mouseMoveEvent_offset(event)
                     for item in self.currently_selected
                 ]
-        super(PickerItem, self).mouseMoveEvent(gfx_event)
+        super().mouseMoveEvent(gfx_event)
 
     def mousePressEvent(self, event):
         """Event called on mouse press"""

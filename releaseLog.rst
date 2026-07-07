@@ -2,6 +2,16 @@ Release Log
 ===========
 
 
+5.3.4
+------
+**Enhancements**
+	* Anim Picker: Modernize the module (Phase 1 cleanup) — Python-3-only idioms, mgear.log-based logging, Maya API 2.0 selection handling, and dead-code / debug-comment removal; internal anim_picker version bumped to 2.0.0
+	* Anim Picker: Store picker data on the PICKER_DATAS node as clean JSON instead of a stringified Python literal read back with eval() — safer, with no arbitrary code execution on load. **BREAKING**: pickers stored only in a scene node with no external .pkr file are not migrated and must be re-exported (.pkr files and file-backed pickers are unaffected)
+
+**Bug Fix**
+	* Anim Picker: Fix "Picker shape from curve not working" #598 — remove the JSON-to-Python-literal replace hack that corrupted control names/paths containing "true", and guard shape-less transforms during curves-to-picker conversion
+	* Anim Picker: Fix latent bugs in picker_node / maya_handlers — a .format() typo, a setAttr that never hid the data node, an assertion that never fired on referenced nodes, and an always-false dictionary type check
+
 5.3.3
 ------
 **Enhancements**

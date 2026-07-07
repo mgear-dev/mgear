@@ -1,8 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
 # python
 import os
 
@@ -13,11 +8,6 @@ import maya.cmds as cmds
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
-
-# debugging
-# from PySide2 import QtGui
-# from PySide2 import QtCore
-# from PySide2 import QtWidgets
 
 # module
 from mgear.core import pyqt
@@ -427,7 +417,7 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
     """minimal ui for adjusting the background image"""
 
     def __init__(self, tabWidget, parent=None):
-        super(BackgroundOptionsDialog, self).__init__(parent)
+        super().__init__(parent)
         self.setWindowTitle("Set background size")
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
 

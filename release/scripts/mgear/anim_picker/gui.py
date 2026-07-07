@@ -1,8 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
 # python
 import os
 import copy
@@ -24,16 +19,8 @@ from mgear.core import callbackManager
 
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
-
-# from mgear.vendor.Qt import QtOpenGL
 from mgear.vendor.Qt import QtCompat
 from mgear.vendor.Qt import QtWidgets
-
-# debugging
-# from PySide2 import QtGui
-# from PySide2 import QtCore
-# from PySide2 import QtOpenGL
-# from PySide2 import QtWidgets
 
 # module
 from . import menu
@@ -47,10 +34,7 @@ from .handlers import __EDIT_MODE__
 from .handlers import __SELECTION__
 
 # constants -------------------------------------------------------------------
-try:
-    _CLIPBOARD
-except NameError as e:
-    _CLIPBOARD = []
+_CLIPBOARD = []
 
 ANIM_PICKER_TITLE = "Anim Picker {ap_version} | mGear {m_version}"
 
@@ -149,9 +133,7 @@ class APPassthroughEventFilter(QtCore.QObject):
                 self.deleteLater()
             except RuntimeError:
                 pass
-        return super(APPassthroughEventFilter, self).eventFilter(
-            QObject, event
-        )
+        return super().eventFilter(QObject, event)
 
 
 class OrderedGraphicsScene(QtWidgets.QGraphicsScene):
@@ -174,9 +156,9 @@ class OrderedGraphicsScene(QtWidgets.QGraphicsScene):
         self.set_default_size()
         self._z_index = 0
 
-    def set_size(self, width, heith):
+    def set_size(self, width, height):
         """Will set scene size with proper center position"""
-        self.setSceneRect(-width / 2, -heith / 2, width, heith)
+        self.setSceneRect(-width / 2, -height / 2, width, height)
 
     def set_default_size(self):
         self.set_size(
@@ -343,7 +325,6 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter)
 
-        # TODO
         # Set selection mode
         self.setRubberBandSelectionMode(QtCore.Qt.IntersectsItemBoundingRect)
         self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
@@ -1012,7 +993,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         path = self.apply_background_fallback_logic(path)
         # Check that path exists
         if not (path and os.path.exists(path)):
-            print("# background image not found: '{}'".format(path))
+            mgear.log(
+                "anim_picker: background image not found: '{}'".format(path),
+                mgear.sev_warning,
+            )
             return
 
         self.background_image_path = path
@@ -1191,7 +1175,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Add background to data
         if self.background_image_path:
             bg_fp = r"{}".format(self.background_image_path)
-            data["background"] = json.dumps(bg_fp).replace('"', "")
+            data["background"] = bg_fp
             data["background_size"] = self.get_background_size().toTuple()
 
         # Add items to data
@@ -1300,10 +1284,20 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             grp = pm.group(em=True, n=PICKER_EXTRACTION_NAME)
             attribute.lockAttribute(grp)
 
-        # deletes existing tab group and recreates it
-        if pm.objExists(tab["name"]):
-            pm.delete(tab["name"])
+        # Delete a previous extraction group for this tab, matched by the
+        # stored tab name rather than the node name: Maya may rename the group
+        # (e.g. "default" -> "default1", or spaces -> "_"), so the node name is
+        # not a reliable key.
+        for existing in grp.listRelatives() or []:
+            if (
+                pm.hasAttr(existing, "tabName")
+                and existing.tabName.get() == tab["name"]
+            ):
+                pm.delete(existing)
         picker_grp = pm.group(em=True, n=tab["name"], p=grp)
+        # Store the real tab name so the round-trip does not depend on the
+        # (possibly Maya-mangled) group node name.
+        attribute.addAttribute(picker_grp, "tabName", "string", tab["name"])
         picker_grp.sy >> picker_grp.sx
         attribute.lockAttribute(
             picker_grp, ["tz", "rx", "ry", "rz", "sx", "sz", "v"]
@@ -1432,7 +1426,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         try:
             pm.delete(PICKER_EXTRACTION_NAME)
         except Exception as e:
-            print(e)
+            mgear.log(
+                "anim_picker: failed to delete extraction group: "
+                "{}".format(e),
+                mgear.sev_warning,
+            )
 
     def convert_curves_to_picker(self):
         """get the information from the created picker curves and reset the
@@ -1442,7 +1440,13 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         new_data = {"tabs": []}
 
         for tab_grp in grp.listRelatives():
-            new_data["tabs"].append({"name": tab_grp.name()})
+            # Recover the real tab name (the group node may have been renamed
+            # by Maya, e.g. "default" -> "default1").
+            if pm.hasAttr(tab_grp, "tabName"):
+                tab_name = tab_grp.tabName.get()
+            else:
+                tab_name = tab_grp.name()
+            new_data["tabs"].append({"name": tab_name})
             new_data["tabs"][-1]["data"] = {"items": []}
             bg_imagePlane = tab_grp.listRelatives(type="imagePlane", ad=True)
 
@@ -1454,11 +1458,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                     bg_imagePlane[0].height.get(),
                 ]
 
-            for item_curve in [
-                ic
-                for ic in tab_grp.listRelatives()
-                if ic.getShape().type() != "imagePlane"
-            ]:
+            for item_curve in tab_grp.listRelatives():
+                shape = item_curve.getShape()
+                if shape is None or shape.type() == "imagePlane":
+                    continue
+
                 item_data = {}
 
                 # color
@@ -1508,18 +1512,31 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Create a lookup dictionary for fast matching
         new_data_lookup = {d["name"]: d for d in new_data["tabs"] if "name" in d}
 
+        # Surface converted tabs that don't match any current picker tab, so
+        # the merge below does not silently drop their edited data.
+        current_names = {
+            d.get("name") for d in data.get("tabs", []) if "name" in d
+        }
+        for converted_name in new_data_lookup:
+            if converted_name not in current_names:
+                mgear.log(
+                    "anim_picker: converted tab '{}' has no matching tab in "
+                    "the current picker; its data was not applied".format(
+                        converted_name
+                    ),
+                    mgear.sev_warning,
+                )
+
         # Replace the matching dictionaries in data
         updated_data = {"tabs": []}
         updated_data["tabs"] = [
             new_data_lookup.get(d.get("name"), d) if "name" in d else d
             for d in data["tabs"]
         ]
-        data_node = pm.PyNode(str(data_node))
-        data_node.picker_datas.set(lock=False)
-        data_node.picker_datas.set(
-            json.dumps(updated_data).replace("true", "True")
-        )
-        data_node.picker_datas.set(lock=True)
+        # Write through the DataNode chokepoint (JSON + version stamp +
+        # lock handling all centralized in picker_node.py)
+        data_node.set_data(updated_data)
+        data_node.write_data(to_node=True)
 
         self.main_window.refresh()
 
@@ -1688,7 +1705,7 @@ class MainDockWindow(QtWidgets.QWidget):
     )
 
     def __init__(self, parent=None, edit=False, dockable=False):
-        super(MainDockWindow, self).__init__(parent=parent)
+        super().__init__(parent=parent)
         self.window_parent = parent
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         self.setWindowFlags(QtCore.Qt.Window)
@@ -2047,7 +2064,7 @@ class MainDockWindow(QtWidgets.QWidget):
             return
 
         # Default close
-        super(MainDockWindow, self).showEvent(*args, **kwargs)
+        super().showEvent(*args, **kwargs)
 
         # Force char load
         self.refresh()
@@ -2069,7 +2086,7 @@ class MainDockWindow(QtWidgets.QWidget):
 
         self.load_widget.resize(size)
 
-        return super(MainDockWindow, self).resizeEvent(event)
+        return super().resizeEvent(event)
 
     def show_about_infos(self):
         """Open animation picker about and help infos"""
@@ -2358,7 +2375,7 @@ class MainDockWindow(QtWidgets.QWidget):
 # version of the anim picker ui that uses MayaQWidgetDockableMixin for docking
 class MainDockableWindow(MayaQWidgetDockableMixin, MainDockWindow):
     def __init__(self, parent=None, edit=False, dockable=True):
-        super(MainDockableWindow, self).__init__(parent=parent)
+        super().__init__(parent=parent)
 
 
 # =============================================================================
@@ -2376,10 +2393,11 @@ def load(edit=False, dockable=False):
 
     """
 
-    # NOTE: if instedad with set dockable to false the window doesn't get
-    # parented to Maya UI
-    # TODO: Dockable breaks the interface when docks. For the moment this
-    # option is not available from the menu
+    # NOTE: if instead we set dockable to false the window doesn't get
+    # parented to Maya UI.
+    # Deferred (feature phase): dockable mode breaks the interface when
+    # docked, so it is intentionally not exposed from the menu yet. See the
+    # anim_picker refactor roadmap (Phase 3+: "Fix + re-enable dockable").
     if dockable:
         ANIM_PKR_UI = MainDockableWindow(
             parent=None, edit=edit, dockable=dockable
