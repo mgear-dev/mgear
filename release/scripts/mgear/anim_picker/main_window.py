@@ -4,6 +4,8 @@ Extracted from gui.py during the Phase 2 decomposition. Also hosts the
 passthrough event filter used by the main window.
 """
 
+from functools import partial
+
 from maya import cmds
 import mgear.pymaya as pm
 
@@ -92,6 +94,9 @@ class MainDockWindow(QtWidgets.QWidget):
 
         __EDIT_MODE__.set_init(edit)
         self.is_dockable = dockable
+        # mGear dockable convention: toolName is the attribute core.pyqt
+        # (showDialog / deleteInstances) reads to name the workspaceControl.
+        self.toolName = self.__OBJ_NAME__
 
         # Setup ui
         self.cb_manager = callbackManager.CallbackManager()
@@ -105,9 +110,12 @@ class MainDockWindow(QtWidgets.QWidget):
 
     def setup(self):
         """Setup interface"""
-        # Main window setting
-        # Setting object name makes docking not useable? da fuck
-        # self.setObjectName(self.__OBJ_NAME__)
+        # Only the dockable window gets an object name: Maya derives its
+        # workspaceControl name from it. Giving the floating window the same
+        # name makes Maya swap/confuse the two when both are open (opacity UI
+        # leaking, close-one-closes-both), so leave the floating window unnamed.
+        if self.is_dockable:
+            self.setObjectName(self.__OBJ_NAME__)
         self.setWindowTitle(self.__TITLE__)
 
         # Add main widget and vertical layout
@@ -413,17 +421,15 @@ class MainDockWindow(QtWidgets.QWidget):
         except Exception:
             pass
 
-        # Default close
-        # mayaMixin bug that i need to correct for
-        corrected_for_dashes = self.objectName().replace("_", "-")
-        corrected_for_initial_dash = corrected_for_dashes.replace("-", "_", 1)
-        work_name = "{}WorkspaceControl".format(corrected_for_initial_dash)
-        try:
-            cmds.workspaceControl(work_name, e=True, close=True)
-        except ValueError:
-            pass
-        except RuntimeError:
-            pass
+        # Only the dockable window owns a workspaceControl; closing it from the
+        # floating window would tear down the (separate) docked picker. Derive
+        # the name the same way pyqt.showDialog does (toolName + suffix).
+        if self.is_dockable:
+            work_name = self.toolName + "WorkspaceControl"
+            try:
+                cmds.workspaceControl(work_name, e=True, close=True)
+            except (ValueError, RuntimeError):
+                pass
         self.deleteLater()
 
     def showEvent(self, *args, **kwargs):
@@ -744,36 +750,36 @@ class MainDockWindow(QtWidgets.QWidget):
 # version of the anim picker ui that uses MayaQWidgetDockableMixin for docking
 class MainDockableWindow(MayaQWidgetDockableMixin, MainDockWindow):
     def __init__(self, parent=None, edit=False, dockable=True):
-        super().__init__(parent=parent)
+        # Pass edit/dockable through: MayaQWidgetDockableMixin forwards extra
+        # kwargs down the MRO to MainDockWindow, so is_dockable/edit are set
+        # (dropping them left is_dockable False and showed the opacity UI).
+        super().__init__(parent=parent, edit=edit, dockable=dockable)
 
 
 # =============================================================================
 # Load user interface function
 # =============================================================================
 def load(edit=False, dockable=False):
-    """To launch the ui and not get the same instance
-
-    Returns:
-        Anim_picker: instance
+    """Launch the anim picker UI (a fresh instance each call).
 
     Args:
-        edit (bool, optional): Description
-        dockable (bool, optional): Description
+        edit (bool, optional): open in edit mode.
+        dockable (bool, optional): open as a dockable workspaceControl.
 
+    Returns:
+        MainDockWindow: the created window instance.
     """
-
-    # NOTE: if instead we set dockable to false the window doesn't get
-    # parented to Maya UI.
-    # Deferred (feature phase): dockable mode breaks the interface when
-    # docked, so it is intentionally not exposed from the menu yet. See the
-    # anim_picker refactor roadmap (Phase 3+: "Fix + re-enable dockable").
     if dockable:
-        ANIM_PKR_UI = MainDockableWindow(
-            parent=None, edit=edit, dockable=dockable
+        # Launch through the shared mGear docking helper, the same path the
+        # other dockable tools (crank, channel master, spring manager) use.
+        # A partial supplies the edit/dockable args because showDialog builds
+        # the window with no arguments; showDialog also closes any stale
+        # <toolName>WorkspaceControl before showing.
+        return pyqt.showDialog(
+            partial(MainDockableWindow, edit=edit, dockable=True),
+            dockable=True,
         )
-        ANIM_PKR_UI.show(dockable=True)
-    else:
-        ANIM_PKR_UI = MainDockWindow(parent=pyqt.get_main_window(), edit=edit)
-        ANIM_PKR_UI.show()
 
+    ANIM_PKR_UI = MainDockWindow(parent=pyqt.get_main_window(), edit=edit)
+    ANIM_PKR_UI.show()
     return ANIM_PKR_UI
