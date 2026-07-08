@@ -24,7 +24,23 @@ from mgear.anim_picker.constants import ANIM_PICKER_RELATIVE_IMAGES
 from mgear.anim_picker.constants import DEFAULT_RELATIVE_IMAGES_PATH
 from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import picker_widgets
+from mgear.anim_picker.widgets import background_model
 from mgear.anim_picker.handlers import __EDIT_MODE__
+
+
+class _LoadedBackground(object):
+    """View-side pairing of a ``BackgroundLayer`` model with its loaded image.
+
+    The ``BackgroundLayer`` is the serialization authority (Qt/Maya-free); the
+    ``QImage`` is runtime-only state, decoded once and reused on every repaint.
+    """
+
+    def __init__(self, layer, image):
+        self.layer = layer
+        self.image = image
+        # Cached geometry, refreshed on layer mutation (never per paint).
+        self.rect = None
+        self.src_rect = None
 
 
 # module clipboard shared across views (copy/paste of picker items)
@@ -67,8 +83,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Set background color
         brush = QtGui.QBrush(QtGui.QColor(70, 70, 70, 255))
         self.setBackgroundBrush(brush)
-        self.background_image = None
-        self.background_image_path = None
+        # Ordered list of _LoadedBackground (back-to-front). Replaces the former
+        # single background_image / background_image_path state.
+        self.background_layers = []
+        # Cached union rect of all layers, refreshed on mutation.
+        self._bounding_rect = None
         self.bg_ui = None
 
         self.fit_margin = 8
@@ -442,16 +461,18 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
             menu.addSeparator()
 
-            background_action = QtWidgets.QAction("Set background image", None)
+            background_action = QtWidgets.QAction("Add background layer", None)
             background_action.triggered.connect(self.set_background_event)
             menu.addAction(background_action)
 
-            background_size_action = QtWidgets.QAction("Background Size", None)
+            background_size_action = QtWidgets.QAction(
+                "Background layers...", None
+            )
             background_size_action.triggered.connect(self.background_options)
             menu.addAction(background_size_action)
 
             reset_background_action = QtWidgets.QAction(
-                "Remove background", None
+                "Remove all backgrounds", None
             )
             func = self.reset_background_event
             reset_background_action.triggered.connect(func)
@@ -711,33 +732,137 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         else:
             return path
 
-    def set_background(self, path=None):
-        """Set tab index widget background image"""
-        if not path:
-            return
-        path = os.path.abspath(r"{}".format(path))
+    def _load_layer_image(self, layer):
+        """Resolve a layer's path and decode its (vertically mirrored) image.
+
+        Fills the layer's natural size when unset and stores the resolved path
+        back on the model so re-saves point at a valid file.
+
+        Args:
+            layer (BackgroundLayer): layer to load.
+
+        Returns:
+            QtGui.QImage: the loaded image, or None if the path is missing.
+        """
+        if not layer.path:
+            return None
+        path = os.path.abspath(r"{}".format(layer.path))
         path = self.apply_background_fallback_logic(path)
-        # Check that path exists
         if not (path and os.path.exists(path)):
             mgear.log(
                 "anim_picker: background image not found: '{}'".format(path),
                 mgear.sev_warning,
             )
+            return None
+        layer.path = path
+        image = QtGui.QImage(path).mirrored(False, True)
+        if not layer.size or not layer.size[0] or not layer.size[1]:
+            layer.size = [image.width(), image.height()]
+        return image
+
+    def _layer_draw_size(self, loaded):
+        """Return the (width, height) a layer is drawn at (model or natural)."""
+        layer = loaded.layer
+        if layer.size and layer.size[0] and layer.size[1]:
+            return int(layer.size[0]), int(layer.size[1])
+        if loaded.image is not None:
+            return loaded.image.width(), loaded.image.height()
+        return 0, 0
+
+    def _refresh_layer_geometry(self):
+        """Recompute and cache each layer's target/source rect and the union.
+
+        Called on layer mutation (add/remove/move/resize/reposition) so the
+        paint path never allocates or recomputes rects per frame.
+        """
+        bounding = None
+        for loaded in self.background_layers:
+            if loaded.image is None:
+                loaded.rect = None
+                loaded.src_rect = None
+                continue
+            width, height = self._layer_draw_size(loaded)
+            cx, cy = loaded.layer.position
+            loaded.rect = QtCore.QRectF(
+                cx - width / 2.0, cy - height / 2.0, width, height
+            )
+            loaded.src_rect = QtCore.QRectF(loaded.image.rect())
+            bounding = (
+                loaded.rect
+                if bounding is None
+                else bounding.united(loaded.rect)
+            )
+        self._bounding_rect = bounding
+
+    def _update_scene_rect(self):
+        """Size the scene rect to all content so pan/zoom can reach it.
+
+        The scene rect is the union of the background layers and the picker
+        items (the buttons), floored at the default canvas so panning stays
+        free and robust to items being moved while editing (issue #108). Only
+        the pan/zoom bounds are set here; the view is not refit.
+        """
+        self._refresh_layer_geometry()
+
+        # Union the background layer bounds with the picker items' extent so
+        # the canvas is not clamped to the image size (buttons stay reachable).
+        content = self._bounding_rect
+        items_rect = self.scene().itemsBoundingRect()
+        if not items_rect.isNull():
+            content = (
+                items_rect
+                if content is None
+                else content.united(items_rect)
+            )
+
+        if content is None:
+            self.scene().set_default_size()
             return
 
-        self.background_image_path = path
+        margin = self.fit_margin
+        content = content.adjusted(-margin, -margin, margin, margin)
+        self.scene().set_rect(content.united(self.scene().default_rect()))
 
-        # Load image and mirror it vertically
-        self.background_image = QtGui.QImage(path).mirrored(False, True)
-
-        # Set scene size to background picture
-        width = self.background_image.width()
-        height = self.background_image.height()
-
-        self.scene().set_size(width, height)
-
-        # Update display
+    def _update_scene_size(self):
+        """Recompute the scene rect and refit the view (load / layer edits)."""
+        self._update_scene_rect()
         self.fit_scene_content()
+        self.viewport().update()
+
+    def set_background(self, path=None):
+        """Append a background image layer to this tab.
+
+        Args:
+            path (str): image file path.
+        """
+        if not path:
+            return
+        layer = background_model.BackgroundLayer()
+        layer.path = path
+        image = self._load_layer_image(layer)
+        if image is None:
+            return
+        self.background_layers.append(_LoadedBackground(layer, image))
+        self._update_scene_size()
+
+    def set_backgrounds(self, layers):
+        """Replace all layers from a list of BackgroundLayer models.
+
+        Args:
+            layers (list): list of BackgroundLayer.
+        """
+        self.background_layers = []
+        for layer in layers:
+            image = self._load_layer_image(layer)
+            if image is None:
+                continue
+            self.background_layers.append(_LoadedBackground(layer, image))
+        self._update_scene_size()
+
+    def clear_backgrounds(self):
+        """Remove all background layers and restore the default canvas."""
+        self.background_layers = []
+        self._update_scene_size()
 
     def background_options(self):
         tabWidget = self.parent().parent()
@@ -748,9 +873,6 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 self.bg_ui.deleteLater()
             except Exception:
                 pass
-        if not tabWidget.currentWidget().get_background(0):
-            cmds.warning("Current view has no background!")
-            return
         self.bg_ui = basic.BackgroundOptionsDialog(tabWidget, self)
         self.bg_ui.show()
         self.bg_ui.raise_()
@@ -775,102 +897,94 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.set_background(file_path)
 
     def reset_background_event(self, event=None):
-        """Reset background to default"""
-        self.background_image = None
-        self.background_image_path = None
-        self.scene().set_default_size()
+        """Reset background to default (clear all layers)"""
+        self.clear_backgrounds()
 
-        # Update display
-        self.fit_scene_content()
+    def remove_background_layer(self, index):
+        """Remove the layer at index and refit the canvas."""
+        if 0 <= index < len(self.background_layers):
+            self.background_layers.pop(index)
+            self._update_scene_size()
+
+    def move_background_layer(self, index, new_index):
+        """Move the layer at index to new_index (changes draw order)."""
+        count = len(self.background_layers)
+        if not (0 <= index < count and 0 <= new_index < count):
+            return
+        loaded = self.background_layers.pop(index)
+        self.background_layers.insert(new_index, loaded)
+        self._update_scene_size()
+
+    def set_layer_position(self, index, x, y):
+        """Set the center position of the layer at index."""
+        if 0 <= index < len(self.background_layers):
+            self.background_layers[index].layer.position = [x, y]
+            self._update_scene_size()
 
     def resize_background_image(
-        self, width, height, keepAspectRatio=False, auto_update=True
+        self, index, width, height, keepAspectRatio=False, auto_update=True
     ):
-        """resize the background image if one is set
+        """Resize the draw size of the layer at index.
 
         Args:
-            width (int): desired width
-            height (int): desired height
-            keepAspectRatio (bool, optional): scale image to fit aspect ratio
-            auto_update (bool, optional): update the scene view
-
-        Returns:
-            None: none
+            index (int): layer index.
+            width (int): desired width.
+            height (int): desired height.
+            keepAspectRatio (bool, optional): keep the image's natural aspect.
+            auto_update (bool, optional): refit the scene view.
         """
-        if not self.background_image:
+        if not (0 <= index < len(self.background_layers)):
             return
-
-        current_width = self.background_image.size().width()
-        current_height = self.background_image.size().height()
-        if current_width == width and current_height == height:
-            return
-
-        if keepAspectRatio:
-            if current_width != width:
-                aspect_size = self.background_image.scaledToWidth(width).size()
-                width, height = aspect_size.width(), aspect_size.height()
-            elif current_height != height:
-                aspect_size = self.background_image.scaledToHeight(
-                    height
-                ).size()
-                width, height = aspect_size.width(), aspect_size.height()
-        # TODO find if this is the most efficient way to achieve this
-        self.background_image = self.background_image.scaled(width, height)
-
+        loaded = self.background_layers[index]
+        if keepAspectRatio and loaded.image is not None:
+            natural = loaded.image.size()
+            nat_w = natural.width() or 1
+            nat_h = natural.height() or 1
+            current_w, current_h = self._layer_draw_size(loaded)
+            if width != current_w:
+                height = int(round(width * nat_h / float(nat_w)))
+            elif height != current_h:
+                width = int(round(height * nat_w / float(nat_h)))
+        loaded.layer.size = [int(width), int(height)]
         if auto_update:
-            self.scene().set_size(width, height)
-            # Update display
-            self.fit_scene_content()
+            self._update_scene_size()
 
-    def set_background_width(self, width, keepAspectRatio=True):
-        """convenience function for setting width on bg image
-
-        Args:
-            width (int): desired width
-            keepAspectRatio (bool, optional): force aspect ration
-
-        Returns:
-            None: None
-        """
-        if not self.background_image:
+    def set_background_width(self, index, width, keepAspectRatio=True):
+        """Set the draw width of the layer at index."""
+        if not (0 <= index < len(self.background_layers)):
             return
-        current_height = self.background_image.size().height()
+        _, current_height = self._layer_draw_size(self.background_layers[index])
         self.resize_background_image(
-            width, current_height, keepAspectRatio=keepAspectRatio
+            index, width, current_height, keepAspectRatio=keepAspectRatio
         )
 
-    def set_background_height(self, height, keepAspectRatio=True):
-        """convenience function for setting height on bg image
-
-        Args:
-            height (int): desired height
-            keepAspectRatio (bool, optional): force aspect ration
-
-        Returns:
-            None: None
-        """
-        if not self.background_image:
+    def set_background_height(self, index, height, keepAspectRatio=True):
+        """Set the draw height of the layer at index."""
+        if not (0 <= index < len(self.background_layers)):
             return
-        current_width = self.background_image.size().width()
+        current_width, _ = self._layer_draw_size(self.background_layers[index])
         self.resize_background_image(
-            current_width, height, keepAspectRatio=keepAspectRatio
+            index, current_width, height, keepAspectRatio=keepAspectRatio
         )
+
+    def get_background_layers(self):
+        """Return the ordered list of _LoadedBackground (back to front)."""
+        return self.background_layers
 
     def get_background_size(self):
-        """get bg image in Qt.QSize
-
-        Returns:
-            Qt.QSize: current size of bg
-        """
-        bg_image = self.get_background(0)
-        if bg_image:
-            return bg_image.size()
-        else:
+        """Return the union size of all layers as a Qt.QSize."""
+        bounding = self._bounding_rect
+        if bounding is None:
             return QtCore.QSize(0, 0)
+        return QtCore.QSize(
+            int(round(bounding.width())), int(round(bounding.height()))
+        )
 
     def get_background(self, index):
-        """Return background for tab index"""
-        return self.background_image
+        """Return the loaded image for the layer at index, or None."""
+        if 0 <= index < len(self.background_layers):
+            return self.background_layers[index].image
+        return None
 
     def clear(self):
         """Clear view, by replacing scene with a new one"""
@@ -898,11 +1012,12 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         """Return view data"""
         data = {}
 
-        # Add background to data
-        if self.background_image_path:
-            bg_fp = r"{}".format(self.background_image_path)
-            data["background"] = bg_fp
-            data["background_size"] = self.get_background_size().toTuple()
+        # Add background layers to data (new composite schema)
+        backgrounds = background_model.layers_to_data(
+            [loaded.layer for loaded in self.background_layers]
+        )
+        if backgrounds:
+            data["backgrounds"] = backgrounds
 
         # Add items to data
         items = []
@@ -917,36 +1032,31 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         """Set/load view data"""
         self.clear()
 
-        # Set backgraound picture
-        background = data.get("background", None)
-        background_size = data.get("background_size", None)
-        if background:
-            self.set_background(background)
-            if background_size:
-                self.resize_background_image(
-                    background_size[0], background_size[1]
-                )
+        # Set background layers (accepts the new backgrounds list and the
+        # legacy single background/background_size keys).
+        self.set_backgrounds(background_model.layers_from_view_data(data))
 
         # Add items to view
         for item_data in data.get("items", []):
             item = self.add_picker_item()
             item.set_data(item_data)
 
+        # Size the scene to include the items too, now that they exist.
+        self._update_scene_size()
+
     def drawBackground(self, painter, rect):
-        """Default method override to draw view custom background image"""
+        """Draw the tab's background image layers (back to front)"""
         # Run default method
         result = QtWidgets.QGraphicsView.drawBackground(self, painter, rect)
 
-        # Stop here if view has no background
-        if not self.background_image:
-            return result
-
-        # Draw background image
-        painter.drawImage(
-            self.sceneRect(),
-            self.background_image,
-            QtCore.QRectF(self.background_image.rect()),
-        )
+        # Draw each layer from its cached geometry, culling those outside the
+        # exposed paint region. No per-paint allocation or recomputation.
+        for loaded in self.background_layers:
+            if loaded.image is None or loaded.rect is None:
+                continue
+            if not loaded.rect.intersects(rect):
+                continue
+            painter.drawImage(loaded.rect, loaded.image, loaded.src_rect)
 
         return result
 
@@ -1029,7 +1139,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             picker_grp, ["tz", "rx", "ry", "rz", "sx", "sz", "v"]
         )
 
-        if "background" in tab["data"]:
+        # Create one image plane per background layer (composite backgrounds).
+        # Accepts both the new backgrounds list and the legacy single keys.
+        bg_layers = background_model.layers_from_view_data(tab["data"])
+        if bg_layers:
             attribute.addAttribute(
                 picker_grp,
                 "backgroundAlpha",
@@ -1038,31 +1151,24 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 minValue=0,
                 maxValue=1,
             )
-            attribute.addAttribute(
-                picker_grp,
-                "backgroundWidth",
-                "long",
-                tab["data"]["background_size"][0],
-                minValue=1,
-            )
-            attribute.addAttribute(
-                picker_grp,
-                "backgroundHeight",
-                "long",
-                tab["data"]["background_size"][1],
-                minValue=1,
-            )
-            ip = pm.imagePlane(n="{}_background".format(tab["name"]))
-            ip[0].tz.set(-1)
-            ip[0].overrideEnabled.set(1)
-            ip[0].overrideDisplayType.set(2)
-            pm.parent(ip[0], picker_grp)
+            for i, layer in enumerate(bg_layers):
+                ip = pm.imagePlane(
+                    n="{}_background_{}".format(tab["name"], i)
+                )
+                # Stack planes behind the curves and by index so the draw
+                # order is recoverable on convert-back.
+                ip[0].tz.set(-1 - i)
+                ip[0].tx.set(layer.position[0])
+                ip[0].ty.set(layer.position[1])
+                ip[0].overrideEnabled.set(1)
+                ip[0].overrideDisplayType.set(2)
+                pm.parent(ip[0], picker_grp)
 
-            picker_grp.backgroundAlpha >> ip[1].alphaGain
-            picker_grp.backgroundWidth >> ip[1].width
-            picker_grp.backgroundHeight >> ip[1].height
-
-            ip[1].imageName.set(tab["data"]["background"])
+                picker_grp.backgroundAlpha >> ip[1].alphaGain
+                if layer.size and layer.size[0] and layer.size[1]:
+                    ip[1].width.set(layer.size[0])
+                    ip[1].height.set(layer.size[1])
+                ip[1].imageName.set(layer.path)
 
         if "items" in tab["data"]:
             for item in tab["data"]["items"]:
@@ -1174,15 +1280,30 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 tab_name = tab_grp.name()
             new_data["tabs"].append({"name": tab_name})
             new_data["tabs"][-1]["data"] = {"items": []}
-            bg_imagePlane = tab_grp.listRelatives(type="imagePlane", ad=True)
+            # Collect all background image planes under the tab group and
+            # rebuild the composite backgrounds list. Draw order is recovered
+            # from the plane depth (tz), which convert_picker_to_curves stacks
+            # per layer index -- robust to Maya node renames.
+            bg_pairs = []
+            for child in tab_grp.listRelatives() or []:
+                shape = child.getShape()
+                if shape is None or shape.type() != "imagePlane":
+                    continue
+                bg_pairs.append((child, shape))
+            # index 0 (backmost) was stacked at tz = -1, index 1 at -2, ...
+            bg_pairs.sort(key=lambda pair: pair[0].tz.get(), reverse=True)
 
-            if bg_imagePlane:
-                image_name = bg_imagePlane[0].imageName.get()
-                new_data["tabs"][-1]["data"]["background"] = image_name
-                new_data["tabs"][-1]["data"]["background_size"] = [
-                    bg_imagePlane[0].width.get(),
-                    bg_imagePlane[0].height.get(),
-                ]
+            bg_layers = []
+            for transform, shape in bg_pairs:
+                layer = background_model.BackgroundLayer()
+                layer.path = shape.imageName.get()
+                layer.position = [transform.tx.get(), transform.ty.get()]
+                layer.size = [shape.width.get(), shape.height.get()]
+                bg_layers.append(layer)
+            if bg_layers:
+                new_data["tabs"][-1]["data"][
+                    "backgrounds"
+                ] = background_model.layers_to_data(bg_layers)
 
             for item_curve in tab_grp.listRelatives():
                 shape = item_curve.getShape()

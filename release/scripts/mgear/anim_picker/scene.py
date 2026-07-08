@@ -34,9 +34,22 @@ class OrderedGraphicsScene(QtWidgets.QGraphicsScene):
         """Will set scene size with proper center position"""
         self.setSceneRect(-width / 2, -height / 2, width, height)
 
+    def set_rect(self, rect):
+        """Set the scene rect from a QRectF (fits the background layer union)"""
+        self.setSceneRect(rect)
+
     def set_default_size(self):
         self.set_size(
             self.__DEFAULT_SCENE_WIDTH__, self.__DEFAULT_SCENE_HEIGHT__
+        )
+
+    def default_rect(self):
+        """Return the default centered scene rect as a QRectF."""
+        return QtCore.QRectF(
+            -self.__DEFAULT_SCENE_WIDTH__ / 2.0,
+            -self.__DEFAULT_SCENE_HEIGHT__ / 2.0,
+            self.__DEFAULT_SCENE_WIDTH__,
+            self.__DEFAULT_SCENE_HEIGHT__,
         )
 
     def get_bounding_rect(self, margin=0, selection=False):

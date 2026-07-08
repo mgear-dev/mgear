@@ -5,6 +5,7 @@ Release Log
 5.3.4
 ------
 **Enhancements**
+	* Anim Picker: Composite and flexible tab backgrounds — a tab background is now an ordered list of image layers, each with its own position and size, drawn back-to-front; the canvas spans both the background layers and the picker buttons (never smaller than the default), so pan and zoom reach all content and backgrounds can be larger and non-proportional #108 (the former 6000 size cap is removed). A new background-layer manager (right-click > Background layers...) adds / removes / reorders and repositions layers. Legacy single-image pickers still load (mapped to one layer); writes now emit a "backgrounds" list
 	* Anim Picker: Modernize the module (Phase 1 cleanup) — Python-3-only idioms, mgear.log-based logging, Maya API 2.0 selection handling, and dead-code / debug-comment removal; internal anim_picker version bumped to 2.0.0
 	* Anim Picker: Store picker data on the PICKER_DATAS node as clean JSON instead of a stringified Python literal read back with eval() — safer, with no arbitrary code execution on load. **BREAKING**: pickers stored only in a scene node with no external .pkr file are not migrated and must be re-exported (.pkr files and file-backed pickers are unaffected)
 
