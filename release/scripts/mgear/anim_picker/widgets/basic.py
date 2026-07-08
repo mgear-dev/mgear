@@ -429,9 +429,14 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         self.keep_aspect_ratio = True
         # Guard to avoid write-back while the fields are being populated.
         self._syncing = False
+        # View whose background-edit sub-mode this panel drives.
+        self._edit_view = None
 
         # Layer list + list actions
         self.layer_list = QtWidgets.QListWidget()
+        self.layer_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.ExtendedSelection
+        )
         self.add_button = QtWidgets.QPushButton("Add Layer")
         self.remove_button = QtWidgets.QPushButton("Remove Layer")
         self.up_button = QtWidgets.QPushButton("Move Up")
@@ -453,6 +458,11 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         self.build_layout()
         self.connectSignals()
         self.refresh_layer_list()
+
+        # Activate on-canvas manipulation for the current view.
+        self._edit_view = self.gfx_view()
+        if self._edit_view:
+            self._edit_view.enter_background_edit()
 
     def build_layout(self):
         self.main_layout = QtWidgets.QVBoxLayout(self)
@@ -479,6 +489,9 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         self.up_button.clicked.connect(self.move_up)
         self.down_button.clicked.connect(self.move_down)
         self.layer_list.currentRowChanged.connect(self.on_selection_changed)
+        self.layer_list.itemSelectionChanged.connect(
+            self.on_list_selection_changed
+        )
         self.aspect_button.clicked.connect(self.toggle_aspect_value)
         self.pos_x_box.editingFinished.connect(self.apply_position)
         self.pos_y_box.editingFinished.connect(self.apply_position)
@@ -492,6 +505,10 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
     def current_index(self):
         """Return the selected layer index (-1 if none)."""
         return self.layer_list.currentRow()
+
+    def _selected_rows(self):
+        """Return the sorted list of selected layer rows."""
+        return sorted({idx.row() for idx in self.layer_list.selectedIndexes()})
 
     def refresh_layer_list(self):
         """Rebuild the layer list from the view, preserving the selection."""
@@ -512,6 +529,9 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         self._syncing = False
 
         self.populate_fields()
+
+        # Keep the canvas manipulator selection in step with the rebuilt list.
+        self.on_list_selection_changed()
 
     def populate_fields(self):
         """Load the selected layer's position/size into the fields."""
@@ -544,6 +564,44 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         if self._syncing:
             return
         self.populate_fields()
+
+    def on_list_selection_changed(self):
+        """Push the list's multi-selection to the canvas manipulator."""
+        if self._syncing:
+            return
+        view = self.gfx_view()
+        if view:
+            view.set_selected_bg_indices(self._selected_rows())
+
+    def on_canvas_selection_changed(self):
+        """Reflect the canvas selection back into the list (called by view)."""
+        if self._syncing:
+            return
+        view = self.gfx_view()
+        if not view:
+            return
+        indices = view.get_selected_bg_indices()
+        self._syncing = True
+        self.layer_list.clearSelection()
+        for i in indices:
+            item = self.layer_list.item(i)
+            if item is not None:
+                item.setSelected(True)
+        if indices:
+            self.layer_list.setCurrentRow(indices[-1])
+        self._syncing = False
+        self.populate_fields()
+
+    def refresh_active_fields(self):
+        """Refresh the fields from the active layer (called during a drag)."""
+        self.populate_fields()
+
+    def closeEvent(self, event):
+        """Deactivate the canvas sub-mode when the panel closes."""
+        if self._edit_view is not None:
+            self._edit_view.exit_background_edit()
+            self._edit_view = None
+        super().closeEvent(event)
 
     def add_layer(self):
         view = self.gfx_view()

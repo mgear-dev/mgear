@@ -25,6 +25,7 @@ from mgear.anim_picker.constants import DEFAULT_RELATIVE_IMAGES_PATH
 from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import picker_widgets
 from mgear.anim_picker.widgets import background_model
+from mgear.anim_picker.widgets import background_manipulator
 from mgear.anim_picker.handlers import __EDIT_MODE__
 
 
@@ -90,6 +91,13 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self._bounding_rect = None
         self.bg_ui = None
 
+        # On-canvas background layer manipulation (active with the panel open).
+        self.background_edit = False
+        self.bg_manipulator = background_manipulator.BackgroundManipulator(self)
+        self._bg_dragging = False
+        self._bg_marquee_origin = None
+        self._bg_marquee_current = None
+
         self.fit_margin = 8
 
         # # undo list ---------------------------------------------------------
@@ -102,6 +110,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         )
 
     def mousePressEvent(self, event):
+        # Background layer manipulation intercepts left-click when active.
+        if self.background_edit and self._bg_mouse_press(event):
+            return
         self.modified_select = False
         self.item_selected = False
         self.__move_prompt = False
@@ -164,6 +175,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             )
 
     def mouseMoveEvent(self, event):
+        # Background layer drag / marquee intercepts movement when active.
+        if self.background_edit and self._bg_mouse_move(event):
+            return
         result = QtWidgets.QGraphicsView.mouseMoveEvent(self, event)
 
         if (
@@ -207,6 +221,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         """Overload to clear selection on empty area"""
+        # Background layer drag / marquee release when active.
+        if self.background_edit and self._bg_mouse_release(event):
+            return
         result = QtWidgets.QGraphicsView.mouseReleaseEvent(self, event)
         if (
             not self.drag_active
@@ -864,6 +881,142 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.background_layers = []
         self._update_scene_size()
 
+    def enter_background_edit(self):
+        """Activate on-canvas background layer manipulation (panel open)."""
+        self.background_edit = True
+        self.setDragMode(QtWidgets.QGraphicsView.NoDrag)
+        self.viewport().update()
+
+    def exit_background_edit(self):
+        """Deactivate manipulation and restore normal picker interaction.
+
+        Only manipulation state is reset here; the ``bg_ui`` panel reference is
+        owned by ``background_options`` (which already tolerates a stale one).
+        """
+        self.background_edit = False
+        self.bg_manipulator.clear()
+        self._bg_dragging = False
+        self._bg_marquee_origin = None
+        self._bg_marquee_current = None
+        self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
+        self.viewport().update()
+
+    def get_selected_bg_indices(self):
+        """Return the indices of the currently selected background layers."""
+        return list(self.bg_manipulator.selected)
+
+    def set_selected_bg_indices(self, indices):
+        """Set the selected background layers (driven by the panel list)."""
+        self.bg_manipulator.set_selected(indices)
+        self.viewport().update()
+
+    def _notify_bg_selection(self):
+        """Tell the panel the canvas selection changed."""
+        if self.bg_ui:
+            self.bg_ui.on_canvas_selection_changed()
+
+    def _notify_bg_fields(self):
+        """Tell the panel to refresh its position/size fields."""
+        if self.bg_ui:
+            self.bg_ui.refresh_active_fields()
+
+    def _bg_mouse_press(self, event):
+        """Handle a background-edit left press. Return True if consumed."""
+        if event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return False
+        scene_pos = self.mapToScene(event.pos())
+        x, y = scene_pos.x(), scene_pos.y()
+
+        # Grab a handle or the body of the current selection first.
+        hit = self.bg_manipulator.hit_test(x, y)
+        if hit is not None:
+            mode = hit[0]
+            handle = hit[1] if mode == "handle" else None
+            self.bg_manipulator.begin_drag(mode, handle, x, y)
+            self._bg_dragging = True
+            return True
+
+        # Otherwise select the layer under the cursor, or start a marquee.
+        additive = bool(event.modifiers() & QtCore.Qt.ShiftModifier)
+        index = self.bg_manipulator.layer_at(x, y)
+        if index is not None:
+            self.bg_manipulator.select(index, additive)
+            self._notify_bg_selection()
+            self.viewport().update()
+            return True
+
+        if not additive:
+            self.bg_manipulator.clear()
+            self._notify_bg_selection()
+        self._bg_marquee_origin = scene_pos
+        self._bg_marquee_current = scene_pos
+        self.viewport().update()
+        return True
+
+    def _bg_mouse_move(self, event):
+        """Handle a background-edit drag/marquee move. Return True if used."""
+        if not (event.buttons() & QtCore.Qt.MouseButton.LeftButton):
+            return False
+        scene_pos = self.mapToScene(event.pos())
+
+        if self._bg_dragging:
+            keep = bool(event.modifiers() & QtCore.Qt.ShiftModifier)
+            self.bg_manipulator.update_drag(scene_pos.x(), scene_pos.y(), keep)
+            self._refresh_layer_geometry()
+            self._notify_bg_fields()
+            self.viewport().update()
+            return True
+
+        if self._bg_marquee_origin is not None:
+            self._bg_marquee_current = scene_pos
+            self.viewport().update()
+            return True
+
+        return False
+
+    def _bg_mouse_release(self, event):
+        """Handle a background-edit release. Return True if consumed."""
+        if event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return False
+
+        if self._bg_dragging:
+            self.bg_manipulator.end_drag()
+            self._bg_dragging = False
+            # Grow the pan bounds to the layer's final size (no view refit).
+            self._update_scene_rect()
+            self._notify_bg_fields()
+            return True
+
+        if self._bg_marquee_origin is not None:
+            additive = bool(event.modifiers() & QtCore.Qt.ShiftModifier)
+            rect = QtCore.QRectF(
+                self._bg_marquee_origin, self._bg_marquee_current
+            ).normalized()
+            self._bg_marquee_origin = None
+            self._bg_marquee_current = None
+            if rect.width() > 1e-5 or rect.height() > 1e-5:
+                self.bg_manipulator.select_in_rect(rect, additive)
+                self._notify_bg_selection()
+            self.viewport().update()
+            return True
+
+        return False
+
+    def _draw_bg_marquee(self, painter):
+        """Draw the background-selection marquee rectangle, if active."""
+        if self._bg_marquee_origin is None or self._bg_marquee_current is None:
+            return
+        rect = QtCore.QRectF(
+            self._bg_marquee_origin, self._bg_marquee_current
+        ).normalized()
+        pen = QtGui.QPen(
+            QtGui.QColor(255, 200, 40, 200), 0, QtCore.Qt.DashLine
+        )
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.NoBrush)
+        painter.drawRect(rect)
+
     def background_options(self):
         tabWidget = self.parent().parent()
         # Delete old window
@@ -1068,6 +1221,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Paint axis in edit mode
         if __EDIT_MODE__.get():
             self.draw_overlay_axis(painter, rect)
+
+        # Background layer manipulator overlay + selection marquee
+        if self.background_edit:
+            self.bg_manipulator.paint(painter)
+            self._draw_bg_marquee(painter)
 
         return result
 
