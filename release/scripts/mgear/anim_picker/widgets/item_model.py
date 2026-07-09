@@ -18,11 +18,20 @@ Fields map 1:1 to the schema keys:
     text         str
     text_size    float
     text_color   RGBA tuple
+    text_align   str (optional placement: center/top/bottom/left/right)
+    text_offset  float (optional gap in pixels from the aligned edge)
     item_id      str (optional stable id, minted when first mirror-linked)
     mirror_id    str (optional mirror partner's item_id)
     pinned       bool (optional; item locked to the viewport as a HUD overlay)
     anchor       str (optional 3x3 viewport anchor code, e.g. "tl")
     offset       [dx, dy] (optional inward pixel offset from the anchor)
+    pin_scale    float (optional screen scale baked into the pin transform)
+    widget       str (optional interactive type: checkbox/slider/slider2d)
+    binding      dict (optional attribute(s) + range the widget drives)
+    scripts      dict (optional per-state scripts for the widget)
+    backdrop     bool (optional; item is a backdrop container behind others)
+    title        str (optional backdrop title)
+    corner_radius float (optional backdrop corner radius; 0 = straight)
 """
 
 
@@ -41,11 +50,20 @@ class PickerItemData(object):
         self.text = None
         self.text_size = None
         self.text_color = None
+        self.text_align = None
+        self.text_offset = None
         self.item_id = None
         self.mirror_id = None
         self.pinned = False
         self.anchor = None
         self.offset = None
+        self.pin_scale = None
+        self.widget = None
+        self.binding = None
+        self.scripts = None
+        self.backdrop = False
+        self.title = None
+        self.corner_radius = None
 
     @classmethod
     def from_dict(cls, data):
@@ -81,6 +99,8 @@ class PickerItemData(object):
             model.text_size = data.get("text_size")
             if "text_color" in data:
                 model.text_color = tuple(data["text_color"])
+            model.text_align = data.get("text_align")
+            model.text_offset = data.get("text_offset")
         if data.get("id"):
             model.item_id = data["id"]
         if data.get("mirror"):
@@ -91,6 +111,15 @@ class PickerItemData(object):
             model.offset = (
                 list(data["offset"]) if "offset" in data else None
             )
+            model.pin_scale = data.get("pin_scale")
+        if data.get("widget"):
+            model.widget = data["widget"]
+            model.binding = dict(data["binding"]) if "binding" in data else None
+            model.scripts = dict(data["scripts"]) if "scripts" in data else None
+        if data.get("backdrop"):
+            model.backdrop = True
+            model.title = data.get("title")
+            model.corner_radius = data.get("corner_radius")
 
         return model
 
@@ -123,6 +152,11 @@ class PickerItemData(object):
             data["text"] = self.text
             data["text_size"] = self.text_size
             data["text_color"] = self.text_color
+            # Additive optional text placement (absent for legacy centered text).
+            if self.text_align and self.text_align != "center":
+                data["text_align"] = self.text_align
+            if self.text_offset:
+                data["text_offset"] = self.text_offset
 
         # Mirror link (additive optional keys; absent when unlinked so old
         # readers and unlinked pickers are unaffected).
@@ -139,5 +173,25 @@ class PickerItemData(object):
                 data["anchor"] = self.anchor
             if self.offset is not None:
                 data["offset"] = list(self.offset)
+            if self.pin_scale is not None:
+                data["pin_scale"] = self.pin_scale
+
+        # Interactive widget (additive optional keys; emitted only for a
+        # non-button widget so old readers and plain buttons are unaffected).
+        if self.widget:
+            data["widget"] = self.widget
+            if self.binding:
+                data["binding"] = dict(self.binding)
+            if self.scripts:
+                data["scripts"] = dict(self.scripts)
+
+        # Backdrop container (additive optional keys; only emitted for a
+        # backdrop so old readers and normal items are unaffected).
+        if self.backdrop:
+            data["backdrop"] = True
+            if self.title:
+                data["title"] = self.title
+            if self.corner_radius is not None:
+                data["corner_radius"] = self.corner_radius
 
         return data

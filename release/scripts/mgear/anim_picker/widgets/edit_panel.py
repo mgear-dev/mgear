@@ -24,6 +24,8 @@ from mgear.core import widgets as mwidgets
 
 from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import overlay
+from mgear.anim_picker.widgets import graphics
+from mgear.anim_picker.widgets import widget_binding
 from mgear.anim_picker.widgets.dialogs.handles_window import (
     HandlesPositionWindow,
 )
@@ -51,6 +53,14 @@ class ItemEditPanel(QtWidgets.QWidget):
     MIXED_INT = -1000000
     MIXED_TEXT = "-"
 
+    # Widget type combo order (index -> widget_binding type).
+    _WIDGET_TYPE_ORDER = (
+        widget_binding.WIDGET_BUTTON,
+        widget_binding.WIDGET_CHECKBOX,
+        widget_binding.WIDGET_SLIDER,
+        widget_binding.WIDGET_SLIDER2D,
+    )
+
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent=parent)
         self.main_window = main_window
@@ -76,6 +86,8 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.text_size_sb = None
         self.text_color_button = None
         self.text_alpha_sb = None
+        self.text_align_combo = None
+        self.text_offset_sb = None
         self.count_sb = None
         self.handles_cb = None
         self.control_list = None
@@ -88,6 +100,24 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.anchor_buttons = {}
         self.pin_off_x_sb = None
         self.pin_off_y_sb = None
+        self.widget_type_combo = None
+        self.widget_attr_field = None
+        self.widget_min_sb = None
+        self.widget_max_sb = None
+        self.widget_orient_combo = None
+        self.widget_attr_x_field = None
+        self.widget_min_x_sb = None
+        self.widget_max_x_sb = None
+        self.widget_attr_y_field = None
+        self.widget_min_y_sb = None
+        self.widget_max_y_sb = None
+        self.widget_recenter_cb = None
+        self._wx_attr_row = None
+        self._wx_checkbox_box = None
+        self._wx_slider_box = None
+        self._wx_2d_box = None
+        self.backdrop_title_field = None
+        self.backdrop_radius_sb = None
 
         self._build_ui()
         self.refresh_fields()
@@ -121,6 +151,8 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._build_mirror_section()
         self._build_controls_section()
         self._build_action_section()
+        self._build_widget_section()
+        self._build_backdrop_section()
         self.content_layout.addStretch()
 
     def _add_section(self, title):
@@ -224,6 +256,26 @@ class ItemEditPanel(QtWidgets.QWidget):
             self._apply_text_size, maximum=100.0, step=0.1
         )
         text_form.addRow("Text size", self.text_size_sb)
+
+        self.text_align_combo = QtWidgets.QComboBox()
+        self.text_align_combo.addItems(
+            ["Center", "Top", "Bottom", "Left", "Right"]
+        )
+        self.text_align_combo.setToolTip(
+            "Text placement relative to the item (edge alignments sit just "
+            "outside so the text does not overlap the button)"
+        )
+        self.text_align_combo.currentIndexChanged.connect(
+            self._apply_text_align
+        )
+        self._fields.append(self.text_align_combo)
+        text_form.addRow("Text align", self.text_align_combo)
+
+        self.text_offset_sb = self._double_spin(
+            self._apply_text_offset, maximum=500.0, step=1.0
+        )
+        self.text_offset_sb.setToolTip("Gap in pixels from the aligned edge")
+        text_form.addRow("Text offset", self.text_offset_sb)
         section.addLayout(text_form)
 
         tcolor_row = QtWidgets.QHBoxLayout()
@@ -431,6 +483,162 @@ class ItemEditPanel(QtWidgets.QWidget):
         menu_row.addWidget(del_menu)
         section.addLayout(menu_row)
 
+    def _binding_spin(self):
+        """Return a framework callback double spin that applies on change.
+
+        Uses ``basic.CallBackDoubleSpinBox`` (like ``_double_spin``) rather than
+        a raw ``QDoubleSpinBox``; binding fields follow the active item, so the
+        mixed-value sentinel of ``_double_spin`` is intentionally not used here.
+        """
+        spin = basic.CallBackDoubleSpinBox(
+            callback=self._apply_binding, value=0.0, min=-1.0e6, max=1.0e6
+        )
+        spin.setDecimals(3)
+        self._fields.append(spin)
+        return spin
+
+    def _binding_attr_field(self, placeholder):
+        """Return a line edit that applies the binding when editing finishes."""
+        field = QtWidgets.QLineEdit()
+        field.setPlaceholderText(placeholder)
+        field.setToolTip(
+            "Enter node.attribute without a namespace; the picker's active "
+            "namespace is applied automatically (like control names). A "
+            "namespace you type explicitly is kept as-is."
+        )
+        field.editingFinished.connect(self._apply_binding)
+        self._fields.append(field)
+        return field
+
+    def _widget_script_button(self, label, key):
+        """Return a button that opens the script editor for a widget state."""
+        button = basic.CallbackButton(
+            callback=partial(self._edit_widget_script, key)
+        )
+        button.setText(label)
+        self._fields.append(button)
+        return button
+
+    def _build_widget_section(self):
+        section = self._add_section("Widget")
+
+        type_form = QtWidgets.QFormLayout()
+        self.widget_type_combo = QtWidgets.QComboBox()
+        self.widget_type_combo.addItems(
+            ["Button", "Checkbox", "Slider (1D)", "2D Slider"]
+        )
+        self.widget_type_combo.setToolTip(
+            "Button selects controls / runs the action; the others drive a "
+            "bound attribute and/or a script"
+        )
+        self.widget_type_combo.currentIndexChanged.connect(
+            self._apply_widget_type
+        )
+        self._fields.append(self.widget_type_combo)
+        type_form.addRow("Type", self.widget_type_combo)
+        section.addLayout(type_form)
+
+        # Shared attribute row (checkbox + 1D slider).
+        self._wx_attr_row = QtWidgets.QWidget()
+        attr_form = QtWidgets.QFormLayout(self._wx_attr_row)
+        attr_form.setContentsMargins(0, 0, 0, 0)
+        self.widget_attr_field = self._binding_attr_field("node.attribute")
+        attr_form.addRow("Attribute", self.widget_attr_field)
+        section.addWidget(self._wx_attr_row)
+
+        # Checkbox on / off scripts.
+        self._wx_checkbox_box = QtWidgets.QWidget()
+        cb_row = QtWidgets.QHBoxLayout(self._wx_checkbox_box)
+        cb_row.setContentsMargins(0, 0, 0, 0)
+        cb_row.addWidget(self._widget_script_button("On Script...", "on"))
+        cb_row.addWidget(self._widget_script_button("Off Script...", "off"))
+        section.addWidget(self._wx_checkbox_box)
+
+        # 1D slider range + orientation + value script.
+        self._wx_slider_box = QtWidgets.QWidget()
+        slider_layout = QtWidgets.QVBoxLayout(self._wx_slider_box)
+        slider_layout.setContentsMargins(0, 0, 0, 0)
+        range_row = QtWidgets.QHBoxLayout()
+        range_row.addWidget(QtWidgets.QLabel("Min"))
+        self.widget_min_sb = self._binding_spin()
+        range_row.addWidget(self.widget_min_sb)
+        range_row.addWidget(QtWidgets.QLabel("Max"))
+        self.widget_max_sb = self._binding_spin()
+        range_row.addWidget(self.widget_max_sb)
+        slider_layout.addLayout(range_row)
+        orient_form = QtWidgets.QFormLayout()
+        self.widget_orient_combo = QtWidgets.QComboBox()
+        self.widget_orient_combo.addItems(["Horizontal", "Vertical"])
+        self.widget_orient_combo.currentIndexChanged.connect(
+            self._apply_binding
+        )
+        self._fields.append(self.widget_orient_combo)
+        orient_form.addRow("Orientation", self.widget_orient_combo)
+        slider_layout.addLayout(orient_form)
+        slider_layout.addWidget(
+            self._widget_script_button("Value Script...", "value")
+        )
+        section.addWidget(self._wx_slider_box)
+
+        # 2D slider: two attributes + ranges + recenter + script.
+        self._wx_2d_box = QtWidgets.QWidget()
+        twod_layout = QtWidgets.QVBoxLayout(self._wx_2d_box)
+        twod_layout.setContentsMargins(0, 0, 0, 0)
+        x_row = QtWidgets.QHBoxLayout()
+        x_row.addWidget(QtWidgets.QLabel("X"))
+        self.widget_attr_x_field = self._binding_attr_field("node.attrX")
+        x_row.addWidget(self.widget_attr_x_field)
+        self.widget_min_x_sb = self._binding_spin()
+        self.widget_max_x_sb = self._binding_spin()
+        x_row.addWidget(self.widget_min_x_sb)
+        x_row.addWidget(self.widget_max_x_sb)
+        twod_layout.addLayout(x_row)
+        y_row = QtWidgets.QHBoxLayout()
+        y_row.addWidget(QtWidgets.QLabel("Y"))
+        self.widget_attr_y_field = self._binding_attr_field("node.attrY")
+        y_row.addWidget(self.widget_attr_y_field)
+        self.widget_min_y_sb = self._binding_spin()
+        self.widget_max_y_sb = self._binding_spin()
+        y_row.addWidget(self.widget_min_y_sb)
+        y_row.addWidget(self.widget_max_y_sb)
+        twod_layout.addLayout(y_row)
+        self.widget_recenter_cb = QtWidgets.QCheckBox("Recenter on release")
+        self.widget_recenter_cb.clicked.connect(self._apply_binding)
+        self._fields.append(self.widget_recenter_cb)
+        twod_layout.addWidget(self.widget_recenter_cb)
+        twod_layout.addWidget(
+            self._widget_script_button("XY Script...", "xy")
+        )
+        section.addWidget(self._wx_2d_box)
+
+    def _build_backdrop_section(self):
+        section = self._add_section("Backdrop")
+
+        form = QtWidgets.QFormLayout()
+        self.backdrop_title_field = QtWidgets.QLineEdit()
+        self.backdrop_title_field.setPlaceholderText("Backdrop title")
+        self.backdrop_title_field.editingFinished.connect(
+            self._apply_backdrop_title
+        )
+        self._fields.append(self.backdrop_title_field)
+        form.addRow("Title", self.backdrop_title_field)
+
+        self.backdrop_radius_sb = self._double_spin(
+            self._apply_backdrop_radius, maximum=80.0, step=1.0
+        )
+        self.backdrop_radius_sb.setToolTip(
+            "Corner radius; 0 = straight corners"
+        )
+        form.addRow("Corners", self.backdrop_radius_sb)
+        section.addLayout(form)
+
+        hint = QtWidgets.QLabel(
+            "Color + transparency are set in Appearance. Drag the backdrop to "
+            "move everything inside it together."
+        )
+        hint.setWordWrap(True)
+        section.addWidget(hint)
+
     # ------------------------------------------------------------------
     # Selection binding
     # ------------------------------------------------------------------
@@ -505,6 +713,68 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._populate_mirror()
         self._populate_controls()
         self._populate_action()
+        self._populate_widget()
+        self._populate_backdrop()
+
+    def _populate_backdrop(self):
+        item = self._active_item()
+        is_backdrop = item is not None and item.get_backdrop()
+        self.backdrop_title_field.blockSignals(True)
+        self.backdrop_title_field.setText(
+            item.get_backdrop_title() if is_backdrop else ""
+        )
+        self.backdrop_title_field.blockSignals(False)
+        radius = item.get_corner_radius() if is_backdrop else 0.0
+        self._set_spin(self.backdrop_radius_sb, round(radius, 4), False)
+
+    def _update_widget_visibility(self, widget_type):
+        """Show only the sub-rows relevant to ``widget_type`` (None hides all)."""
+        self._wx_attr_row.setVisible(
+            widget_type
+            in (widget_binding.WIDGET_CHECKBOX, widget_binding.WIDGET_SLIDER)
+        )
+        self._wx_checkbox_box.setVisible(
+            widget_type == widget_binding.WIDGET_CHECKBOX
+        )
+        self._wx_slider_box.setVisible(
+            widget_type == widget_binding.WIDGET_SLIDER
+        )
+        self._wx_2d_box.setVisible(
+            widget_type == widget_binding.WIDGET_SLIDER2D
+        )
+
+    def _populate_widget(self):
+        wtype, wtype_mixed = self._shared(lambda item: item.get_widget_type())
+        self.widget_type_combo.blockSignals(True)
+        if wtype_mixed or wtype not in self._WIDGET_TYPE_ORDER:
+            self.widget_type_combo.setCurrentIndex(-1 if wtype_mixed else 0)
+        else:
+            self.widget_type_combo.setCurrentIndex(
+                self._WIDGET_TYPE_ORDER.index(wtype)
+            )
+        self.widget_type_combo.blockSignals(False)
+
+        # Binding fields follow the active item (like controls / menus); an
+        # edit applies to the whole selection via _apply_binding.
+        item = self._active_item()
+        binding = (item.get_binding() if item else None) or {}
+        self.widget_attr_field.setText(binding.get("attr", ""))
+        self.widget_min_sb.setValue(binding.get("min", 0.0))
+        self.widget_max_sb.setValue(binding.get("max", 1.0))
+        horizontal = (
+            binding.get("orientation", widget_binding.ORIENT_HORIZONTAL)
+            == widget_binding.ORIENT_HORIZONTAL
+        )
+        self.widget_orient_combo.setCurrentIndex(0 if horizontal else 1)
+        self.widget_attr_x_field.setText(binding.get("attr_x", ""))
+        self.widget_min_x_sb.setValue(binding.get("min_x", -1.0))
+        self.widget_max_x_sb.setValue(binding.get("max_x", 1.0))
+        self.widget_attr_y_field.setText(binding.get("attr_y", ""))
+        self.widget_min_y_sb.setValue(binding.get("min_y", -1.0))
+        self.widget_max_y_sb.setValue(binding.get("max_y", 1.0))
+        self.widget_recenter_cb.setChecked(bool(binding.get("recenter")))
+
+        self._update_widget_visibility(None if wtype_mixed else wtype)
 
     def _populate_pin(self):
         pinned, pinned_mixed = self._shared(lambda item: item.get_pinned())
@@ -612,6 +882,21 @@ class ItemEditPanel(QtWidgets.QWidget):
             lambda item: item.get_text_color().alpha()
         )
         self._set_spin(self.text_alpha_sb, talpha, talpha_mixed)
+
+        align, align_mixed = self._shared(lambda item: item.get_text_align())
+        self.text_align_combo.blockSignals(True)
+        if align_mixed or align not in graphics.TEXT_ALIGNS:
+            self.text_align_combo.setCurrentIndex(-1 if align_mixed else 0)
+        else:
+            self.text_align_combo.setCurrentIndex(
+                graphics.TEXT_ALIGNS.index(align)
+            )
+        self.text_align_combo.blockSignals(False)
+
+        offset, offset_mixed = self._shared(
+            lambda item: round(item.get_text_offset(), 4)
+        )
+        self._set_spin(self.text_offset_sb, offset, offset_mixed)
 
     def _populate_shape(self):
         count, count_mixed = self._shared(lambda item: item.point_count)
@@ -803,6 +1088,27 @@ class ItemEditPanel(QtWidgets.QWidget):
             item.set_text_color(color)
         self._repaint_view()
 
+    def _apply_text_align(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        index = self.text_align_combo.currentIndex()
+        if index < 0:
+            return
+        align = graphics.TEXT_ALIGNS[index]
+        for item in self.items:
+            item.set_text_align(align)
+        self._repaint_view()
+
+    def _apply_text_offset(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        offset = self._committed(self.text_offset_sb)
+        if offset is None:
+            return
+        for item in self.items:
+            item.set_text_offset(offset)
+        self._repaint_view()
+
     # -- shape ----------------------------------------------------------
     def _apply_show_handles(self, *args, **kwargs):
         if self._syncing or not self.items:
@@ -930,6 +1236,89 @@ class ItemEditPanel(QtWidgets.QWidget):
             )
         self._view._update_pinned_items()
         self._view.viewport().update()
+
+    # -- widget ---------------------------------------------------------
+    def _apply_widget_type(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        index = self.widget_type_combo.currentIndex()
+        if index < 0:
+            return
+        widget_type = self._WIDGET_TYPE_ORDER[index]
+        for item in self.items:
+            item.set_widget_type(widget_type)
+        self._update_widget_visibility(widget_type)
+        self._repaint_view()
+        # A fresh non-button widget gets a default binding; reflect it back.
+        self._guarded(self._populate_widget)
+
+    def _collect_binding(self):
+        """Build a binding dict from the current field values."""
+        orientation = (
+            widget_binding.ORIENT_HORIZONTAL
+            if self.widget_orient_combo.currentIndex() == 0
+            else widget_binding.ORIENT_VERTICAL
+        )
+        return {
+            "attr": str(self.widget_attr_field.text()).strip(),
+            "min": self.widget_min_sb.value(),
+            "max": self.widget_max_sb.value(),
+            "orientation": orientation,
+            "attr_x": str(self.widget_attr_x_field.text()).strip(),
+            "min_x": self.widget_min_x_sb.value(),
+            "max_x": self.widget_max_x_sb.value(),
+            "attr_y": str(self.widget_attr_y_field.text()).strip(),
+            "min_y": self.widget_min_y_sb.value(),
+            "max_y": self.widget_max_y_sb.value(),
+            "recenter": self.widget_recenter_cb.isChecked(),
+        }
+
+    def _apply_binding(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        binding = self._collect_binding()
+        for item in self.items:
+            item.set_binding(binding)
+        self._repaint_view()
+
+    def _edit_widget_script(self, key):
+        """Edit the widget script for ``key`` and apply it to the selection."""
+        item = self._active_item()
+        if item is None:
+            return
+        # Seed an empty script with the per-state sample snippet so the editor
+        # opens with a documented, runnable example.
+        current = (item.get_widget_scripts() or {}).get(
+            key
+        ) or widget_binding.script_template(key)
+        cmd, ok = CustomScriptEditDialog.get(cmd=current, item=item)
+        if not (ok and cmd):
+            return
+        for target in self.items:
+            scripts = dict(target.get_widget_scripts() or {})
+            scripts[key] = cmd
+            target.set_widget_scripts(scripts)
+
+    # -- backdrop -------------------------------------------------------
+    def _apply_backdrop_title(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        title = str(self.backdrop_title_field.text())
+        for item in self.items:
+            if item.get_backdrop():
+                item.set_backdrop_title(title)
+        self._repaint_view()
+
+    def _apply_backdrop_radius(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        radius = self._committed(self.backdrop_radius_sb)
+        if radius is None:
+            return
+        for item in self.items:
+            if item.get_backdrop():
+                item.set_corner_radius(radius)
+        self._repaint_view()
 
     # -- controls -------------------------------------------------------
     def _add_selected_controls(self):

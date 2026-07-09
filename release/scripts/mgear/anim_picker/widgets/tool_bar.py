@@ -24,6 +24,13 @@ from mgear.vendor.Qt import QtWidgets
 TOOL_SELECT = "select"
 TOOL_TRANSFORM = "transform"
 
+# Drag-and-drop mime type carrying a widget-type payload from a palette tile to
+# the canvas (the view creates the item at the drop position).
+WIDGET_MIME = "application/x-mgear-anim-picker-item"
+
+# Palette payload for a backdrop container (not a widget_binding type).
+BACKDROP_PAYLOAD = "backdrop"
+
 
 def maya_icon(resource):
     """Return a QIcon for a Maya resource path (e.g. ``:/aselect.png``)."""
@@ -36,6 +43,59 @@ def mgear_icon(name):
         return QtGui.QIcon(pyqt.get_icon(name))
     except Exception:
         return QtGui.QIcon()
+
+
+class PaletteButton(QtWidgets.QToolButton):
+    """A draggable palette tile that creates a picker item/widget on drop.
+
+    Dragging the tile onto the canvas starts a drag carrying the widget-type
+    payload (``WIDGET_MIME``); the view's drop handler creates the item at the
+    drop position. A plain click does nothing (creation is drag-driven).
+    """
+
+    _ICON_SIZE = 22
+
+    def __init__(self, payload, parent=None):
+        super(PaletteButton, self).__init__(parent)
+        self._payload = payload
+        self._press_pos = None
+        self._double_callback = None
+
+    def set_double_callback(self, callback):
+        """Set the callback invoked on a double-click (create at center)."""
+        self._double_callback = callback
+
+    def mouseDoubleClickEvent(self, event):
+        if self._double_callback is not None:
+            self._double_callback()
+        super(PaletteButton, self).mouseDoubleClickEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self._press_pos = event.pos()
+        super(PaletteButton, self).mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        # Start the drag once the cursor has moved past the drag threshold.
+        if (
+            not (event.buttons() & QtCore.Qt.LeftButton)
+            or self._press_pos is None
+        ):
+            super(PaletteButton, self).mouseMoveEvent(event)
+            return
+        moved = (event.pos() - self._press_pos).manhattanLength()
+        if moved < QtWidgets.QApplication.startDragDistance():
+            super(PaletteButton, self).mouseMoveEvent(event)
+            return
+        drag = QtGui.QDrag(self)
+        mime = QtCore.QMimeData()
+        mime.setData(WIDGET_MIME, self._payload.encode("utf-8"))
+        drag.setMimeData(mime)
+        icon = self.icon()
+        if not icon.isNull():
+            drag.setPixmap(icon.pixmap(self._ICON_SIZE, self._ICON_SIZE))
+        drag.exec_(QtCore.Qt.CopyAction)
+        self._press_pos = None
 
 
 class PickerToolBar(QtWidgets.QWidget):
@@ -129,6 +189,79 @@ class PickerToolBar(QtWidgets.QWidget):
         self._style_button(button, label, tooltip, icon)
         button.clicked.connect(callback)
         # Insert before the trailing stretch.
+        self.main_layout.insertWidget(self.main_layout.count() - 1, button)
+        return button
+
+    def add_separator(self):
+        """Add a thin horizontal divider above the trailing stretch."""
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        line.setStyleSheet("color: #4a4a4a;")
+        self.main_layout.insertWidget(self.main_layout.count() - 1, line)
+        return line
+
+    def add_section_label(self, text):
+        """Add a small centered section label above the trailing stretch."""
+        label = QtWidgets.QLabel(text)
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        font = label.font()
+        font.setPointSizeF(max(6.0, font.pointSizeF() - 2.0))
+        label.setFont(font)
+        label.setStyleSheet("color: #9a9a9a;")
+        self.main_layout.insertWidget(self.main_layout.count() - 1, label)
+        return label
+
+    def add_button_grid(self, specs, columns=2):
+        """Add a compact grid of icon command buttons above the stretch.
+
+        Args:
+            specs (list): ``(tooltip, callback, icon)`` per button.
+            columns (int): number of columns in the grid.
+
+        Returns:
+            list: the created QToolButtons.
+        """
+        container = QtWidgets.QWidget()
+        grid = QtWidgets.QGridLayout(container)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(2)
+        buttons = []
+        for index, (tooltip, callback, icon) in enumerate(specs):
+            button = QtWidgets.QToolButton()
+            button.setToolTip(tooltip)
+            button.setAutoRaise(True)
+            button.setFixedSize(QtCore.QSize(26, 26))
+            if icon is not None and not icon.isNull():
+                button.setIcon(icon)
+                button.setIconSize(QtCore.QSize(18, 18))
+            button.clicked.connect(callback)
+            grid.addWidget(button, index // columns, index % columns)
+            buttons.append(button)
+        self.main_layout.insertWidget(self.main_layout.count() - 1, container)
+        return buttons
+
+    def add_palette_item(
+        self, label, tooltip, payload, icon=None, double_callback=None
+    ):
+        """Add a draggable palette tile that creates ``payload`` on drop.
+
+        Args:
+            label (str): short tile label (used when ``icon`` is null).
+            tooltip (str): hover description.
+            payload (str): widget-type string carried by the drag.
+            icon (QtGui.QIcon, optional): icon to show.
+            double_callback (callable, optional): invoked on a double-click
+                (creates the item at the canvas center as an alternative to
+                dragging).
+
+        Returns:
+            PaletteButton: the created draggable tile.
+        """
+        button = PaletteButton(payload)
+        self._style_button(button, label, tooltip, icon)
+        if double_callback is not None:
+            button.set_double_callback(double_callback)
         self.main_layout.insertWidget(self.main_layout.count() - 1, button)
         return button
 

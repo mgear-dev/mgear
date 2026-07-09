@@ -14,6 +14,7 @@ import mgear.pymaya as pm
 
 import mgear
 from mgear.core import attribute
+from mgear.core import string
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
@@ -31,7 +32,19 @@ from mgear.anim_picker.widgets import item_manipulator
 from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
+from mgear.anim_picker.widgets import silhouette
+from mgear.anim_picker.widgets import widget_binding
 from mgear.anim_picker.handlers import __EDIT_MODE__
+from mgear.anim_picker.handlers import maya_handlers
+
+
+def _united_scene_rect(items):
+    """Return the union of ``items`` scene bounding rects (None when empty)."""
+    union = None
+    for item in items:
+        rect = item.sceneBoundingRect()
+        union = rect if union is None else union.united(rect)
+    return union
 
 
 class _LoadedBackground(object):
@@ -85,6 +98,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Disable scroll bars
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
+        # Accept drops from the left tool-strip palette (drag an item / widget
+        # tile onto the canvas to create it at the drop position, edit mode).
+        self.setAcceptDrops(True)
 
         # Set background color
         brush = QtGui.QBrush(QtGui.QColor(70, 70, 70, 255))
@@ -151,9 +168,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             and __EDIT_MODE__.get()
         ):
             transform = self.viewportTransform()
-            picker_at = self.scene().picker_at(
-                self.mapToScene(event.pos()), transform
-            )
+            scene_pos = self.mapToScene(event.pos())
+            picker_at = self.scene().picker_at(scene_pos, transform)
+            picker_at = self._resolve_backdrop_pick(picker_at, scene_pos)
             if picker_at and self._select_on_press(picker_at, event):
                 self.modified_select = True
         QtWidgets.QGraphicsView.mousePressEvent(self, event)
@@ -163,7 +180,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             transform = self.viewportTransform()
             scene_pos = self.mapToScene(event.pos())
             # Clear selection if no picker item below mouse
-            picker_at = self.scene().picker_at(scene_pos, transform) or []
+            picker_at = self.scene().picker_at(scene_pos, transform)
+            picker_at = self._resolve_backdrop_pick(picker_at, scene_pos) or []
             if picker_at:
                 if __EDIT_MODE__.get():
                     self.item_selected = True
@@ -706,6 +724,156 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.scene().select_picker_items([ctrl])
         return ctrl
 
+    def add_widget_item(self, widget_type, mouse_pos=None):
+        """Create a picker item of ``widget_type`` at ``mouse_pos``.
+
+        Used by the left-strip drag-and-drop palette. An interactive widget
+        (checkbox / slider / slider2d) is created with a type-appropriate
+        default shape, a default binding range, and seeded "just print"
+        scripts; a plain button is created with the generic item shape.
+
+        Args:
+            widget_type (str): a value from ``widget_binding.WIDGET_TYPES``.
+            mouse_pos (QPointF, optional): scene position for the new item.
+
+        Returns:
+            PickerItem: the created (and selected) item.
+        """
+        if widget_type == tool_bar.BACKDROP_PAYLOAD:
+            return self.add_backdrop_item(mouse_pos)
+        ctrl = self.add_picker_item()
+        if mouse_pos is not None:
+            ctrl.setPos(mouse_pos)
+        if widget_binding.is_interactive(widget_type):
+            # set_widget_type seeds the default binding + scripts, so only the
+            # type and the type-appropriate shape are supplied here.
+            data = {"widget": widget_type}
+            handles = widget_binding.default_handles(widget_type)
+            if handles:
+                data["handles"] = handles
+            ctrl.set_data(data)
+        self.scene().select_picker_items([ctrl])
+        return ctrl
+
+    def add_backdrop_item(self, mouse_pos=None, fit_items=None):
+        """Create a backdrop container, sent behind the picker items.
+
+        Args:
+            mouse_pos (QPointF, optional): scene position for the backdrop
+                (ignored when ``fit_items`` is given).
+            fit_items (list, optional): items to enclose; the backdrop is sized
+                and placed to wrap them (with padding). When omitted a small
+                default backdrop is created so it does not swallow items by
+                accident.
+
+        Returns:
+            PickerItem: the created (and selected) backdrop.
+        """
+        ctrl = self.add_picker_item()
+        data = {
+            "backdrop": True,
+            "title": "Backdrop",
+            "corner_radius": 8.0,
+            "color": (70, 80, 110, 80),
+        }
+        if fit_items:
+            union = _united_scene_rect(fit_items)
+            pad = 24.0
+            half_w = union.width() / 2.0 + pad
+            half_h = union.height() / 2.0 + pad
+            data["handles"] = [
+                [-half_w, -half_h],
+                [half_w, -half_h],
+                [half_w, half_h],
+                [-half_w, half_h],
+            ]
+            data["position"] = [union.center().x(), union.center().y()]
+        else:
+            if mouse_pos is not None:
+                ctrl.setPos(mouse_pos)
+            # A modest default so a dropped backdrop does not enclose nearby
+            # items unintentionally.
+            data["handles"] = [[-70, -45], [70, -45], [70, 45], [-70, 45]]
+        ctrl.set_data(data)
+        # Backdrops sit behind the picker items so the buttons stay clickable.
+        # Nested-backdrop *selection* is resolved geometrically in
+        # ``_resolve_backdrop_pick`` (smallest under the cursor wins), so no
+        # area-based z-restack is needed here.
+        ctrl.move_to_back()
+        self.scene().select_picker_items([ctrl])
+        return ctrl
+
+    def _resolve_backdrop_pick(self, picker_at, scene_pos):
+        """Prefer the smallest backdrop under the cursor (innermost nested one).
+
+        A normal button drawn over the backdrops wins as usual (``picker_at``
+        is returned unchanged). But when the pick is a backdrop, the
+        smallest-area backdrop whose rectangle contains the point is chosen, so
+        an inner nested backdrop is always selectable regardless of z-order.
+
+        Args:
+            picker_at (PickerItem): the item the scene hit-test returned.
+            scene_pos (QPointF): the click position in scene coordinates.
+
+        Returns:
+            PickerItem: the resolved item (or the input when not a backdrop).
+        """
+        if picker_at is None or not getattr(picker_at, "backdrop", False):
+            return picker_at
+        best = picker_at
+        best_area = self._backdrop_area(best)
+        for item in self.get_picker_items():
+            if item is best or not item.backdrop:
+                continue
+            rect = item.sceneBoundingRect()
+            if rect.contains(scene_pos):
+                area = rect.width() * rect.height()
+                if area < best_area:
+                    best = item
+                    best_area = area
+        return best
+
+    @staticmethod
+    def _backdrop_area(item):
+        """Return an item's scene bounding-box area."""
+        rect = item.sceneBoundingRect()
+        return rect.width() * rect.height()
+
+    def _is_palette_drag(self, event):
+        """Return True when ``event`` is a palette-tile drag we accept."""
+        return __EDIT_MODE__.get() and event.mimeData().hasFormat(
+            tool_bar.WIDGET_MIME
+        )
+
+    def dragEnterEvent(self, event):
+        """Accept a palette drag (widget/item tile) in edit mode."""
+        if self._is_palette_drag(event):
+            event.acceptProposedAction()
+        else:
+            QtWidgets.QGraphicsView.dragEnterEvent(self, event)
+
+    def dragMoveEvent(self, event):
+        """Keep accepting the palette drag while it hovers the canvas."""
+        if self._is_palette_drag(event):
+            event.acceptProposedAction()
+        else:
+            QtWidgets.QGraphicsView.dragMoveEvent(self, event)
+
+    def dropEvent(self, event):
+        """Create the dropped widget/item at the drop position (edit mode)."""
+        if not self._is_palette_drag(event):
+            QtWidgets.QGraphicsView.dropEvent(self, event)
+            return
+        mime = event.mimeData()
+        widget_type = bytes(mime.data(tool_bar.WIDGET_MIME)).decode("utf-8")
+        # Qt6 (Maya 2025+) drops pos() in favor of position(); support both.
+        try:
+            view_pos = event.position().toPoint()
+        except AttributeError:
+            view_pos = event.pos()
+        self.add_widget_item(widget_type, self.mapToScene(view_pos))
+        event.acceptProposedAction()
+
     def add_picker_item_selected(self, mouse_pos=None):
         """Add new PickerItem to current view"""
         ctrl = self.add_picker_item()
@@ -748,6 +916,130 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             created_ctrls.append(ctrl)
 
         return created_ctrls
+
+    def add_picker_item_trace(self, plane="front", mouse_pos=None):
+        """Create one silhouette button per selected control (trace tool).
+
+        For each selected control the world-space shape points are projected
+        onto ``plane`` (front / side / top), reduced to a 2D convex hull, and
+        scaled -- with a single shared factor so the traced set keeps the rig's
+        proportions (auto-fit) -- into a picker button placed at the control's
+        projected position and colored from the control.
+
+        Args:
+            plane (str): projection plane (``silhouette.PLANE_*``).
+            mouse_pos (QPointF, optional): canvas anchor for the traced set.
+
+        Returns:
+            list: the created PickerItem instances.
+        """
+        # Target canvas span (pixels) the whole traced set is auto-fit into.
+        target_span = 400.0
+
+        selection = cmds.ls(sl=True) or []
+        if not selection:
+            return []
+
+        # First pass: extract + project + hull each control, and collect the
+        # global bounds so one scale keeps the set's proportions.
+        traced = []
+        all_points = []
+        for ctrl in selection:
+            points_3d = maya_handlers.get_shape_points(ctrl)
+            if not points_3d:
+                continue
+            hull = silhouette.convex_hull_2d(
+                silhouette.project_to_plane(points_3d, plane)
+            )
+            if not hull:
+                continue
+            traced.append((ctrl, hull))
+            all_points.extend(hull)
+
+        if not traced:
+            return []
+
+        scale = silhouette.fit_scale(
+            silhouette.bounding_box(all_points), target_span
+        )
+        centers = [silhouette.centroid(hull) for _ctrl, hull in traced]
+
+        # Second pass: lay each button out at its scaled projected center
+        # (relative arrangement); the group is centered on the target below.
+        created = []
+        item_by_ctrl = {}
+        for (ctrl, hull), (center_x, center_y) in zip(traced, centers):
+            handles = [
+                [(hx - center_x) * scale, (hy - center_y) * scale]
+                for hx, hy in hull
+            ]
+            # A point / edge-on projection collapses to < 3 hull points; use a
+            # small box so the polygon shape stays valid and visible.
+            if len(handles) < 3:
+                handles = [[-8, -8], [8, -8], [8, 8], [-8, 8]]
+            item = self.add_picker_item()
+            item.set_data(
+                {
+                    "controls": [ctrl],
+                    "handles": handles,
+                    "position": [center_x * scale, center_y * scale],
+                }
+            )
+            item.set_color(color=self.get_color_picker_override(item, ctrl))
+            item.set_selected_state(True)
+            created.append(item)
+            item_by_ctrl[ctrl] = item
+
+        # Center the whole traced group on the target by its real bounding box
+        # (accounts for the button shapes, so it lands visually centered
+        # regardless of asymmetric silhouettes).
+        target = mouse_pos if mouse_pos is not None else self.get_center_pos()
+        self._center_items_on(created, target)
+        self._link_traced_mirror_pairs(item_by_ctrl)
+        return created
+
+    def _center_items_on(self, items, target):
+        """Shift ``items`` as a group so their union bbox center is ``target``.
+
+        Args:
+            items (list): PickerItems to move together.
+            target (QPointF): scene point the group's center should land on.
+        """
+        union = _united_scene_rect(items)
+        if union is None:
+            return
+        dx = target.x() - union.center().x()
+        dy = target.y() - union.center().y()
+        for item in items:
+            item.setPos(item.x() + dx, item.y() + dy)
+
+    def _link_traced_mirror_pairs(self, item_by_ctrl):
+        """Link traced L/R control pairs as mirror pairs.
+
+        Detects mirror partners by the ``_L`` / ``_R`` naming convention (the
+        same ``convertRLName`` logic ``pickWalk`` uses); when both sides of a
+        pair were traced in this run, their buttons are linked so editing one
+        mirrors to the other.
+
+        Args:
+            item_by_ctrl (dict): ``{control_name: PickerItem}`` traced this run.
+        """
+        linked = set()
+        for ctrl, item in item_by_ctrl.items():
+            if item in linked:
+                continue
+            try:
+                mirror_name = string.convertRLName(ctrl)
+            except Exception:
+                mirror_name = None
+            if not mirror_name or mirror_name == ctrl:
+                continue
+            partner = item_by_ctrl.get(mirror_name)
+            if partner is None or partner is item or partner in linked:
+                continue
+            self.link_mirror_pair(item, partner)
+            linked.add(item)
+            linked.add(partner)
 
     def copy_event(self):
         """reset the clipboard and populate the list with picker data for paste"""

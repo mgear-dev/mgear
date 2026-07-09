@@ -29,6 +29,8 @@ from mgear.anim_picker.tab_widget import ContextMenuTabWidget
 from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import edit_panel
 from mgear.anim_picker.widgets import tool_bar
+from mgear.anim_picker.widgets import widget_binding
+from mgear.anim_picker.widgets import alignment
 from mgear.anim_picker.widgets import color_palette
 from mgear.anim_picker.widgets import tiled_view
 from mgear.anim_picker.widgets import overlay_widgets
@@ -437,6 +439,82 @@ class MainDockWindow(QtWidgets.QWidget):
                 tool_bar.mgear_icon("mgear_map-pin"),
             ),
         ]
+        # Trace: one silhouette button per selected Maya control. Not gated on
+        # a picker selection (it reads the Maya selection); the drop-down picks
+        # the projection plane, a plain click uses Front.
+        trace_btn = self.left_toolbar.add_command(
+            "Trc",
+            "Trace a silhouette button per selected control (Front)",
+            partial(self._cmd_trace, "front"),
+            tool_bar.mgear_icon("mgear_camera"),
+        )
+        trace_menu = QtWidgets.QMenu(trace_btn)
+        for label, plane in (("Front", "front"), ("Side", "side"),
+                             ("Top", "top")):
+            trace_menu.addAction(label).triggered.connect(
+                partial(self._cmd_trace, plane)
+            )
+        trace_btn.setMenu(trace_menu)
+        trace_btn.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
+
+        # Align / distribute the current multi-selection. Two columns: the left
+        # column is horizontal ops (left / H-center / right / distribute-H),
+        # the right column vertical (top / V-center / bottom / distribute-V).
+        self.left_toolbar.add_separator()
+        self.left_toolbar.add_section_label("Align")
+        align_specs = (
+            ("mgear_align_left", "Align left edges",
+             partial(self._align_selected, "left")),
+            ("mgear_align_top", "Align top edges",
+             partial(self._align_selected, "top")),
+            ("mgear_align_hcenter", "Align horizontal centers",
+             partial(self._align_selected, "hcenter")),
+            ("mgear_align_vcenter", "Align vertical centers",
+             partial(self._align_selected, "vcenter")),
+            ("mgear_align_right", "Align right edges",
+             partial(self._align_selected, "right")),
+            ("mgear_align_bottom", "Align bottom edges",
+             partial(self._align_selected, "bottom")),
+            ("mgear_distribute_h", "Distribute horizontally (3+ to redistribute)",
+             partial(self._distribute_selected, "h")),
+            ("mgear_distribute_v", "Distribute vertically (3+ to redistribute)",
+             partial(self._distribute_selected, "v")),
+        )
+        self.left_toolbar.add_button_grid(
+            [
+                (tooltip, callback, tool_bar.mgear_icon(icon))
+                for icon, tooltip, callback in align_specs
+            ],
+            columns=2,
+        )
+
+        # Drag-to-canvas creation palette: drag a tile onto the canvas to create
+        # that item / widget at the drop position (the primary way to add).
+        self.left_toolbar.add_separator()
+        self.left_toolbar.add_section_label("Drag to add")
+        # Each tile drops to create at the drop point, or double-click to
+        # create at the canvas center (a backdrop double-click wraps the
+        # current selection).
+        palette_specs = (
+            ("Btn", "Drag to add a button (double-click = center)",
+             widget_binding.WIDGET_BUTTON, "mgear_widget_button"),
+            ("Chk", "Drag to add a checkbox (double-click = center)",
+             widget_binding.WIDGET_CHECKBOX, "mgear_widget_checkbox"),
+            ("Sld", "Drag to add a slider (double-click = center)",
+             widget_binding.WIDGET_SLIDER, "mgear_widget_slider"),
+            ("2D", "Drag to add a 2D slider (double-click = center)",
+             widget_binding.WIDGET_SLIDER2D, "mgear_widget_slider2d"),
+            ("Bkd", "Drag to add a backdrop (double-click = wrap selection)",
+             tool_bar.BACKDROP_PAYLOAD, "mgear_widget_backdrop"),
+        )
+        for label, tooltip, payload, icon in palette_specs:
+            self.left_toolbar.add_palette_item(
+                label,
+                tooltip,
+                payload,
+                tool_bar.mgear_icon(icon),
+                double_callback=partial(self._palette_create, payload),
+            )
         canvas_row = QtWidgets.QHBoxLayout()
         canvas_row.setContentsMargins(0, 0, 0, 0)
         canvas_row.setSpacing(0)
@@ -646,6 +724,74 @@ class MainDockWindow(QtWidgets.QWidget):
         for item in items:
             view.set_item_pinned(item, target)
         view.viewport().update()
+        self._after_command()
+
+    def _palette_create(self, payload):
+        """Create a palette item at the canvas center (double-click path).
+
+        A backdrop wraps the current selection when one exists (auto-sized),
+        otherwise it (and every other tile) is created at the viewport center.
+
+        Args:
+            payload (str): the palette payload (widget type / backdrop).
+        """
+        view = self._current_view()
+        if view is None:
+            return
+        if payload == tool_bar.BACKDROP_PAYLOAD:
+            view.add_backdrop_item(
+                mouse_pos=view.get_center_pos(),
+                fit_items=self._selected_items() or None,
+            )
+        else:
+            view.add_widget_item(payload, view.get_center_pos())
+        self._after_command()
+
+    def _item_scene_rect(self, item):
+        """Return an item's scene bounding box as ``(x0, y0, x1, y1)``."""
+        rect = item.sceneBoundingRect()
+        return (rect.left(), rect.top(), rect.right(), rect.bottom())
+
+    def _apply_item_offsets(self, min_count, offsets_fn):
+        """Move the current selection by per-item ``(dx, dy)`` offsets.
+
+        Args:
+            min_count (int): minimum selection size to act on.
+            offsets_fn (callable): ``rects -> [(dx, dy), ...]``.
+        """
+        items = self._selected_items()
+        if len(items) < min_count:
+            return
+        rects = [self._item_scene_rect(item) for item in items]
+        for item, (dx, dy) in zip(items, offsets_fn(rects)):
+            item.setPos(item.x() + dx, item.y() + dy)
+        self._after_command()
+
+    def _align_selected(self, mode):
+        """Align the selected items by ``mode`` (needs 2+)."""
+        self._apply_item_offsets(
+            2, partial(alignment.align_offsets, mode=mode)
+        )
+
+    def _distribute_selected(self, axis):
+        """Distribute the selected items along ``axis`` by bounding box (2+).
+
+        Spreads items with even edge gaps when they have room, and fans a
+        stack of overlapping items into a row / column.
+        """
+        self._apply_item_offsets(
+            2, partial(alignment.distribute_offsets, axis=axis)
+        )
+
+    def _cmd_trace(self, plane):
+        """Trace a silhouette button per selected control onto ``plane``.
+
+        Args:
+            plane (str): projection plane ("front" / "side" / "top").
+        """
+        view = self._current_view()
+        if view is not None:
+            view.add_picker_item_trace(plane=plane)
         self._after_command()
 
     def apply_palette_color(self, side, level):

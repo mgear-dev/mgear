@@ -22,6 +22,8 @@ from mgear.anim_picker.widgets.graphics import DefaultPolygon
 from mgear.anim_picker.widgets.graphics import PointHandle
 from mgear.anim_picker.widgets.graphics import Polygon
 from mgear.anim_picker.widgets.graphics import GraphicText
+from mgear.anim_picker.widgets.graphics import WidgetGraphic
+from mgear.anim_picker.widgets.graphics import BackdropGraphic
 from mgear.anim_picker.widgets.dialogs.item_options import ItemOptionsWindow
 from mgear.anim_picker.widgets.dialogs.search_replace_dialog import (
     SearchAndReplaceDialog,
@@ -30,10 +32,12 @@ from mgear.anim_picker.widgets.dialogs.copy_paste_dialog import DataCopyDialog
 from mgear.anim_picker.widgets.item_model import PickerItemData
 from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
+from mgear.anim_picker.widgets import widget_binding
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
 from mgear.anim_picker.handlers import python_handlers
 from mgear.anim_picker.handlers import maya_handlers
+from mgear.anim_picker.handlers import widget_handlers
 
 
 def select_picker_controls(picker_items, event, modifiers=None):
@@ -89,6 +93,14 @@ class PickerItem(DefaultPolygon):
         # Add polygon
         self.polygon = Polygon(parent=self)
 
+        # Backdrop container body (rounded / straight fill + title); replaces
+        # the plain polygon when the item is a backdrop, hidden otherwise.
+        self.backdrop_graphic = BackdropGraphic(parent=self)
+
+        # Interactive-widget affordance (checkbox / slider); drawn above the
+        # polygon and below the text, hidden unless the item is a widget.
+        self.widget_graphic = WidgetGraphic(parent=self)
+
         # Add text
         self.text = GraphicText(parent=self)
 
@@ -120,6 +132,24 @@ class PickerItem(DefaultPolygon):
         self.anchor = overlay.DEFAULT_ANCHOR
         self.offset = list(overlay.DEFAULT_OFFSET)
         self._pin_drag_delta = (0.0, 0.0)
+        # Screen scale baked into the pin transform so a pinned item keeps the
+        # apparent size it had when pinned (rather than snapping to 1:1, which
+        # looks tiny when the canvas was zoomed in). Captured at pin time and
+        # persisted so a reload restores the size.
+        self.pin_scale = 1.0
+
+        # Interactive widget (optional): a non-button ``widget_type`` makes the
+        # item a checkbox / slider bound to a Maya attribute (``binding``) and/
+        # or per-state ``widget_scripts``. ``_widget_dragging`` is set while a
+        # slider drag is live so the drag is grouped into one undo chunk.
+        self.widget_type = widget_binding.WIDGET_BUTTON
+        self.binding = {}
+        self.widget_scripts = {}
+        self._widget_dragging = False
+
+        # Backdrop container (optional): a large rectangle behind the picker
+        # items that moves everything geometrically inside it when dragged.
+        self.backdrop = False
 
     def shape(self):
         path = QtGui.QPainterPath()
@@ -259,6 +289,10 @@ class PickerItem(DefaultPolygon):
 
     def mouseMoveEvent(self, event):
         gfx_event = event
+        # A live slider drag (animation mode) updates the bound value.
+        if self._widget_dragging:
+            self._widget_mouse_drag(event)
+            return
         if event.buttons() == QtCore.Qt.LeftButton and __EDIT_MODE__.get():
             if self.currently_selected:
                 [
@@ -290,6 +324,17 @@ class PickerItem(DefaultPolygon):
                     item.get_delta_from_point(event.scenePos())
                     for item in self.currently_selected
                 ]
+            # Backdrop move-together: dragging a backdrop (the pressed item or
+            # any selected one) also drags every item whose center lies within
+            # its rectangle, so items visually inside it -- including a nested
+            # backdrop and its contents -- move as a group.
+            movers = [self] + self.currently_selected
+            for backdrop in [item for item in movers if item.backdrop]:
+                for item in backdrop.contained_items():
+                    if item is self or item in self.currently_selected:
+                        continue
+                    self.currently_selected.append(item)
+                    item.get_delta_from_point(event.scenePos())
             # Prime the offset drag for any pinned item in the drag set (the
             # view records a per-item grab delta so the anchor tracks the
             # cursor without jumping to the item's origin).
@@ -302,6 +347,14 @@ class PickerItem(DefaultPolygon):
 
         # Run selection on left mouse button event
         if event.buttons() == QtCore.Qt.LeftButton:
+            # Interactive widget (checkbox / slider) handles its own press and
+            # keeps the mouse grab for a drag; it is not a control selection.
+            # Accepting the press makes the item the mouse grabber so the
+            # slider drag receives the subsequent move / release events.
+            if self.is_widget():
+                event.accept()
+                self._widget_mouse_press(event)
+                return
             # Run custom script action
             if self.get_custom_action_mode():
                 self.mouse_press_custom_action(event)
@@ -313,6 +366,13 @@ class PickerItem(DefaultPolygon):
         maya_window = pyqt.maya_main_window()
         if maya_window:
             maya_window.setFocus()
+
+    def mouseReleaseEvent(self, event):
+        """Event called on mouse release (ends a live slider drag)."""
+        if self._widget_dragging:
+            self._widget_mouse_release(event)
+            return
+        super().mouseReleaseEvent(event)
 
     def mouse_press_select_event(self, event, modifiers=None):
         """
@@ -549,6 +609,13 @@ class PickerItem(DefaultPolygon):
         env["__SELF__"] = self
         env["__INIT__"] = False
 
+        # Widget state vars (populated by widget interactions before exec;
+        # present as defaults so a script can always reference them).
+        env["__STATE__"] = None
+        env["__VALUE__"] = None
+        env["__X__"] = None
+        env["__Y__"] = None
+
         return env
 
     def _get_custom_action_menus(self):
@@ -658,6 +725,22 @@ class PickerItem(DefaultPolygon):
     def set_text_size(self, size):
         self.text.set_size(size)
 
+    def get_text_align(self):
+        """Return the text placement (``center`` / top / bottom / left / right)."""
+        return self.text.align
+
+    def set_text_align(self, align):
+        """Set the text placement, keeping the current offset."""
+        self.text.set_alignment(align, self.text.offset)
+
+    def get_text_offset(self):
+        """Return the text gap (pixels) from the aligned edge."""
+        return self.text.offset
+
+    def set_text_offset(self, offset):
+        """Set the text gap (pixels), keeping the current alignment."""
+        self.text.set_alignment(self.text.align, offset)
+
     # =========================================================================
     # Scene Placement ---
     def move_to_front(self):
@@ -722,32 +805,61 @@ class PickerItem(DefaultPolygon):
         """Return True when the item is pinned to the viewport."""
         return self.pinned
 
-    def set_pinned(self, state):
+    def set_pinned(self, state, capture_scale=True):
         """Pin / unpin the item to the viewport.
 
         A pinned item ignores the view transform so it draws at a constant
-        screen size (like the point handles), and a compensating vertical flip
-        is applied so its shape / text stay upright despite the Y-flipped view.
-        The view owns the item's *position* (see ``_update_pinned_items``); a
-        pinned item is not free-dragged in scene space, so it is made
-        non-movable while pinned.
+        screen size (like the point handles). To avoid the item snapping to its
+        tiny 1:1 size when pinned (jarring when the canvas is zoomed in), the
+        current view scale is baked into the transform so it keeps its apparent
+        size; a compensating vertical flip keeps it upright despite the
+        Y-flipped view. The view owns the item's *position* (see
+        ``_update_pinned_items``); a pinned item is repositioned by an
+        offset-drag rather than a free scene move, so it is made non-movable.
 
         Args:
             state (bool): pin when True, unpin when False.
+            capture_scale (bool, optional): when pinning, sample the current
+                view scale into ``pin_scale``; False keeps the existing value
+                (used on load so a saved size is restored, not re-sampled).
         """
         self.pinned = bool(state)
         self.setFlag(
             QtWidgets.QGraphicsItem.ItemIgnoresTransformations, self.pinned
         )
-        # Counter the view's scale(1, -1): with the view transform ignored the
-        # item would otherwise render vertically mirrored.
         if self.pinned:
-            self.setTransform(QtGui.QTransform().scale(1, -1))
+            if capture_scale:
+                self.pin_scale = self._current_view_scale()
+            # scale(s, -s): s preserves the apparent size, -s counters the
+            # view's scale(1, -1) so the item is not vertically mirrored.
+            self.setTransform(
+                QtGui.QTransform().scale(self.pin_scale, -self.pin_scale)
+            )
         else:
             self.setTransform(QtGui.QTransform())
         if __EDIT_MODE__.get():
             self.setFlag(
                 QtWidgets.QGraphicsItem.ItemIsMovable, not self.pinned
+            )
+
+    def _current_view_scale(self):
+        """Return the view's current uniform scale (1.0 when unavailable)."""
+        view = self.parent()
+        if view is None or not hasattr(view, "viewportTransform"):
+            return 1.0
+        scale = abs(view.viewportTransform().m11())
+        return scale or 1.0
+
+    def get_pin_scale(self):
+        """Return the screen scale baked into the pin transform."""
+        return self.pin_scale
+
+    def set_pin_scale(self, scale):
+        """Set the pin transform scale (re-applies when currently pinned)."""
+        self.pin_scale = scale or 1.0
+        if self.pinned:
+            self.setTransform(
+                QtGui.QTransform().scale(self.pin_scale, -self.pin_scale)
             )
 
     def get_anchor(self):
@@ -765,6 +877,284 @@ class PickerItem(DefaultPolygon):
     def set_offset(self, offset):
         """Set the item's inward ``[dx, dy]`` pixel offset."""
         self.offset = list(offset)
+
+    # =========================================================================
+    # Interactive widget (checkbox / slider) ---
+    def is_widget(self):
+        """Return True when the item is an interactive (non-button) widget."""
+        return widget_binding.is_interactive(self.widget_type)
+
+    def get_widget_type(self):
+        """Return the item's widget type (button / checkbox / slider / ...)."""
+        return self.widget_type
+
+    def set_widget_type(self, widget_type):
+        """Set the widget type and toggle the affordance visibility.
+
+        Args:
+            widget_type (str): a value from ``widget_binding.WIDGET_TYPES``.
+        """
+        self.widget_type = widget_type or widget_binding.WIDGET_BUTTON
+        interactive = self.is_widget()
+        self.widget_graphic.setVisible(interactive)
+        # Give a freshly-typed widget a sane default range to drive, and seed
+        # "just print" scripts so it works out of the box and logs its value.
+        if interactive and not self.binding:
+            self.binding = widget_binding.default_binding()
+        if interactive and not self.widget_scripts:
+            self.widget_scripts = widget_binding.default_scripts(
+                self.widget_type
+            )
+        self.refresh_widget_state()
+        self.update()
+
+    def get_binding(self):
+        """Return the widget's binding dict (attribute(s) + range)."""
+        return self.binding
+
+    def set_binding(self, binding):
+        """Set the widget's binding dict and refresh the displayed value."""
+        self.binding = dict(binding) if binding else {}
+        self.refresh_widget_state()
+
+    def get_widget_scripts(self):
+        """Return the widget's per-state script dict."""
+        return self.widget_scripts
+
+    def set_widget_scripts(self, scripts):
+        """Set the widget's per-state script dict."""
+        self.widget_scripts = dict(scripts) if scripts else {}
+
+    def _widget_is_horizontal(self):
+        """Return True when a 1D slider is horizontal (its default)."""
+        orientation = (self.binding or {}).get(
+            "orientation", widget_binding.ORIENT_HORIZONTAL
+        )
+        return orientation == widget_binding.ORIENT_HORIZONTAL
+
+    def _widget_norm_from_pos(self, pos):
+        """Return the normalized value(s) for a cursor position.
+
+        Maps ``pos`` (item-local) within the polygon's bounding rect to 0..1.
+        Higher screen positions map to larger values (the view is Y-flipped).
+
+        Args:
+            pos (QPointF): cursor position in item-local coordinates.
+
+        Returns:
+            float or tuple: 0..1 for a 1D slider, ``(x, y)`` for a 2D slider.
+        """
+        rect = self.polygon.shape().boundingRect()
+        x0, x1, y0, y1 = widget_binding.track_bounds(
+            rect.left(), rect.right(), rect.top(), rect.bottom()
+        )
+        nx = 0.0 if x1 == x0 else (pos.x() - x0) / (x1 - x0)
+        ny = 0.0 if y1 == y0 else (pos.y() - y0) / (y1 - y0)
+        nx = widget_binding.clamp(nx, 0.0, 1.0)
+        ny = widget_binding.clamp(ny, 0.0, 1.0)
+        if self.widget_type == widget_binding.WIDGET_SLIDER2D:
+            return (nx, ny)
+        return nx if self._widget_is_horizontal() else ny
+
+    def _widget_mouse_press(self, event):
+        """Handle a widget press in animation mode."""
+        if self.widget_type == widget_binding.WIDGET_CHECKBOX:
+            self._widget_toggle()
+            return
+        # Slider: begin a single-undo drag and set the value from the press.
+        self._widget_dragging = True
+        cmds.undoInfo(openChunk=True)
+        self._widget_mouse_drag(event)
+
+    def _widget_mouse_drag(self, event):
+        """Apply the value at the current cursor position during a drag."""
+        self._apply_widget_value(self._widget_norm_from_pos(event.pos()))
+
+    def _widget_mouse_release(self, event):
+        """End a slider drag (optionally recentering a 2D slider)."""
+        if self.widget_type == widget_binding.WIDGET_SLIDER2D and (
+            self.binding or {}
+        ).get("recenter"):
+            self._apply_widget_value((0.5, 0.5))
+        self._widget_dragging = False
+        cmds.undoInfo(closeChunk=True)
+
+    def _run_widget_script(self, key, extra_env):
+        """Run the widget's script for ``key`` with extra exec-env vars.
+
+        Args:
+            key (str): script key (``on`` / ``off`` / ``value`` / ``xy``).
+            extra_env (dict): widget-state vars merged into the exec env.
+        """
+        script = (self.widget_scripts or {}).get(key)
+        if not script:
+            return
+        env = self.get_exec_env()
+        env.update(extra_env)
+        python_handlers.safe_code_exec(script, env=env)
+
+    def _widget_toggle(self):
+        """Toggle the checkbox: flip the bound bool attr and/or run a script."""
+        binding = self.binding or {}
+        attr = widget_handlers.resolve_attr(
+            binding.get("attr"), self.get_namespace()
+        )
+        # One undo for the attribute flip + its script.
+        with widget_handlers.undo_chunk():
+            if attr:
+                new_state = widget_handlers.toggle_attr(attr)
+                if new_state is not None:
+                    self.widget_graphic.checked = new_state
+            else:
+                # Script-only checkbox: flip the displayed state itself.
+                self.widget_graphic.checked = not self.widget_graphic.checked
+            state = self.widget_graphic.checked
+            self._run_widget_script(
+                "on" if state else "off", {"__STATE__": state}
+            )
+        self.widget_graphic.update()
+
+    def _apply_widget_value(self, norm):
+        """Write a normalized slider value to the bound attribute(s)/script.
+
+        Args:
+            norm (float or tuple): 0..1 for a 1D slider, ``(x, y)`` for 2D.
+        """
+        binding = self.binding or {}
+        namespace = self.get_namespace()
+        if self.widget_type == widget_binding.WIDGET_SLIDER2D:
+            nx, ny = norm
+            vx = widget_binding.map_value(
+                nx, binding.get("min_x", -1.0), binding.get("max_x", 1.0)
+            )
+            vy = widget_binding.map_value(
+                ny, binding.get("min_y", -1.0), binding.get("max_y", 1.0)
+            )
+            self.widget_graphic.value_xy = (nx, ny)
+            attr_x = widget_handlers.resolve_attr(
+                binding.get("attr_x"), namespace
+            )
+            attr_y = widget_handlers.resolve_attr(
+                binding.get("attr_y"), namespace
+            )
+            if attr_x:
+                widget_handlers.write_attr(attr_x, vx)
+            if attr_y:
+                widget_handlers.write_attr(attr_y, vy)
+            self._run_widget_script("xy", {"__X__": vx, "__Y__": vy})
+        else:
+            value = widget_binding.map_value(
+                norm, binding.get("min", 0.0), binding.get("max", 1.0)
+            )
+            self.widget_graphic.value = norm
+            attr = widget_handlers.resolve_attr(binding.get("attr"), namespace)
+            if attr:
+                widget_handlers.write_attr(attr, value)
+            self._run_widget_script("value", {"__VALUE__": value})
+        self.widget_graphic.update()
+
+    def refresh_widget_state(self):
+        """Refresh the widget's displayed value from its bound attribute(s).
+
+        Called on load and on the selection-change refresh so the widget
+        reflects the rig. Reads only, never writes, and is safe when the target
+        attribute is missing (the current / default display value is kept).
+        """
+        if not self.is_widget():
+            return
+        binding = self.binding or {}
+        namespace = self.get_namespace()
+        if self.widget_type == widget_binding.WIDGET_CHECKBOX:
+            attr = widget_handlers.resolve_attr(binding.get("attr"), namespace)
+            value = widget_handlers.read_attr(attr) if attr else None
+            if value is not None:
+                self.widget_graphic.checked = bool(value)
+        elif self.widget_type == widget_binding.WIDGET_SLIDER:
+            attr = widget_handlers.resolve_attr(binding.get("attr"), namespace)
+            value = widget_handlers.read_attr(attr) if attr else None
+            if value is not None:
+                self.widget_graphic.value = widget_binding.normalize(
+                    value, binding.get("min", 0.0), binding.get("max", 1.0)
+                )
+        elif self.widget_type == widget_binding.WIDGET_SLIDER2D:
+            attr_x = widget_handlers.resolve_attr(
+                binding.get("attr_x"), namespace
+            )
+            attr_y = widget_handlers.resolve_attr(
+                binding.get("attr_y"), namespace
+            )
+            value_x = widget_handlers.read_attr(attr_x) if attr_x else None
+            value_y = widget_handlers.read_attr(attr_y) if attr_y else None
+            cur_x, cur_y = self.widget_graphic.value_xy
+            if value_x is not None:
+                cur_x = widget_binding.normalize(
+                    value_x,
+                    binding.get("min_x", -1.0),
+                    binding.get("max_x", 1.0),
+                )
+            if value_y is not None:
+                cur_y = widget_binding.normalize(
+                    value_y,
+                    binding.get("min_y", -1.0),
+                    binding.get("max_y", 1.0),
+                )
+            self.widget_graphic.value_xy = (cur_x, cur_y)
+        self.widget_graphic.update()
+
+    # =========================================================================
+    # Backdrop container ---
+    def get_backdrop(self):
+        """Return True when the item is a backdrop container."""
+        return self.backdrop
+
+    def set_backdrop(self, state):
+        """Toggle backdrop mode (swaps the polygon body for the backdrop)."""
+        self.backdrop = bool(state)
+        # The backdrop graphic replaces the plain polygon fill; the polygon is
+        # kept only as the (still hit-testable) shape, so hide its drawing.
+        self.polygon.setVisible(not self.backdrop)
+        self.backdrop_graphic.setVisible(self.backdrop)
+        self.update()
+
+    def get_backdrop_title(self):
+        """Return the backdrop title text."""
+        return self.backdrop_graphic.title
+
+    def set_backdrop_title(self, title):
+        """Set the backdrop title text."""
+        self.backdrop_graphic.title = title or ""
+        self.backdrop_graphic.update()
+
+    def get_corner_radius(self):
+        """Return the backdrop corner radius (0 = straight corners)."""
+        return self.backdrop_graphic.corner_radius
+
+    def set_corner_radius(self, radius):
+        """Set the backdrop corner radius (0 = straight corners)."""
+        self.backdrop_graphic.corner_radius = max(0.0, radius or 0.0)
+        self.backdrop_graphic.update()
+
+    def contained_items(self):
+        """Return items whose center lies within this backdrop's rectangle.
+
+        Used for backdrop move-together; the center-in-rect test naturally
+        includes nested backdrops and their contents (anything visually inside
+        the rectangle moves as a group).
+
+        Returns:
+            list: the contained PickerItems (empty when not a backdrop).
+        """
+        view = self.parent()
+        if view is None or not hasattr(view, "get_picker_items"):
+            return []
+        my_rect = self.sceneBoundingRect()
+        contained = []
+        for item in view.get_picker_items():
+            if item is self:
+                continue
+            if my_rect.contains(item.sceneBoundingRect().center()):
+                contained.append(item)
+        return contained
 
     # =========================================================================
     # Ducplicate and mirror methods ---
@@ -1069,6 +1459,9 @@ class PickerItem(DefaultPolygon):
     def run_selection_check(self):
         """Will set selection state based on selection status"""
         self.set_selected_state(self.is_selected())
+        # Reflect the bound attribute value on the selection-change refresh.
+        if self.is_widget():
+            self.refresh_widget_state()
 
     # =========================================================================
     # Custom menus handling ---
@@ -1113,6 +1506,10 @@ class PickerItem(DefaultPolygon):
             self.set_text(data["text"])
             self.set_text_size(data["text_size"])
             self.set_text_color(QtGui.QColor(*data["text_color"]))
+            if model.text_align is not None:
+                self.set_text_align(model.text_align)
+            if model.text_offset is not None:
+                self.set_text_offset(model.text_offset)
 
         # Set action mode
         if model.action_mode:
@@ -1143,7 +1540,26 @@ class PickerItem(DefaultPolygon):
                 self.set_anchor(model.anchor)
             if model.offset is not None:
                 self.set_offset(model.offset)
-            self.set_pinned(True)
+            if model.pin_scale is not None:
+                self.pin_scale = model.pin_scale
+            # Restore the saved size instead of re-sampling the current zoom.
+            self.set_pinned(True, capture_scale=False)
+
+        # Interactive widget (optional, additive keys). Set the binding /
+        # scripts first so ``set_widget_type`` can refresh the display value.
+        if model.widget:
+            self.set_binding(model.binding or {})
+            self.set_widget_scripts(model.scripts or {})
+            self.set_widget_type(model.widget)
+
+        # Backdrop container (optional, additive keys). Set the title / corner
+        # radius first, then enable so the graphic shows with them applied.
+        if model.backdrop:
+            if model.title is not None:
+                self.set_backdrop_title(model.title)
+            if model.corner_radius is not None:
+                self.set_corner_radius(model.corner_radius)
+            self.set_backdrop(True)
 
     def get_data(self):
         """Get picker item data in dictionary form.
@@ -1171,6 +1587,8 @@ class PickerItem(DefaultPolygon):
             model.text = self.get_text()
             model.text_size = self.get_text_size()
             model.text_color = self.get_text_color().getRgb()
+            model.text_align = self.get_text_align()
+            model.text_offset = self.get_text_offset()
 
         model.item_id = self.item_id
         model.mirror_id = self.mirror_id
@@ -1179,5 +1597,18 @@ class PickerItem(DefaultPolygon):
             model.pinned = True
             model.anchor = self.anchor
             model.offset = list(self.offset)
+            model.pin_scale = self.pin_scale
+
+        if self.is_widget():
+            model.widget = self.widget_type
+            model.binding = dict(self.binding) if self.binding else None
+            model.scripts = (
+                dict(self.widget_scripts) if self.widget_scripts else None
+            )
+
+        if self.backdrop:
+            model.backdrop = True
+            model.title = self.get_backdrop_title()
+            model.corner_radius = self.get_corner_radius()
 
         return model.to_dict()

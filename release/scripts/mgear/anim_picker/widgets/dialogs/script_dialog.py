@@ -20,6 +20,18 @@ SCRIPT_DOC_HEADER = """
 # __NAMESPACE__ for current picker namespace
 # __INIT__ use 'if not' statement to avoid code execution on creation.
 # __SELF__ to get access to the PickerItem() instace. (Change color, size, etc)
+#
+# Interactive widget variables (checkbox / slider items):
+# __STATE__ bool  -> checkbox on/off state (in the on/off scripts).
+# __VALUE__ float -> 1D slider value, mapped to the binding's min..max range.
+# __X__ / __Y__   -> 2D slider X / Y values, each mapped to its own range.
+#
+# Example (checkbox on script):
+#   print("checkbox is now", __STATE__)
+# Example (1D slider value script):
+#   import maya.cmds as cmds
+#   for ctl in __FLATCONTROLS__:
+#       cmds.setAttr(ctl + ".myAttr", __VALUE__)
 
 """
 
@@ -81,6 +93,11 @@ class CustomScriptEditDialog(QtWidgets.QDialog):
         btn_layout.addWidget(run_btn)
 
         self.resize(500, 600)
+
+    def showEvent(self, event):
+        """Focus the code editor on show (not the font/toolbar widgets)."""
+        QtWidgets.QDialog.showEvent(self, event)
+        self.cmd_widget.setFocus(QtCore.Qt.OtherFocusReason)
 
     def _build_menu_bar(self):
         """Build the File / Edit / View menu bar bound to the editor."""

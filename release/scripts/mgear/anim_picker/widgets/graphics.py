@@ -8,6 +8,8 @@ from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
 
+from mgear.anim_picker.widgets import widget_binding
+
 
 class DefaultPolygon(QtWidgets.QGraphicsObject):
     """Default polygon class, with move and hover support"""
@@ -380,6 +382,318 @@ class PointHandleIndex(QtWidgets.QGraphicsSimpleTextItem):
         return QtWidgets.QGraphicsSimpleTextItem.setText(self, str(text))
 
 
+class WidgetGraphic(DefaultPolygon):
+    """Interactive-widget affordance drawn over a picker item.
+
+    Draws the checkbox / slider / 2D-slider affordance from the parent
+    ``PickerItem``'s widget state, sized to the item's polygon. It is passive:
+    all interaction (click / drag) is handled in ``PickerItem``'s mouse events,
+    and this child accepts no mouse buttons so presses fall through to the
+    item. The display values (``checked`` / ``value`` / ``value_xy``) are set
+    by the item's widget refresh from the bound attribute(s).
+    """
+
+    # Modern flat palette (Fusion-like): a neutral body, a recessed groove,
+    # a blue accent for progress / knob, and a light handle.
+    _BODY = QtGui.QColor(58, 58, 58, 235)
+    _BODY_BORDER = QtGui.QColor(96, 96, 96, 255)
+    _SEL_BORDER = QtGui.QColor(240, 240, 240, 235)
+    _GROOVE = QtGui.QColor(34, 34, 34, 255)
+    _GROOVE_BORDER = QtGui.QColor(96, 96, 96, 255)
+    _ACCENT = QtGui.QColor(90, 150, 205, 255)
+    _HANDLE = QtGui.QColor(228, 228, 228, 255)
+    _CHECK = QtGui.QColor(120, 200, 120, 255)
+
+    # Fixed pixel sizes so handles never stretch with the item.
+    _HANDLE_R = 6.0
+    _GROOVE_T = 4.0
+
+    def __init__(self, parent=None):
+        DefaultPolygon.__init__(self, parent=parent)
+        # Display state, refreshed from the bound attribute(s) by the item.
+        self.checked = False
+        self.value = 0.0  # 1D slider, normalized 0..1
+        self.value_xy = (0.5, 0.5)  # 2D slider, normalized (x, y)
+        # Passive overlay: let presses fall through to the parent PickerItem.
+        self.setAcceptHoverEvents(False)
+        self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        self.setVisible(False)
+
+    def _item_rect(self):
+        """Return the parent's polygon bounding rect in local coordinates."""
+        parent = self.parentItem()
+        if parent is None or getattr(parent, "polygon", None) is None:
+            return QtCore.QRectF(-10, -10, 20, 20)
+        return parent.polygon.shape().boundingRect()
+
+    def boundingRect(self):
+        return self._item_rect()
+
+    def shape(self):
+        path = QtGui.QPainterPath()
+        path.addRect(self._item_rect())
+        return path
+
+    def _widget_type(self):
+        parent = self.parentItem()
+        return getattr(parent, "widget_type", widget_binding.WIDGET_BUTTON)
+
+    def _is_horizontal(self):
+        parent = self.parentItem()
+        binding = getattr(parent, "binding", None) or {}
+        orientation = binding.get(
+            "orientation", widget_binding.ORIENT_HORIZONTAL
+        )
+        return orientation == widget_binding.ORIENT_HORIZONTAL
+
+    def _selected(self):
+        """Return True when the parent item is selected (for the border)."""
+        parent = self.parentItem()
+        polygon = getattr(parent, "polygon", None)
+        return bool(polygon and getattr(polygon, "selected", False))
+
+    def paint(self, painter, options, widget=None):
+        """Paint the affordance for the parent item's widget type.
+
+        A neutral rounded body is drawn first (so the widget reads as a proper
+        control regardless of the underlying polygon fill), then the
+        type-specific affordance on top. The rect is computed once and shared.
+        """
+        wtype = self._widget_type()
+        if not widget_binding.is_interactive(wtype):
+            return
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        rect = self._item_rect()
+        self._paint_body(painter, rect)
+        if wtype == widget_binding.WIDGET_CHECKBOX:
+            self._paint_checkbox(painter, rect)
+        elif wtype == widget_binding.WIDGET_SLIDER:
+            self._paint_slider(painter, rect)
+        elif wtype == widget_binding.WIDGET_SLIDER2D:
+            self._paint_slider2d(painter, rect)
+
+    def _paint_body(self, painter, rect):
+        """Draw the neutral rounded widget body with selection-aware border."""
+        selected = self._selected()
+        pen = QtGui.QPen(self._SEL_BORDER if selected else self._BODY_BORDER)
+        pen.setWidthF(1.5 if selected else 1.0)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush(self._BODY))
+        painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 3.0, 3.0)
+
+    def _paint_checkbox(self, painter, rect):
+        """Draw a recessed box on the left with an upright check when on."""
+        size = min(rect.height() - 6.0, 14.0)
+        if size < 6.0:
+            size = max(6.0, min(rect.height(), rect.width()) - 2.0)
+        box = QtCore.QRectF(
+            rect.left() + 4.0, rect.center().y() - size / 2.0, size, size
+        )
+        pen = QtGui.QPen(self._GROOVE_BORDER)
+        pen.setWidthF(1.2)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush(self._GROOVE))
+        painter.drawRoundedRect(box, 2.0, 2.0)
+        if not self.checked:
+            return
+        # The view is Y-flipped, so counter-flip about the box center to draw
+        # the checkmark upright (a filled glyph would otherwise be inverted).
+        painter.save()
+        painter.translate(box.center())
+        painter.scale(1.0, -1.0)
+        painter.translate(-box.center())
+        pen = QtGui.QPen(self._CHECK)
+        pen.setWidthF(2.0)
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.NoBrush)
+        check = QtGui.QPainterPath()
+        check.moveTo(box.left() + size * 0.22, box.top() + size * 0.52)
+        check.lineTo(box.left() + size * 0.42, box.top() + size * 0.72)
+        check.lineTo(box.left() + size * 0.80, box.top() + size * 0.28)
+        painter.drawPath(check)
+        painter.restore()
+
+    def _paint_slider(self, painter, rect):
+        """Draw a thin groove, an accent fill, and a fixed round handle."""
+        horizontal = self._is_horizontal()
+        x0, x1, y0, y1 = widget_binding.track_bounds(
+            rect.left(), rect.right(), rect.top(), rect.bottom()
+        )
+        half_t = self._GROOVE_T / 2.0
+        if horizontal:
+            cy = rect.center().y()
+            groove = QtCore.QRectF(x0, cy - half_t, x1 - x0, self._GROOVE_T)
+            hx = x0 + self.value * (x1 - x0)
+            hy = cy
+            fill = QtCore.QRectF(x0, cy - half_t, hx - x0, self._GROOVE_T)
+        else:
+            cx = rect.center().x()
+            groove = QtCore.QRectF(cx - half_t, y0, self._GROOVE_T, y1 - y0)
+            # Higher numeric y is higher on screen (Y-flipped view) -> value up.
+            hy = y0 + self.value * (y1 - y0)
+            hx = cx
+            fill = QtCore.QRectF(cx - half_t, y0, self._GROOVE_T, hy - y0)
+        pen = QtGui.QPen(self._GROOVE_BORDER)
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush(self._GROOVE))
+        painter.drawRoundedRect(groove, half_t, half_t)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QBrush(self._ACCENT))
+        painter.drawRoundedRect(fill, half_t, half_t)
+        self._draw_knob(painter, hx, hy)
+
+    def _paint_slider2d(self, painter, rect):
+        """Draw a faint crosshair pad and a fixed knob at (x, y)."""
+        x0, x1, y0, y1 = widget_binding.track_bounds(
+            rect.left(), rect.right(), rect.top(), rect.bottom()
+        )
+        pen = QtGui.QPen(self._GROOVE_BORDER)
+        pen.setWidthF(0.8)
+        pen.setStyle(QtCore.Qt.DotLine)
+        painter.setPen(pen)
+        cx = (x0 + x1) / 2.0
+        cy = (y0 + y1) / 2.0
+        painter.drawLine(QtCore.QPointF(x0, cy), QtCore.QPointF(x1, cy))
+        painter.drawLine(QtCore.QPointF(cx, y0), QtCore.QPointF(cx, y1))
+        vx, vy = self.value_xy
+        self._draw_knob(
+            painter, x0 + vx * (x1 - x0), y0 + vy * (y1 - y0)
+        )
+
+    def _draw_knob(self, painter, x, y):
+        """Draw a fixed-size light knob with an accent ring at ``(x, y)``."""
+        pen = QtGui.QPen(self._ACCENT)
+        pen.setWidthF(1.5)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush(self._HANDLE))
+        painter.drawEllipse(QtCore.QPointF(x, y), self._HANDLE_R, self._HANDLE_R)
+
+
+class BackdropGraphic(DefaultPolygon):
+    """Backdrop container fill + title, drawn as the item's body.
+
+    A backdrop item hides its plain polygon and shows this instead: a filled
+    rounded (or straight) rectangle in the item's color / alpha, a border, and
+    a title strip. It is passive (no mouse); the item owns selection and the
+    move-together behavior. Title / corner radius are set by the item.
+    """
+
+    _TITLE_H = 18.0
+
+    def __init__(self, parent=None):
+        DefaultPolygon.__init__(self, parent=parent)
+        self.title = ""
+        self.corner_radius = 8.0
+        self.setAcceptHoverEvents(False)
+        self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        self.setVisible(False)
+
+    def _item_rect(self):
+        """Return the parent's polygon bounding rect in local coordinates."""
+        parent = self.parentItem()
+        if parent is None or getattr(parent, "polygon", None) is None:
+            return QtCore.QRectF(-50, -35, 100, 70)
+        return parent.polygon.shape().boundingRect()
+
+    def boundingRect(self):
+        return self._item_rect()
+
+    def shape(self):
+        path = QtGui.QPainterPath()
+        path.addRect(self._item_rect())
+        return path
+
+    def _selected(self):
+        parent = self.parentItem()
+        polygon = getattr(parent, "polygon", None)
+        return bool(polygon and getattr(polygon, "selected", False))
+
+    def _fill_color(self):
+        parent = self.parentItem()
+        if parent is not None:
+            return parent.get_color()
+        return QtGui.QColor(70, 80, 110, 70)
+
+    def paint(self, painter, options, widget=None):
+        """Draw the backdrop rectangle + optional title strip."""
+        rect = self._item_rect()
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        color = self._fill_color()
+        painter.setBrush(QtGui.QBrush(color))
+        if self._selected():
+            pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 230))
+            pen.setWidthF(2.0)
+        else:
+            border = QtGui.QColor(
+                color.red(),
+                color.green(),
+                color.blue(),
+                min(255, color.alpha() + 90),
+            )
+            pen = QtGui.QPen(border)
+            pen.setWidthF(1.5)
+        painter.setPen(pen)
+        radius = max(0.0, self.corner_radius)
+        if radius > 0:
+            painter.drawRoundedRect(rect, radius, radius)
+        else:
+            painter.drawRect(rect)
+        if self.title:
+            self._paint_title(painter, rect, color, radius)
+
+    def _paint_title(self, painter, rect, color, radius):
+        """Draw a title strip along the item's screen-top edge."""
+        # Screen-top edge is the maximum numeric y under the Y-flipped view.
+        strip = QtCore.QRectF(
+            rect.left(),
+            rect.bottom() - self._TITLE_H,
+            rect.width(),
+            self._TITLE_H,
+        )
+        strip_color = QtGui.QColor(
+            color.red(),
+            color.green(),
+            color.blue(),
+            min(255, color.alpha() + 60),
+        )
+        # Clip to the backdrop shape so the title bar follows the rounded top
+        # corners instead of overhanging them.
+        painter.save()
+        clip = QtGui.QPainterPath()
+        if radius > 0:
+            clip.addRoundedRect(rect, radius, radius)
+        else:
+            clip.addRect(rect)
+        painter.setClipPath(clip)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QBrush(strip_color))
+        painter.drawRect(strip)
+        # Counter the Y-flip so the title reads upright.
+        painter.translate(strip.center())
+        painter.scale(1.0, -1.0)
+        painter.translate(-strip.center())
+        painter.setPen(QtGui.QPen(QtGui.QColor(235, 235, 235, 255)))
+        font = painter.font()
+        font.setPointSizeF(9.0)
+        painter.setFont(font)
+        painter.drawText(
+            strip.adjusted(6.0, 0.0, -6.0, 0.0),
+            QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
+            self.title,
+        )
+        painter.restore()
+
+
+# Text placement relative to the item, plus an inward/outward gap. "center"
+# keeps the legacy origin-centered behavior; the edge alignments place the text
+# just outside that edge of the item so it does not overlap the button.
+TEXT_ALIGN_CENTER = "center"
+TEXT_ALIGNS = ("center", "top", "bottom", "left", "right")
+
+
 class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
     """Picker item text element"""
 
@@ -392,6 +706,10 @@ class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
         self.scale_transform = QtGui.QTransform().scale(1, -1)
         self.setTransform(self.scale_transform)
 
+        # Placement relative to the item + a gap in pixels.
+        self.align = TEXT_ALIGN_CENTER
+        self.offset = 0.0
+
         # Init default size
         self.set_size()
         self.set_color(GraphicText.__DEFAULT_COLOR__)
@@ -399,10 +717,10 @@ class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
     def set_text(self, text):
         """
         Set current text
-        (Will center text on parent too)
+        (Will reposition text on parent too)
         """
         self.setText(text)
-        self.center_on_parent()
+        self._reposition()
 
     def get_text(self):
         """Return element text"""
@@ -413,7 +731,20 @@ class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
         font = self.font()
         font.setPointSizeF(value)
         self.setFont(font)
-        self.center_on_parent()
+        self._reposition()
+
+    def set_alignment(self, align=None, offset=0.0):
+        """Set the text placement (``TEXT_ALIGNS``) + gap and reposition."""
+        self.align = align if align in TEXT_ALIGNS else TEXT_ALIGN_CENTER
+        self.offset = offset or 0.0
+        self._reposition()
+
+    def _reposition(self):
+        """Reposition the text from the current alignment + offset."""
+        if self.align == TEXT_ALIGN_CENTER:
+            self.center_on_parent()
+        else:
+            self.align_on_parent(self.align, self.offset)
 
     def get_size(self):
         """Return text pointSizeF"""
@@ -443,5 +774,39 @@ class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
         # self.setPos(-center_pos * self.scale_transform)
         scale_xy = QtCore.QPointF(center_pos.x(), center_pos.y() * -1)
         self.setPos(-scale_xy)
+
+    def align_on_parent(self, align, offset=0.0):
+        """Place the text just outside the item's ``align`` edge.
+
+        Positions the text's visual center against the parent polygon's
+        bounding box: left / right beside it, top / bottom above / below it,
+        each pushed out by ``offset`` pixels so the text clears the button. The
+        Y-flipped view is accounted for (higher numeric y is higher on screen).
+
+        Args:
+            align (str): one of ``TEXT_ALIGNS`` (non-center).
+            offset (float): gap in pixels between the text and the item edge.
+        """
+        parent = self.parentItem()
+        if parent is None or getattr(parent, "polygon", None) is None:
+            self.center_on_parent()
+            return
+        rect = parent.polygon.shape().boundingRect()
+        text_center = self.boundingRect().center()
+        half_tw = self.boundingRect().width() / 2.0
+        half_th = self.boundingRect().height() / 2.0
+        cx = rect.center().x()
+        cy = rect.center().y()
+        if align == "left":
+            cx = rect.center().x() - rect.width() / 2.0 - half_tw - offset
+        elif align == "right":
+            cx = rect.center().x() + rect.width() / 2.0 + half_tw + offset
+        elif align == "top":
+            cy = rect.center().y() + rect.height() / 2.0 + half_th + offset
+        elif align == "bottom":
+            cy = rect.center().y() - rect.height() / 2.0 - half_th - offset
+        # Place the text's visual center at (cx, cy). The item's own scale(1,-1)
+        # maps its local center (tx, ty) to (tx, -ty), so pos = center - (tx,-ty).
+        self.setPos(cx - text_center.x(), cy + text_center.y())
 
 

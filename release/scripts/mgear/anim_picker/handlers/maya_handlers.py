@@ -145,6 +145,84 @@ def reset_node_attributes(node, attr="rigBindPose"):
     return True
 
 
+def _shape_cv_points(shape):
+    """Return a shape's world-space CV / vertex points (empty on failure).
+
+    Args:
+        shape (str): a nurbsCurve / nurbsSurface / mesh shape node.
+
+    Returns:
+        list: ``(x, y, z)`` world-space points.
+    """
+    sel = OpenMaya.MSelectionList()
+    try:
+        sel.add(shape)
+        dag = sel.getDagPath(0)
+    except Exception:
+        return []
+    world = OpenMaya.MSpace.kWorld
+    node_type = cmds.nodeType(shape)
+    try:
+        if node_type == "nurbsCurve":
+            points = OpenMaya.MFnNurbsCurve(dag).cvPositions(world)
+        elif node_type == "nurbsSurface":
+            points = OpenMaya.MFnNurbsSurface(dag).cvPositions(world)
+        elif node_type == "mesh":
+            points = OpenMaya.MFnMesh(dag).getPoints(world)
+        else:
+            return []
+    except Exception:
+        return []
+    return [(point.x, point.y, point.z) for point in points]
+
+
+def _bounding_box_points(node):
+    """Return the eight world-bounding-box corners of ``node`` (or empty)."""
+    if not cmds.objExists(node):
+        return []
+    x0, y0, z0, x1, y1, z1 = cmds.exactWorldBoundingBox(node)
+    return [
+        (x0, y0, z0),
+        (x1, y0, z0),
+        (x1, y1, z0),
+        (x0, y1, z0),
+        (x0, y0, z1),
+        (x1, y0, z1),
+        (x1, y1, z1),
+        (x0, y1, z1),
+    ]
+
+
+def get_shape_points(node):
+    """Return a node's world-space shape points for the trace tool.
+
+    Gathers NURBS curve / surface CVs or mesh vertices in world space via the
+    Maya API; when the node has no such shape (or the query fails) it falls
+    back to the eight corners of the world bounding box, so the trace never
+    fails on an unusual control.
+
+    Args:
+        node (str): a transform or shape node name.
+
+    Returns:
+        list: ``(x, y, z)`` world-space points (empty only for a bad node).
+    """
+    if not cmds.objExists(node):
+        return []
+    if cmds.nodeType(node) == "transform":
+        shapes = cmds.listRelatives(node, shapes=True, fullPath=True) or []
+    else:
+        shapes = [node]
+
+    points = []
+    for shape in shapes:
+        points.extend(_shape_cv_points(shape))
+
+    if points:
+        return points
+    return _bounding_box_points(node)
+
+
 class SelectionCheck(object):
     def __init__(self):
         self.sel = OpenMaya.MSelectionList()
