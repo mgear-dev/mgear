@@ -7,6 +7,7 @@ from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
 
+from mgear.core import pycodeeditor
 from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.handlers import python_handlers
 
@@ -46,13 +47,18 @@ class CustomScriptEditDialog(QtWidgets.QDialog):
         # Add layout
         self.main_layout = QtWidgets.QVBoxLayout(self)
 
-        # Add cmd txt field
-        self.cmd_widget = QtWidgets.QTextEdit()
+        # Modern Python code editor (line numbers, syntax highlight, smart
+        # indent) from mgear.core. Create it first so the menu bar and the
+        # font/indent toolbar can bind to it.
+        self.cmd_widget = pycodeeditor.PythonCodeEditor()
+        self.main_layout.setMenuBar(self._build_menu_bar())
+        self.main_layout.addLayout(self._build_editor_toolbar())
+
         if self.cmd:
             text = self.cmd
         else:
             text = SCRIPT_DOC_HEADER
-        self.cmd_widget.setText(text)
+        self.cmd_widget.setPlainText(text)
         newCursor = self.cmd_widget.textCursor()
         newCursor.movePosition(QtGui.QTextCursor.End)
         self.cmd_widget.setTextCursor(newCursor)
@@ -75,6 +81,117 @@ class CustomScriptEditDialog(QtWidgets.QDialog):
         btn_layout.addWidget(run_btn)
 
         self.resize(500, 600)
+
+    def _build_menu_bar(self):
+        """Build the File / Edit / View menu bar bound to the editor."""
+        editor = self.cmd_widget
+        menu_bar = QtWidgets.QMenuBar(self)
+
+        file_menu = menu_bar.addMenu("File")
+        file_menu.addAction("New", self._file_new)
+        file_menu.addAction("Open...", self._file_open)
+        file_menu.addAction("Save As...", self._file_save)
+
+        edit_menu = menu_bar.addMenu("Edit")
+        edit_menu.addAction("Undo", editor.undo)
+        edit_menu.addAction("Redo", editor.redo)
+        edit_menu.addSeparator()
+        edit_menu.addAction("Cut", editor.cut)
+        edit_menu.addAction("Copy", editor.copy)
+        edit_menu.addAction("Paste", editor.paste)
+        edit_menu.addAction("Select All", editor.selectAll)
+        edit_menu.addSeparator()
+        edit_menu.addAction(
+            "Convert Indentation to Spaces",
+            editor.convert_indentation_to_spaces,
+        )
+
+        view_menu = menu_bar.addMenu("View")
+        self.show_ws_action = view_menu.addAction("Show Indentation")
+        self.show_ws_action.setCheckable(True)
+        self.show_ws_action.setChecked(editor.show_whitespace())
+        self.show_ws_action.toggled.connect(editor.set_show_whitespace)
+
+        return menu_bar
+
+    def _file_new(self):
+        """Reset the editor to the documentation header."""
+        self.cmd_widget.setPlainText(SCRIPT_DOC_HEADER)
+
+    def _file_open(self):
+        """Load a python file into the editor."""
+        path, _flt = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Open script", "", "Python (*.py);;All Files (*)"
+        )
+        if not path:
+            return
+        with open(path, "r") as script_file:
+            self.cmd_widget.setPlainText(script_file.read())
+
+    def _file_save(self):
+        """Write the editor contents to a python file."""
+        path, _flt = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save script", "", "Python (*.py);;All Files (*)"
+        )
+        if not path:
+            return
+        with open(path, "w") as script_file:
+            script_file.write(self.cmd_widget.toPlainText())
+
+    def _build_editor_toolbar(self):
+        """Build the font / indentation controls row bound to the editor."""
+        editor = self.cmd_widget
+        layout = QtWidgets.QHBoxLayout()
+
+        layout.addWidget(QtWidgets.QLabel("Font"))
+        self.font_combo = QtWidgets.QFontComboBox()
+        self.font_combo.setFontFilters(
+            QtWidgets.QFontComboBox.MonospacedFonts
+        )
+        self.font_combo.setCurrentFont(editor.font())
+        self.font_combo.currentFontChanged.connect(self._editor_font_changed)
+        layout.addWidget(self.font_combo)
+
+        self.font_size_sb = QtWidgets.QSpinBox()
+        self.font_size_sb.setRange(6, 48)
+        self.font_size_sb.setValue(editor.font().pointSize())
+        self.font_size_sb.valueChanged.connect(self._editor_font_changed)
+        layout.addWidget(self.font_size_sb)
+
+        layout.addSpacing(10)
+        layout.addWidget(QtWidgets.QLabel("Indent"))
+        self.indent_mode_cb = QtWidgets.QComboBox()
+        self.indent_mode_cb.addItems(["Spaces", "Tabs"])
+        self.indent_mode_cb.setCurrentIndex(
+            0 if editor.use_spaces() else 1
+        )
+        self.indent_mode_cb.currentIndexChanged.connect(
+            self._editor_indent_changed
+        )
+        layout.addWidget(self.indent_mode_cb)
+
+        self.indent_width_sb = QtWidgets.QSpinBox()
+        self.indent_width_sb.setRange(1, 8)
+        self.indent_width_sb.setValue(editor.indent_width())
+        self.indent_width_sb.valueChanged.connect(
+            self._editor_indent_changed
+        )
+        layout.addWidget(self.indent_width_sb)
+
+        layout.addStretch()
+        return layout
+
+    def _editor_font_changed(self, *args):
+        """Apply the toolbar font family/size to the editor."""
+        self.cmd_widget.set_editor_font(
+            self.font_combo.currentFont().family(),
+            self.font_size_sb.value(),
+        )
+
+    def _editor_indent_changed(self, *args):
+        """Apply the toolbar indentation mode/width to the editor."""
+        self.cmd_widget.set_use_spaces(self.indent_mode_cb.currentIndex() == 0)
+        self.cmd_widget.set_indent_width(self.indent_width_sb.value())
 
     def accept_event(self):
         """Accept button event"""
