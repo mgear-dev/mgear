@@ -30,6 +30,7 @@ from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import edit_panel
 from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.widgets import color_palette
+from mgear.anim_picker.widgets import tiled_view
 from mgear.anim_picker.widgets import overlay_widgets
 from mgear.anim_picker.widgets.dialogs.shape_library_dialog import (
     ShapeLibraryDialog,
@@ -245,10 +246,10 @@ class MainDockWindow(QtWidgets.QWidget):
         # hide main tab widget for os compatibility
         if QObject in getattr(self, "overlays", []):
             if event.type() == QtCore.QEvent.Type.Show:
-                self.tab_widget.hide()
+                self.tab_area.hide()
                 return True
             elif event.type() == QtCore.QEvent.Type.Hide:
-                self.tab_widget.show()
+                self.tab_area.show()
                 return True
 
         return False
@@ -311,6 +312,8 @@ class MainDockWindow(QtWidgets.QWidget):
         # Add option buttons
         btns_layout = QtWidgets.QHBoxLayout()
         box_layout.addLayout(btns_layout)
+        # Kept so add_tab_widget can append the view-mode selector here.
+        self.char_btns_layout = btns_layout
 
         # Add horizont spacer
         spacer = QtWidgets.QSpacerItem(
@@ -376,8 +379,16 @@ class MainDockWindow(QtWidgets.QWidget):
         self.edit_panel = edit_panel.ItemEditPanel(main_window=self)
         self.edit_panel.setMinimumWidth(pyqt.dpi_scale(220))
 
+        # Wrap the tab widget so it can also be presented as a tiled multi-tab
+        # view (grid / vertical / horizontal); the area is the state-sensitive
+        # facade (active view, all views, data, fit) used across the window.
+        self.tab_area = tiled_view.PickerTabArea(
+            self.tab_widget, main_window=self
+        )
+        self._build_view_mode_selector()
+
         self.editor_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        self.editor_splitter.addWidget(self.tab_widget)
+        self.editor_splitter.addWidget(self.tab_area)
         self.editor_splitter.addWidget(self.edit_panel)
         self.editor_splitter.setStretchFactor(0, 1)
         self.editor_splitter.setStretchFactor(1, 0)
@@ -441,10 +452,10 @@ class MainDockWindow(QtWidgets.QWidget):
         view = GraphicViewWidget(main_window=self)
         self.tab_widget.addTab(view, name)
 
-        # ensure the tab retains its size when hidden
-        sp_retain = self.tab_widget.sizePolicy()
+        # ensure the picker area retains its size when hidden (overlay filter)
+        sp_retain = self.tab_area.sizePolicy()
         sp_retain.setRetainSizeWhenHidden(True)
-        self.tab_widget.setSizePolicy(sp_retain)
+        self.tab_area.setSizePolicy(sp_retain)
 
         # Editor panel, tool strip and palette are edit-mode only; refresh the
         # panel when the tab changes.
@@ -452,6 +463,87 @@ class MainDockWindow(QtWidgets.QWidget):
         self.left_toolbar.setVisible(__EDIT_MODE__.get())
         self.color_palette.setVisible(__EDIT_MODE__.get())
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
+        # In anim mode the panel is hidden; hand the whole splitter to the
+        # picker area so the canvas / tiled view fills the full width.
+        if not __EDIT_MODE__.get():
+            self.editor_splitter.setSizes([1, 0])
+
+        # Restore the last-used view mode / grid column count.
+        self._apply_saved_view_mode()
+
+    # =====================================================================
+    # View mode (tabbed / tiled multi-tab) ---
+    _VIEW_MODES = (
+        tiled_view.MODE_TABBED,
+        tiled_view.MODE_GRID,
+        tiled_view.MODE_VERTICAL,
+        tiled_view.MODE_HORIZONTAL,
+    )
+
+    def _build_view_mode_selector(self):
+        """Add the Tabbed / Grid / Rows / Columns selector to the char bar."""
+        self.char_btns_layout.addWidget(QtWidgets.QLabel("View"))
+        self.view_mode_cb = QtWidgets.QComboBox()
+        self.view_mode_cb.addItems(["Tabbed", "Grid", "Rows", "Columns"])
+        self.view_mode_cb.setToolTip(
+            "Show one tab at a time, or all tabs tiled at once"
+        )
+        self.view_mode_cb.currentIndexChanged.connect(
+            self._on_view_mode_changed
+        )
+        self.char_btns_layout.addWidget(self.view_mode_cb)
+
+        self.grid_cols_sb = QtWidgets.QSpinBox()
+        self.grid_cols_sb.setRange(0, 12)
+        self.grid_cols_sb.setToolTip("Grid columns (0 = auto)")
+        self.grid_cols_sb.setEnabled(False)
+        self.grid_cols_sb.valueChanged.connect(self._on_grid_cols_changed)
+        self.char_btns_layout.addWidget(self.grid_cols_sb)
+
+    def _view_settings(self):
+        """Return the QSettings store for anim picker UI preferences."""
+        return QtCore.QSettings("mgear", "anim_picker")
+
+    def _apply_saved_view_mode(self):
+        """Restore the persisted view mode + grid columns, without re-saving."""
+        settings = self._view_settings()
+        mode = settings.value("tab_view_mode", tiled_view.MODE_TABBED)
+        try:
+            columns = int(settings.value("tab_grid_columns", 0) or 0)
+        except (TypeError, ValueError):
+            columns = 0
+        if mode not in self._VIEW_MODES:
+            mode = tiled_view.MODE_TABBED
+
+        self.grid_cols_sb.blockSignals(True)
+        self.grid_cols_sb.setValue(columns)
+        self.grid_cols_sb.blockSignals(False)
+        self.tab_area.set_grid_columns(columns or None)
+
+        index = self._VIEW_MODES.index(mode)
+        self.view_mode_cb.blockSignals(True)
+        self.view_mode_cb.setCurrentIndex(index)
+        self.view_mode_cb.blockSignals(False)
+        self._set_view_mode(mode)
+
+    def _on_view_mode_changed(self, index):
+        """Apply and persist the selected view mode."""
+        mode = self._VIEW_MODES[index]
+        self._view_settings().setValue("tab_view_mode", mode)
+        self._set_view_mode(mode)
+
+    def _on_grid_cols_changed(self, value):
+        """Apply and persist the grid column count (0 = auto)."""
+        self._view_settings().setValue("tab_grid_columns", value)
+        self.tab_area.set_grid_columns(value or None)
+
+    def _set_view_mode(self, mode):
+        """Switch the picker area to ``mode`` and refresh dependent UI."""
+        self.tab_area.set_view_mode(mode)
+        self.grid_cols_sb.setEnabled(mode == tiled_view.MODE_GRID)
+        self.tab_area.fit_contents()
+        self._on_tab_changed()
 
     def _on_tab_changed(self, *args):
         """Rebind the inline editor to the newly active tab's selection."""
@@ -467,7 +559,7 @@ class MainDockWindow(QtWidgets.QWidget):
             name (str): a ``tool_bar`` tool id (TOOL_SELECT / TOOL_TRANSFORM).
         """
         self.active_tool = name
-        view = self.tab_widget.currentWidget()
+        view = self.tab_area.active_view()
         if view is not None:
             view.viewport().update()
 
@@ -475,7 +567,7 @@ class MainDockWindow(QtWidgets.QWidget):
     # Tool-strip quick commands ---
     def _current_view(self):
         """Return the active graphics view, or None."""
-        return self.tab_widget.currentWidget()
+        return self.tab_area.active_view()
 
     def _selected_items(self):
         """Return the current view's selected picker items."""
@@ -638,6 +730,14 @@ class MainDockWindow(QtWidgets.QWidget):
         if panel is None:
             return
         panel.setVisible(edit)
+        # Give the whole splitter to the picker area when the panel is hidden
+        # (anim mode), so the canvas / tiled view fills the full width.
+        splitter = getattr(self, "editor_splitter", None)
+        if splitter is not None:
+            if edit:
+                splitter.setSizes([pyqt.dpi_scale(600), pyqt.dpi_scale(240)])
+            else:
+                splitter.setSizes([1, 0])
         if edit:
             panel.sync()
         self.update_tool_commands()
@@ -655,11 +755,11 @@ class MainDockWindow(QtWidgets.QWidget):
 
     def get_picker_items(self):
         """Return picker items for current active tab"""
-        return self.tab_widget.get_current_picker_items()
+        return self.tab_area.get_current_picker_items()
 
     def get_all_picker_items(self):
         """Return all picker items for current picker"""
-        return self.tab_widget.get_all_picker_items()
+        return self.tab_area.get_all_picker_items()
 
     def dockCloseEventTriggered(self):
         self.close()
@@ -775,7 +875,7 @@ class MainDockWindow(QtWidgets.QWidget):
 
         # Set status
         self.char_selector_cb.setEnabled(self.status)
-        self.tab_widget.setEnabled(self.status)
+        self.tab_area.setEnabled(self.status)
         if self.save_char_btn:
             self.save_char_btn.setEnabled(self.status)
 
@@ -785,6 +885,9 @@ class MainDockWindow(QtWidgets.QWidget):
 
     def load_default_tabs(self):
         """Will reset and load default empty tabs"""
+        # Return to tabbed so the tab widget owns the (about to be replaced)
+        # views before clearing.
+        self.tab_area.ensure_tabbed()
         self.tab_widget.clear()
         self.tab_widget.addTab(GraphicViewWidget(main_window=self), "None")
 
@@ -812,13 +915,15 @@ class MainDockWindow(QtWidgets.QWidget):
         self.selection_change_event()
 
         # Force view resize
-        self.tab_widget.fit_contents()
+        self.tab_area.fit_contents()
 
         # Sync the inline editor's visibility/content with the current mode.
         self._sync_edit_panel()
 
         # Set focus on view
-        self.tab_widget.currentWidget().setFocus()
+        active_view = self.tab_area.active_view()
+        if active_view is not None:
+            active_view.setFocus()
 
     def load_from_sel_node(self):
         """Will try to load character for selected node"""
@@ -920,9 +1025,9 @@ class MainDockWindow(QtWidgets.QWidget):
         path = picker_data.get("snapshot", None)
         self.pic_widget.set_background(path)
 
-        # load tabs
+        # load tabs (set_data returns the area to the tabbed presentation)
         tabs_data = picker_data.get("tabs", {})
-        self.tab_widget.set_data(tabs_data)
+        self.tab_area.set_data(tabs_data)
 
         # Default tab
         if not self.tab_widget.count():
@@ -933,8 +1038,11 @@ class MainDockWindow(QtWidgets.QWidget):
             # Return to first tab
             self.tab_widget.setCurrentIndex(0)
 
+        # Re-apply the persisted view mode over the freshly loaded tabs.
+        self._apply_saved_view_mode()
+
         # Fit content
-        self.tab_widget.fit_contents()
+        self.tab_area.fit_contents()
 
         # Update selection states
         self.selection_change_event()
@@ -969,8 +1077,8 @@ class MainDockWindow(QtWidgets.QWidget):
         if snapshot_data:
             picker_data["snapshot"] = snapshot_data
 
-        # Add tabs data
-        tabs_data = self.tab_widget.get_data()
+        # Add tabs data (from the area, so it works in tabbed or tiled view)
+        tabs_data = self.tab_area.get_data()
         if tabs_data:
             picker_data["tabs"] = tabs_data
 

@@ -10,12 +10,32 @@ from mgear.anim_picker.view import GraphicViewWidget
 from mgear.anim_picker.handlers import __EDIT_MODE__
 
 
+def tab_data_entry(name, view):
+    """Return the serialized ``{"name", "data"}`` entry for one tab view.
+
+    The single authority for a tab's on-disk shape, so the tabbed and tiled
+    presentations serialize identically.
+
+    Args:
+        name (str): the tab name.
+        view (GraphicViewWidget): the tab's picker view.
+
+    Returns:
+        dict: ``{"name": str, "data": dict}``.
+    """
+    return {"name": str(name), "data": view.get_data()}
+
+
 class ContextMenuTabWidget(QtWidgets.QTabWidget):
     """Custom tab widget with specific context menu support"""
 
     def __init__(self, parent, main_window=None, *args, **kwargs):
         QtWidgets.QTabWidget.__init__(self, parent, *args, **kwargs)
         self.main_window = main_window
+        # Drag-to-reorder tabs (edit mode only, matching the Move menu). The
+        # order is the widget's own tab order, already serialized positionally
+        # by get_data, so a reorder persists with no extra work.
+        self.setMovable(__EDIT_MODE__.get())
 
     def contextMenuEvent(self, event):
         """Right click menu options"""
@@ -145,14 +165,39 @@ class ContextMenuTabWidget(QtWidgets.QTabWidget):
             items.extend(self.widget(i).get_picker_items())
         return items
 
+    def borrow_views(self):
+        """Detach every view page for temporary display elsewhere (tiled view).
+
+        Returns an ordered ``[(name, view), ...]`` snapshot and empties the tab
+        widget without deleting the views (``removeTab`` reparents them). Pair
+        with :meth:`restore_views` to put them back in order.
+
+        Returns:
+            list: ``(name, GraphicViewWidget)`` pairs in tab order.
+        """
+        snapshot = []
+        for i in range(self.count()):
+            snapshot.append((str(self.tabText(i)), self.widget(i)))
+        # Remove from the end so indices stay valid; views survive removeTab.
+        for i in reversed(range(self.count())):
+            self.removeTab(i)
+        return snapshot
+
+    def restore_views(self, snapshot):
+        """Re-attach borrowed views as tabs, in order.
+
+        Args:
+            snapshot (list): ``(name, view)`` pairs from :meth:`borrow_views`.
+        """
+        for name, view in snapshot:
+            self.addTab(view, name)
+
     def get_data(self):
         """Will return all tabs data"""
-        data = []
-        for i in range(self.count()):
-            name = str(self.tabText(i))
-            tab_data = self.widget(i).get_data()
-            data.append({"name": name, "data": tab_data})
-        return data
+        return [
+            tab_data_entry(self.tabText(i), self.widget(i))
+            for i in range(self.count())
+        ]
 
     def set_data(self, data):
         """Will, set/load tabs data"""

@@ -436,10 +436,10 @@ class ItemEditPanel(QtWidgets.QWidget):
     # ------------------------------------------------------------------
     def _current_view(self):
         """Return the main window's active graphics view, or None."""
-        tab_widget = getattr(self.main_window, "tab_widget", None)
-        if tab_widget is None:
+        getter = getattr(self.main_window, "_current_view", None)
+        if getter is None:
             return None
-        return tab_widget.currentWidget()
+        return getter()
 
     def sync(self):
         """Rebind to the current active view's selection."""
