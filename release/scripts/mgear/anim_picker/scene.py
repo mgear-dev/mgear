@@ -88,7 +88,7 @@ class OrderedGraphicsScene(QtWidgets.QGraphicsScene):
             scene_rect.setCoords(x1, y1, x2, y2)
 
         else:
-            scene_rect = self.itemsBoundingRect()
+            scene_rect = self.content_bounding_rect()
 
         # Stop here if no margin
         if not margin:
@@ -101,6 +101,38 @@ class OrderedGraphicsScene(QtWidgets.QGraphicsScene):
         scene_rect.setHeight(scene_rect.height() + margin)
 
         return scene_rect
+
+    def content_bounding_rect(self):
+        """Scene bounding rect of all items, excluding pinned picker items.
+
+        Pinned items are viewport-locked HUD overlays: their scene position is
+        driven by the current pan/zoom, so including them would enlarge the
+        scrollable canvas or let a corner button be framed by fit / reset view.
+        Identical to ``itemsBoundingRect`` when nothing is pinned (the common
+        case), so non-pinned pickers behave exactly as before.
+
+        Returns:
+            QtCore.QRectF: the content bounds (possibly null when empty).
+        """
+        pinned = [
+            item for item in self.get_picker_items() if item.pinned
+        ]
+        if not pinned:
+            return self.itemsBoundingRect()
+
+        # Skip the pinned items and their child graphics (polygon / text /
+        # handles) so only free canvas content contributes to the extent.
+        excluded = set()
+        for item in pinned:
+            excluded.add(item)
+            excluded.update(item.childItems())
+        rect = None
+        for item in self.items():
+            if item in excluded:
+                continue
+            item_rect = item.sceneBoundingRect()
+            rect = item_rect if rect is None else rect.united(item_rect)
+        return rect if rect is not None else QtCore.QRectF()
 
     def clear(self):
         """Reset default z index on clear"""

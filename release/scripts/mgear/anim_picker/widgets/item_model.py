@@ -20,6 +20,9 @@ Fields map 1:1 to the schema keys:
     text_color   RGBA tuple
     item_id      str (optional stable id, minted when first mirror-linked)
     mirror_id    str (optional mirror partner's item_id)
+    pinned       bool (optional; item locked to the viewport as a HUD overlay)
+    anchor       str (optional 3x3 viewport anchor code, e.g. "tl")
+    offset       [dx, dy] (optional inward pixel offset from the anchor)
 """
 
 
@@ -40,6 +43,9 @@ class PickerItemData(object):
         self.text_color = None
         self.item_id = None
         self.mirror_id = None
+        self.pinned = False
+        self.anchor = None
+        self.offset = None
 
     @classmethod
     def from_dict(cls, data):
@@ -79,6 +85,12 @@ class PickerItemData(object):
             model.item_id = data["id"]
         if data.get("mirror"):
             model.mirror_id = data["mirror"]
+        if data.get("pinned"):
+            model.pinned = True
+            model.anchor = data.get("anchor")
+            model.offset = (
+                list(data["offset"]) if "offset" in data else None
+            )
 
         return model
 
@@ -118,5 +130,14 @@ class PickerItemData(object):
             data["id"] = self.item_id
         if self.mirror_id:
             data["mirror"] = self.mirror_id
+
+        # Viewport pin (additive optional keys; only emitted when pinned so old
+        # readers and non-pinned items are unaffected).
+        if self.pinned:
+            data["pinned"] = True
+            if self.anchor:
+                data["anchor"] = self.anchor
+            if self.offset is not None:
+                data["offset"] = list(self.offset)
 
         return data

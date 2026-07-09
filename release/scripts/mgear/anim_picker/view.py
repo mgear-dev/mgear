@@ -30,6 +30,7 @@ from mgear.anim_picker.widgets import background_manipulator
 from mgear.anim_picker.widgets import item_manipulator
 from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.widgets import mirror
+from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.handlers import __EDIT_MODE__
 
 
@@ -113,6 +114,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.mirror_axis_x = 0.0
         self._mirroring = False
         self._has_mirror_links = False
+
+        # Viewport-pinned (HUD overlay) items: a cached "any pinned?" flag so
+        # the reposition on every pan / zoom / resize short-circuits when
+        # nothing is pinned (the common case).
+        self._has_pinned_items = False
 
         self.fit_margin = 8
 
@@ -240,6 +246,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 scene_paning - self.scene_mouse_origin
             )
             self.centerOn(new_center)
+            self._update_pinned_items()
 
         if self.zoom_active:
             cursor_pos = QtGui.QVector2D(self.mapToGlobal(event.pos()))
@@ -252,6 +259,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             # Apply zoom
             self.scale(factor, factor)
             self.zoom_delta = current_delta
+            self._update_pinned_items()
 
         return result
 
@@ -364,6 +372,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 scene_drag_end - self.scene_mouse_origin
             )
             self.centerOn(new_center)
+            self._update_pinned_items()
             self.pan_active = False
             self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
 
@@ -400,6 +409,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         # Apply zoom
         self.scale(factor, factor)
+        # Keep viewport-pinned items locked to their screen anchors.
+        self._update_pinned_items()
 
     # undo --------------------------------------------------------------------
     def undo_move(self):
@@ -610,12 +621,18 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             self.fit_scene_content()
 
         # Run default resizeEvent
-        return QtWidgets.QGraphicsView.resizeEvent(self, *args, **kwargs)
+        result = QtWidgets.QGraphicsView.resizeEvent(self, *args, **kwargs)
+        # Re-anchor pinned items to the new viewport size (covers the case
+        # where auto-frame is off and no fit happened above).
+        self._update_pinned_items()
+        return result
 
     def fit_scene_content(self):
         """Will fit scene content to view, by scaling it"""
         scene_rect = self.scene().get_bounding_rect(margin=self.fit_margin)
         self.fitInView(scene_rect, QtCore.Qt.KeepAspectRatio)
+        # The fit changed the view transform; re-anchor pinned items.
+        self._update_pinned_items()
 
     def set_auto_frame_view(self):
         """Enable auto fit when a resize event happens"""
@@ -631,6 +648,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         )
         if scene_rect:
             self.fitInView(scene_rect, QtCore.Qt.KeepAspectRatio)
+            self._update_pinned_items()
 
     def get_color_picker_override(self, picker, ctrl):
         """Get the maya override color and return picker equivelant
@@ -883,8 +901,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         # Union the background layer bounds with the picker items' extent so
         # the canvas is not clamped to the image size (buttons stay reachable).
+        # Pinned HUD items are excluded so they never inflate the canvas.
         content = self._bounding_rect
-        items_rect = self.scene().itemsBoundingRect()
+        items_rect = self.scene().content_bounding_rect()
         if not items_rect.isNull():
             content = (
                 items_rect
@@ -1257,6 +1276,83 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 item.mirror_id = None
         self._recompute_mirror_links()
 
+    # -- viewport pins (HUD overlay) ------------------------------------
+    def _recompute_pinned_flag(self):
+        """Refresh the cached "any pinned item?" flag (on toggle / load)."""
+        self._has_pinned_items = any(
+            item.pinned for item in self.get_picker_items()
+        )
+
+    def _viewport_size(self):
+        """Return the viewport ``(width, height)`` for the overlay math."""
+        return (self.viewport().width(), self.viewport().height())
+
+    def _update_pinned_items(self):
+        """Lock each pinned item to its viewport anchor (constant screen spot).
+
+        A pinned item ignores the view transform for *drawing* (constant size)
+        but still lives at a scene point that pans with the canvas; this maps
+        its 3x3 anchor + pixel offset to the current viewport and writes the
+        item's scene position, so it stays fixed to the viewport through pan /
+        zoom / resize. A no-op when nothing is pinned.
+        """
+        if not self._has_pinned_items:
+            return
+        size = self._viewport_size()
+        # Scene accessor (no draw-order reverse) since order is irrelevant to
+        # repositioning; this runs per pan / zoom frame while pins exist.
+        for item in self.scene().get_picker_items():
+            if not item.pinned:
+                continue
+            px, py = overlay.anchor_point(size, item.anchor, item.offset)
+            item.setPos(self.mapToScene(int(round(px)), int(round(py))))
+
+    def set_item_pinned(self, item, state, anchor=None):
+        """Pin / unpin an item and reposition it (default anchor = its region).
+
+        Args:
+            item (PickerItem): the item to pin or unpin.
+            state (bool): pin when True, unpin when False.
+            anchor (str, optional): explicit anchor code; when pinning without
+                one, the item's current on-screen region is used (least
+                surprising) and the residual is stored as the offset.
+        """
+        if state:
+            view_pt = self.mapFromScene(item.pos())
+            size = self._viewport_size()
+            point = (view_pt.x(), view_pt.y())
+            if anchor is None:
+                anchor = overlay.nearest_anchor(size, point)
+            item.set_anchor(anchor)
+            item.set_offset(overlay.offset_from_anchor(size, anchor, point))
+        item.set_pinned(state)
+        self._recompute_pinned_flag()
+        self._update_pinned_items()
+        # Pins are excluded from the canvas extent, so toggling one may shrink
+        # or grow the scrollable bounds.
+        self._update_scene_rect()
+
+    def begin_pin_drag(self, item, scene_grab):
+        """Record a pinned item's grab delta at the start of an offset drag."""
+        grab = self.mapFromScene(scene_grab)
+        anchor_pt = self.mapFromScene(item.pos())
+        item._pin_drag_delta = (
+            anchor_pt.x() - grab.x(),
+            anchor_pt.y() - grab.y(),
+        )
+
+    def update_pin_drag(self, item, scene_pos):
+        """Update a pinned item's anchor / offset from an in-progress drag."""
+        grab = self.mapFromScene(scene_pos)
+        px = grab.x() + item._pin_drag_delta[0]
+        py = grab.y() + item._pin_drag_delta[1]
+        size = self._viewport_size()
+        anchor = overlay.nearest_anchor(size, (px, py))
+        item.set_anchor(anchor)
+        item.set_offset(overlay.offset_from_anchor(size, anchor, (px, py)))
+        self._update_pinned_items()
+        self._notify_item_transform()
+
     def _draw_bg_marquee(self, painter):
         """Draw the background-selection marquee rectangle, if active."""
         if self._bg_marquee_origin is None or self._bg_marquee_current is None:
@@ -1400,6 +1496,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.setScene(OrderedGraphicsScene(parent=self))
         old_scene.deleteLater()
         self._has_mirror_links = False
+        self._has_pinned_items = False
 
     def get_picker_items(self):
         """Return scene picker items in proper order (back to front)"""
@@ -1454,8 +1551,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # missing (resolve pairs lazily via item ids at edit time).
         self._clean_dangling_mirrors()
 
-        # Size the scene to include the items too, now that they exist.
+        # Record whether any item is pinned, then size the scene (pins are
+        # excluded from the extent) and lock the pins to their anchors.
+        self._recompute_pinned_flag()
         self._update_scene_size()
+        self._update_pinned_items()
 
     def drawBackground(self, painter, rect):
         """Draw the tab's background image layers (back to front)"""

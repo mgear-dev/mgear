@@ -419,6 +419,12 @@ class MainDockWindow(QtWidgets.QWidget):
                 self._cmd_shapes,
                 tool_bar.mgear_icon("mgear_replace_shape"),
             ),
+            self.left_toolbar.add_command(
+                "Pin",
+                "Pin / unpin the selection to the viewport (HUD overlay)",
+                self._cmd_toggle_pin,
+                tool_bar.mgear_icon("mgear_map-pin"),
+            ),
         ]
         canvas_row = QtWidgets.QHBoxLayout()
         canvas_row.setContentsMargins(0, 0, 0, 0)
@@ -533,6 +539,22 @@ class MainDockWindow(QtWidgets.QWidget):
 
     def _cmd_mirror_shape(self):
         self._cmd_mirror("mirror_shape")
+
+    def _cmd_toggle_pin(self):
+        """Pin / unpin the selection to the viewport (anchored to its region).
+
+        Toggles based on the first item's state so a mixed selection resolves
+        to a single, predictable result.
+        """
+        view = self._current_view()
+        items = self._selected_items()
+        if not (view and items):
+            return
+        target = not items[0].get_pinned()
+        for item in items:
+            view.set_item_pinned(item, target)
+        view.viewport().update()
+        self._after_command()
 
     def apply_palette_color(self, side, level):
         """Apply a preset color to the selection, mirroring by side to partners.

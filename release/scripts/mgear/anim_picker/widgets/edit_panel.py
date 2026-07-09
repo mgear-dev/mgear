@@ -14,6 +14,8 @@ drag; the main window calls :meth:`sync` on tab change / mode toggle. A
 background options panel.
 """
 
+from functools import partial
+
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
@@ -21,6 +23,7 @@ from mgear.vendor.Qt import QtWidgets
 from mgear.core import widgets as mwidgets
 
 from mgear.anim_picker.widgets import basic
+from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets.dialogs.handles_window import (
     HandlesPositionWindow,
 )
@@ -80,6 +83,11 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.custom_action_cb = None
         self.mirror_axis_sb = None
         self.mirror_status = None
+        self.pinned_cb = None
+        self.anchor_group = None
+        self.anchor_buttons = {}
+        self.pin_off_x_sb = None
+        self.pin_off_y_sb = None
 
         self._build_ui()
         self.refresh_fields()
@@ -109,6 +117,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._build_transform_section()
         self._build_appearance_section()
         self._build_shape_section()
+        self._build_pin_section()
         self._build_mirror_section()
         self._build_controls_section()
         self._build_action_section()
@@ -253,6 +262,76 @@ class ItemEditPanel(QtWidgets.QWidget):
         shapes_btn.setToolTip("Apply a premade / saved shape to the selection")
         self._fields.append(shapes_btn)
         section.addWidget(shapes_btn)
+
+    def _build_pin_section(self):
+        section = self._add_section("Pin")
+
+        self.pinned_cb = QtWidgets.QCheckBox("Pinned to viewport")
+        self.pinned_cb.setTristate(True)
+        self.pinned_cb.setToolTip(
+            "Lock the item to a viewport corner / edge (HUD overlay); it "
+            "ignores canvas pan and zoom"
+        )
+        self.pinned_cb.clicked.connect(self._apply_pinned)
+        self._fields.append(self.pinned_cb)
+        section.addWidget(self.pinned_cb)
+
+        # 3x3 anchor picker: nine exclusive toggle cells laid out like the
+        # viewport regions (top-left ... bottom-right). Explicit cell borders
+        # are set so the empty (unchecked) cells stay visible against Maya's
+        # dark stylesheet -- a bare QToolButton renders frameless there.
+        section.addWidget(QtWidgets.QLabel("Anchor"))
+        anchor_grid = QtWidgets.QGridLayout()
+        anchor_grid.setSpacing(2)
+        anchor_style = (
+            "QToolButton{border:1px solid #5a5a5a;border-radius:2px;"
+            "background:#3c3c3c;}"
+            "QToolButton:hover{border:1px solid #8a8a8a;}"
+            "QToolButton:checked{background:#5285a6;"
+            "border:1px solid #79b0d0;}"
+        )
+        self.anchor_group = QtWidgets.QButtonGroup(self)
+        self.anchor_group.setExclusive(True)
+        labels = {
+            "tl": "Top-left",
+            "tc": "Top-center",
+            "tr": "Top-right",
+            "ml": "Middle-left",
+            "mc": "Center",
+            "mr": "Middle-right",
+            "bl": "Bottom-left",
+            "bc": "Bottom-center",
+            "br": "Bottom-right",
+        }
+        for index, code in enumerate(overlay.ANCHOR_CODES):
+            button = QtWidgets.QToolButton()
+            button.setCheckable(True)
+            button.setFixedSize(QtCore.QSize(22, 22))
+            button.setStyleSheet(anchor_style)
+            button.setToolTip(labels[code])
+            button.clicked.connect(partial(self._apply_anchor, code))
+            self.anchor_group.addButton(button)
+            self.anchor_buttons[code] = button
+            self._fields.append(button)
+            anchor_grid.addWidget(button, index // 3, index % 3)
+        anchor_row = QtWidgets.QHBoxLayout()
+        anchor_row.addLayout(anchor_grid)
+        anchor_row.addStretch()
+        section.addLayout(anchor_row)
+
+        offset_form = QtWidgets.QFormLayout()
+        self.pin_off_x_sb = self._int_spin(self._apply_offset, -10000, 10000)
+        self.pin_off_y_sb = self._int_spin(self._apply_offset, -10000, 10000)
+        offset_form.addRow("Offset X", self.pin_off_x_sb)
+        offset_form.addRow("Offset Y", self.pin_off_y_sb)
+        section.addLayout(offset_form)
+
+        hint = QtWidgets.QLabel(
+            "Drag the item on the canvas to set its offset; the anchor snaps "
+            "to the nearest region."
+        )
+        hint.setWordWrap(True)
+        section.addWidget(hint)
 
     def _build_mirror_section(self):
         section = self._add_section("Mirror")
@@ -422,9 +501,27 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._populate_transform()
         self._populate_appearance()
         self._populate_shape()
+        self._populate_pin()
         self._populate_mirror()
         self._populate_controls()
         self._populate_action()
+
+    def _populate_pin(self):
+        pinned, pinned_mixed = self._shared(lambda item: item.get_pinned())
+        self._set_tristate(self.pinned_cb, pinned, pinned_mixed)
+
+        anchor, anchor_mixed = self._shared(lambda item: item.get_anchor())
+        self.anchor_group.setExclusive(False)
+        for code, button in self.anchor_buttons.items():
+            button.blockSignals(True)
+            button.setChecked(not anchor_mixed and code == anchor)
+            button.blockSignals(False)
+        self.anchor_group.setExclusive(True)
+
+        ox, ox_mixed = self._shared(lambda item: int(round(item.get_offset()[0])))
+        oy, oy_mixed = self._shared(lambda item: int(round(item.get_offset()[1])))
+        self._set_spin(self.pin_off_x_sb, ox, ox_mixed)
+        self._set_spin(self.pin_off_y_sb, oy, oy_mixed)
 
     def _populate_mirror(self):
         if self._view is not None:
@@ -457,6 +554,17 @@ class ItemEditPanel(QtWidgets.QWidget):
             spin.setValue(spin.minimum())
         else:
             spin.setValue(value)
+
+    def _set_tristate(self, checkbox, value, mixed):
+        """Set a tristate checkbox from a shared value (partial when mixed)."""
+        checkbox.blockSignals(True)
+        checkbox.setTristate(True)
+        if mixed:
+            checkbox.setCheckState(QtCore.Qt.PartiallyChecked)
+        else:
+            state = QtCore.Qt.Checked if value else QtCore.Qt.Unchecked
+            checkbox.setCheckState(state)
+        checkbox.blockSignals(False)
 
     def _populate_transform(self):
         x, x_mixed = self._shared(lambda item: round(item.x(), 4))
@@ -512,14 +620,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         status, status_mixed = self._shared(
             lambda item: item.get_edit_status()
         )
-        self.handles_cb.blockSignals(True)
-        self.handles_cb.setTristate(True)
-        if status_mixed:
-            self.handles_cb.setCheckState(QtCore.Qt.PartiallyChecked)
-        else:
-            state = QtCore.Qt.Checked if status else QtCore.Qt.Unchecked
-            self.handles_cb.setCheckState(state)
-        self.handles_cb.blockSignals(False)
+        self._set_tristate(self.handles_cb, status, status_mixed)
 
     def _populate_controls(self):
         self.control_list.clear()
@@ -535,14 +636,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         mode, mode_mixed = self._shared(
             lambda item: item.get_custom_action_mode()
         )
-        self.custom_action_cb.blockSignals(True)
-        self.custom_action_cb.setTristate(True)
-        if mode_mixed:
-            self.custom_action_cb.setCheckState(QtCore.Qt.PartiallyChecked)
-        else:
-            state = QtCore.Qt.Checked if mode else QtCore.Qt.Unchecked
-            self.custom_action_cb.setCheckState(state)
-        self.custom_action_cb.blockSignals(False)
+        self._set_tristate(self.custom_action_cb, mode, mode_mixed)
 
         self.menus_list.clear()
         item = self._active_item()
@@ -584,6 +678,15 @@ class ItemEditPanel(QtWidgets.QWidget):
         """
         value = spin.value()
         return None if value == spin.minimum() else value
+
+    def _resolve_tristate(self, checkbox):
+        """Resolve a user-clicked tristate to a bool (partial counts as on).
+
+        Clears the tristate so a subsequent click toggles cleanly on/off.
+        """
+        resolved = checkbox.checkState() != QtCore.Qt.Unchecked
+        checkbox.setTristate(False)
+        return resolved
 
     # -- transform ------------------------------------------------------
     def _apply_position(self, *args, **kwargs):
@@ -704,10 +807,8 @@ class ItemEditPanel(QtWidgets.QWidget):
     def _apply_show_handles(self, *args, **kwargs):
         if self._syncing or not self.items:
             return
-        state = self.handles_cb.checkState()
         # A user click resolves the tristate; treat partial as "show".
-        show = state != QtCore.Qt.Unchecked
-        self.handles_cb.setTristate(False)
+        show = self._resolve_tristate(self.handles_cb)
         for item in self.items:
             item.set_edit_status(show)
         self._repaint_view()
@@ -799,6 +900,37 @@ class ItemEditPanel(QtWidgets.QWidget):
             self._view.apply_mirror_for([item])
         self._view.viewport().update()
 
+    # -- pin ------------------------------------------------------------
+    def _apply_pinned(self, *args, **kwargs):
+        if self._syncing or not self.items or self._view is None:
+            return
+        state = self._resolve_tristate(self.pinned_cb)
+        for item in self.items:
+            self._view.set_item_pinned(item, state)
+        self._view.viewport().update()
+        self._guarded(self._populate_pin)
+
+    def _apply_anchor(self, code, *args, **kwargs):
+        if self._syncing or not self.items or self._view is None:
+            return
+        for item in self.items:
+            item.set_anchor(code)
+        self._view._update_pinned_items()
+        self._view.viewport().update()
+
+    def _apply_offset(self, *args, **kwargs):
+        if self._syncing or not self.items or self._view is None:
+            return
+        x = self._committed(self.pin_off_x_sb)
+        y = self._committed(self.pin_off_y_sb)
+        for item in self.items:
+            off = item.get_offset()
+            item.set_offset(
+                [off[0] if x is None else x, off[1] if y is None else y]
+            )
+        self._view._update_pinned_items()
+        self._view.viewport().update()
+
     # -- controls -------------------------------------------------------
     def _add_selected_controls(self):
         if not self.items:
@@ -829,8 +961,7 @@ class ItemEditPanel(QtWidgets.QWidget):
     def _apply_action_mode(self, *args, **kwargs):
         if self._syncing or not self.items:
             return
-        custom = self.custom_action_cb.checkState() != QtCore.Qt.Unchecked
-        self.custom_action_cb.setTristate(False)
+        custom = self._resolve_tristate(self.custom_action_cb)
         for item in self.items:
             item.set_custom_action_mode(custom)
 

@@ -29,6 +29,7 @@ from mgear.anim_picker.widgets.dialogs.search_replace_dialog import (
 from mgear.anim_picker.widgets.dialogs.copy_paste_dialog import DataCopyDialog
 from mgear.anim_picker.widgets.item_model import PickerItemData
 from mgear.anim_picker.widgets import mirror
+from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
 from mgear.anim_picker.handlers import python_handlers
@@ -110,6 +111,15 @@ class PickerItem(DefaultPolygon):
         # the item is first linked; mirror_id is the partner's item_id.
         self.item_id = None
         self.mirror_id = None
+
+        # Viewport pin (optional HUD overlay): when pinned the item ignores the
+        # canvas pan/zoom and is repositioned by the view to ``anchor`` +
+        # ``offset`` (a 3x3 viewport anchor code + inward pixel offset). The
+        # view records a per-item drag delta here while an offset drag is live.
+        self.pinned = False
+        self.anchor = overlay.DEFAULT_ANCHOR
+        self.offset = list(overlay.DEFAULT_OFFSET)
+        self._pin_drag_delta = (0.0, 0.0)
 
     def shape(self):
         path = QtGui.QPainterPath()
@@ -238,6 +248,13 @@ class PickerItem(DefaultPolygon):
         super().hoverEnterEvent(event)
 
     def mouseMoveEvent_offset(self, event):
+        # A pinned item is not moved in scene space: its drag updates its
+        # viewport anchor / offset instead (the view snaps the anchor).
+        if self.pinned:
+            view = self.parent()
+            if hasattr(view, "update_pin_drag"):
+                view.update_pin_drag(self, event.scenePos())
+            return
         self.setPos(event.scenePos() + self.cursor_delta)
 
     def mouseMoveEvent(self, event):
@@ -248,6 +265,11 @@ class PickerItem(DefaultPolygon):
                     item.mouseMoveEvent_offset(event)
                     for item in self.currently_selected
                 ]
+            # The pressed item is moved by Qt (ItemIsMovable) when free, but a
+            # pinned item is non-movable, so route its drag to an offset here.
+            if self.pinned:
+                self.mouseMoveEvent_offset(event)
+                return
         super().mouseMoveEvent(gfx_event)
 
     def mousePressEvent(self, event):
@@ -268,6 +290,14 @@ class PickerItem(DefaultPolygon):
                     item.get_delta_from_point(event.scenePos())
                     for item in self.currently_selected
                 ]
+            # Prime the offset drag for any pinned item in the drag set (the
+            # view records a per-item grab delta so the anchor tracks the
+            # cursor without jumping to the item's origin).
+            view = self.parent()
+            if hasattr(view, "begin_pin_drag"):
+                for item in [self] + self.currently_selected:
+                    if item.pinned:
+                        view.begin_pin_drag(item, event.scenePos())
             return DefaultPolygon.mousePressEvent(self, event)
 
         # Run selection on left mouse button event
@@ -687,6 +717,56 @@ class PickerItem(DefaultPolygon):
         return self.cursor_delta
 
     # =========================================================================
+    # Viewport pin (HUD overlay) ---
+    def get_pinned(self):
+        """Return True when the item is pinned to the viewport."""
+        return self.pinned
+
+    def set_pinned(self, state):
+        """Pin / unpin the item to the viewport.
+
+        A pinned item ignores the view transform so it draws at a constant
+        screen size (like the point handles), and a compensating vertical flip
+        is applied so its shape / text stay upright despite the Y-flipped view.
+        The view owns the item's *position* (see ``_update_pinned_items``); a
+        pinned item is not free-dragged in scene space, so it is made
+        non-movable while pinned.
+
+        Args:
+            state (bool): pin when True, unpin when False.
+        """
+        self.pinned = bool(state)
+        self.setFlag(
+            QtWidgets.QGraphicsItem.ItemIgnoresTransformations, self.pinned
+        )
+        # Counter the view's scale(1, -1): with the view transform ignored the
+        # item would otherwise render vertically mirrored.
+        if self.pinned:
+            self.setTransform(QtGui.QTransform().scale(1, -1))
+        else:
+            self.setTransform(QtGui.QTransform())
+        if __EDIT_MODE__.get():
+            self.setFlag(
+                QtWidgets.QGraphicsItem.ItemIsMovable, not self.pinned
+            )
+
+    def get_anchor(self):
+        """Return the item's 3x3 viewport anchor code."""
+        return self.anchor
+
+    def set_anchor(self, anchor):
+        """Set the item's viewport anchor code (e.g. ``"tl"``)."""
+        self.anchor = anchor
+
+    def get_offset(self):
+        """Return the item's inward ``[dx, dy]`` pixel offset."""
+        return self.offset
+
+    def set_offset(self, offset):
+        """Set the item's inward ``[dx, dy]`` pixel offset."""
+        self.offset = list(offset)
+
+    # =========================================================================
     # Ducplicate and mirror methods ---
     def mirror_position(self, axis_x=0.0):
         """Mirror picker position about the vertical axis at ``axis_x``."""
@@ -1056,6 +1136,15 @@ class PickerItem(DefaultPolygon):
         if model.mirror_id:
             self.mirror_id = model.mirror_id
 
+        # Viewport pin (optional, additive keys). Apply anchor / offset first so
+        # the view can place the item on the next _update_pinned_items pass.
+        if model.pinned:
+            if model.anchor:
+                self.set_anchor(model.anchor)
+            if model.offset is not None:
+                self.set_offset(model.offset)
+            self.set_pinned(True)
+
     def get_data(self):
         """Get picker item data in dictionary form.
 
@@ -1085,5 +1174,10 @@ class PickerItem(DefaultPolygon):
 
         model.item_id = self.item_id
         model.mirror_id = self.mirror_id
+
+        if self.pinned:
+            model.pinned = True
+            model.anchor = self.anchor
+            model.offset = list(self.offset)
 
         return model.to_dict()
