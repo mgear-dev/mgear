@@ -27,6 +27,8 @@ from mgear.anim_picker.constants import _mgear_version
 from mgear.anim_picker.view import GraphicViewWidget
 from mgear.anim_picker.tab_widget import ContextMenuTabWidget
 from mgear.anim_picker.widgets import basic
+from mgear.anim_picker.widgets import edit_panel
+from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.widgets import overlay_widgets
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
@@ -91,6 +93,9 @@ class MainDockWindow(QtWidgets.QWidget):
         self.status = False
         self.childs = []
         self.script_jobs = []
+        # Active canvas tool (Photoshop-style left toolbar); the view reads
+        # this to decide whether the transform manipulator is shown/active.
+        self.active_tool = tool_bar.TOOL_SELECT
 
         __EDIT_MODE__.set_init(edit)
         self.is_dockable = dockable
@@ -360,7 +365,29 @@ class MainDockWindow(QtWidgets.QWidget):
     def add_tab_widget(self, name="default"):
         """Add control display field"""
         self.tab_widget = ContextMenuTabWidget(self, main_window=self)
-        self.main_vertical_layout.addWidget(self.tab_widget)
+
+        # Right-docked inline item editor (edit mode only). The tab widget and
+        # the panel share a resizable, collapsible splitter, so the classic
+        # single-pane view is simply the panel-hidden state.
+        self.edit_panel = edit_panel.ItemEditPanel(main_window=self)
+        self.edit_panel.setMinimumWidth(pyqt.dpi_scale(220))
+
+        self.editor_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        self.editor_splitter.addWidget(self.tab_widget)
+        self.editor_splitter.addWidget(self.edit_panel)
+        self.editor_splitter.setStretchFactor(0, 1)
+        self.editor_splitter.setStretchFactor(1, 0)
+        self.editor_splitter.setCollapsible(0, False)
+        self.editor_splitter.setCollapsible(1, True)
+
+        # Photoshop-style tool strip on the left of the canvas + the splitter.
+        self.left_toolbar = tool_bar.PickerToolBar(main_window=self)
+        canvas_row = QtWidgets.QHBoxLayout()
+        canvas_row.setContentsMargins(0, 0, 0, 0)
+        canvas_row.setSpacing(0)
+        canvas_row.addWidget(self.left_toolbar)
+        canvas_row.addWidget(self.editor_splitter)
+        self.main_vertical_layout.addLayout(canvas_row)
 
         # Add default first tab
         view = GraphicViewWidget(main_window=self)
@@ -370,6 +397,42 @@ class MainDockWindow(QtWidgets.QWidget):
         sp_retain = self.tab_widget.sizePolicy()
         sp_retain.setRetainSizeWhenHidden(True)
         self.tab_widget.setSizePolicy(sp_retain)
+
+        # Editor panel and tool strip are edit-mode only; refresh the panel
+        # when the tab changes.
+        self.edit_panel.setVisible(__EDIT_MODE__.get())
+        self.left_toolbar.setVisible(__EDIT_MODE__.get())
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
+    def _on_tab_changed(self, *args):
+        """Rebind the inline editor to the newly active tab's selection."""
+        panel = getattr(self, "edit_panel", None)
+        if panel is not None:
+            panel.sync()
+
+    def set_active_tool(self, name):
+        """Set the active canvas tool and repaint so the overlay updates.
+
+        Args:
+            name (str): a ``tool_bar`` tool id (TOOL_SELECT / TOOL_TRANSFORM).
+        """
+        self.active_tool = name
+        view = self.tab_widget.currentWidget()
+        if view is not None:
+            view.viewport().update()
+
+    def _sync_edit_panel(self):
+        """Show/hide the inline editor + tool strip with the mode."""
+        edit = __EDIT_MODE__.get()
+        toolbar = getattr(self, "left_toolbar", None)
+        if toolbar is not None:
+            toolbar.setVisible(edit)
+        panel = getattr(self, "edit_panel", None)
+        if panel is None:
+            return
+        panel.setVisible(edit)
+        if edit:
+            panel.sync()
 
     def add_overlays(self):
         """Add transparent overlay widgets"""
@@ -542,6 +605,9 @@ class MainDockWindow(QtWidgets.QWidget):
 
         # Force view resize
         self.tab_widget.fit_contents()
+
+        # Sync the inline editor's visibility/content with the current mode.
+        self._sync_edit_panel()
 
         # Set focus on view
         self.tab_widget.currentWidget().setFocus()

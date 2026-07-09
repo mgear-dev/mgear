@@ -26,6 +26,8 @@ from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import picker_widgets
 from mgear.anim_picker.widgets import background_model
 from mgear.anim_picker.widgets import background_manipulator
+from mgear.anim_picker.widgets import item_manipulator
+from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.handlers import __EDIT_MODE__
 
 
@@ -98,6 +100,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self._bg_marquee_origin = None
         self._bg_marquee_current = None
 
+        # On-canvas picker item scale/rotate manipulator (edit mode only).
+        self.item_manipulator = item_manipulator.ItemManipulator(self)
+        self._item_dragging = False
+
         self.fit_margin = 8
 
         # # undo list ---------------------------------------------------------
@@ -112,6 +118,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
     def mousePressEvent(self, event):
         # Background layer manipulation intercepts left-click when active.
         if self.background_edit and self._bg_mouse_press(event):
+            return
+        # Item scale/rotate handle press intercepts left-click in edit mode.
+        if self._item_mouse_press(event):
             return
         self.modified_select = False
         self.item_selected = False
@@ -178,6 +187,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Background layer drag / marquee intercepts movement when active.
         if self.background_edit and self._bg_mouse_move(event):
             return
+        # Item scale/rotate drag intercepts movement when active.
+        if self._item_dragging and self._item_mouse_move(event):
+            return
         result = QtWidgets.QGraphicsView.mouseMoveEvent(self, event)
 
         if (
@@ -224,11 +236,20 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Background layer drag / marquee release when active.
         if self.background_edit and self._bg_mouse_release(event):
             return
+        # Item scale/rotate drag release when active.
+        if self._item_dragging and self._item_mouse_release(event):
+            return
         result = QtWidgets.QGraphicsView.mouseReleaseEvent(self, event)
+        # A left release that was NOT a drag re-selects the item under the
+        # cursor (click-to-select). Skip it when a move happened
+        # (``__move_prompt``): dragging a selected item moves the whole
+        # selection, so re-selecting the item under the cursor would collapse
+        # a multi-selection down to one.
         if (
             not self.drag_active
             and event.button() == QtCore.Qt.MouseButton.LeftButton
             and not self.modified_select
+            and not self.__move_prompt
         ):
             self.modified_select = False
             scene_pos = self.mapToScene(event.pos())
@@ -326,6 +347,12 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         ):
             self.zoom_active = False
             self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
+
+        # Refresh the item manipulator overlay + inline edit panel for the new
+        # selection (edit mode only; a no-op when nothing consumes it).
+        if __EDIT_MODE__.get():
+            self._notify_item_selection()
+            self.viewport().update()
 
         self.drag_active = False
         return result
@@ -1002,6 +1029,75 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         return False
 
+    def _transform_tool_active(self):
+        """Return True when the Transform tool is active (manipulator on)."""
+        active = getattr(
+            self.main_window, "active_tool", tool_bar.TOOL_SELECT
+        )
+        return active == tool_bar.TOOL_TRANSFORM
+
+    def _notify_item_selection(self):
+        """Tell the inline edit panel the item selection changed (full sync)."""
+        panel = getattr(self.main_window, "edit_panel", None)
+        if panel is not None:
+            panel.sync_from_view(self)
+
+    def _notify_item_transform(self):
+        """Tell the panel the selection's transform changed (light refresh)."""
+        panel = getattr(self.main_window, "edit_panel", None)
+        if panel is not None:
+            panel.refresh_transform()
+
+    def _item_mouse_press(self, event):
+        """Begin an item scale/rotate drag if a handle was pressed.
+
+        Returns True (consuming the event) only when a manipulator handle under
+        the cursor starts a drag; otherwise the event falls through to normal
+        selection / move handling.
+        """
+        if not __EDIT_MODE__.get():
+            return False
+        if not self._transform_tool_active():
+            return False
+        if event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return False
+        if not self.item_manipulator.is_active():
+            return False
+        scene_pos = self.mapToScene(event.pos())
+        hit = self.item_manipulator.hit_test(scene_pos.x(), scene_pos.y())
+        if hit is None:
+            return False
+        mode = hit[0]
+        handle = hit[1] if mode == "scale" else None
+        self.item_manipulator.begin_drag(
+            mode, handle, scene_pos.x(), scene_pos.y()
+        )
+        self._item_dragging = True
+        return True
+
+    def _item_mouse_move(self, event):
+        """Update an in-progress item scale/rotate drag. Return True if used."""
+        if not (event.buttons() & QtCore.Qt.MouseButton.LeftButton):
+            return False
+        scene_pos = self.mapToScene(event.pos())
+        keep = bool(event.modifiers() & QtCore.Qt.ShiftModifier)
+        self.item_manipulator.update_drag(scene_pos.x(), scene_pos.y(), keep)
+        self._notify_item_transform()
+        self.viewport().update()
+        return True
+
+    def _item_mouse_release(self, event):
+        """Finish an item scale/rotate drag. Return True if consumed."""
+        if event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return False
+        self.item_manipulator.end_drag()
+        self._item_dragging = False
+        # Grow the pan bounds to the items' new extent (no view refit).
+        self._update_scene_rect()
+        self._notify_item_selection()
+        self.viewport().update()
+        return True
+
     def _draw_bg_marquee(self, painter):
         """Draw the background-selection marquee rectangle, if active."""
         if self._bg_marquee_origin is None or self._bg_marquee_current is None:
@@ -1221,6 +1317,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Paint axis in edit mode
         if __EDIT_MODE__.get():
             self.draw_overlay_axis(painter, rect)
+            # Item scale/rotate manipulator overlay: opt-in via the Transform
+            # tool and suppressed while manipulating background layers.
+            if not self.background_edit and self._transform_tool_active():
+                self.item_manipulator.paint(painter)
 
         # Background layer manipulator overlay + selection marquee
         if self.background_edit:

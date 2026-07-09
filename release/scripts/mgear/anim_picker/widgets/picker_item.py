@@ -542,8 +542,27 @@ class PickerItem(DefaultPolygon):
     # =========================================================================
     # Edit picker item options ---
     def edit_options(self):
-        """Open Edit options window"""
-        # Delete old window
+        """Surface the inline editor bound to this item.
+
+        Replaces the per-item modal for the common path (6a): the docked panel
+        edits the whole selection inline. Falls back to the legacy
+        ``ItemOptionsWindow`` only when no inline panel is available.
+        """
+        panel = getattr(self.main_window, "edit_panel", None)
+        if panel is None:
+            self._open_options_modal()
+            return
+
+        # Bind the panel to this item, keeping any existing multi-selection.
+        if not self.polygon.selected:
+            self.scene().select_picker_items([self])
+        panel.sync()
+        panel.setVisible(True)
+        panel.raise_()
+        panel.setFocus()
+
+    def _open_options_modal(self):
+        """Open the legacy single-item options modal (fallback only)."""
         if self.edit_window:
             try:
                 self.edit_window.close()
@@ -551,12 +570,9 @@ class PickerItem(DefaultPolygon):
             except Exception:
                 pass
 
-        # Init new window
         self.edit_window = ItemOptionsWindow(
             parent=self.main_window, picker_item=self
         )
-
-        # Show window
         self.edit_window.show()
         self.edit_window.raise_()
 

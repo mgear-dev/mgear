@@ -1,0 +1,777 @@
+"""Inline multi-selection edit panel for picker items.
+
+``ItemEditPanel`` is the right-docked, edit-mode-only replacement for the
+per-item ``ItemOptionsWindow`` modal. It binds to the current picker selection
+and edits every selected item at once through the existing ``PickerItem``
+setters -- no re-implementation of the item logic. Fields whose value differs
+across the selection are shown in a distinct "mixed" state (numeric spin boxes
+via a sentinel + special text, text/color swatches via a placeholder) so a
+multi-edit never silently clobbers differing values.
+
+The view calls :meth:`sync_from_view` after any selection change or manipulator
+drag; the main window calls :meth:`sync` on tab change / mode toggle. A
+``_syncing`` guard breaks the canvas<->panel feedback loop, mirroring the
+background options panel.
+"""
+
+from mgear.vendor.Qt import QtGui
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtWidgets
+
+from mgear.core import widgets as mwidgets
+
+from mgear.anim_picker.widgets import basic
+from mgear.anim_picker.widgets.dialogs.handles_window import (
+    HandlesPositionWindow,
+)
+from mgear.anim_picker.widgets.dialogs.script_dialog import (
+    CustomScriptEditDialog,
+)
+from mgear.anim_picker.widgets.dialogs.script_dialog import (
+    CustomMenuEditDialog,
+)
+from mgear.anim_picker.widgets.dialogs.search_replace_dialog import (
+    SearchAndReplaceDialog,
+)
+
+
+class ItemEditPanel(QtWidgets.QWidget):
+    """Right-docked inline editor for the current picker item selection."""
+
+    # Sentinel spin value shown as ``MIXED_TEXT`` when a field is mixed. It is
+    # the spin box minimum, so the display reads "-" until the user commits a
+    # real value; the apply handlers skip it so a mixed field is never written.
+    MIXED = -1.0e7
+    MIXED_INT = -1000000
+    MIXED_TEXT = "-"
+
+    def __init__(self, parent=None, main_window=None):
+        super().__init__(parent=parent)
+        self.main_window = main_window
+        # Currently bound selection and the view it came from.
+        self.items = []
+        self._view = None
+        # Guard against panel<->canvas write-back while populating fields.
+        self._syncing = False
+        # Child windows opened from the panel (handles table).
+        self.handles_window = None
+        # Interactive widgets toggled with the selection presence.
+        self._fields = []
+
+        # Widgets created in the section builders.
+        self.pos_x_sb = None
+        self.pos_y_sb = None
+        self.rotate_sb = None
+        self.scale_factor_sb = None
+        self.worldspace_cb = None
+        self.color_button = None
+        self.alpha_sb = None
+        self.text_field = None
+        self.text_size_sb = None
+        self.text_color_button = None
+        self.text_alpha_sb = None
+        self.count_sb = None
+        self.handles_cb = None
+        self.control_list = None
+        self.menus_list = None
+        self.custom_action_cb = None
+
+        self._build_ui()
+        self.refresh_fields()
+
+    # ------------------------------------------------------------------
+    # Construction
+    # ------------------------------------------------------------------
+    def _build_ui(self):
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        self.title = QtWidgets.QLabel("Item Editor")
+        self.title.setAlignment(QtCore.Qt.AlignCenter)
+        outer.addWidget(self.title)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        outer.addWidget(scroll)
+
+        content = QtWidgets.QWidget()
+        self.content_layout = QtWidgets.QVBoxLayout(content)
+        self.content_layout.setContentsMargins(2, 2, 2, 2)
+        self.content_layout.setSpacing(2)
+        scroll.setWidget(content)
+
+        self._build_transform_section()
+        self._build_appearance_section()
+        self._build_shape_section()
+        self._build_controls_section()
+        self._build_action_section()
+        self.content_layout.addStretch()
+
+    def _add_section(self, title):
+        """Add a collapsible section and return its widget."""
+        section = mwidgets.CollapsibleWidget(title, expanded=True)
+        self.content_layout.addWidget(section)
+        return section
+
+    def _double_spin(self, callback, maximum=1.0e6, step=1.0, decimals=2):
+        """Return a mixed-aware double spin box (sentinel minimum).
+
+        Built on ``basic.CallBackDoubleSpinBox`` (the framework's value->callback
+        wrapper); the mixed state is layered on via the sentinel minimum +
+        ``setSpecialValueText``.
+        """
+        spin = basic.CallBackDoubleSpinBox(
+            callback=callback, value=0.0, min=self.MIXED, max=maximum
+        )
+        spin.setDecimals(decimals)
+        spin.setSingleStep(step)
+        spin.setSpecialValueText(self.MIXED_TEXT)
+        self._fields.append(spin)
+        return spin
+
+    def _int_spin(self, callback, minimum, maximum):
+        """Return a mixed-aware int spin box (sentinel minimum)."""
+        spin = basic.CallBackSpinBox(
+            callback=callback, value=0, min=self.MIXED_INT, max=maximum
+        )
+        spin.setSpecialValueText(self.MIXED_TEXT)
+        # ``minimum`` is the real usable floor; the sentinel sits below it.
+        spin.setProperty("usable_minimum", minimum)
+        self._fields.append(spin)
+        return spin
+
+    def _build_transform_section(self):
+        section = self._add_section("Transform")
+
+        form = QtWidgets.QFormLayout()
+        self.pos_x_sb = self._double_spin(self._apply_position)
+        self.pos_y_sb = self._double_spin(self._apply_position)
+        self.rotate_sb = self._double_spin(
+            self._apply_rotation, maximum=3600.0, step=5.0
+        )
+        form.addRow("X", self.pos_x_sb)
+        form.addRow("Y", self.pos_y_sb)
+        form.addRow("Rotation", self.rotate_sb)
+        section.addLayout(form)
+
+        reset_rot = basic.CallbackButton(callback=self._reset_rotation)
+        reset_rot.setText("Reset Rotation")
+        self._fields.append(reset_rot)
+        section.addWidget(reset_rot)
+
+        # Scale (shape) factor + axis buttons, mirroring the modal.
+        scale_row = QtWidgets.QHBoxLayout()
+        scale_row.addWidget(QtWidgets.QLabel("Factor"))
+        self.scale_factor_sb = QtWidgets.QDoubleSpinBox()
+        self.scale_factor_sb.setRange(0.01, 100.0)
+        self.scale_factor_sb.setValue(1.1)
+        self.scale_factor_sb.setSingleStep(0.05)
+        scale_row.addWidget(self.scale_factor_sb)
+        section.addLayout(scale_row)
+
+        self.worldspace_cb = QtWidgets.QCheckBox("World space")
+        section.addWidget(self.worldspace_cb)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        for label, kwargs in (
+            ("X", {"x": True}),
+            ("Y", {"y": True}),
+            ("XY", {"x": True, "y": True}),
+        ):
+            btn = basic.CallbackButton(callback=self._apply_scale, **kwargs)
+            btn.setText(label)
+            self._fields.append(btn)
+            btn_row.addWidget(btn)
+        section.addLayout(btn_row)
+
+    def _build_appearance_section(self):
+        section = self._add_section("Appearance")
+
+        color_row = QtWidgets.QHBoxLayout()
+        self.color_button = basic.CallbackButton(callback=self._pick_color)
+        self.color_button.setToolTip("Shape color")
+        color_row.addWidget(self.color_button)
+        color_row.addWidget(QtWidgets.QLabel("Alpha"))
+        self.alpha_sb = self._int_spin(self._apply_alpha, 0, 255)
+        color_row.addWidget(self.alpha_sb)
+        section.addLayout(color_row)
+
+        # ``CallbackLineEdit`` commits on Enter (returnPressed), so a focus-out
+        # never clobbers a field left blank for the mixed state.
+        self.text_field = basic.CallbackLineEdit(callback=self._apply_text)
+        self.text_field.setPlaceholderText("Text")
+        self._fields.append(self.text_field)
+        section.addWidget(self.text_field)
+
+        text_form = QtWidgets.QFormLayout()
+        self.text_size_sb = self._double_spin(
+            self._apply_text_size, maximum=100.0, step=0.1
+        )
+        text_form.addRow("Text size", self.text_size_sb)
+        section.addLayout(text_form)
+
+        tcolor_row = QtWidgets.QHBoxLayout()
+        self.text_color_button = basic.CallbackButton(
+            callback=self._pick_text_color
+        )
+        self.text_color_button.setToolTip("Text color")
+        tcolor_row.addWidget(self.text_color_button)
+        tcolor_row.addWidget(QtWidgets.QLabel("Alpha"))
+        self.text_alpha_sb = self._int_spin(self._apply_text_alpha, 0, 255)
+        tcolor_row.addWidget(self.text_alpha_sb)
+        section.addLayout(tcolor_row)
+
+    def _build_shape_section(self):
+        section = self._add_section("Shape")
+
+        self.handles_cb = QtWidgets.QCheckBox("Show handles")
+        self.handles_cb.setTristate(True)
+        self.handles_cb.clicked.connect(self._apply_show_handles)
+        self._fields.append(self.handles_cb)
+        section.addWidget(self.handles_cb)
+
+        count_row = QtWidgets.QHBoxLayout()
+        count_row.addWidget(QtWidgets.QLabel("Vtx count"))
+        self.count_sb = self._int_spin(self._apply_point_count, 2, 200)
+        count_row.addWidget(self.count_sb)
+        section.addLayout(count_row)
+
+        handles_btn = basic.CallbackButton(callback=self._edit_handles)
+        handles_btn.setText("Handles Positions...")
+        self._fields.append(handles_btn)
+        section.addWidget(handles_btn)
+
+    def _build_controls_section(self):
+        section = self._add_section("Controls")
+
+        self.control_list = QtWidgets.QListWidget()
+        self.control_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.ExtendedSelection
+        )
+        self.control_list.setToolTip(
+            "Controls of the active (last selected) item"
+        )
+        self.control_list.setMaximumHeight(120)
+        section.addWidget(self.control_list)
+
+        row1 = QtWidgets.QHBoxLayout()
+        add_btn = basic.CallbackButton(callback=self._add_selected_controls)
+        add_btn.setText("Add Selection")
+        add_btn.setToolTip("Add the Maya selection to every selected item")
+        self._fields.append(add_btn)
+        row1.addWidget(add_btn)
+        remove_btn = basic.CallbackButton(callback=self._remove_controls)
+        remove_btn.setText("Remove")
+        remove_btn.setToolTip("Remove the highlighted controls (active item)")
+        self._fields.append(remove_btn)
+        row1.addWidget(remove_btn)
+        section.addLayout(row1)
+
+        replace_btn = basic.CallbackButton(callback=self._search_replace)
+        replace_btn.setText("Search && Replace")
+        replace_btn.setToolTip("Search/replace control names on all selected")
+        self._fields.append(replace_btn)
+        section.addWidget(replace_btn)
+
+    def _build_action_section(self):
+        section = self._add_section("Action")
+
+        self.custom_action_cb = QtWidgets.QCheckBox("Custom action (script)")
+        self.custom_action_cb.setTristate(True)
+        self.custom_action_cb.setToolTip(
+            "Off = select controls, On = run the custom action script"
+        )
+        self.custom_action_cb.clicked.connect(self._apply_action_mode)
+        self._fields.append(self.custom_action_cb)
+        section.addWidget(self.custom_action_cb)
+
+        script_btn = basic.CallbackButton(callback=self._edit_action_script)
+        script_btn.setText("Edit Action Script...")
+        self._fields.append(script_btn)
+        section.addWidget(script_btn)
+
+        section.addWidget(QtWidgets.QLabel("Custom Menus (active item)"))
+        self.menus_list = QtWidgets.QListWidget()
+        self.menus_list.setMaximumHeight(90)
+        self.menus_list.itemDoubleClicked.connect(self._edit_menu)
+        section.addWidget(self.menus_list)
+
+        menu_row = QtWidgets.QHBoxLayout()
+        new_menu = basic.CallbackButton(callback=self._new_menu)
+        new_menu.setText("New")
+        self._fields.append(new_menu)
+        menu_row.addWidget(new_menu)
+        del_menu = basic.CallbackButton(callback=self._remove_menu)
+        del_menu.setText("Remove")
+        self._fields.append(del_menu)
+        menu_row.addWidget(del_menu)
+        section.addLayout(menu_row)
+
+    # ------------------------------------------------------------------
+    # Selection binding
+    # ------------------------------------------------------------------
+    def _current_view(self):
+        """Return the main window's active graphics view, or None."""
+        tab_widget = getattr(self.main_window, "tab_widget", None)
+        if tab_widget is None:
+            return None
+        return tab_widget.currentWidget()
+
+    def sync(self):
+        """Rebind to the current active view's selection."""
+        self.sync_from_view(self._current_view())
+
+    def sync_from_view(self, view):
+        """Rebind to ``view``'s current picker selection.
+
+        Args:
+            view (GraphicViewWidget): the view whose selection to edit.
+        """
+        self._view = view
+        items = []
+        if view is not None:
+            items = view.scene().get_selected_items()
+        self.items = list(items)
+        self.refresh_fields()
+
+    def refresh_transform(self):
+        """Refresh only the transform fields (live during a manipulator drag).
+
+        The selection set is stable during a drag, so this avoids rebuilding the
+        control / menu lists (and their per-control ``objExists`` checks) every
+        mouse-move frame. Skipped entirely when the panel is hidden.
+        """
+        if not self.items or not self.isVisible():
+            return
+        self._guarded(self._populate_transform)
+
+    def _active_item(self):
+        """Return the reference item for per-item fields (controls/menus)."""
+        return self.items[-1] if self.items else None
+
+    def _shared(self, func):
+        """Return ``(value, mixed)`` for ``func`` across the selection.
+
+        ``value`` is the first item's value; ``mixed`` is True when the items
+        do not all agree.
+        """
+        if not self.items:
+            return (None, False)
+        values = [func(item) for item in self.items]
+        first = values[0]
+        mixed = any(value != first for value in values[1:])
+        return (first, mixed)
+
+    # ------------------------------------------------------------------
+    # Field population
+    # ------------------------------------------------------------------
+    def _guarded(self, populate):
+        """Run a populate function with the canvas<->panel sync guard set."""
+        self._syncing = True
+        try:
+            populate()
+        finally:
+            self._syncing = False
+
+    def _populate_all(self):
+        self._populate_transform()
+        self._populate_appearance()
+        self._populate_shape()
+        self._populate_controls()
+        self._populate_action()
+
+    def refresh_fields(self):
+        """Populate every field from the current selection (mixed-aware)."""
+        has = bool(self.items)
+        for widget in self._fields:
+            widget.setEnabled(has)
+        self.title.setText(
+            "Item Editor - {} selected".format(len(self.items))
+            if has
+            else "Item Editor - no selection"
+        )
+        if not has:
+            return
+        self._guarded(self._populate_all)
+
+    def _set_spin(self, spin, value, mixed):
+        """Set a spin box to ``value`` or the mixed sentinel."""
+        if mixed or value is None:
+            spin.setValue(spin.minimum())
+        else:
+            spin.setValue(value)
+
+    def _populate_transform(self):
+        x, x_mixed = self._shared(lambda item: round(item.x(), 4))
+        y, y_mixed = self._shared(lambda item: round(item.y(), 4))
+        rot, rot_mixed = self._shared(lambda item: round(item.rotation(), 4))
+        self._set_spin(self.pos_x_sb, x, x_mixed)
+        self._set_spin(self.pos_y_sb, y, y_mixed)
+        self._set_spin(self.rotate_sb, rot, rot_mixed)
+
+    def _populate_appearance(self):
+        color, color_mixed = self._shared(
+            lambda item: item.get_color().getRgb()
+        )
+        self._set_swatch(
+            self.color_button, None if color_mixed else QtGui.QColor(*color)
+        )
+        alpha, alpha_mixed = self._shared(
+            lambda item: item.get_color().alpha()
+        )
+        self._set_spin(self.alpha_sb, alpha, alpha_mixed)
+
+        text, text_mixed = self._shared(lambda item: item.get_text())
+        self.text_field.blockSignals(True)
+        if text_mixed:
+            self.text_field.clear()
+            self.text_field.setPlaceholderText("- multiple -")
+        else:
+            self.text_field.setText(text or "")
+            self.text_field.setPlaceholderText("Text")
+        self.text_field.blockSignals(False)
+
+        size, size_mixed = self._shared(
+            lambda item: round(item.get_text_size(), 4)
+        )
+        self._set_spin(self.text_size_sb, size, size_mixed)
+
+        tcolor, tcolor_mixed = self._shared(
+            lambda item: item.get_text_color().getRgb()
+        )
+        self._set_swatch(
+            self.text_color_button,
+            None if tcolor_mixed else QtGui.QColor(*tcolor),
+        )
+        talpha, talpha_mixed = self._shared(
+            lambda item: item.get_text_color().alpha()
+        )
+        self._set_spin(self.text_alpha_sb, talpha, talpha_mixed)
+
+    def _populate_shape(self):
+        count, count_mixed = self._shared(lambda item: item.point_count)
+        self._set_spin(self.count_sb, count, count_mixed)
+
+        status, status_mixed = self._shared(
+            lambda item: item.get_edit_status()
+        )
+        self.handles_cb.blockSignals(True)
+        self.handles_cb.setTristate(True)
+        if status_mixed:
+            self.handles_cb.setCheckState(QtCore.Qt.PartiallyChecked)
+        else:
+            state = QtCore.Qt.Checked if status else QtCore.Qt.Unchecked
+            self.handles_cb.setCheckState(state)
+        self.handles_cb.blockSignals(False)
+
+    def _populate_controls(self):
+        self.control_list.clear()
+        item = self._active_item()
+        if item is None:
+            return
+        for name in item.get_controls(with_namespace=False):
+            list_item = basic.CtrlListWidgetItem()
+            list_item.setText(name)
+            self.control_list.addItem(list_item)
+
+    def _populate_action(self):
+        mode, mode_mixed = self._shared(
+            lambda item: item.get_custom_action_mode()
+        )
+        self.custom_action_cb.blockSignals(True)
+        self.custom_action_cb.setTristate(True)
+        if mode_mixed:
+            self.custom_action_cb.setCheckState(QtCore.Qt.PartiallyChecked)
+        else:
+            state = QtCore.Qt.Checked if mode else QtCore.Qt.Unchecked
+            self.custom_action_cb.setCheckState(state)
+        self.custom_action_cb.blockSignals(False)
+
+        self.menus_list.clear()
+        item = self._active_item()
+        if item is None:
+            return
+        for name, _cmd in item.get_custom_menus():
+            self.menus_list.addItem(name)
+
+    def _set_swatch(self, button, color):
+        """Show ``color`` on ``button`` or a 'multiple' placeholder if None."""
+        if color is None:
+            button.setText("multiple")
+            button.setPalette(QtWidgets.QApplication.palette())
+            button.setAutoFillBackground(False)
+        else:
+            button.setText("")
+            palette = QtGui.QPalette()
+            palette.setColor(QtGui.QPalette.Button, color)
+            button.setPalette(palette)
+            button.setAutoFillBackground(True)
+
+    # ------------------------------------------------------------------
+    # Apply helpers (write to every selected item)
+    # ------------------------------------------------------------------
+    def _repaint_view(self):
+        """Repaint the canvas so edits + the manipulator overlay refresh."""
+        if self._view is not None:
+            self._view.viewport().update()
+
+    def _committed(self, spin):
+        """Return a committed spin value, or None while the field is mixed.
+
+        A mixed field sits at ``spin.minimum()`` (the sentinel shown as
+        ``MIXED_TEXT``); any other value is a real, user-committed edit.
+        """
+        value = spin.value()
+        return None if value == spin.minimum() else value
+
+    # -- transform ------------------------------------------------------
+    def _apply_position(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        x = self._committed(self.pos_x_sb)
+        y = self._committed(self.pos_y_sb)
+        for item in self.items:
+            new_x = item.x() if x is None else x
+            new_y = item.y() if y is None else y
+            item.setPos(new_x, new_y)
+        self._repaint_view()
+
+    def _apply_rotation(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        angle = self._committed(self.rotate_sb)
+        if angle is None:
+            return
+        for item in self.items:
+            item.setRotation(angle)
+            item.update()
+        self._repaint_view()
+
+    def _reset_rotation(self):
+        if not self.items:
+            return
+        for item in self.items:
+            item.reset_rotation()
+        self._repaint_view()
+        self.refresh_fields()
+
+    def _apply_scale(self, x=False, y=False):
+        if not self.items:
+            return
+        factor = self.scale_factor_sb.value()
+        world = self.worldspace_cb.isChecked()
+        sx = factor if x else 1.0
+        sy = factor if y else 1.0
+        for item in self.items:
+            item.scale_shape(x=sx, y=sy, world=world)
+        self._repaint_view()
+        # Position may change in world-space scale mode.
+        self._guarded(self._populate_transform)
+
+    # -- appearance -----------------------------------------------------
+    def _pick_color(self):
+        if not self.items:
+            return
+        initial = self._active_item().get_color()
+        color = QtWidgets.QColorDialog.getColor(initial=initial, parent=self)
+        if not color.isValid():
+            return
+        for item in self.items:
+            new_color = QtGui.QColor(color)
+            new_color.setAlpha(item.get_color().alpha())
+            item.set_color(new_color)
+        self._repaint_view()
+        self._guarded(self._populate_appearance)
+
+    def _apply_alpha(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        alpha = self._committed(self.alpha_sb)
+        if alpha is None:
+            return
+        for item in self.items:
+            color = item.get_color()
+            color.setAlpha(alpha)
+            item.set_color(color)
+        self._repaint_view()
+
+    def _apply_text(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        text = str(self.text_field.text())
+        for item in self.items:
+            item.set_text(text)
+        self._repaint_view()
+
+    def _apply_text_size(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        size = self._committed(self.text_size_sb)
+        if size is None:
+            return
+        for item in self.items:
+            item.set_text_size(size)
+        self._repaint_view()
+
+    def _pick_text_color(self):
+        if not self.items:
+            return
+        initial = self._active_item().get_text_color()
+        color = QtWidgets.QColorDialog.getColor(initial=initial, parent=self)
+        if not color.isValid():
+            return
+        for item in self.items:
+            new_color = QtGui.QColor(color)
+            new_color.setAlpha(item.get_text_color().alpha())
+            item.set_text_color(new_color)
+        self._repaint_view()
+        self._guarded(self._populate_appearance)
+
+    def _apply_text_alpha(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        alpha = self._committed(self.text_alpha_sb)
+        if alpha is None:
+            return
+        for item in self.items:
+            color = item.get_text_color()
+            color.setAlpha(alpha)
+            item.set_text_color(color)
+        self._repaint_view()
+
+    # -- shape ----------------------------------------------------------
+    def _apply_show_handles(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        state = self.handles_cb.checkState()
+        # A user click resolves the tristate; treat partial as "show".
+        show = state != QtCore.Qt.Unchecked
+        self.handles_cb.setTristate(False)
+        for item in self.items:
+            item.set_edit_status(show)
+        self._repaint_view()
+
+    def _apply_point_count(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        count = self._committed(self.count_sb)
+        if count is None:
+            return
+        floor = self.count_sb.property("usable_minimum") or 2
+        count = max(count, floor)
+        for item in self.items:
+            item.edit_point_count(count)
+        self._repaint_view()
+
+    def _edit_handles(self):
+        item = self._active_item()
+        if item is None:
+            return
+        if self.handles_window:
+            try:
+                self.handles_window.close()
+                self.handles_window.deleteLater()
+            except Exception:
+                pass
+        self.handles_window = HandlesPositionWindow(
+            parent=self, picker_item=item
+        )
+        self.handles_window.show()
+        self.handles_window.raise_()
+
+    # -- controls -------------------------------------------------------
+    def _add_selected_controls(self):
+        if not self.items:
+            return
+        for item in self.items:
+            item.add_selected_controls()
+        self._populate_controls()
+
+    def _remove_controls(self):
+        item = self._active_item()
+        if item is None:
+            return
+        for row in self.control_list.selectedItems():
+            item.remove_control(row.node())
+        self._populate_controls()
+
+    def _search_replace(self):
+        if not self.items:
+            return
+        search, replace, ok = SearchAndReplaceDialog.get()
+        if not ok:
+            return
+        for item in self.items:
+            item.search_and_replace_controls(search=search, replace=replace)
+        self._populate_controls()
+
+    # -- action ---------------------------------------------------------
+    def _apply_action_mode(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        custom = self.custom_action_cb.checkState() != QtCore.Qt.Unchecked
+        self.custom_action_cb.setTristate(False)
+        for item in self.items:
+            item.set_custom_action_mode(custom)
+
+    def _edit_action_script(self):
+        item = self._active_item()
+        if item is None:
+            return
+        cmd, ok = CustomScriptEditDialog.get(
+            cmd=item.get_custom_action_script(), item=item
+        )
+        if not (ok and cmd):
+            return
+        for target in self.items:
+            target.set_custom_action_script(cmd)
+
+    def _edit_menu(self, list_item):
+        item = self._active_item()
+        if item is None:
+            return
+        index = self.menus_list.row(list_item)
+        menus = item.get_custom_menus()
+        if not (0 <= index < len(menus)):
+            return
+        name, cmd = menus[index]
+        name, cmd, ok = CustomMenuEditDialog.get(name=name, cmd=cmd, item=item)
+        if not (ok and name and cmd):
+            return
+        menus[index] = [name, cmd]
+        item.set_custom_menus(menus)
+        self._populate_action()
+
+    def _new_menu(self):
+        item = self._active_item()
+        if item is None:
+            return
+        name, cmd, ok = CustomMenuEditDialog.get(item=item)
+        if not (ok and name and cmd):
+            return
+        menus = item.get_custom_menus()
+        menus.append([name, cmd])
+        item.set_custom_menus(menus)
+        self._populate_action()
+
+    def _remove_menu(self):
+        item = self._active_item()
+        if item is None:
+            return
+        index = self.menus_list.currentRow()
+        menus = item.get_custom_menus()
+        if not (0 <= index < len(menus)):
+            return
+        menus.pop(index)
+        item.set_custom_menus(menus)
+        self._populate_action()
+
+    # ------------------------------------------------------------------
+    def closeEvent(self, event):
+        if self.handles_window:
+            try:
+                self.handles_window.close()
+            except Exception:
+                pass
+        super().closeEvent(event)
