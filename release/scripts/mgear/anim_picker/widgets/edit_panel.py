@@ -33,6 +33,9 @@ from mgear.anim_picker.widgets.dialogs.script_dialog import (
 from mgear.anim_picker.widgets.dialogs.search_replace_dialog import (
     SearchAndReplaceDialog,
 )
+from mgear.anim_picker.widgets.dialogs.shape_library_dialog import (
+    ShapeLibraryDialog,
+)
 
 
 class ItemEditPanel(QtWidgets.QWidget):
@@ -75,6 +78,8 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.control_list = None
         self.menus_list = None
         self.custom_action_cb = None
+        self.mirror_axis_sb = None
+        self.mirror_status = None
 
         self._build_ui()
         self.refresh_fields()
@@ -104,6 +109,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._build_transform_section()
         self._build_appearance_section()
         self._build_shape_section()
+        self._build_mirror_section()
         self._build_controls_section()
         self._build_action_section()
         self.content_layout.addStretch()
@@ -242,6 +248,44 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._fields.append(handles_btn)
         section.addWidget(handles_btn)
 
+        shapes_btn = basic.CallbackButton(callback=self._open_shape_library)
+        shapes_btn.setText("Shapes...")
+        shapes_btn.setToolTip("Apply a premade / saved shape to the selection")
+        self._fields.append(shapes_btn)
+        section.addWidget(shapes_btn)
+
+    def _build_mirror_section(self):
+        section = self._add_section("Mirror")
+
+        form = QtWidgets.QFormLayout()
+        # Global axis setting (not a per-item field), so it uses the framework
+        # callback spin directly rather than the mixed-value _double_spin.
+        self.mirror_axis_sb = basic.CallBackDoubleSpinBox(
+            callback=self._apply_mirror_axis, value=0.0, min=-1.0e6, max=1.0e6
+        )
+        form.addRow("Axis X", self.mirror_axis_sb)
+        section.addLayout(form)
+
+        link_btn = basic.CallbackButton(callback=self._link_mirror)
+        link_btn.setText("Link selected pair")
+        link_btn.setToolTip("Link exactly two selected items as a mirror pair")
+        self._fields.append(link_btn)
+        section.addWidget(link_btn)
+
+        row = QtWidgets.QHBoxLayout()
+        unlink_btn = basic.CallbackButton(callback=self._unlink_mirror)
+        unlink_btn.setText("Unlink")
+        self._fields.append(unlink_btn)
+        row.addWidget(unlink_btn)
+        symm_btn = basic.CallbackButton(callback=self._make_symmetric)
+        symm_btn.setText("Make Symmetric")
+        self._fields.append(symm_btn)
+        row.addWidget(symm_btn)
+        section.addLayout(row)
+
+        self.mirror_status = QtWidgets.QLabel("")
+        section.addWidget(self.mirror_status)
+
     def _build_controls_section(self):
         section = self._add_section("Controls")
 
@@ -378,8 +422,20 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._populate_transform()
         self._populate_appearance()
         self._populate_shape()
+        self._populate_mirror()
         self._populate_controls()
         self._populate_action()
+
+    def _populate_mirror(self):
+        if self._view is not None:
+            self.mirror_axis_sb.setValue(self._view.mirror_axis_x)
+        linked = sum(1 for item in self.items if item.mirror_id)
+        if linked:
+            self.mirror_status.setText(
+                "{} of {} selected linked".format(linked, len(self.items))
+            )
+        else:
+            self.mirror_status.setText("no mirror link")
 
     def refresh_fields(self):
         """Populate every field from the current selection (mixed-aware)."""
@@ -512,9 +568,13 @@ class ItemEditPanel(QtWidgets.QWidget):
     # Apply helpers (write to every selected item)
     # ------------------------------------------------------------------
     def _repaint_view(self):
-        """Repaint the canvas so edits + the manipulator overlay refresh."""
-        if self._view is not None:
-            self._view.viewport().update()
+        """Propagate edits to mirror partners, then repaint the canvas."""
+        if self._view is None:
+            return
+        # Live-mirror the edit to any linked partners (guarded against loops),
+        # then repaint so both sides refresh.
+        self._view.apply_mirror_for(self.items)
+        self._view.viewport().update()
 
     def _committed(self, spin):
         """Return a committed spin value, or None while the field is mixed.
@@ -679,6 +739,65 @@ class ItemEditPanel(QtWidgets.QWidget):
         )
         self.handles_window.show()
         self.handles_window.raise_()
+
+    def _open_shape_library(self):
+        if not self.items:
+            return
+        active = self._active_item()
+        current = None
+        if active is not None:
+            current = [[h.x(), h.y()] for h in active.handles]
+        dialog = ShapeLibraryDialog(
+            parent=self,
+            apply_callback=self._apply_shape,
+            current_handles=current,
+        )
+        dialog.show()
+
+    def _apply_shape(self, handles):
+        if not self.items:
+            return
+        for item in self.items:
+            item.set_handles([list(point) for point in handles])
+        self._repaint_view()
+
+    # -- mirror ---------------------------------------------------------
+    def _apply_mirror_axis(self, *args, **kwargs):
+        if self._syncing or self._view is None:
+            return
+        self._view.mirror_axis_x = self.mirror_axis_sb.value()
+        self._view.viewport().update()
+
+    def _link_mirror(self):
+        if self._view is None:
+            return
+        if len(self.items) != 2:
+            QtWidgets.QMessageBox.information(
+                self, "Mirror", "Select exactly two items to link."
+            )
+            return
+        # Establish the relationship without moving anything; the user snaps
+        # the sides explicitly with Make Symmetric.
+        self._view.link_mirror_pair(self.items[0], self.items[1])
+        self._view.viewport().update()
+        self._guarded(self._populate_mirror)
+
+    def _unlink_mirror(self):
+        if self._view is None:
+            return
+        for item in self.items:
+            self._view.unlink_mirror(item)
+        self._view.viewport().update()
+        self._guarded(self._populate_mirror)
+
+    def _make_symmetric(self):
+        if self._view is None:
+            return
+        # Reflect each selected item onto its partner (per-item, so a selected
+        # item forces its own side onto the other).
+        for item in self.items:
+            self._view.apply_mirror_for([item])
+        self._view.viewport().update()
 
     # -- controls -------------------------------------------------------
     def _add_selected_controls(self):

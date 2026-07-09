@@ -29,7 +29,11 @@ from mgear.anim_picker.tab_widget import ContextMenuTabWidget
 from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import edit_panel
 from mgear.anim_picker.widgets import tool_bar
+from mgear.anim_picker.widgets import color_palette
 from mgear.anim_picker.widgets import overlay_widgets
+from mgear.anim_picker.widgets.dialogs.shape_library_dialog import (
+    ShapeLibraryDialog,
+)
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
 
@@ -382,12 +386,50 @@ class MainDockWindow(QtWidgets.QWidget):
 
         # Photoshop-style tool strip on the left of the canvas + the splitter.
         self.left_toolbar = tool_bar.PickerToolBar(main_window=self)
+        # Quick-access commands below the tools; selection-dependent ones are
+        # collected so they can be enabled/disabled with the selection.
+        self.left_toolbar.add_command(
+            "Add",
+            "Add a new item at the origin",
+            self._cmd_add_item,
+            tool_bar.mgear_icon("mgear_plus-square"),
+        )
+        self._selection_commands = [
+            self.left_toolbar.add_command(
+                "Dup",
+                "Duplicate selected items",
+                self._cmd_duplicate,
+                tool_bar.mgear_icon("mgear_copy"),
+            ),
+            self.left_toolbar.add_command(
+                "DupM",
+                "Duplicate and mirror the selection (linked as a pair)",
+                self._cmd_duplicate_mirror,
+                tool_bar.mgear_icon("mgear_duplicate_sym"),
+            ),
+            self.left_toolbar.add_command(
+                "MirS",
+                "Mirror the selected shapes",
+                self._cmd_mirror_shape,
+                tool_bar.mgear_icon("mgear_mirror_controls"),
+            ),
+            self.left_toolbar.add_command(
+                "Shp",
+                "Apply a premade / saved shape to the selection",
+                self._cmd_shapes,
+                tool_bar.mgear_icon("mgear_replace_shape"),
+            ),
+        ]
         canvas_row = QtWidgets.QHBoxLayout()
         canvas_row.setContentsMargins(0, 0, 0, 0)
         canvas_row.setSpacing(0)
         canvas_row.addWidget(self.left_toolbar)
         canvas_row.addWidget(self.editor_splitter)
         self.main_vertical_layout.addLayout(canvas_row)
+
+        # Preset L/R/center color palette along the bottom (edit mode only).
+        self.color_palette = color_palette.ColorPaletteBar(main_window=self)
+        self.main_vertical_layout.addWidget(self.color_palette)
 
         # Add default first tab
         view = GraphicViewWidget(main_window=self)
@@ -398,10 +440,11 @@ class MainDockWindow(QtWidgets.QWidget):
         sp_retain.setRetainSizeWhenHidden(True)
         self.tab_widget.setSizePolicy(sp_retain)
 
-        # Editor panel and tool strip are edit-mode only; refresh the panel
-        # when the tab changes.
+        # Editor panel, tool strip and palette are edit-mode only; refresh the
+        # panel when the tab changes.
         self.edit_panel.setVisible(__EDIT_MODE__.get())
         self.left_toolbar.setVisible(__EDIT_MODE__.get())
+        self.color_palette.setVisible(__EDIT_MODE__.get())
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
     def _on_tab_changed(self, *args):
@@ -409,6 +452,7 @@ class MainDockWindow(QtWidgets.QWidget):
         panel = getattr(self, "edit_panel", None)
         if panel is not None:
             panel.sync()
+        self.update_tool_commands()
 
     def set_active_tool(self, name):
         """Set the active canvas tool and repaint so the overlay updates.
@@ -421,18 +465,160 @@ class MainDockWindow(QtWidgets.QWidget):
         if view is not None:
             view.viewport().update()
 
+    # =====================================================================
+    # Tool-strip quick commands ---
+    def _current_view(self):
+        """Return the active graphics view, or None."""
+        return self.tab_widget.currentWidget()
+
+    def _selected_items(self):
+        """Return the current view's selected picker items."""
+        view = self._current_view()
+        return view.scene().get_selected_items() if view is not None else []
+
+    def update_tool_commands(self):
+        """Enable/disable the selection-dependent command buttons."""
+        has = bool(self._selected_items())
+        for button in getattr(self, "_selection_commands", []):
+            button.setEnabled(has)
+
+    def _after_command(self):
+        """Refresh the canvas, inline panel and command states after an op."""
+        view = self._current_view()
+        if view is not None:
+            view.viewport().update()
+        panel = getattr(self, "edit_panel", None)
+        if panel is not None:
+            panel.sync()
+        self.update_tool_commands()
+
+    def _cmd_add_item(self):
+        view = self._current_view()
+        if view is not None:
+            view.add_picker_item_gui(QtCore.QPointF(0, 0))
+        self._after_command()
+
+    def _cmd_duplicate(self):
+        items = self._selected_items()
+        if items:
+            items[0].duplicate_selected()
+        self._after_command()
+
+    def _cmd_shapes(self):
+        items = self._selected_items()
+        if not items:
+            return
+        current = [[h.x(), h.y()] for h in items[-1].handles]
+        dialog = ShapeLibraryDialog(
+            parent=self,
+            apply_callback=self._apply_shape_to_selection,
+            current_handles=current,
+        )
+        dialog.show()
+
+    def _apply_shape_to_selection(self, handles):
+        for item in self._selected_items():
+            item.set_handles([list(point) for point in handles])
+        self._after_command()
+
+    def _cmd_mirror(self, method_name):
+        """Run a PickerItem mirror op on the selection and propagate it."""
+        view = self._current_view()
+        items = self._selected_items()
+        for item in items:
+            getattr(item, method_name)()
+        if view is not None:
+            view.apply_mirror_for(items)
+        self._after_command()
+
+    def _cmd_mirror_shape(self):
+        self._cmd_mirror("mirror_shape")
+
+    def apply_palette_color(self, side, level):
+        """Apply a preset color to the selection, mirroring by side to partners.
+
+        The selected item(s) get the clicked (side, level) color; each item's
+        mirror partner (when not itself selected) gets the same level on the
+        opposite side. Presets never repaint items that already used the color.
+
+        Args:
+            side (str): "left" / "center" / "right".
+            level (str): "primary" / "secondary".
+        """
+        view = self._current_view()
+        if view is None:
+            return
+        color = self.color_palette.color_for(side, level)
+        if color is None:
+            return
+        mirror_side = color_palette.MIRROR_SIDE.get(side, side)
+        partner_color = self.color_palette.color_for(mirror_side, level)
+        items = self._selected_items()
+        selected = set(items)
+        for item in items:
+            self._set_item_rgb(item, color)
+            partner = view.get_mirror_partner(item)
+            if (
+                partner is not None
+                and partner not in selected
+                and partner_color is not None
+            ):
+                self._set_item_rgb(partner, partner_color)
+        view.viewport().update()
+        self._after_command()
+
+    def _set_item_rgb(self, item, color):
+        """Set an item's RGB from ``color`` while preserving its alpha."""
+        result = QtGui.QColor(color)
+        result.setAlpha(item.get_color().alpha())
+        item.set_color(result)
+
+    def _cmd_duplicate_mirror(self):
+        view = self._current_view()
+        items = self._selected_items()
+        if not (view and items):
+            return
+        # Reuse the existing duplicate+mirror (handles the search/replace
+        # prompt once); link each returned pair as a persistent mirror.
+        pairs = items[0].duplicate_and_mirror_selected() or []
+        for source, new_item in pairs:
+            view.link_mirror_pair(source, new_item)
+            self._apply_mirror_color_from_palette(source, new_item)
+        self._after_command()
+
+    def _apply_mirror_color_from_palette(self, source, new_item):
+        """Color a mirrored copy from the palette (opposite side, same level).
+
+        If the source's color matches a palette swatch, the new item gets the
+        opposite-side preset at the same level; otherwise the source color is
+        copied (never the old red/blue swap that duplicate_and_mirror applied).
+        """
+        slot = self.color_palette.match_color(source.get_color())
+        if slot is None:
+            new_item.set_color(source.get_color())
+            return
+        side, level = slot
+        mirror_side = color_palette.MIRROR_SIDE.get(side, side)
+        color = self.color_palette.color_for(mirror_side, level)
+        if color is not None:
+            self._set_item_rgb(new_item, color)
+
     def _sync_edit_panel(self):
         """Show/hide the inline editor + tool strip with the mode."""
         edit = __EDIT_MODE__.get()
         toolbar = getattr(self, "left_toolbar", None)
         if toolbar is not None:
             toolbar.setVisible(edit)
+        palette = getattr(self, "color_palette", None)
+        if palette is not None:
+            palette.setVisible(edit)
         panel = getattr(self, "edit_panel", None)
         if panel is None:
             return
         panel.setVisible(edit)
         if edit:
             panel.sync()
+        self.update_tool_commands()
 
     def add_overlays(self):
         """Add transparent overlay widgets"""

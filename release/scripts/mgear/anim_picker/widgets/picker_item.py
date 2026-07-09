@@ -28,6 +28,7 @@ from mgear.anim_picker.widgets.dialogs.search_replace_dialog import (
 )
 from mgear.anim_picker.widgets.dialogs.copy_paste_dialog import DataCopyDialog
 from mgear.anim_picker.widgets.item_model import PickerItemData
+from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
 from mgear.anim_picker.handlers import python_handlers
@@ -104,6 +105,11 @@ class PickerItem(DefaultPolygon):
 
         # uuid & undo
         self.uuid = uuid.uuid4()
+
+        # Persistent mirror link (optional): item_id is a stable id minted when
+        # the item is first linked; mirror_id is the partner's item_id.
+        self.item_id = None
+        self.mirror_id = None
 
     def shape(self):
         path = QtGui.QPainterPath()
@@ -667,6 +673,11 @@ class PickerItem(DefaultPolygon):
         [picker.remove() for picker in selected_pickers]
 
     def remove(self):
+        # Break any mirror link so the partner is not left pointing at a
+        # deleted item.
+        view = self.parent()
+        if self.mirror_id and hasattr(view, "unlink_mirror"):
+            view.unlink_mirror(self)
         self.scene().removeItem(self)
         self.setParent(None)
         self.deleteLater()
@@ -677,38 +688,27 @@ class PickerItem(DefaultPolygon):
 
     # =========================================================================
     # Ducplicate and mirror methods ---
-    def mirror_position(self):
-        """Mirror picker position (on X axis)"""
-        self.setX(-1 * self.pos().x())
+    def mirror_position(self, axis_x=0.0):
+        """Mirror picker position about the vertical axis at ``axis_x``."""
+        pos = mirror.mirror_position([self.pos().x(), self.pos().y()], axis_x)
+        self.setX(pos[0])
 
     def mirror_rotation(self, angle=None):
         """Mirror picker rotation angle"""
         if not angle:
             angle = self.rotation()
-
-        if angle > 360:
-            angle = angle - 360
-
-        mirror_angle = abs(angle - 360)
-
-        self.setRotation(mirror_angle)
+        self.setRotation(mirror.mirror_rotation(angle))
         self.update()
 
     def mirror_shape(self):
         """Will mirror polygon handles position on X axis"""
-        for handle in self.handles:
-            handle.mirror_x_position()
+        handles = [[handle.x(), handle.y()] for handle in self.handles]
+        self.set_handles(mirror.mirror_handles(handles))
 
     def mirror_color(self):
         """Will reverse red/bleu rgb values for the polygon color"""
-        old_color = self.get_color()
-        new_color = QtGui.QColor(
-            old_color.blue(),
-            old_color.green(),
-            old_color.red(),
-        )
-        new_color.setAlpha(old_color.alpha())
-        self.set_color(new_color)
+        new_color = mirror.mirror_color(self.get_color().getRgb())
+        self.set_color(QtGui.QColor(*new_color))
 
     def duplicate_selected(self, *args, **kwargs):
         selected_pickers = self.scene().get_selected_items()
@@ -736,24 +736,37 @@ class PickerItem(DefaultPolygon):
         data = copy.deepcopy(self.get_data())
         new_item.set_data(data)
 
+        # A duplicate is an independent item: never inherit the source's
+        # stable id or mirror link (those are re-established by explicit
+        # linking, e.g. Duplicate & Mirror).
+        new_item.item_id = None
+        new_item.mirror_id = None
+
         return new_item
 
     def duplicate_and_mirror_selected(self):
+        """Duplicate + mirror the selection.
+
+        Returns:
+            list: ``(source, new)`` pairs, so callers (e.g. the toolbar
+            command) can link each pair as a persistent mirror relationship.
+        """
         selected_pickers = self.scene().get_selected_items()
         if self not in selected_pickers:
             selected_pickers.append(self)
 
         search = None
         replace = None
-        new_pickers = []
+        pairs = []
         for picker in selected_pickers:
             if picker.get_controls() and not search and not replace:
                 search, replace, ok = SearchAndReplaceDialog.get()
                 if not ok:
                     break
             new_picker = picker.duplicate_and_mirror(search, replace)
-            new_pickers.append(new_picker)
-        self.scene().select_picker_items(new_pickers)
+            pairs.append((picker, new_picker))
+        self.scene().select_picker_items([new for _, new in pairs])
+        return pairs
 
     def duplicate_and_mirror(self, search=None, replace=None):
         """Duplicate and mirror picker item"""
@@ -1037,6 +1050,12 @@ class PickerItem(DefaultPolygon):
         if "menus" in data:
             self.set_custom_menus(model.menus)
 
+        # Mirror link (optional, additive keys)
+        if model.item_id:
+            self.item_id = model.item_id
+        if model.mirror_id:
+            self.mirror_id = model.mirror_id
+
     def get_data(self):
         """Get picker item data in dictionary form.
 
@@ -1063,5 +1082,8 @@ class PickerItem(DefaultPolygon):
             model.text = self.get_text()
             model.text_size = self.get_text_size()
             model.text_color = self.get_text_color().getRgb()
+
+        model.item_id = self.item_id
+        model.mirror_id = self.mirror_id
 
         return model.to_dict()

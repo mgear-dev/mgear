@@ -6,6 +6,7 @@ Extracted from gui.py during the Phase 2 decomposition.
 import os
 import copy
 import json
+import uuid
 from functools import partial
 
 from maya import cmds
@@ -28,6 +29,7 @@ from mgear.anim_picker.widgets import background_model
 from mgear.anim_picker.widgets import background_manipulator
 from mgear.anim_picker.widgets import item_manipulator
 from mgear.anim_picker.widgets import tool_bar
+from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.handlers import __EDIT_MODE__
 
 
@@ -104,6 +106,14 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.item_manipulator = item_manipulator.ItemManipulator(self)
         self._item_dragging = False
 
+        # Persistent mirror relationships: the symmetry axis (scene x), a
+        # guard that breaks the A -> B -> A live-mirror feedback loop, and a
+        # cached "any pair linked?" flag so the per-frame paint / per-edit
+        # propagation short-circuit when nothing is linked (the common case).
+        self.mirror_axis_x = 0.0
+        self._mirroring = False
+        self._has_mirror_links = False
+
         self.fit_margin = 8
 
         # # undo list ---------------------------------------------------------
@@ -125,6 +135,21 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.modified_select = False
         self.item_selected = False
         self.__move_prompt = False
+        # Select the clicked item on press (edit mode), before the default
+        # handler sets up the item drag -- so a single click selects and can
+        # move in the same motion, and the drag moves the right set. Returns
+        # True when the selection is finalized here (release should not re-run
+        # it); modified_select carries that, matching its existing meaning.
+        if (
+            event.button() == QtCore.Qt.MouseButton.LeftButton
+            and __EDIT_MODE__.get()
+        ):
+            transform = self.viewportTransform()
+            picker_at = self.scene().picker_at(
+                self.mapToScene(event.pos()), transform
+            )
+            if picker_at and self._select_on_press(picker_at, event):
+                self.modified_select = True
         QtWidgets.QGraphicsView.mousePressEvent(self, event)
         if event.buttons() == QtCore.Qt.MouseButton.LeftButton:
             self.scene_mouse_origin = self.mapToScene(event.pos())
@@ -147,9 +172,6 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                         pt = [picker.x(), picker.y(), picker.rotation()]
                         self.tmp_picker_pos_info[picker.uuid] = pt
                     # undo ---------------------------------------------------
-                    if event.modifiers():
-                        # this allows for shift selecting in edit
-                        self.modified_select = False
                 else:
                     self.modified_select = True
                     picker_widgets.select_picker_controls([picker_at], event)
@@ -206,6 +228,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         ):
             # confirm undo move chunck, a picker has been moved
             self.__move_prompt = True
+            # Live-mirror the moving selection to linked partners in realtime.
+            self.apply_mirror_for(self.scene().get_selected_items())
         # undo ----------------------------------------------------------------
 
         if self.pan_active:
@@ -289,6 +313,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                     copy.deepcopy(self.tmp_picker_pos_info)
                 )
             self.undo_move_order_index = -1
+            # Live-mirror the moved selection to any linked partners (covers a
+            # plain item drag-move, not just the manipulator).
+            self.apply_mirror_for(self.scene().get_selected_items())
         self.__move_prompt = None
         self.tmp_picker_pos_info = {}
         # undo ----------------------------------------------------------------
@@ -651,9 +678,15 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         Args:
             mouse_pos (QPosition, optional): mouse position
+
+        Returns:
+            PickerItem: the created (and selected) item.
         """
         ctrl = self.add_picker_item()
         ctrl.setPos(mouse_pos)
+        # Keep the new item selected so it can be edited immediately.
+        self.scene().select_picker_items([ctrl])
+        return ctrl
 
     def add_picker_item_selected(self, mouse_pos=None):
         """Add new PickerItem to current view"""
@@ -1036,11 +1069,47 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         )
         return active == tool_bar.TOOL_TRANSFORM
 
+    def _select_on_press(self, picker_at, event):
+        """Select ``picker_at`` on mouse press (edit mode).
+
+        Returns True when the selection is fully determined here (release must
+        not re-handle it): Shift adds, Ctrl removes, and a plain click on an
+        unselected item selects just it. Returns False for a plain click on an
+        already-selected item (kept for a group drag; a release without a drag
+        collapses it to one) and for Alt (control-selection handled at release).
+
+        Args:
+            picker_at (PickerItem): the item under the cursor.
+            event (QMouseEvent): the press event.
+
+        Returns:
+            bool: True if the selection was finalized here.
+        """
+        modifiers = event.modifiers()
+        if modifiers == QtCore.Qt.ShiftModifier:
+            picker_at.set_selected_state(True)
+        elif modifiers == QtCore.Qt.ControlModifier:
+            picker_at.set_selected_state(False)
+        elif (
+            not modifiers
+            and picker_at not in self.scene().get_selected_items()
+        ):
+            self.scene().clear_picker_selection()
+            picker_at.set_selected_state(True)
+        else:
+            return False
+        self._notify_item_selection()
+        self.viewport().update()
+        return True
+
     def _notify_item_selection(self):
         """Tell the inline edit panel the item selection changed (full sync)."""
         panel = getattr(self.main_window, "edit_panel", None)
         if panel is not None:
             panel.sync_from_view(self)
+        update = getattr(self.main_window, "update_tool_commands", None)
+        if update is not None:
+            update()
 
     def _notify_item_transform(self):
         """Tell the panel the selection's transform changed (light refresh)."""
@@ -1082,6 +1151,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         scene_pos = self.mapToScene(event.pos())
         keep = bool(event.modifiers() & QtCore.Qt.ShiftModifier)
         self.item_manipulator.update_drag(scene_pos.x(), scene_pos.y(), keep)
+        # Live-mirror to linked partners in realtime (not just on release).
+        self.apply_mirror_for(self.scene().get_selected_items())
         self._notify_item_transform()
         self.viewport().update()
         return True
@@ -1094,9 +1165,97 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self._item_dragging = False
         # Grow the pan bounds to the items' new extent (no view refit).
         self._update_scene_rect()
+        # Live-mirror the transformed selection to any linked partners.
+        self.apply_mirror_for(self.scene().get_selected_items())
         self._notify_item_selection()
         self.viewport().update()
         return True
+
+    # -- mirror relationships -------------------------------------------
+    def get_mirror_partner(self, item):
+        """Return the item linked as ``item``'s mirror partner, or None."""
+        if not item.mirror_id:
+            return None
+        for other in self.get_picker_items():
+            if other is not item and other.item_id == item.mirror_id:
+                return other
+        return None
+
+    def link_mirror_pair(self, item_a, item_b):
+        """Link two items as a mirror pair, minting ids as needed."""
+        if not item_a.item_id:
+            item_a.item_id = str(uuid.uuid4())
+        if not item_b.item_id:
+            item_b.item_id = str(uuid.uuid4())
+        item_a.mirror_id = item_b.item_id
+        item_b.mirror_id = item_a.item_id
+        self._has_mirror_links = True
+
+    def unlink_mirror(self, item):
+        """Break the mirror link on ``item`` and its partner."""
+        partner = self.get_mirror_partner(item)
+        item.mirror_id = None
+        if partner is not None:
+            partner.mirror_id = None
+        self._recompute_mirror_links()
+
+    def has_mirror_links(self):
+        """Return True when any item in the view is mirror-linked (cached)."""
+        return self._has_mirror_links
+
+    def _recompute_mirror_links(self):
+        """Refresh the cached mirror-link flag (call on link changes / load)."""
+        self._has_mirror_links = any(
+            item.mirror_id for item in self.get_picker_items()
+        )
+
+    def _mirror_item_to(self, src, dst):
+        """Write ``src``'s mirrored transform / shape onto ``dst``.
+
+        Color is intentionally NOT mirrored here: L/R coloring is set
+        explicitly through the color palette, so a live geometry mirror never
+        overwrites a deliberately chosen side color.
+        """
+        axis = self.mirror_axis_x
+        pos = mirror.mirror_position([src.x(), src.y()], axis)
+        dst.setPos(pos[0], pos[1])
+        dst.setRotation(mirror.mirror_rotation(src.rotation()))
+        src_handles = [[h.x(), h.y()] for h in src.handles]
+        dst.set_handles(mirror.mirror_handles(src_handles))
+        dst.set_text(src.get_text())
+        dst.update()
+
+    def apply_mirror_for(self, items):
+        """Mirror each linked item onto its partner (loop-guarded).
+
+        Partners that are themselves in ``items`` are skipped so a both-sides
+        edit does not fight itself. No-op when nothing is linked.
+        """
+        if self._mirroring or not self._has_mirror_links:
+            return
+        self._mirroring = True
+        try:
+            edited = set(items)
+            for item in items:
+                partner = self.get_mirror_partner(item)
+                if partner is None or partner in edited:
+                    continue
+                self._mirror_item_to(item, partner)
+        finally:
+            self._mirroring = False
+
+    def _clean_dangling_mirrors(self):
+        """Drop mirror ids that no longer point at an existing item."""
+        items = self.get_picker_items()
+        ids = set(item.item_id for item in items if item.item_id)
+        for item in items:
+            if item.mirror_id and item.mirror_id not in ids:
+                mgear.log(
+                    "anim_picker: dropped a dangling mirror link on load",
+                    mgear.sev_warning,
+                )
+                item.mirror_id = None
+        self._recompute_mirror_links()
 
     def _draw_bg_marquee(self, painter):
         """Draw the background-selection marquee rectangle, if active."""
@@ -1240,6 +1399,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         old_scene = self.scene()
         self.setScene(OrderedGraphicsScene(parent=self))
         old_scene.deleteLater()
+        self._has_mirror_links = False
 
     def get_picker_items(self):
         """Return scene picker items in proper order (back to front)"""
@@ -1290,6 +1450,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             item = self.add_picker_item()
             item.set_data(item_data)
 
+        # Now that every item exists, drop any mirror link whose partner is
+        # missing (resolve pairs lazily via item ids at edit time).
+        self._clean_dangling_mirrors()
+
         # Size the scene to include the items too, now that they exist.
         self._update_scene_size()
 
@@ -1321,6 +1485,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             # tool and suppressed while manipulating background layers.
             if not self.background_edit and self._transform_tool_active():
                 self.item_manipulator.paint(painter)
+            # Symmetry-axis guide + pink dotted outline on linked items,
+            # shown once any mirror pair exists.
+            if self.has_mirror_links():
+                self._draw_mirror_axis(painter, rect)
+                self._draw_mirror_links(painter)
 
         # Background layer manipulator overlay + selection marquee
         if self.background_edit:
@@ -1328,6 +1497,34 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             self._draw_bg_marquee(painter)
 
         return result
+
+    def _draw_mirror_axis(self, painter, rect):
+        """Draw the vertical symmetry-axis guide at ``mirror_axis_x``."""
+        x = self.mirror_axis_x
+        if not (rect.x() <= x <= rect.x() + rect.width()):
+            return
+        pen = QtGui.QPen(
+            QtGui.QColor(255, 120, 180, 170), 0, QtCore.Qt.DashLine
+        )
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        painter.drawLine(
+            QtCore.QLineF(x, rect.y(), x, rect.y() + rect.height())
+        )
+
+    def _draw_mirror_links(self, painter):
+        """Draw a pink dotted outline matching each linked item's shape."""
+        pen = QtGui.QPen(
+            QtGui.QColor(255, 105, 180, 220), 0, QtCore.Qt.DotLine
+        )
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.NoBrush)
+        for item in self.get_picker_items():
+            if item.mirror_id and item.polygon is not None:
+                # Map the item's polygon outline into scene space so the guide
+                # follows the actual shape (and its rotation), not a bbox.
+                painter.drawPath(item.mapToScene(item.polygon.shape()))
 
     def draw_overlay_axis(self, painter, rect):
         """Draw x and y origin axis"""

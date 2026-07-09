@@ -14,6 +14,7 @@ group.
 
 from functools import partial
 
+from mgear.core import pyqt
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
@@ -24,10 +25,24 @@ TOOL_SELECT = "select"
 TOOL_TRANSFORM = "transform"
 
 
+def maya_icon(resource):
+    """Return a QIcon for a Maya resource path (e.g. ``:/aselect.png``)."""
+    return QtGui.QIcon(resource)
+
+
+def mgear_icon(name):
+    """Return a QIcon for an mGear SVG icon name (from release/icons)."""
+    try:
+        return QtGui.QIcon(pyqt.get_icon(name))
+    except Exception:
+        return QtGui.QIcon()
+
+
 class PickerToolBar(QtWidgets.QWidget):
     """Vertical tool strip that drives the active picker tool."""
 
     _BUTTON_SIZE = 34
+    _ICON_SIZE = 22
 
     def __init__(self, main_window=None, parent=None):
         super(PickerToolBar, self).__init__(parent)
@@ -48,67 +63,70 @@ class PickerToolBar(QtWidgets.QWidget):
         self.main_layout.setSpacing(2)
         self.main_layout.setAlignment(QtCore.Qt.AlignTop)
 
+        # Tools use the default Maya tool icons.
         self._add_tool(
             TOOL_SELECT,
             "Sel",
             "Select tool: click / marquee select and drag to move items",
-            ":/aselect.png",
+            maya_icon(":/aselect.png"),
             checked=True,
         )
         self._add_tool(
             TOOL_TRANSFORM,
             "Xfrm",
             "Transform tool: show on-canvas scale / rotate handles",
-            ":/move_M.png",
+            maya_icon(":/move_M.png"),
             checked=False,
         )
 
         self.main_layout.addStretch()
 
-    def _style_button(self, button, label, tooltip, icon_resource):
-        """Apply the shared strip button look, using an icon when available."""
+    def _style_button(self, button, label, tooltip, icon):
+        """Apply the shared strip button look, using an icon when available.
+
+        Args:
+            button (QToolButton): the button to style.
+            label (str): short text fallback when ``icon`` is null.
+            tooltip (str): hover description.
+            icon (QtGui.QIcon): icon to show, or a null icon for text.
+        """
         button.setToolTip(tooltip)
         button.setAutoRaise(True)
         button.setFixedWidth(self._BUTTON_SIZE)
         button.setMinimumHeight(self._BUTTON_SIZE)
-        # Prefer a Maya resource icon; fall back to a short text label so the
-        # strip is usable even when the resource is absent.
-        icon = QtGui.QIcon(icon_resource) if icon_resource else QtGui.QIcon()
-        if not icon.isNull():
+        if icon is not None and not icon.isNull():
             button.setIcon(icon)
+            button.setIconSize(QtCore.QSize(self._ICON_SIZE, self._ICON_SIZE))
             button.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
         else:
             button.setText(label)
             button.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
 
-    def _add_tool(self, name, label, tooltip, icon_resource, checked=False):
+    def _add_tool(self, name, label, tooltip, icon, checked=False):
         """Add an exclusive tool toggle button."""
         button = QtWidgets.QToolButton()
         button.setCheckable(True)
         button.setChecked(checked)
-        self._style_button(button, label, tooltip, icon_resource)
+        self._style_button(button, label, tooltip, icon)
         button.clicked.connect(partial(self._tool_clicked, name))
         self.tool_group.addButton(button)
         self._tool_buttons[name] = button
         self.main_layout.addWidget(button)
 
-    def add_command(self, label, tooltip, callback, icon_resource=None):
+    def add_command(self, label, tooltip, callback, icon=None):
         """Add a non-exclusive quick-access command button below the tools.
 
-        Reserved for future commands (duplicate, mirror, ...); returns the
-        created button so callers can enable/disable it with the selection.
-
         Args:
-            label (str): short button label (used when no icon is available).
+            label (str): short button label (used when ``icon`` is null).
             tooltip (str): hover description.
             callback (callable): invoked on click.
-            icon_resource (str, optional): icon resource path.
+            icon (QtGui.QIcon, optional): icon to show.
 
         Returns:
             QtWidgets.QToolButton: the created button.
         """
         button = QtWidgets.QToolButton()
-        self._style_button(button, label, tooltip, icon_resource)
+        self._style_button(button, label, tooltip, icon)
         button.clicked.connect(callback)
         # Insert before the trailing stretch.
         self.main_layout.insertWidget(self.main_layout.count() - 1, button)

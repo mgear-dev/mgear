@@ -18,6 +18,8 @@ Fields map 1:1 to the schema keys:
     text         str
     text_size    float
     text_color   RGBA tuple
+    item_id      str (optional stable id, minted when first mirror-linked)
+    mirror_id    str (optional mirror partner's item_id)
 """
 
 
@@ -36,6 +38,8 @@ class PickerItemData(object):
         self.text = None
         self.text_size = None
         self.text_color = None
+        self.item_id = None
+        self.mirror_id = None
 
     @classmethod
     def from_dict(cls, data):
@@ -71,6 +75,10 @@ class PickerItemData(object):
             model.text_size = data.get("text_size")
             if "text_color" in data:
                 model.text_color = tuple(data["text_color"])
+        if data.get("id"):
+            model.item_id = data["id"]
+        if data.get("mirror"):
+            model.mirror_id = data["mirror"]
 
         return model
 
@@ -103,5 +111,12 @@ class PickerItemData(object):
             data["text"] = self.text
             data["text_size"] = self.text_size
             data["text_color"] = self.text_color
+
+        # Mirror link (additive optional keys; absent when unlinked so old
+        # readers and unlinked pickers are unaffected).
+        if self.item_id:
+            data["id"] = self.item_id
+        if self.mirror_id:
+            data["mirror"] = self.mirror_id
 
         return data
