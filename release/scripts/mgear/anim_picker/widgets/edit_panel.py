@@ -26,6 +26,7 @@ from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets import graphics
 from mgear.anim_picker.widgets import widget_binding
+from mgear.anim_picker.widgets import visibility
 from mgear.anim_picker.widgets.dialogs.handles_window import (
     HandlesPositionWindow,
 )
@@ -59,6 +60,13 @@ class ItemEditPanel(QtWidgets.QWidget):
         widget_binding.WIDGET_CHECKBOX,
         widget_binding.WIDGET_SLIDER,
         widget_binding.WIDGET_SLIDER2D,
+    )
+
+    # Visibility mode combo order (index -> visibility mode).
+    _VIS_MODE_ORDER = (
+        visibility.VIS_NONE,
+        visibility.VIS_CHANNEL,
+        visibility.VIS_ZOOM,
     )
 
     def __init__(self, parent=None, main_window=None):
@@ -118,6 +126,14 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._wx_2d_box = None
         self.backdrop_title_field = None
         self.backdrop_radius_sb = None
+        self.vis_mode_combo = None
+        self.vis_attr_field = None
+        self.vis_operator_combo = None
+        self.vis_threshold_sb = None
+        self.vis_min_zoom_sb = None
+        self.vis_max_zoom_sb = None
+        self._vx_channel_box = None
+        self._vx_zoom_box = None
 
         self._build_ui()
         self.refresh_fields()
@@ -153,6 +169,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._build_action_section()
         self._build_widget_section()
         self._build_backdrop_section()
+        self._build_visibility_section()
         self.content_layout.addStretch()
 
     def _add_section(self, title):
@@ -497,8 +514,14 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._fields.append(spin)
         return spin
 
-    def _binding_attr_field(self, placeholder):
-        """Return a line edit that applies the binding when editing finishes."""
+    def _binding_attr_field(self, placeholder, callback=None):
+        """Return a namespaced-attribute line edit that applies on edit-finish.
+
+        Args:
+            placeholder (str): the field's placeholder text.
+            callback (callable, optional): the ``editingFinished`` handler;
+                defaults to ``_apply_binding`` (the widget binding fields).
+        """
         field = QtWidgets.QLineEdit()
         field.setPlaceholderText(placeholder)
         field.setToolTip(
@@ -506,7 +529,7 @@ class ItemEditPanel(QtWidgets.QWidget):
             "namespace is applied automatically (like control names). A "
             "namespace you type explicitly is kept as-is."
         )
-        field.editingFinished.connect(self._apply_binding)
+        field.editingFinished.connect(callback or self._apply_binding)
         self._fields.append(field)
         return field
 
@@ -639,6 +662,88 @@ class ItemEditPanel(QtWidgets.QWidget):
         hint.setWordWrap(True)
         section.addWidget(hint)
 
+    def _capture_zoom_button(self, which):
+        """Return a button that captures the current view zoom into a bound."""
+        button = basic.CallbackButton(
+            callback=partial(self._capture_zoom, which)
+        )
+        button.setText("Capture current")
+        button.setToolTip("Set this bound from the view's current zoom level")
+        self._fields.append(button)
+        return button
+
+    def _build_visibility_section(self):
+        section = self._add_section("Visibility")
+
+        mode_form = QtWidgets.QFormLayout()
+        self.vis_mode_combo = QtWidgets.QComboBox()
+        self.vis_mode_combo.addItems(["None", "Channel state", "Zoom level"])
+        self.vis_mode_combo.setToolTip(
+            "Show the item only when a Maya attribute passes a test "
+            "(channel state) or the view zoom is within a range (zoom level). "
+            "Edit mode always shows every item."
+        )
+        self.vis_mode_combo.currentIndexChanged.connect(self._apply_visibility)
+        self._fields.append(self.vis_mode_combo)
+        mode_form.addRow("Condition", self.vis_mode_combo)
+        section.addLayout(mode_form)
+
+        # Channel-state fields: attribute + operator + threshold.
+        self._vx_channel_box = QtWidgets.QWidget()
+        channel_layout = QtWidgets.QVBoxLayout(self._vx_channel_box)
+        channel_layout.setContentsMargins(0, 0, 0, 0)
+        attr_form = QtWidgets.QFormLayout()
+        self.vis_attr_field = self._binding_attr_field(
+            "node.attribute", callback=self._apply_visibility
+        )
+        attr_form.addRow("Attribute", self.vis_attr_field)
+        channel_layout.addLayout(attr_form)
+        test_row = QtWidgets.QHBoxLayout()
+        test_row.addWidget(QtWidgets.QLabel("Show when"))
+        self.vis_operator_combo = QtWidgets.QComboBox()
+        self.vis_operator_combo.addItems(list(visibility.OPERATORS))
+        self.vis_operator_combo.setCurrentIndex(
+            visibility.OPERATORS.index(">=")
+        )
+        self.vis_operator_combo.currentIndexChanged.connect(
+            self._apply_visibility
+        )
+        self._fields.append(self.vis_operator_combo)
+        test_row.addWidget(self.vis_operator_combo)
+        self.vis_threshold_sb = basic.CallBackDoubleSpinBox(
+            callback=self._apply_visibility, value=0.5, min=-1.0e6, max=1.0e6
+        )
+        self.vis_threshold_sb.setDecimals(3)
+        self._fields.append(self.vis_threshold_sb)
+        test_row.addWidget(self.vis_threshold_sb)
+        channel_layout.addLayout(test_row)
+        section.addWidget(self._vx_channel_box)
+
+        # Zoom-level fields: min / max scale, each with a capture button. A
+        # bound of 0 means open-ended (a real zoom scale is always > 0).
+        self._vx_zoom_box = QtWidgets.QWidget()
+        zoom_form = QtWidgets.QFormLayout(self._vx_zoom_box)
+        zoom_form.setContentsMargins(0, 0, 0, 0)
+        min_row = QtWidgets.QHBoxLayout()
+        self.vis_min_zoom_sb = basic.CallBackDoubleSpinBox(
+            callback=self._apply_visibility, value=0.0, min=0.0, max=1.0e6
+        )
+        self.vis_min_zoom_sb.setDecimals(3)
+        self.vis_min_zoom_sb.setToolTip("Lower zoom bound; 0 = no lower bound")
+        min_row.addWidget(self.vis_min_zoom_sb)
+        min_row.addWidget(self._capture_zoom_button("min"))
+        zoom_form.addRow("Min zoom", min_row)
+        max_row = QtWidgets.QHBoxLayout()
+        self.vis_max_zoom_sb = basic.CallBackDoubleSpinBox(
+            callback=self._apply_visibility, value=0.0, min=0.0, max=1.0e6
+        )
+        self.vis_max_zoom_sb.setDecimals(3)
+        self.vis_max_zoom_sb.setToolTip("Upper zoom bound; 0 = no upper bound")
+        max_row.addWidget(self.vis_max_zoom_sb)
+        max_row.addWidget(self._capture_zoom_button("max"))
+        zoom_form.addRow("Max zoom", max_row)
+        section.addWidget(self._vx_zoom_box)
+
     # ------------------------------------------------------------------
     # Selection binding
     # ------------------------------------------------------------------
@@ -715,6 +820,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._populate_action()
         self._populate_widget()
         self._populate_backdrop()
+        self._populate_visibility()
 
     def _populate_backdrop(self):
         item = self._active_item()
@@ -726,6 +832,37 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.backdrop_title_field.blockSignals(False)
         radius = item.get_corner_radius() if is_backdrop else 0.0
         self._set_spin(self.backdrop_radius_sb, round(radius, 4), False)
+
+    def _update_visibility_mode(self, mode):
+        """Show only the sub-box relevant to ``mode`` (VIS_NONE hides both)."""
+        self._vx_channel_box.setVisible(mode == visibility.VIS_CHANNEL)
+        self._vx_zoom_box.setVisible(mode == visibility.VIS_ZOOM)
+
+    def _populate_visibility(self):
+        mode, mode_mixed = self._shared(
+            lambda item: item.get_visibility().get("mode", visibility.VIS_NONE)
+        )
+        self._set_enum_combo(
+            self.vis_mode_combo, self._VIS_MODE_ORDER, mode, mode_mixed
+        )
+
+        # Condition fields follow the active item (like the widget binding); an
+        # edit applies to the whole selection via _apply_visibility.
+        item = self._active_item()
+        condition = (item.get_visibility() if item else None) or {}
+        self.vis_attr_field.setText(condition.get("attr", ""))
+        self._set_enum_combo(
+            self.vis_operator_combo,
+            visibility.OPERATORS,
+            condition.get("operator", ">="),
+        )
+        self.vis_threshold_sb.setValue(condition.get("threshold", 0.5))
+        self.vis_min_zoom_sb.setValue(condition.get("min_zoom") or 0.0)
+        self.vis_max_zoom_sb.setValue(condition.get("max_zoom") or 0.0)
+
+        self._update_visibility_mode(
+            visibility.VIS_NONE if mode_mixed else mode
+        )
 
     def _update_widget_visibility(self, widget_type):
         """Show only the sub-rows relevant to ``widget_type`` (None hides all)."""
@@ -745,14 +882,12 @@ class ItemEditPanel(QtWidgets.QWidget):
 
     def _populate_widget(self):
         wtype, wtype_mixed = self._shared(lambda item: item.get_widget_type())
-        self.widget_type_combo.blockSignals(True)
-        if wtype_mixed or wtype not in self._WIDGET_TYPE_ORDER:
-            self.widget_type_combo.setCurrentIndex(-1 if wtype_mixed else 0)
-        else:
-            self.widget_type_combo.setCurrentIndex(
-                self._WIDGET_TYPE_ORDER.index(wtype)
-            )
-        self.widget_type_combo.blockSignals(False)
+        self._set_enum_combo(
+            self.widget_type_combo,
+            self._WIDGET_TYPE_ORDER,
+            wtype,
+            wtype_mixed,
+        )
 
         # Binding fields follow the active item (like controls / menus); an
         # edit applies to the whole selection via _apply_binding.
@@ -836,6 +971,19 @@ class ItemEditPanel(QtWidgets.QWidget):
             checkbox.setCheckState(state)
         checkbox.blockSignals(False)
 
+    def _set_enum_combo(self, combo, order, value, mixed=False):
+        """Select ``value``'s index in ``combo`` (signals blocked).
+
+        Mixed selections clear the combo (index -1); an unknown value falls
+        back to the first entry. ``order`` is the index -> value sequence.
+        """
+        combo.blockSignals(True)
+        if mixed or value not in order:
+            combo.setCurrentIndex(-1 if mixed else 0)
+        else:
+            combo.setCurrentIndex(order.index(value))
+        combo.blockSignals(False)
+
     def _populate_transform(self):
         x, x_mixed = self._shared(lambda item: round(item.x(), 4))
         y, y_mixed = self._shared(lambda item: round(item.y(), 4))
@@ -884,14 +1032,9 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._set_spin(self.text_alpha_sb, talpha, talpha_mixed)
 
         align, align_mixed = self._shared(lambda item: item.get_text_align())
-        self.text_align_combo.blockSignals(True)
-        if align_mixed or align not in graphics.TEXT_ALIGNS:
-            self.text_align_combo.setCurrentIndex(-1 if align_mixed else 0)
-        else:
-            self.text_align_combo.setCurrentIndex(
-                graphics.TEXT_ALIGNS.index(align)
-            )
-        self.text_align_combo.blockSignals(False)
+        self._set_enum_combo(
+            self.text_align_combo, graphics.TEXT_ALIGNS, align, align_mixed
+        )
 
         offset, offset_mixed = self._shared(
             lambda item: round(item.get_text_offset(), 4)
@@ -1319,6 +1462,64 @@ class ItemEditPanel(QtWidgets.QWidget):
             if item.get_backdrop():
                 item.set_corner_radius(radius)
         self._repaint_view()
+
+    # -- visibility -----------------------------------------------------
+    def _collect_visibility(self):
+        """Build a visibility condition dict from the current field values."""
+        index = self.vis_mode_combo.currentIndex()
+        mode = (
+            self._VIS_MODE_ORDER[index]
+            if index >= 0
+            else visibility.VIS_NONE
+        )
+        if mode == visibility.VIS_CHANNEL:
+            return {
+                "mode": visibility.VIS_CHANNEL,
+                "attr": str(self.vis_attr_field.text()).strip(),
+                "operator": visibility.OPERATORS[
+                    self.vis_operator_combo.currentIndex()
+                ],
+                "threshold": self.vis_threshold_sb.value(),
+            }
+        if mode == visibility.VIS_ZOOM:
+            low = self.vis_min_zoom_sb.value()
+            high = self.vis_max_zoom_sb.value()
+            # A bound of 0 means open-ended (a real zoom scale is always > 0).
+            return {
+                "mode": visibility.VIS_ZOOM,
+                "min_zoom": low if low > 0 else None,
+                "max_zoom": high if high > 0 else None,
+            }
+        return {}
+
+    def _apply_visibility(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        condition = self._collect_visibility()
+        for item in self.items:
+            item.set_visibility(condition)
+        self._update_visibility_mode(
+            condition.get("mode", visibility.VIS_NONE)
+        )
+        # Refresh the view's "any conditioned item?" gate and re-apply the
+        # show/hide. The display is unchanged while editing (edit mode forces
+        # everything visible), but this keeps the runtime state correct.
+        if self._view is not None:
+            self._view._recompute_conditional_flag()
+            self._view.refresh_item_visibility()
+        self._repaint_view()
+
+    def _capture_zoom(self, which):
+        """Set a zoom bound from the active view's current zoom scale."""
+        view = self._current_view()
+        if view is None:
+            return
+        zoom = round(abs(view.viewportTransform().m11()), 3)
+        spin = (
+            self.vis_min_zoom_sb if which == "min" else self.vis_max_zoom_sb
+        )
+        spin.setValue(zoom)
+        self._apply_visibility()
 
     # -- controls -------------------------------------------------------
     def _add_selected_controls(self):

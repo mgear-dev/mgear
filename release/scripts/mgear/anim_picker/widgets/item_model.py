@@ -32,6 +32,8 @@ Fields map 1:1 to the schema keys:
     backdrop     bool (optional; item is a backdrop container behind others)
     title        str (optional backdrop title)
     corner_radius float (optional backdrop corner radius; 0 = straight)
+    visibility   dict (optional condition; show only when a channel / zoom test
+                 passes -- see ``widgets.visibility``)
 """
 
 
@@ -64,6 +66,7 @@ class PickerItemData(object):
         self.backdrop = False
         self.title = None
         self.corner_radius = None
+        self.visibility = None
 
     @classmethod
     def from_dict(cls, data):
@@ -120,6 +123,8 @@ class PickerItemData(object):
             model.backdrop = True
             model.title = data.get("title")
             model.corner_radius = data.get("corner_radius")
+        if data.get("visibility"):
+            model.visibility = dict(data["visibility"])
 
         return model
 
@@ -193,5 +198,10 @@ class PickerItemData(object):
                 data["title"] = self.title
             if self.corner_radius is not None:
                 data["corner_radius"] = self.corner_radius
+
+        # Visibility condition (additive optional key; only emitted when set so
+        # old readers and unconditioned items are unaffected).
+        if self.visibility:
+            data["visibility"] = dict(self.visibility)
 
         return data

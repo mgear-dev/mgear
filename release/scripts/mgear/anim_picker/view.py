@@ -137,6 +137,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # nothing is pinned (the common case).
         self._has_pinned_items = False
 
+        # Conditional-visibility items: a cached "any condition?" flag so the
+        # per-item show/hide evaluation on zoom / selection / time is skipped
+        # when no item carries a visibility condition (the common case).
+        self._has_conditional_items = False
+
         self.fit_margin = 8
 
         # # undo list ---------------------------------------------------------
@@ -278,6 +283,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             self.scale(factor, factor)
             self.zoom_delta = current_delta
             self._update_pinned_items()
+            # Zoom changed; re-evaluate zoom-level visibility conditions.
+            self.refresh_item_visibility()
 
         return result
 
@@ -429,6 +436,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.scale(factor, factor)
         # Keep viewport-pinned items locked to their screen anchors.
         self._update_pinned_items()
+        # Zoom changed; re-evaluate zoom-level visibility conditions.
+        self.refresh_item_visibility()
 
     # undo --------------------------------------------------------------------
     def undo_move(self):
@@ -641,7 +650,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Run default resizeEvent
         result = QtWidgets.QGraphicsView.resizeEvent(self, *args, **kwargs)
         # Re-anchor pinned items to the new viewport size (covers the case
-        # where auto-frame is off and no fit happened above).
+        # where auto-frame is off and no fit happened above). Visibility is not
+        # refreshed here: an auto-frame fit already did (via fit_scene_content),
+        # and without a fit a resize does not change the zoom scale.
         self._update_pinned_items()
         return result
 
@@ -649,8 +660,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         """Will fit scene content to view, by scaling it"""
         scene_rect = self.scene().get_bounding_rect(margin=self.fit_margin)
         self.fitInView(scene_rect, QtCore.Qt.KeepAspectRatio)
-        # The fit changed the view transform; re-anchor pinned items.
+        # The fit changed the view transform; re-anchor pins + re-eval zoom.
         self._update_pinned_items()
+        self.refresh_item_visibility()
 
     def set_auto_frame_view(self):
         """Enable auto fit when a resize event happens"""
@@ -667,6 +679,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         if scene_rect:
             self.fitInView(scene_rect, QtCore.Qt.KeepAspectRatio)
             self._update_pinned_items()
+            self.refresh_item_visibility()
 
     def get_color_picker_override(self, picker, ctrl):
         """Get the maya override color and return picker equivelant
@@ -1062,6 +1075,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             ctrl = self.add_picker_item(event=None)
             ctrl.set_data(data)
             ctrl.set_selected_state(True)
+        # A pasted item may carry a visibility condition copied from another
+        # picker, so refresh the "any conditioned item?" gate and re-apply.
+        self._recompute_conditional_flag()
+        self.refresh_item_visibility()
 
     def toggle_all_handles_event(self, event=None):
         new_status = None
@@ -1599,6 +1616,38 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             px, py = overlay.anchor_point(size, item.anchor, item.offset)
             item.setPos(self.mapToScene(int(round(px)), int(round(py))))
 
+    # -- conditional visibility -----------------------------------------
+    def _recompute_conditional_flag(self):
+        """Refresh the cached "any conditioned item?" flag (on edit / load)."""
+        self._has_conditional_items = any(
+            item.has_visibility_condition() for item in self.get_picker_items()
+        )
+
+    def refresh_item_visibility(self):
+        """Show / hide each conditioned item for the current zoom + rig state.
+
+        Mirrors ``_update_pinned_items``: the view owns *when* (called from the
+        zoom / pan / fit hooks and the selection / time callbacks) and computes
+        the zoom once, while each item owns its own decision (channel read +
+        pure evaluation). A no-op when no item carries a condition.
+        """
+        if not self._has_conditional_items:
+            return
+        zoom = abs(self.viewportTransform().m11())
+        for item in self.scene().get_picker_items():
+            item.evaluate_visibility(zoom)
+
+    def refresh_widget_states(self):
+        """Re-read every interactive widget's bound attribute into its display.
+
+        The checkbox / slider / 2D-slider items re-sync their drawn state from
+        the rig; ``refresh_widget_state`` is a cheap no-op on non-widget items.
+        Used by the mouse-enter (hover) refresh so a manual channel change is
+        reflected without a selection / time callback. Read-only, never writes.
+        """
+        for item in self.scene().get_picker_items():
+            item.refresh_widget_state()
+
     def set_item_pinned(self, item, state, anchor=None):
         """Pin / unpin an item and reposition it (default anchor = its region).
 
@@ -1789,6 +1838,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         old_scene.deleteLater()
         self._has_mirror_links = False
         self._has_pinned_items = False
+        self._has_conditional_items = False
 
     def get_picker_items(self):
         """Return scene picker items in proper order (back to front)"""
@@ -1848,6 +1898,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self._recompute_pinned_flag()
         self._update_scene_size()
         self._update_pinned_items()
+
+        # Record whether any item is conditioned, then apply the initial
+        # show/hide for the loaded zoom + rig state.
+        self._recompute_conditional_flag()
+        self.refresh_item_visibility()
 
     def drawBackground(self, painter, rect):
         """Draw the tab's background image layers (back to front)"""

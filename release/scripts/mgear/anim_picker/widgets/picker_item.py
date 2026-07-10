@@ -33,6 +33,7 @@ from mgear.anim_picker.widgets.item_model import PickerItemData
 from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets import widget_binding
+from mgear.anim_picker.widgets import visibility
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
 from mgear.anim_picker.handlers import python_handlers
@@ -150,6 +151,11 @@ class PickerItem(DefaultPolygon):
         # Backdrop container (optional): a large rectangle behind the picker
         # items that moves everything geometrically inside it when dragged.
         self.backdrop = False
+
+        # Visibility condition (optional): a channel-state / zoom-level test
+        # that hides the item in animation mode until it passes. Empty means
+        # always visible. Evaluated by the view on zoom / selection / time.
+        self.visibility = {}
 
     def shape(self):
         path = QtGui.QPainterPath()
@@ -794,6 +800,10 @@ class PickerItem(DefaultPolygon):
         self.scene().removeItem(self)
         self.setParent(None)
         self.deleteLater()
+        # Removing the last conditioned item must clear the view's visibility
+        # gate, else it keeps iterating every item on each zoom / selection.
+        if hasattr(view, "_recompute_conditional_flag"):
+            view._recompute_conditional_flag()
 
     def get_delta_from_point(self, point):
         self.cursor_delta = self.pos() - point
@@ -1100,6 +1110,54 @@ class PickerItem(DefaultPolygon):
                 )
             self.widget_graphic.value_xy = (cur_x, cur_y)
         self.widget_graphic.update()
+
+    # =========================================================================
+    # Conditional visibility ---
+    def get_visibility(self):
+        """Return the item's visibility condition dict (empty when none)."""
+        return self.visibility
+
+    def set_visibility(self, condition):
+        """Set (or clear) the item's visibility condition.
+
+        Args:
+            condition (dict): a ``widgets.visibility`` condition, or a falsy
+                value to clear it (the item then stays always visible).
+        """
+        self.visibility = dict(condition) if condition else {}
+
+    def has_visibility_condition(self):
+        """Return True when the item carries a visibility condition."""
+        return bool(self.visibility)
+
+    def evaluate_visibility(self, zoom):
+        """Show / hide the item for its condition at the current ``zoom``.
+
+        Edit mode always shows the item so a condition can never block editing.
+        A channel condition reads its attribute here (namespace applied, safe
+        read); the pure show/hide decision is delegated to
+        ``widgets.visibility``. A no-op decision (fail-open) keeps the item
+        visible.
+
+        Args:
+            zoom (float): the view's current zoom scale.
+        """
+        if __EDIT_MODE__.get():
+            self.setVisible(True)
+            return
+        condition = self.visibility
+        if not condition:
+            self.setVisible(True)
+            return
+        value = None
+        if condition.get("mode") == visibility.VIS_CHANNEL:
+            attr = widget_handlers.resolve_attr(
+                condition.get("attr"), self.get_namespace()
+            )
+            value = widget_handlers.read_attr(attr) if attr else None
+        self.setVisible(
+            visibility.evaluate(condition, {"zoom": zoom, "value": value})
+        )
 
     # =========================================================================
     # Backdrop container ---
@@ -1561,6 +1619,10 @@ class PickerItem(DefaultPolygon):
                 self.set_corner_radius(model.corner_radius)
             self.set_backdrop(True)
 
+        # Visibility condition (optional, additive key).
+        if model.visibility:
+            self.set_visibility(model.visibility)
+
     def get_data(self):
         """Get picker item data in dictionary form.
 
@@ -1610,5 +1672,8 @@ class PickerItem(DefaultPolygon):
             model.backdrop = True
             model.title = self.get_backdrop_title()
             model.corner_radius = self.get_corner_radius()
+
+        if self.visibility:
+            model.visibility = dict(self.visibility)
 
         return model.to_dict()

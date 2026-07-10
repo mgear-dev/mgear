@@ -1245,6 +1245,10 @@ class MainDockWindow(QtWidgets.QWidget):
         self.cb_manager.newSceneCB(
             "anim_picker_newScene", self.selection_change_event
         )
+        # No time-change callback: channel-state visibility is not refreshed
+        # per playback frame (that would read the rig every frame). A manual /
+        # animated channel change is picked up on mouse-over (enterEvent ->
+        # refresh_from_rig) instead -- on-demand, never polling.
 
     def selection_change_event(self, *args):
         """
@@ -1273,6 +1277,50 @@ class MainDockWindow(QtWidgets.QWidget):
         # Update controls for active tab
         for item in self.get_picker_items():
             item.run_selection_check()
+
+        # Re-evaluate conditional visibility for the new selection / rig state
+        # (channel-state conditions may now pass or fail).
+        self.refresh_item_visibility()
+
+    def refresh_item_visibility(self, *args):
+        """Re-evaluate conditional-visibility items across every live view.
+
+        Each view computes the zoom once and applies its items' show/hide.
+        Wired to selection- and time-change callbacks so channel-state
+        conditions update as the animator selects or scrubs; iterating every
+        view (not just the active one) keeps the multi-tab tiled presentation
+        live, and is cheap since each view early-outs when it has none.
+        """
+        for view in self.tab_area.all_views():
+            if view is not None:
+                view.refresh_item_visibility()
+
+    def enterEvent(self, event):
+        """Refresh rig-driven display when the mouse enters the picker.
+
+        Like the Channel Master tool, a mouse-enter (no focus needed) re-reads
+        the bound Maya attributes so interactive widgets and conditional-
+        visibility items reflect the current rig even after a change that fired
+        no selection / time callback (e.g. a manual channel-box edit). It is
+        on-demand only -- it never polls the rig.
+        """
+        super().enterEvent(event)
+        self.refresh_from_rig()
+
+    def refresh_from_rig(self, *args):
+        """Re-sync widgets + conditional visibility from the rig (all views).
+
+        One pass per live view reads each interactive widget's attribute and
+        re-evaluates the conditional-visibility items. A no-op in edit mode
+        (nothing reads the rig while authoring).
+        """
+        if __EDIT_MODE__.get():
+            return
+        for view in self.tab_area.all_views():
+            if view is None:
+                continue
+            view.refresh_widget_states()
+            view.refresh_item_visibility()
 
 
 # version of the anim picker ui that uses MayaQWidgetDockableMixin for docking
