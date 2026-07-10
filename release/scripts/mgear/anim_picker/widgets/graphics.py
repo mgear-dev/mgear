@@ -427,9 +427,16 @@ class WidgetGraphic(DefaultPolygon):
         return parent.polygon.shape().boundingRect()
 
     def boundingRect(self):
-        return self._item_rect()
+        # Expand past the item rect by the knob radius (+ pen / antialias
+        # margin): the fixed-size slider knob overhangs a thin track, and a
+        # bounding rect that stopped at the track would leave the old knob's
+        # overhang unrepainted -- a ghost of the previous drag position.
+        margin = self._HANDLE_R + 2.0
+        return self._item_rect().adjusted(-margin, -margin, margin, margin)
 
     def shape(self):
+        # Hit-testing stays the item rect (the knob overhang is not clickable);
+        # only boundingRect is padded, for the repaint region.
         path = QtGui.QPainterPath()
         path.addRect(self._item_rect())
         return path
