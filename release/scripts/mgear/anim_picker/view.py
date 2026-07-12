@@ -34,6 +34,7 @@ from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets import silhouette
 from mgear.anim_picker.widgets import widget_binding
+from mgear.core import svg_import
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import maya_handlers
 
@@ -768,6 +769,66 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.scene().select_picker_items([ctrl])
         return ctrl
 
+    def add_svg_item(self, path, scene_pos=None):
+        """Import an ``.svg`` file as a vector picker item.
+
+        Parses the SVG's supported geometry (discarding and reporting
+        unsupported elements), and creates one vector item at ``scene_pos``.
+        Nothing is created when the file has no supported geometry; either way
+        the import never raises.
+
+        Args:
+            path (str): path to the ``.svg`` file.
+            scene_pos (QPointF, optional): scene position for the new item
+                (defaults to the view center).
+
+        Returns:
+            PickerItem: the created (and selected) vector item, or None when the
+            SVG had no supported geometry.
+        """
+        name = os.path.basename(path)
+        try:
+            with open(path, "r") as svg_file:
+                text = svg_file.read()
+        except IOError as exc:
+            mgear.log(
+                "anim_picker: could not read '{}' ({})".format(path, exc),
+                mgear.sev_warning,
+            )
+            return None
+
+        # flip_y: the picker view is y-up, so the SVG (y-down) is flipped to
+        # import upright. mode is a suggested fill / stroke render (line-art
+        # icons come back as stroke, so they are not filled to nothing).
+        subpaths, dropped, mode = svg_import.parse_svg(text, flip_y=True)
+        if not subpaths:
+            reason = (
+                "ignored unsupported: {}".format(", ".join(dropped))
+                if dropped
+                else "no supported geometry"
+            )
+            mgear.log(
+                "anim_picker: '{}' imported nothing ({})".format(name, reason),
+                mgear.sev_warning,
+            )
+            return None
+        if dropped:
+            mgear.log(
+                "anim_picker: imported '{}'; ignored unsupported: {}".format(
+                    name, ", ".join(dropped)
+                ),
+                mgear.sev_warning,
+            )
+
+        ctrl = self.add_picker_item()
+        if scene_pos is not None:
+            ctrl.setPos(scene_pos)
+        ctrl.set_data(
+            {"svg": {"name": name, "subpaths": subpaths, "mode": mode}}
+        )
+        self.scene().select_picker_items([ctrl])
+        return ctrl
+
     def add_backdrop_item(self, mouse_pos=None, fit_items=None):
         """Create a backdrop container, sent behind the picker items.
 
@@ -858,34 +919,64 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             tool_bar.WIDGET_MIME
         )
 
+    def _svg_drop_paths(self, event):
+        """Return the ``.svg`` local file paths in a file-URL drag (edit mode).
+
+        Empty when not in edit mode, not a URL drag, or no dropped file is an
+        ``.svg`` -- so a non-SVG file drop falls through to the default.
+        """
+        if not __EDIT_MODE__.get():
+            return []
+        mime = event.mimeData()
+        if not mime.hasUrls():
+            return []
+        paths = []
+        for url in mime.urls():
+            local = url.toLocalFile()
+            if local and local.lower().endswith(".svg"):
+                paths.append(local)
+        return paths
+
+    def _drop_view_pos(self, event):
+        """Return the drop position in view coords (Qt5 pos / Qt6 position)."""
+        # Qt6 (Maya 2025+) drops pos() in favor of position(); support both.
+        try:
+            return event.position().toPoint()
+        except AttributeError:
+            return event.pos()
+
     def dragEnterEvent(self, event):
-        """Accept a palette drag (widget/item tile) in edit mode."""
-        if self._is_palette_drag(event):
+        """Accept a palette drag or an ``.svg`` file drag in edit mode."""
+        if self._is_palette_drag(event) or self._svg_drop_paths(event):
             event.acceptProposedAction()
         else:
             QtWidgets.QGraphicsView.dragEnterEvent(self, event)
 
     def dragMoveEvent(self, event):
-        """Keep accepting the palette drag while it hovers the canvas."""
-        if self._is_palette_drag(event):
+        """Keep accepting a palette / ``.svg`` drag while it hovers the canvas."""
+        if self._is_palette_drag(event) or self._svg_drop_paths(event):
             event.acceptProposedAction()
         else:
             QtWidgets.QGraphicsView.dragMoveEvent(self, event)
 
     def dropEvent(self, event):
-        """Create the dropped widget/item at the drop position (edit mode)."""
-        if not self._is_palette_drag(event):
-            QtWidgets.QGraphicsView.dropEvent(self, event)
+        """Create the dropped widget / SVG item at the drop position (edit)."""
+        if self._is_palette_drag(event):
+            widget_type = bytes(
+                event.mimeData().data(tool_bar.WIDGET_MIME)
+            ).decode("utf-8")
+            scene_pos = self.mapToScene(self._drop_view_pos(event))
+            self.add_widget_item(widget_type, scene_pos)
+            event.acceptProposedAction()
             return
-        mime = event.mimeData()
-        widget_type = bytes(mime.data(tool_bar.WIDGET_MIME)).decode("utf-8")
-        # Qt6 (Maya 2025+) drops pos() in favor of position(); support both.
-        try:
-            view_pos = event.position().toPoint()
-        except AttributeError:
-            view_pos = event.pos()
-        self.add_widget_item(widget_type, self.mapToScene(view_pos))
-        event.acceptProposedAction()
+        svg_paths = self._svg_drop_paths(event)
+        if svg_paths:
+            scene_pos = self.mapToScene(self._drop_view_pos(event))
+            for path in svg_paths:
+                self.add_svg_item(path, scene_pos)
+            event.acceptProposedAction()
+            return
+        QtWidgets.QGraphicsView.dropEvent(self, event)
 
     def add_picker_item_selected(self, mouse_pos=None):
         """Add new PickerItem to current view"""
@@ -1548,8 +1639,14 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         pos = mirror.mirror_position([src.x(), src.y()], axis)
         dst.setPos(pos[0], pos[1])
         dst.setRotation(mirror.mirror_rotation(src.rotation()))
-        src_handles = [[h.x(), h.y()] for h in src.handles]
-        dst.set_handles(mirror.mirror_handles(src_handles))
+        if src.is_vector_shape():
+            dst.set_svg_shape(dict(src.get_svg_shape()))
+            dst.set_svg_subpaths(
+                svg_import.scale_subpaths(src.get_svg_subpaths(), -1.0, 1.0)
+            )
+        else:
+            src_handles = [[h.x(), h.y()] for h in src.handles]
+            dst.set_handles(mirror.mirror_handles(src_handles))
         dst.set_text(src.get_text())
         dst.update()
 

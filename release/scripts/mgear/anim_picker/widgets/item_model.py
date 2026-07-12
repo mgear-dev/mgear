@@ -34,6 +34,8 @@ Fields map 1:1 to the schema keys:
     corner_radius float (optional backdrop corner radius; 0 = straight)
     visibility   dict (optional condition; show only when a channel / zoom test
                  passes -- see ``widgets.visibility``)
+    svg          dict (optional vector shape imported from SVG; normalized
+                 subpaths + render mode -- see ``mgear.core.svg_import``)
 """
 
 
@@ -67,6 +69,7 @@ class PickerItemData(object):
         self.title = None
         self.corner_radius = None
         self.visibility = None
+        self.svg = None
 
     @classmethod
     def from_dict(cls, data):
@@ -125,6 +128,8 @@ class PickerItemData(object):
             model.corner_radius = data.get("corner_radius")
         if data.get("visibility"):
             model.visibility = dict(data["visibility"])
+        if data.get("svg"):
+            model.svg = dict(data["svg"])
 
         return model
 
@@ -203,5 +208,10 @@ class PickerItemData(object):
         # old readers and unconditioned items are unaffected).
         if self.visibility:
             data["visibility"] = dict(self.visibility)
+
+        # Vector (SVG) shape (additive optional key; only emitted for a vector
+        # item so old readers and polygon items are unaffected).
+        if self.svg:
+            data["svg"] = dict(self.svg)
 
         return data

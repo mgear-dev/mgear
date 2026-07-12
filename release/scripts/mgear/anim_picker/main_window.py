@@ -407,6 +407,13 @@ class MainDockWindow(QtWidgets.QWidget):
             self._cmd_add_item,
             tool_bar.mgear_icon("mgear_plus-square"),
         )
+        self.left_toolbar.add_command(
+            "SVG",
+            "Import an .svg file as a vector shape "
+            "(or drag one onto the canvas)",
+            self._cmd_import_svg,
+            tool_bar.mgear_icon("mgear_image"),
+        )
         self._selection_commands = [
             self.left_toolbar.add_command(
                 "Dup",
@@ -673,6 +680,19 @@ class MainDockWindow(QtWidgets.QWidget):
         if view is not None:
             view.add_picker_item_gui(QtCore.QPointF(0, 0))
         self._after_command()
+
+    def _cmd_import_svg(self):
+        """Import one or more .svg files as vector items (file dialog)."""
+        view = self._current_view()
+        if view is None:
+            return
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, "Import SVG", "", "SVG files (*.svg)"
+        )
+        for path in paths or []:
+            view.add_svg_item(path, view.get_center_pos())
+        if paths:
+            self._after_command()
 
     def _cmd_duplicate(self):
         items = self._selected_items()

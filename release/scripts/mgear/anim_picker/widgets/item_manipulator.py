@@ -17,6 +17,7 @@ from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
 
 from mgear.anim_picker.widgets import manipulator_transform
+from mgear.core import svg_import
 
 
 class ItemManipulator(object):
@@ -114,8 +115,12 @@ class ItemManipulator(object):
         self._orig_items = []
         for item in self.selected_items():
             handles = [[h.x(), h.y()] for h in item.handles]
+            # Capture the vector subpaths too, so a vector item scales its
+            # curve (baked into the subpaths) rather than its hidden handles.
+            svg_subpaths = item.get_svg_subpaths()
             self._orig_items.append(
-                (item, item.x(), item.y(), item.rotation(), handles)
+                (item, item.x(), item.y(), item.rotation(), handles,
+                 svg_subpaths)
             )
 
     def update_drag(self, x, y, keep_aspect=False):
@@ -129,16 +134,22 @@ class ItemManipulator(object):
         anchor_x, anchor_y, sx, sy = manipulator_transform.scale_factors(
             self._orig_bounds, self._drag_handle, x, y, keep_aspect
         )
-        for item, ox, oy, _orot, ohandles in self._orig_items:
+        for item, ox, oy, _orot, ohandles, osvg in self._orig_items:
             item.setPos(
                 anchor_x + (ox - anchor_x) * sx,
                 anchor_y + (oy - anchor_y) * sy,
             )
-            # Scale each item's handles in its own (axis-aligned) local frame,
-            # rebuilt from the captured originals. Non-uniform scale of a
-            # rotated item shears it (accepted v1 limitation); uniform is exact.
-            for handle, (hx, hy) in zip(item.handles, ohandles):
-                handle.setPos(hx * sx, hy * sy)
+            # Scale the body geometry in the item's own (axis-aligned) local
+            # frame, rebuilt from the captured originals. A vector item scales
+            # its subpaths (baked); a polygon scales its handles. Non-uniform
+            # scale of a rotated item shears it (v1 limitation); uniform exact.
+            if item.is_vector_shape():
+                item.set_svg_subpaths(
+                    svg_import.scale_subpaths(osvg, sx, sy)
+                )
+            else:
+                for handle, (hx, hy) in zip(item.handles, ohandles):
+                    handle.setPos(hx * sx, hy * sy)
             item.update()
 
     def _update_rotate(self, x, y):
@@ -150,7 +161,7 @@ class ItemManipulator(object):
         # Rigid rotation about the group center: orbit each item's position and
         # add the same angle to its rotation. A single item's center is its own
         # bbox center, so it rotates in place.
-        for item, ox, oy, orot, _ohandles in self._orig_items:
+        for item, ox, oy, orot, _ohandles, _osvg in self._orig_items:
             nx, ny = manipulator_transform.rotate_point(ox, oy, cx, cy, angle)
             item.setPos(nx, ny)
             item.setRotation(orot + angle)

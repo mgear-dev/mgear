@@ -24,6 +24,7 @@ from mgear.anim_picker.widgets.graphics import Polygon
 from mgear.anim_picker.widgets.graphics import GraphicText
 from mgear.anim_picker.widgets.graphics import WidgetGraphic
 from mgear.anim_picker.widgets.graphics import BackdropGraphic
+from mgear.anim_picker.widgets.graphics import VectorGraphic
 from mgear.anim_picker.widgets.dialogs.item_options import ItemOptionsWindow
 from mgear.anim_picker.widgets.dialogs.search_replace_dialog import (
     SearchAndReplaceDialog,
@@ -34,6 +35,7 @@ from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets import widget_binding
 from mgear.anim_picker.widgets import visibility
+from mgear.core import svg_import
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
 from mgear.anim_picker.handlers import python_handlers
@@ -98,6 +100,10 @@ class PickerItem(DefaultPolygon):
         # the plain polygon when the item is a backdrop, hidden otherwise.
         self.backdrop_graphic = BackdropGraphic(parent=self)
 
+        # Vector (curved) body imported from SVG; replaces the plain polygon
+        # when the item is a vector shape, hidden otherwise.
+        self.vector_graphic = VectorGraphic(parent=self)
+
         # Interactive-widget affordance (checkbox / slider); drawn above the
         # polygon and below the text, hidden unless the item is a widget.
         self.widget_graphic = WidgetGraphic(parent=self)
@@ -157,10 +163,18 @@ class PickerItem(DefaultPolygon):
         # always visible. Evaluated by the view on zoom / selection / time.
         self.visibility = {}
 
+        # Vector (SVG) shape (optional): normalized subpaths imported from an
+        # SVG. When set, the item is a curved shape (polygon hidden). Empty
+        # means the item is a plain polygon.
+        self.svg = {}
+
     def shape(self):
         path = QtGui.QPainterPath()
 
-        if self.polygon:
+        # A vector item is hit-tested on its curved silhouette, not the polygon.
+        if self.svg:
+            path.addPath(self.vector_graphic.shape())
+        elif self.polygon:
             path.addPath(self.polygon.shape())
 
         # Stop here in default mode
@@ -1160,6 +1174,83 @@ class PickerItem(DefaultPolygon):
         )
 
     # =========================================================================
+    # Vector (SVG) shape ---
+    def is_vector_shape(self):
+        """Return True when the item is a vector (SVG-imported) shape."""
+        return bool(self.svg)
+
+    def get_svg_shape(self):
+        """Return the item's vector shape dict (empty when not a vector)."""
+        return self.svg
+
+    def set_svg_shape(self, svg):
+        """Set (or clear) the item's vector shape.
+
+        A vector shape swaps the plain polygon body for the curved
+        ``vector_graphic`` (like the backdrop swap). Passing a falsy value
+        reverts the item to its polygon.
+
+        Args:
+            svg (dict): ``{"subpaths": [...], "name": ...}`` from
+                ``svg_import.parse_svg``, or a falsy value to clear it.
+        """
+        self.svg = dict(svg) if svg else {}
+        subpaths = self.svg.get("subpaths", []) if self.svg else []
+        # set_subpaths rebuilds the vector path and repaints the child.
+        self.vector_graphic.set_subpaths(subpaths)
+        self.vector_graphic.set_mode(
+            self.svg.get("mode", svg_import.MODE_FILL) if self.svg else None
+        )
+        self.vector_graphic.set_stroke_width(self.svg.get("stroke_width", 2.0))
+        # The polygon is kept as the fallback body; hide its drawing while the
+        # vector graphic is shown (mirrors the backdrop swap). Handles stay
+        # hidden for a vector item (no per-point editing in this version). A
+        # vector body takes precedence over a backdrop (one visible body).
+        self.polygon.setVisible(not self.svg)
+        self.vector_graphic.setVisible(bool(self.svg))
+        if self.svg:
+            self.backdrop_graphic.setVisible(False)
+        # The item's shape()/boundingRect derive from the vector path, so tell
+        # the scene of the geometry change (the item itself paints nothing).
+        self.prepareGeometryChange()
+
+    def get_svg_subpaths(self):
+        """Return the vector shape's subpaths (empty when not a vector)."""
+        return self.svg.get("subpaths", []) if self.svg else []
+
+    def set_svg_subpaths(self, subpaths):
+        """Replace the vector shape's subpaths (scale / mirror bake here)."""
+        if not self.svg:
+            return
+        self.svg["subpaths"] = subpaths
+        self.vector_graphic.set_subpaths(subpaths)
+        self.prepareGeometryChange()
+
+    def get_svg_mode(self):
+        """Return the vector render mode (``fill`` / ``stroke``)."""
+        return self.svg.get("mode", svg_import.MODE_FILL) if self.svg else (
+            svg_import.MODE_FILL
+        )
+
+    def set_svg_mode(self, mode):
+        """Set the vector render mode (fill vs stroke)."""
+        if not self.svg:
+            return
+        self.svg["mode"] = mode
+        self.vector_graphic.set_mode(mode)
+
+    def get_svg_stroke_width(self):
+        """Return the vector stroke width (used in stroke mode)."""
+        return self.svg.get("stroke_width", 2.0) if self.svg else 2.0
+
+    def set_svg_stroke_width(self, width):
+        """Set the vector stroke width (used in stroke mode)."""
+        if not self.svg:
+            return
+        self.svg["stroke_width"] = width
+        self.vector_graphic.set_stroke_width(width)
+
+    # =========================================================================
     # Backdrop container ---
     def get_backdrop(self):
         """Return True when the item is a backdrop container."""
@@ -1229,7 +1320,12 @@ class PickerItem(DefaultPolygon):
         self.update()
 
     def mirror_shape(self):
-        """Will mirror polygon handles position on X axis"""
+        """Mirror the item's shape on X (vector subpaths or handles)."""
+        if self.svg:
+            self.set_svg_subpaths(
+                svg_import.scale_subpaths(self.get_svg_subpaths(), -1.0, 1.0)
+            )
+            return
         handles = [[handle.x(), handle.y()] for handle in self.handles]
         self.set_handles(mirror.mirror_handles(handles))
 
@@ -1513,6 +1609,9 @@ class PickerItem(DefaultPolygon):
     def set_selected_state(self, state):
         """Will set border color feedback based on selection state"""
         self.polygon.set_selected_state(state)
+        # Route selection to the vector body too (it draws its own border).
+        if self.svg:
+            self.vector_graphic.set_selected_state(state)
 
     def run_selection_check(self):
         """Will set selection state based on selection status"""
@@ -1623,6 +1722,10 @@ class PickerItem(DefaultPolygon):
         if model.visibility:
             self.set_visibility(model.visibility)
 
+        # Vector (SVG) shape (optional, additive key).
+        if model.svg:
+            self.set_svg_shape(model.svg)
+
     def get_data(self):
         """Get picker item data in dictionary form.
 
@@ -1675,5 +1778,8 @@ class PickerItem(DefaultPolygon):
 
         if self.visibility:
             model.visibility = dict(self.visibility)
+
+        if self.svg:
+            model.svg = dict(self.svg)
 
         return model.to_dict()

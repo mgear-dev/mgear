@@ -27,6 +27,7 @@ from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets import graphics
 from mgear.anim_picker.widgets import widget_binding
 from mgear.anim_picker.widgets import visibility
+from mgear.core import svg_import
 from mgear.anim_picker.widgets.dialogs.handles_window import (
     HandlesPositionWindow,
 )
@@ -69,6 +70,9 @@ class ItemEditPanel(QtWidgets.QWidget):
         visibility.VIS_ZOOM,
     )
 
+    # Vector render mode combo order (index -> svg_import mode).
+    _SVG_MODE_ORDER = (svg_import.MODE_FILL, svg_import.MODE_STROKE)
+
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent=parent)
         self.main_window = main_window
@@ -98,6 +102,11 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.text_offset_sb = None
         self.count_sb = None
         self.handles_cb = None
+        self._shape_polygon_box = None
+        self._shape_vector_box = None
+        self._shape_vector_label = None
+        self.svg_mode_combo = None
+        self.svg_width_sb = None
         self.control_list = None
         self.menus_list = None
         self.custom_action_cb = None
@@ -309,28 +318,74 @@ class ItemEditPanel(QtWidgets.QWidget):
     def _build_shape_section(self):
         section = self._add_section("Shape")
 
+        # Polygon point editing -- hidden for a vector (SVG) item, which has no
+        # per-point handles (including the "Show handles" toggle).
+        self._shape_polygon_box = QtWidgets.QWidget()
+        poly_layout = QtWidgets.QVBoxLayout(self._shape_polygon_box)
+        poly_layout.setContentsMargins(0, 0, 0, 0)
         self.handles_cb = QtWidgets.QCheckBox("Show handles")
         self.handles_cb.setTristate(True)
         self.handles_cb.clicked.connect(self._apply_show_handles)
         self._fields.append(self.handles_cb)
-        section.addWidget(self.handles_cb)
-
+        poly_layout.addWidget(self.handles_cb)
         count_row = QtWidgets.QHBoxLayout()
         count_row.addWidget(QtWidgets.QLabel("Vtx count"))
         self.count_sb = self._int_spin(self._apply_point_count, 2, 200)
         count_row.addWidget(self.count_sb)
-        section.addLayout(count_row)
-
+        poly_layout.addLayout(count_row)
         handles_btn = basic.CallbackButton(callback=self._edit_handles)
         handles_btn.setText("Handles Positions...")
         self._fields.append(handles_btn)
-        section.addWidget(handles_btn)
+        poly_layout.addWidget(handles_btn)
+        section.addWidget(self._shape_polygon_box)
 
         shapes_btn = basic.CallbackButton(callback=self._open_shape_library)
         shapes_btn.setText("Shapes...")
         shapes_btn.setToolTip("Apply a premade / saved shape to the selection")
         self._fields.append(shapes_btn)
         section.addWidget(shapes_btn)
+
+        # Vector (SVG) import: create a curved item from an .svg file (or drag
+        # a file onto the canvas).
+        import_btn = basic.CallbackButton(callback=self._import_svg)
+        import_btn.setText("Import SVG...")
+        import_btn.setToolTip(
+            "Import an .svg file as a vector shape "
+            "(or drag one onto the canvas)"
+        )
+        self._fields.append(import_btn)
+        section.addWidget(import_btn)
+
+        # Vector-only controls (render fill vs stroke + a summary), shown only
+        # when the active item is a vector shape.
+        self._shape_vector_box = QtWidgets.QWidget()
+        vec_layout = QtWidgets.QVBoxLayout(self._shape_vector_box)
+        vec_layout.setContentsMargins(0, 0, 0, 0)
+        self._shape_vector_label = QtWidgets.QLabel("")
+        self._shape_vector_label.setWordWrap(True)
+        vec_layout.addWidget(self._shape_vector_label)
+        render_row = QtWidgets.QHBoxLayout()
+        render_row.addWidget(QtWidgets.QLabel("Render"))
+        self.svg_mode_combo = QtWidgets.QComboBox()
+        self.svg_mode_combo.addItems(["Fill", "Stroke (lines)"])
+        self.svg_mode_combo.setToolTip(
+            "Fill the shape, or draw it as lines of a given thickness "
+            "(better for line-art icons)"
+        )
+        self.svg_mode_combo.currentIndexChanged.connect(self._apply_svg_mode)
+        self._fields.append(self.svg_mode_combo)
+        render_row.addWidget(self.svg_mode_combo)
+        self.svg_width_sb = basic.CallBackDoubleSpinBox(
+            callback=self._apply_svg_stroke_width,
+            value=2.0,
+            min=0.1,
+            max=100.0,
+        )
+        self.svg_width_sb.setDecimals(1)
+        self.svg_width_sb.setToolTip("Line thickness (stroke mode)")
+        render_row.addWidget(self.svg_width_sb)
+        vec_layout.addLayout(render_row)
+        section.addWidget(self._shape_vector_box)
 
     def _build_pin_section(self):
         section = self._add_section("Pin")
@@ -1049,6 +1104,51 @@ class ItemEditPanel(QtWidgets.QWidget):
             lambda item: item.get_edit_status()
         )
         self._set_tristate(self.handles_cb, status, status_mixed)
+
+        # Show polygon point editing only for a polygon item; the vector render
+        # controls (fill / stroke + width) only for a vector item.
+        item = self._active_item()
+        is_vector = item is not None and item.is_vector_shape()
+        self._shape_polygon_box.setVisible(not is_vector)
+        self._shape_vector_box.setVisible(is_vector)
+        if not is_vector:
+            return
+        svg = item.get_svg_shape()
+        self._shape_vector_label.setText(
+            "Vector: {} ({} subpaths)".format(
+                svg.get("name", "(svg)"), len(svg.get("subpaths", []))
+            )
+        )
+        self._set_enum_combo(
+            self.svg_mode_combo, self._SVG_MODE_ORDER, item.get_svg_mode()
+        )
+        self.svg_width_sb.setValue(item.get_svg_stroke_width())
+
+    def _apply_svg_mode(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        index = self.svg_mode_combo.currentIndex()
+        if index < 0:
+            return
+        mode = self._SVG_MODE_ORDER[index]
+        for item in self.items:
+            if item.is_vector_shape():
+                item.set_svg_mode(mode)
+        self._repaint_view()
+
+    def _apply_svg_stroke_width(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        width = self.svg_width_sb.value()
+        for item in self.items:
+            if item.is_vector_shape():
+                item.set_svg_stroke_width(width)
+        self._repaint_view()
+
+    def _import_svg(self):
+        """Open the main window's SVG import (file dialog)."""
+        if self.main_window is not None:
+            self.main_window._cmd_import_svg()
 
     def _populate_controls(self):
         self.control_list.clear()

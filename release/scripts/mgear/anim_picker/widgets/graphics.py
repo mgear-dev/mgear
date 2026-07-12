@@ -9,6 +9,7 @@ from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
 
 from mgear.anim_picker.widgets import widget_binding
+from mgear.core import svg_import
 
 
 class DefaultPolygon(QtWidgets.QGraphicsObject):
@@ -691,6 +692,154 @@ class BackdropGraphic(DefaultPolygon):
             QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
             self.title,
         )
+        painter.restore()
+
+
+class VectorGraphic(DefaultPolygon):
+    """Vector (curved) shape drawn as the item's body, from imported SVG.
+
+    A vector item hides its plain polygon and shows this instead: a compound
+    ``QPainterPath`` (with curves and holes) built from the item's normalized
+    subpaths, drawn either **filled** in the item's color or **stroked** as
+    lines of a given width (so line-art icons read correctly). Clicks fall
+    through to the parent item, but it accepts hover so a hovered vector item
+    shows an "SVG" badge (a distinct hover cue, not a border lighten).
+    ``shape()`` delegates hit-testing to the path. Subpaths / mode / width are
+    set by the item from its ``svg`` data.
+    """
+
+    __DEFAULT_SELECT_COLOR__ = QtGui.QColor(230, 230, 230, 240)
+    _BADGE = QtCore.QRectF(0.0, 0.0, 34.0, 18.0)
+
+    def __init__(self, parent=None):
+        DefaultPolygon.__init__(self, parent=parent)
+        self.subpaths = []
+        self._path = QtGui.QPainterPath()
+        self.selected = False
+        self.mode = svg_import.MODE_FILL
+        self.stroke_width = 2.0
+        # Accept hover (for the SVG badge) but no mouse buttons, so a click
+        # falls through to the parent PickerItem for selection.
+        self.setAcceptHoverEvents(True)
+        self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
+        self.setVisible(False)
+
+    def set_subpaths(self, subpaths):
+        """Set the normalized subpaths and rebuild the cached path."""
+        self.prepareGeometryChange()
+        self.subpaths = [list(sub) for sub in (subpaths or [])]
+        self._path = self._build_path(self.subpaths)
+        self.update()
+
+    def set_mode(self, mode):
+        """Set the render mode (``MODE_FILL`` / ``MODE_STROKE``)."""
+        self.prepareGeometryChange()
+        self.mode = mode or svg_import.MODE_FILL
+        self.update()
+
+    def set_stroke_width(self, width):
+        """Set the stroke width (used in ``MODE_STROKE``)."""
+        self.prepareGeometryChange()
+        self.stroke_width = max(0.1, float(width))
+        self.update()
+
+    @staticmethod
+    def _build_path(subpaths):
+        """Build a ``QPainterPath`` from M / L / C / Z segments."""
+        path = QtGui.QPainterPath()
+        # Even-odd so overlapping subpaths cut holes (typical icon glyphs).
+        path.setFillRule(QtCore.Qt.OddEvenFill)
+        for sub in subpaths:
+            for segment in sub:
+                command = segment[0]
+                if command == "M":
+                    path.moveTo(segment[1], segment[2])
+                elif command == "L":
+                    path.lineTo(segment[1], segment[2])
+                elif command == "C":
+                    path.cubicTo(
+                        segment[1],
+                        segment[2],
+                        segment[3],
+                        segment[4],
+                        segment[5],
+                        segment[6],
+                    )
+                elif command == "Z":
+                    path.closeSubpath()
+        return path
+
+    def boundingRect(self):
+        # Pad for the selection border / stroke width / antialias so a moving
+        # selection or a thick stroke never leaves a paint ghost.
+        margin = max(2.0, self.stroke_width)
+        return self._path.boundingRect().adjusted(
+            -margin, -margin, margin, margin
+        )
+
+    def shape(self):
+        return self._path
+
+    def set_selected_state(self, state):
+        if state == self.selected:
+            return
+        self.selected = state
+        self.update()
+
+    def _fill_color(self):
+        parent = self.parentItem()
+        if parent is not None:
+            return parent.get_color()
+        return QtGui.QColor(self.color)
+
+    def paint(self, painter, options, widget=None):
+        """Draw the path filled or stroked, plus selection / hover cues."""
+        if self._path.isEmpty():
+            return
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        color = QtGui.QColor(self._fill_color())
+        if self.mode == svg_import.MODE_STROKE:
+            pen = QtGui.QPen(color)
+            pen.setWidthF(self.stroke_width)
+            pen.setCapStyle(QtCore.Qt.RoundCap)
+            pen.setJoinStyle(QtCore.Qt.RoundJoin)
+            painter.setPen(pen)
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawPath(self._path)
+        else:
+            painter.fillPath(self._path, QtGui.QBrush(color))
+            if self.selected:
+                painter.fillPath(
+                    self._path, QtGui.QBrush(QtGui.QColor(255, 255, 255, 50))
+                )
+        if self.selected:
+            border = QtGui.QPen(self.__DEFAULT_SELECT_COLOR__)
+            border.setWidthF(2.0)
+            painter.setPen(border)
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawPath(self._path)
+        if self._hovered:
+            self._paint_svg_badge(painter)
+
+    def _paint_svg_badge(self, painter):
+        """Draw a small upright "SVG" badge over the shape center on hover."""
+        badge = QtCore.QRectF(self._BADGE)
+        badge.moveCenter(self._path.boundingRect().center())
+        painter.save()
+        # Counter the view's Y-flip so the label reads upright.
+        center = badge.center()
+        painter.translate(center)
+        painter.scale(1.0, -1.0)
+        painter.translate(-center)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QBrush(QtGui.QColor(20, 20, 20, 175)))
+        painter.drawRoundedRect(badge, 4.0, 4.0)
+        painter.setPen(QtGui.QPen(QtGui.QColor(235, 235, 235, 255)))
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSizeF(9.0)
+        painter.setFont(font)
+        painter.drawText(badge, QtCore.Qt.AlignCenter, "SVG")
         painter.restore()
 
 
