@@ -20,11 +20,11 @@ from mgear.core import svg_import
 # Maya at load, and the resolved factor is cached here after the first call.
 _DPI_FACTOR = None
 
-# Base scene-text point sizes (authored / 96-DPI); DPI-scaled at render.
+# Base scene-text point sizes (authored / 96-DPI); DPI-scaled at render. The
+# backdrop title / SVG badge are NOT here: they are scene geometry, sized from
+# their container height (so they never outgrow it) rather than DPI-scaled.
 DEFAULT_TEXT_PT = 10.0
 INDEX_PT = 8.0
-TITLE_PT = 9.0
-BADGE_PT = 9.0
 
 # Base screen-pixel handle size (DPI-scaled; ``ItemIgnoresTransformations``).
 HANDLE_PX = 8.0
@@ -734,12 +734,19 @@ class BackdropGraphic(DefaultPolygon):
         painter.translate(-strip.center())
         painter.setPen(QtGui.QPen(QtGui.QColor(235, 235, 235, 255)))
         font = painter.font()
-        font.setPointSizeF(_dpi(TITLE_PT))
+        # Size the title from the strip height (scene units) so it always fits
+        # -- it scales with zoom and stays crisp on HDPI. Not DPI-scaled: the
+        # strip is scene geometry, so a scaled font would outgrow it and cut.
+        font.setPixelSize(max(1, int(self._TITLE_H * 0.6)))
         painter.setFont(font)
+        text_rect = strip.adjusted(6.0, 0.0, -6.0, 0.0)
+        title = QtGui.QFontMetricsF(font).elidedText(
+            self.title, QtCore.Qt.ElideRight, text_rect.width()
+        )
         painter.drawText(
-            strip.adjusted(6.0, 0.0, -6.0, 0.0),
+            text_rect,
             QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
-            self.title,
+            title,
         )
         painter.restore()
 
@@ -872,7 +879,21 @@ class VectorGraphic(DefaultPolygon):
 
     def _paint_svg_badge(self, painter):
         """Draw a small upright "SVG" badge over the shape center on hover."""
-        badge = QtCore.QRectF(self._BADGE)
+        text = "SVG"
+        # Font sized from the reference badge height (scene units) so it scales
+        # with zoom and stays crisp on HDPI; not DPI-scaled (scene geometry).
+        font = QtGui.QFont(painter.font())
+        font.setBold(True)
+        font.setPixelSize(max(1, int(self._BADGE.height() * 0.55)))
+        # Size the pill to the text so it never clips (grows past the reference
+        # width for a wider font / label).
+        metrics = QtGui.QFontMetricsF(font)
+        try:
+            text_w = metrics.horizontalAdvance(text)
+        except AttributeError:
+            text_w = metrics.width(text)
+        width = max(self._BADGE.width(), text_w + 12.0)
+        badge = QtCore.QRectF(0.0, 0.0, width, self._BADGE.height())
         badge.moveCenter(self._path.boundingRect().center())
         painter.save()
         # Counter the view's Y-flip so the label reads upright.
@@ -884,11 +905,8 @@ class VectorGraphic(DefaultPolygon):
         painter.setBrush(QtGui.QBrush(QtGui.QColor(20, 20, 20, 175)))
         painter.drawRoundedRect(badge, 4.0, 4.0)
         painter.setPen(QtGui.QPen(QtGui.QColor(235, 235, 235, 255)))
-        font = painter.font()
-        font.setBold(True)
-        font.setPointSizeF(_dpi(BADGE_PT))
         painter.setFont(font)
-        painter.drawText(badge, QtCore.Qt.AlignCenter, "SVG")
+        painter.drawText(badge, QtCore.Qt.AlignCenter, text)
         painter.restore()
 
 
