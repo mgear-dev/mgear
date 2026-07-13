@@ -12,6 +12,41 @@ from mgear.anim_picker.widgets import widget_binding
 from mgear.core import svg_import
 
 
+# High-DPI sizing. Scene fonts and screen-fixed affordances are multiplied by
+# ``mgear.core.pyqt.dpi_scale`` so they grow on a high-DPI display to match the
+# already-scaled window chrome. The factor is clamped to [1x, 2x] and cached
+# for the session, so this is a no-op at 100% scaling. ``pyqt`` is imported
+# lazily (it touches the Maya main window) to keep this module import-free of
+# Maya at load, and the resolved factor is cached here after the first call.
+_DPI_FACTOR = None
+
+# Base scene-text point sizes (authored / 96-DPI); DPI-scaled at render.
+DEFAULT_TEXT_PT = 10.0
+INDEX_PT = 8.0
+TITLE_PT = 9.0
+BADGE_PT = 9.0
+
+# Base screen-pixel handle size (DPI-scaled; ``ItemIgnoresTransformations``).
+HANDLE_PX = 8.0
+
+
+def _dpi(value):
+    """Return ``value`` scaled for the display DPI (no-op at 100%).
+
+    Wraps ``mgear.core.pyqt.dpi_scale`` with a session cache; falls back to the
+    unscaled value when Maya / the DPI query is unavailable.
+    """
+    global _DPI_FACTOR
+    if _DPI_FACTOR is None:
+        try:
+            from mgear.core import pyqt
+
+            _DPI_FACTOR = pyqt.dpi_scale(1.0)
+        except Exception:
+            _DPI_FACTOR = 1.0
+    return value * _DPI_FACTOR
+
+
 class DefaultPolygon(QtWidgets.QGraphicsObject):
     """Default polygon class, with move and hover support"""
 
@@ -87,7 +122,9 @@ class PointHandle(DefaultPolygon):
 
     __DEFAULT_COLOR__ = QtGui.QColor(30, 30, 30, 200)
 
-    def __init__(self, x=0, y=0, size=8, color=None, parent=None, index=0):
+    def __init__(
+        self, x=0, y=0, size=HANDLE_PX, color=None, parent=None, index=0
+    ):
 
         DefaultPolygon.__init__(self, parent)
 
@@ -164,12 +201,22 @@ class PointHandle(DefaultPolygon):
     # =========================================================================
     # Graphic item methods
     # =========================================================================
+    def _draw_size(self):
+        """Return the on-screen handle size, DPI-scaled (no-op at 100%).
+
+        The handle ignores the view transform, so ``self.size`` is a screen
+        size; scaling it here (not on the stored ``size``) keeps handle copies
+        from compounding the DPI factor.
+        """
+        return _dpi(self.size)
+
     def shape(self):
         """Return default handle square shape based on specified size"""
         path = QtGui.QPainterPath()
+        half = self._draw_size() / 2.0
         rectangle = QtCore.QRectF(
-            QtCore.QPointF(-self.size / 2.0, self.size / 2.0),
-            QtCore.QPointF(self.size / 2.0, -self.size / 2.0),
+            QtCore.QPointF(-half, half),
+            QtCore.QPointF(half, -half),
         )
         # path.addRect(rectangle)
         path.addEllipse(rectangle)
@@ -198,7 +245,7 @@ class PointHandle(DefaultPolygon):
 
         # if not edit_mode: return
         # Paint center cross
-        cross_size = self.size / 2 - 2
+        cross_size = self._draw_size() / 2 - 2
         painter.setPen(QtGui.QColor(0, 0, 0, 180))
         painter.drawLine(-cross_size, 0, cross_size, 0)
         painter.drawLine(0, cross_size, 0, -cross_size)
@@ -364,10 +411,10 @@ class PointHandleIndex(QtWidgets.QGraphicsSimpleTextItem):
 
         self.setText(index)
 
-    def set_size(self, value=8.0):
-        """Set pointSizeF for text"""
+    def set_size(self, value=INDEX_PT):
+        """Set the index text point size (DPI-scaled)."""
         font = self.font()
-        font.setPointSizeF(value)
+        font.setPointSizeF(_dpi(value))
         self.setFont(font)
 
     def set_color(self, color=None):
@@ -405,7 +452,9 @@ class WidgetGraphic(DefaultPolygon):
     _HANDLE = QtGui.QColor(228, 228, 228, 255)
     _CHECK = QtGui.QColor(120, 200, 120, 255)
 
-    # Fixed pixel sizes so handles never stretch with the item.
+    # Fixed sizes so the knob / groove never stretch with the item. These are
+    # scene units (they scale with the view zoom and render crisp on HDPI), so
+    # they are deliberately NOT DPI-scaled -- doing so would enlarge them twice.
     _HANDLE_R = 6.0
     _GROOVE_T = 4.0
 
@@ -685,7 +734,7 @@ class BackdropGraphic(DefaultPolygon):
         painter.translate(-strip.center())
         painter.setPen(QtGui.QPen(QtGui.QColor(235, 235, 235, 255)))
         font = painter.font()
-        font.setPointSizeF(9.0)
+        font.setPointSizeF(_dpi(TITLE_PT))
         painter.setFont(font)
         painter.drawText(
             strip.adjusted(6.0, 0.0, -6.0, 0.0),
@@ -837,7 +886,7 @@ class VectorGraphic(DefaultPolygon):
         painter.setPen(QtGui.QPen(QtGui.QColor(235, 235, 235, 255)))
         font = painter.font()
         font.setBold(True)
-        font.setPointSizeF(9.0)
+        font.setPointSizeF(_dpi(BADGE_PT))
         painter.setFont(font)
         painter.drawText(badge, QtCore.Qt.AlignCenter, "SVG")
         painter.restore()
@@ -866,6 +915,10 @@ class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
         self.align = TEXT_ALIGN_CENTER
         self.offset = 0.0
 
+        # Authored (DPI-independent) point size; the font is set to the
+        # DPI-scaled size, but this is what is stored / shown.
+        self.point_size = DEFAULT_TEXT_PT
+
         # Init default size
         self.set_size()
         self.set_color(GraphicText.__DEFAULT_COLOR__)
@@ -882,10 +935,15 @@ class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
         """Return element text"""
         return str(self.text())
 
-    def set_size(self, value=10.0):
-        """Set pointSizeF for text"""
+    def set_size(self, value=DEFAULT_TEXT_PT):
+        """Set the text size from an authored (DPI-independent) point size.
+
+        The authored value is stored; the font is set to the DPI-scaled size so
+        the label grows on a high-DPI display (a no-op at 100%).
+        """
+        self.point_size = value
         font = self.font()
-        font.setPointSizeF(value)
+        font.setPointSizeF(_dpi(value))
         self.setFont(font)
         self._reposition()
 
@@ -903,8 +961,8 @@ class GraphicText(QtWidgets.QGraphicsSimpleTextItem):
             self.align_on_parent(self.align, self.offset)
 
     def get_size(self):
-        """Return text pointSizeF"""
-        return self.font().pointSizeF()
+        """Return the authored (DPI-independent) text point size."""
+        return self.point_size
 
     def get_color(self):
         """Return text color"""

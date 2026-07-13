@@ -12,6 +12,7 @@ from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
 
 from mgear.anim_picker.widgets import background_transform
+from mgear.core import pyqt
 
 
 class BackgroundManipulator(object):
@@ -34,11 +35,16 @@ class BackgroundManipulator(object):
 
     # -- helpers --------------------------------------------------------
     def _px_to_scene(self):
-        """Return the scene units per screen pixel for the current zoom."""
+        """Return DPI-scaled scene units per screen pixel for the current zoom.
+
+        The DPI factor (no-op at 100%) is folded in here so every screen-pixel
+        handle / pick constant that multiplies this value grows on a high-DPI
+        display, staying visible and hittable.
+        """
         m11 = self.view.transform().m11()
         if not m11:
             return 1.0
-        return 1.0 / abs(m11)
+        return pyqt.dpi_scale(1.0) / abs(m11)
 
     def _layers(self):
         return self.view.background_layers
