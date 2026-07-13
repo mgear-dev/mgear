@@ -29,6 +29,7 @@ from mgear.anim_picker.widgets import picker_widgets
 from mgear.anim_picker.widgets import background_model
 from mgear.anim_picker.widgets import background_manipulator
 from mgear.anim_picker.widgets import item_manipulator
+from mgear.anim_picker.widgets import edit_undo
 from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
@@ -145,9 +146,18 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         self.fit_margin = 8
 
-        # # undo list ---------------------------------------------------------
-        self.undo_move_order = []
-        self.undo_move_order_index = -1
+        # Editor undo: one snapshot-based stack that every edit records to. A
+        # snapshot is the item serialization (get_data / set_data) + z-order;
+        # item identity is the per-item uuid, preserved when an item is
+        # recreated so add / delete round-trip. ``_undo_baseline`` is the last
+        # committed state, so each edit's "before" is implicit -- a gesture
+        # (drag / manipulator) commits once at release for a single step.
+        self._undo_stack = edit_undo.UndoStack()
+        self._undo_baseline = None
+
+        # Keep keyboard focus on the canvas so edit shortcuts / undo get key
+        # events (an item click would otherwise not focus the view widget).
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
 
     def get_center_pos(self):
         return self.mapToScene(
@@ -155,6 +165,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         )
 
     def mousePressEvent(self, event):
+        # Keep keyboard focus on the canvas in edit mode so the edit shortcuts
+        # and undo receive key events after any click (a plain item click would
+        # otherwise leave focus elsewhere and the shortcuts would not fire).
+        if __EDIT_MODE__.get():
+            self.setFocus()
         # Background layer manipulation intercepts left-click when active.
         if self.background_edit and self._bg_mouse_press(event):
             return
@@ -191,17 +206,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             if picker_at:
                 if __EDIT_MODE__.get():
                     self.item_selected = True
-                    # undo ---------------------------------------------------
+                    # An item move is committed as one undo step on release;
+                    # the pre-drag state is the current undo baseline, so
+                    # nothing is captured here (see mouseReleaseEvent).
                     self.__move_prompt = False
-                    # open undo chunk
-                    self.tmp_picker_pos_info = {}
-                    pickers = self.scene().get_selected_items()
-                    if picker_at not in pickers:
-                        pickers.append(picker_at)
-                    for picker in pickers:
-                        pt = [picker.x(), picker.y(), picker.rotation()]
-                        self.tmp_picker_pos_info[picker.uuid] = pt
-                    # undo ---------------------------------------------------
                 else:
                     self.modified_select = True
                     picker_widgets.select_picker_controls([picker_at], event)
@@ -327,31 +335,14 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             else:
                 self.scene().select_picker_items([picker_at], event)
 
-        # add moved pickers to undo_move_order list ---------------------------
+        # Commit an item drag-move as one undo step -------------------------
         if not self.drag_active and self.__move_prompt:
-            for picker_uuid in list(self.tmp_picker_pos_info.keys()):
-                picker = self.scene().get_picker_by_uuid(picker_uuid)
-                if picker is None:
-                    continue
-                pt = [picker.x(), picker.y(), picker.rotation()]
-                self.tmp_picker_pos_info[picker_uuid].extend(pt)
-            if self.undo_move_order_index in [-1]:
-                self.undo_move_order.append(
-                    copy.deepcopy(self.tmp_picker_pos_info)
-                )
-            else:
-                self.undo_move_order = self.undo_move_order[
-                    : self.undo_move_order_index
-                ]
-                self.undo_move_order.append(
-                    copy.deepcopy(self.tmp_picker_pos_info)
-                )
-            self.undo_move_order_index = -1
             # Live-mirror the moved selection to any linked partners (covers a
-            # plain item drag-move, not just the manipulator).
+            # plain item drag-move, not just the manipulator) before the
+            # snapshot, so the partners' new positions are part of the step.
             self.apply_mirror_for(self.scene().get_selected_items())
+            self.commit_edit("Move items")
         self.__move_prompt = None
-        self.tmp_picker_pos_info = {}
         # undo ----------------------------------------------------------------
 
         # Area selection
@@ -440,73 +431,276 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # Zoom changed; re-evaluate zoom-level visibility conditions.
         self.refresh_item_visibility()
 
-    # undo --------------------------------------------------------------------
-    def undo_move(self):
-        """go through (reversed) the undo_move_order list and move pickers
-        back to their previously stored location
+    # =====================================================================
+    # Editor undo/redo ---
+    def _item_state(self, item):
+        """Return a restorable snapshot of one item (its data + z-order)."""
+        return {"data": copy.deepcopy(item.get_data()), "z": item.zValue()}
+
+    def _snapshot_items(self):
+        """Return ``{uuid: item-state}`` for every picker item in the scene."""
+        return {
+            item.uuid: self._item_state(item)
+            for item in self.scene().get_picker_items()
+        }
+
+    def _diff_snapshot(self, before, after):
+        """Return a ``{"before", "after"}`` record of the items that changed.
+
+        Only items that were added, removed, or whose state differs are kept,
+        each mapped to its state (or None when absent on that side). Returns
+        None when nothing changed, so a no-op edit pushes no undo step.
         """
-        undo_len = len(self.undo_move_order)
-        if undo_len == 0:
-            return
+        changed_before = {}
+        changed_after = {}
+        for key in set(before) | set(after):
+            was = before.get(key)
+            now = after.get(key)
+            if was != now:
+                changed_before[key] = was
+                changed_after[key] = now
+        if not changed_before and not changed_after:
+            return None
+        return {"before": changed_before, "after": changed_after}
 
-        if self.undo_move_order_index == -1:
-            self.undo_move_order_index = undo_len
-        elif self.undo_move_order_index == 0:
-            return
-        if self.undo_move_order_index > 0:
-            self.undo_move_order_index = self.undo_move_order_index - 1
-        undo_items = self.undo_move_order[self.undo_move_order_index].items()
-        for picker_uuid, undo_pos in undo_items:
-            picker = self.scene().get_picker_by_uuid(picker_uuid)
-            if not picker:
-                continue
-            picker.setPos(undo_pos[0], undo_pos[1])
-            picker.setRotation(undo_pos[2])
+    def _reset_undo_baseline(self):
+        """Re-baseline the undo diff to the current item set."""
+        self._undo_baseline = self._snapshot_items()
 
-    def redo_move(self):
-        """go through the undo_move_order restoring picker locations"""
-        undo_len = len(self.undo_move_order)
-        if undo_len == 0:
-            return
+    def commit_edit(self, label=None):
+        """Push one undo step for changes since the last commit / baseline.
 
-        if self.undo_move_order_index == -1:
-            return
-        if self.undo_move_order_index < undo_len:
-            undo_index = self.undo_move_order[self.undo_move_order_index]
-            for picker_uuid, undo_pos in undo_index.items():
-                picker = self.scene().get_picker_by_uuid(picker_uuid)
-                if not picker:
-                    continue
-                picker.setPos(undo_pos[3], undo_pos[4])
-                picker.setRotation(undo_pos[5])
-            self.undo_move_order_index = self.undo_move_order_index + 1
-        else:
-            self.undo_move_order_index = -1
-
-    def keyPressEvent(self, event):
-        """keyboard press event override for custom shortcuts
+        The pre-edit state is the current baseline, so a whole gesture (an item
+        drag, a manipulator scale / rotate) commits once at its end for a
+        single step. A commit with no change (baseline already current) is a
+        harmless no-op, so redundant calls do not create empty steps.
 
         Args:
-            event (QtCore.QEvent): keyboard event
+            label (str, optional): a human label for the step (diagnostics).
         """
-        if __EDIT_MODE__.get():
-            modifiers = event.modifiers()
-            if (
-                modifiers == QtCore.Qt.ControlModifier
-                and event.key() == QtCore.Qt.Key_Z
-            ):
-                self.undo_move()
-                event.accept()
-            elif (
-                modifiers == QtCore.Qt.ControlModifier
-                and event.key() == QtCore.Qt.Key_Y
-            ):
-                self.redo_move()
-                event.accept()
+        current = self._snapshot_items()
+        if self._undo_baseline is None:
+            self._undo_baseline = current
+            return
+        record = self._diff_snapshot(self._undo_baseline, current)
+        self._undo_baseline = current
+        if record is not None:
+            record["label"] = label
+            self._undo_stack.push(record)
+
+    def record_edit(self, label, mutate_fn):
+        """Run ``mutate_fn`` then commit its changes as one undo step.
+
+        Args:
+            label (str): a human label for the step.
+            mutate_fn (callable): performs the edit; its return is passed back.
+        """
+        result = mutate_fn()
+        self.commit_edit(label)
+        return result
+
+    def _recreate_item(self, item_uuid):
+        """Recreate a removed item, preserving its uuid identity."""
+        item = picker_widgets.PickerItem(
+            main_window=self.main_window, namespace=self.namespace
+        )
+        item.uuid = item_uuid
+        item.setParent(self)
+        self.scene().addItem(item)
+        return item
+
+    def _apply_undo_snapshot(self, snapshot):
+        """Restore items to ``snapshot`` (``{uuid: state-or-None}``).
+
+        Items mapped to a state are updated in place (or recreated when
+        missing); items mapped to None are removed. Only the items named in the
+        snapshot are touched, so unrelated items are left alone.
+        """
+        # One uuid -> item map for the whole restore (get_picker_by_uuid is a
+        # linear scan, so looking it up per snapshot item would be O(n*m)).
+        by_uuid = {
+            item.uuid: item for item in self.scene().get_picker_items()
+        }
+        for key, state in snapshot.items():
+            item = by_uuid.get(key)
+            if state is None:
+                if item is not None:
+                    item.remove()
             else:
-                event.ignore()
+                if item is None:
+                    item = self._recreate_item(key)
+                item.set_data(copy.deepcopy(state["data"]))
+                item.setZValue(state["z"])
+
+    def undo(self):
+        """Undo the last editor edit (restore its 'before' snapshot)."""
+        record = self._undo_stack.undo()
+        if record is None:
+            return
+        self._apply_undo_snapshot(record["before"])
+        self._after_undo_redo()
+
+    def redo(self):
+        """Redo the next editor edit (restore its 'after' snapshot)."""
+        record = self._undo_stack.redo()
+        if record is None:
+            return
+        self._apply_undo_snapshot(record["after"])
+        self._after_undo_redo()
+
+    def _after_undo_redo(self):
+        """Refresh derived state and re-baseline after an undo / redo."""
+        self._reset_undo_baseline()
+        self._recompute_conditional_flag()
+        self.refresh_item_visibility()
+        self._notify_item_selection()
+        self.viewport().update()
+
+    # =====================================================================
+    # Selection / clipboard shortcuts ---
+    def _selection_anchor(self):
+        """Return a selected item to anchor a selection-wide op, or None."""
+        items = self.scene().get_selected_items()
+        return items[0] if items else None
+
+    def select_all_items(self):
+        """Select every picker item (selection is not an undo step)."""
+        self.scene().select_picker_items(self.get_picker_items())
+        self._notify_item_selection()
+        self.viewport().update()
+
+    def clear_selection(self):
+        """Clear the picker (and Maya) selection."""
+        self.scene().clear_picker_selection()
+        cmds.select(cl=True)
+        self._notify_item_selection()
+        self.viewport().update()
+
+    def delete_selection(self):
+        """Delete the selected items as one undo step."""
+        items = self.scene().get_selected_items()
+        if not items:
+            return
+        self.record_edit(
+            "Delete items", lambda: [item.remove() for item in items]
+        )
+
+    def cut_event(self):
+        """Copy then delete the selection as one undo step."""
+        items = self.scene().get_selected_items()
+        if not items:
+            return
+        self.copy_event()
+        self.record_edit(
+            "Cut items", lambda: [item.remove() for item in items]
+        )
+
+    def duplicate_selection(self, mirror=False):
+        """Duplicate the selection (optionally mirrored) as one undo step."""
+        if mirror:
+            # Reuse the toolbar command so the search/replace prompt and the
+            # persistent mirror linking / palette coloring stay in one place.
+            if self.main_window is not None:
+                self.main_window._cmd_duplicate_mirror()
+            return
+        anchor = self._selection_anchor()
+        if anchor is None:
+            return
+        self.record_edit("Duplicate items", anchor.duplicate_selected)
+
+    # Arrow-key nudge distances, in scene units (Shift = the larger step).
+    _NUDGE_STEP = 1.0
+    _NUDGE_LARGE = 10.0
+
+    def nudge_selection(self, key, large=False):
+        """Nudge the selection one step by an arrow key (one undo step).
+
+        The scene is Y-up (the view flips Y), so Up increases y and Down
+        decreases it.
+        """
+        items = self.scene().get_selected_items()
+        if not items:
+            return
+        step = self._NUDGE_LARGE if large else self._NUDGE_STEP
+        dx = dy = 0.0
+        if key == QtCore.Qt.Key_Left:
+            dx = -step
+        elif key == QtCore.Qt.Key_Right:
+            dx = step
+        elif key == QtCore.Qt.Key_Up:
+            dy = step
+        elif key == QtCore.Qt.Key_Down:
+            dy = -step
+
+        def _do():
+            for item in items:
+                item.setPos(item.x() + dx, item.y() + dy)
+            self.apply_mirror_for(items)
+
+        self.record_edit("Nudge items", _do)
+
+    def keyPressEvent(self, event):
+        """Editor keyboard shortcuts (only while the picker holds focus).
+
+        Because this fires only when the view widget has keyboard focus, the
+        shortcuts never leak to Maya's global hotkeys; when the picker is
+        unfocused Qt routes the key elsewhere and this is not called. Most
+        shortcuts act on the selection and are edit-mode only.
+
+        Args:
+            event (QtCore.QEvent): keyboard event.
+        """
+        key = event.key()
+        mods = event.modifiers()
+        ctrl = bool(mods & QtCore.Qt.ControlModifier)
+        shift = bool(mods & QtCore.Qt.ShiftModifier)
+
+        # Undo / redo: Ctrl+Z, Ctrl+Shift+Z (and the legacy Ctrl+Y alias).
+        if ctrl and key == QtCore.Qt.Key_Z:
+            self.redo() if shift else self.undo()
+            event.accept()
+            return
+        if ctrl and key == QtCore.Qt.Key_Y:
+            self.redo()
+            event.accept()
+            return
+
+        if not __EDIT_MODE__.get():
+            event.ignore()
+            return QtWidgets.QGraphicsView.keyPressEvent(self, event)
+
+        handled = True
+        if ctrl and key == QtCore.Qt.Key_C:
+            self.copy_event()
+        elif ctrl and key == QtCore.Qt.Key_V:
+            self.paste_event()
+        elif ctrl and key == QtCore.Qt.Key_X:
+            self.cut_event()
+        elif ctrl and key == QtCore.Qt.Key_D:
+            self.duplicate_selection(mirror=shift)
+        elif ctrl and key == QtCore.Qt.Key_A:
+            self.select_all_items()
+        elif key in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
+            self.delete_selection()
+        elif key in (
+            QtCore.Qt.Key_Left,
+            QtCore.Qt.Key_Right,
+            QtCore.Qt.Key_Up,
+            QtCore.Qt.Key_Down,
+        ):
+            self.nudge_selection(key, large=shift)
+        elif key == QtCore.Qt.Key_F:
+            self.fit_scene_content()
+        elif key == QtCore.Qt.Key_Escape:
+            self.clear_selection()
+        else:
+            handled = False
+
+        if handled:
+            event.accept()
         else:
             event.ignore()
+            QtWidgets.QGraphicsView.keyPressEvent(self, event)
 
     # undo --------------------------------------------------------------------
 
@@ -641,6 +835,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         # Open context menu under mouse
         menu.exec_(event.globalPos())
+        # Commit any item change a menu action made (add / paste / trace) as
+        # one editor undo step; a no-op when nothing changed.
+        self.commit_edit("Edit")
 
     def resizeEvent(self, *args, **kwargs):
         """Overload to force scale scene content to fit view"""
@@ -1158,18 +1355,25 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         Make new pickers selected
         """
         global _CLIPBOARD
-        [
-            x.set_selected_state(False)
-            for x in self.scene().get_selected_items()
-        ]
-        for data in _CLIPBOARD:
-            ctrl = self.add_picker_item(event=None)
-            ctrl.set_data(data)
-            ctrl.set_selected_state(True)
-        # A pasted item may carry a visibility condition copied from another
-        # picker, so refresh the "any conditioned item?" gate and re-apply.
-        self._recompute_conditional_flag()
-        self.refresh_item_visibility()
+        if not _CLIPBOARD:
+            return
+
+        def _do():
+            [
+                x.set_selected_state(False)
+                for x in self.scene().get_selected_items()
+            ]
+            for data in _CLIPBOARD:
+                ctrl = self.add_picker_item(event=None)
+                ctrl.set_data(data)
+                ctrl.set_selected_state(True)
+            # A pasted item may carry a visibility condition copied from
+            # another picker, so refresh the "any conditioned item?" gate and
+            # re-apply.
+            self._recompute_conditional_flag()
+            self.refresh_item_visibility()
+
+        self.record_edit("Paste items", _do)
 
     def toggle_all_handles_event(self, event=None):
         new_status = None
@@ -1197,6 +1401,13 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         # Toggle mode
         __EDIT_MODE__.toggle()
+
+        # Entering edit mode starts a fresh editing session: clear the undo
+        # history and baseline the diff to the current item set so the first
+        # edit is recorded correctly.
+        if __EDIT_MODE__.get():
+            self._undo_stack.clear()
+            self._reset_undo_baseline()
 
         # Reset size to default
         self.main_window.reset_default_size()
@@ -1584,8 +1795,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self._item_dragging = False
         # Grow the pan bounds to the items' new extent (no view refit).
         self._update_scene_rect()
-        # Live-mirror the transformed selection to any linked partners.
+        # Live-mirror the transformed selection to any linked partners, then
+        # commit the whole scale / rotate drag as a single undo step (the
+        # pre-drag state is the baseline, so mid-drag frames are not recorded).
         self.apply_mirror_for(self.scene().get_selected_items())
+        self.commit_edit("Transform items")
         self._notify_item_selection()
         self.viewport().update()
         return True
@@ -2000,6 +2214,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # show/hide for the loaded zoom + rig state.
         self._recompute_conditional_flag()
         self.refresh_item_visibility()
+
+        # Baseline the undo diff to the freshly-loaded item set (a load is not
+        # itself an undoable edit).
+        self._reset_undo_baseline()
 
     def drawBackground(self, painter, rect):
         """Draw the tab's background image layers (back to front)"""

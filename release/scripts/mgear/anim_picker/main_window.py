@@ -486,6 +486,14 @@ class MainDockWindow(QtWidgets.QWidget):
              partial(self._distribute_selected, "h")),
             ("mgear_distribute_v", "Distribute vertically (3+ to redistribute)",
              partial(self._distribute_selected, "v")),
+            ("mgear_expand_h", "Expand horizontal spacing (spread apart)",
+             partial(self._expand_selected, "h")),
+            ("mgear_expand_v", "Expand vertical spacing (spread apart)",
+             partial(self._expand_selected, "v")),
+            ("mgear_contract_h", "Contract horizontal spacing (bring closer)",
+             partial(self._contract_selected, "h")),
+            ("mgear_contract_v", "Contract vertical spacing (bring closer)",
+             partial(self._contract_selected, "v")),
         )
         self.left_toolbar.add_button_grid(
             [
@@ -669,6 +677,9 @@ class MainDockWindow(QtWidgets.QWidget):
         """Refresh the canvas, inline panel and command states after an op."""
         view = self._current_view()
         if view is not None:
+            # Record the command's item changes as one editor undo step (a
+            # no-op when the command changed nothing).
+            view.commit_edit()
             view.viewport().update()
         panel = getattr(self, "edit_panel", None)
         if panel is not None:
@@ -801,6 +812,32 @@ class MainDockWindow(QtWidgets.QWidget):
         """
         self._apply_item_offsets(
             2, partial(alignment.distribute_offsets, axis=axis)
+        )
+
+    # Spread step for the expand / contract fine-tune tools. Contract is the
+    # inverse of expand, so an expand then a contract returns near the start.
+    _SPREAD_STEP = 1.1
+
+    def _expand_selected(self, axis):
+        """Spread the selection apart along ``axis`` a step (fine-tune, 2+)."""
+        self._apply_item_offsets(
+            2,
+            partial(
+                alignment.scale_spread_offsets,
+                axis=axis,
+                factor=self._SPREAD_STEP,
+            ),
+        )
+
+    def _contract_selected(self, axis):
+        """Pull the selection closer along ``axis`` a step (fine-tune, 2+)."""
+        self._apply_item_offsets(
+            2,
+            partial(
+                alignment.scale_spread_offsets,
+                axis=axis,
+                factor=1.0 / self._SPREAD_STEP,
+            ),
         )
 
     def _cmd_trace(self, plane):

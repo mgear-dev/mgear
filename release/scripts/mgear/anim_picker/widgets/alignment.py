@@ -118,3 +118,33 @@ def distribute_offsets(rects, axis, gap=8.0):
         offsets[index] = (delta, 0.0) if axis == "h" else (0.0, delta)
         cursor += sizes[index] + use_gap
     return offsets
+
+
+def scale_spread_offsets(rects, axis, factor):
+    """Return per-rect ``(dx, dy)`` scaling the selection spread about center.
+
+    Each item's center is moved away from (``factor`` > 1) or toward
+    (``factor`` < 1) the selection's bounding-box center on ``axis``, scaling
+    the spacing while keeping the arrangement. Backs the expand / contract
+    fine-tune tools (repeat clicks nudge the spread step by step). Items at the
+    center do not move; a single item (or none) is a no-op.
+
+    Args:
+        rects (list): ``(x0, y0, x1, y1)`` scene bounding boxes.
+        axis (str): ``"h"`` (horizontal) or ``"v"`` (vertical).
+        factor (float): spread multiplier (> 1 expands, < 1 contracts).
+
+    Returns:
+        list: ``(dx, dy)`` per rect.
+    """
+    count = len(rects)
+    if count < 2:
+        return [(0.0, 0.0)] * count
+    lo_index, hi_index = (0, 2) if axis == "h" else (1, 3)
+    centers = [(r[lo_index] + r[hi_index]) / 2.0 for r in rects]
+    origin = (min(centers) + max(centers)) / 2.0
+    offsets = []
+    for center in centers:
+        delta = (center - origin) * (factor - 1.0)
+        offsets.append((delta, 0.0) if axis == "h" else (0.0, delta))
+    return offsets

@@ -577,6 +577,12 @@ class PickerItem(DefaultPolygon):
         # OFFSET
         offseted_pos = event.pos() + QtCore.QPoint(5, 0)
         menu.exec_(offseted_pos)
+        # Commit any item change a menu action made (move / mirror / dup /
+        # remove / z-order / paste) as one editor undo step. A no-op when the
+        # action changed nothing (Copy, Select associated controls).
+        view = self.parent()
+        if view is not None and hasattr(view, "commit_edit"):
+            view.commit_edit("Edit item")
         return True
 
     def default_context_menu(self, event):

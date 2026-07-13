@@ -809,6 +809,17 @@ class ItemEditPanel(QtWidgets.QWidget):
             return None
         return getter()
 
+    def _commit_edit(self, label=None):
+        """Record the just-applied panel change as one editor undo step.
+
+        The view owns the undo stack and diffs against its own baseline, so
+        this only needs to signal that an edit committed; a call with no change
+        is a harmless no-op.
+        """
+        view = self._view
+        if view is not None and hasattr(view, "commit_edit"):
+            view.commit_edit(label)
+
     def sync(self):
         """Rebind to the current active view's selection."""
         self.sync_from_view(self._current_view())
@@ -1190,13 +1201,19 @@ class ItemEditPanel(QtWidgets.QWidget):
     # Apply helpers (write to every selected item)
     # ------------------------------------------------------------------
     def _repaint_view(self):
-        """Propagate edits to mirror partners, then repaint the canvas."""
+        """Propagate edits to mirror partners, then repaint the canvas.
+
+        Also records the just-applied field edit as one editor undo step: every
+        transform / appearance / text / shape / widget / backdrop / visibility
+        edit ends here, so this is the single seam that makes them undoable.
+        """
         if self._view is None:
             return
         # Live-mirror the edit to any linked partners (guarded against loops),
         # then repaint so both sides refresh.
         self._view.apply_mirror_for(self.items)
         self._view.viewport().update()
+        self._commit_edit()
 
     def _committed(self, spin):
         """Return a committed spin value, or None while the field is mixed.
@@ -1431,6 +1448,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._view.link_mirror_pair(self.items[0], self.items[1])
         self._view.viewport().update()
         self._guarded(self._populate_mirror)
+        self._commit_edit("Link mirror")
 
     def _unlink_mirror(self):
         if self._view is None:
@@ -1439,6 +1457,7 @@ class ItemEditPanel(QtWidgets.QWidget):
             self._view.unlink_mirror(item)
         self._view.viewport().update()
         self._guarded(self._populate_mirror)
+        self._commit_edit("Unlink mirror")
 
     def _make_symmetric(self):
         if self._view is None:
@@ -1448,6 +1467,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         for item in self.items:
             self._view.apply_mirror_for([item])
         self._view.viewport().update()
+        self._commit_edit("Make symmetric")
 
     # -- pin ------------------------------------------------------------
     def _apply_pinned(self, *args, **kwargs):
@@ -1458,6 +1478,7 @@ class ItemEditPanel(QtWidgets.QWidget):
             self._view.set_item_pinned(item, state)
         self._view.viewport().update()
         self._guarded(self._populate_pin)
+        self._commit_edit("Pin item")
 
     def _apply_anchor(self, code, *args, **kwargs):
         if self._syncing or not self.items or self._view is None:
@@ -1466,6 +1487,7 @@ class ItemEditPanel(QtWidgets.QWidget):
             item.set_anchor(code)
         self._view._update_pinned_items()
         self._view.viewport().update()
+        self._commit_edit("Set anchor")
 
     def _apply_offset(self, *args, **kwargs):
         if self._syncing or not self.items or self._view is None:
@@ -1479,6 +1501,7 @@ class ItemEditPanel(QtWidgets.QWidget):
             )
         self._view._update_pinned_items()
         self._view.viewport().update()
+        self._commit_edit("Set pin offset")
 
     # -- widget ---------------------------------------------------------
     def _apply_widget_type(self, *args, **kwargs):
@@ -1541,6 +1564,7 @@ class ItemEditPanel(QtWidgets.QWidget):
             scripts = dict(target.get_widget_scripts() or {})
             scripts[key] = cmd
             target.set_widget_scripts(scripts)
+        self._commit_edit("Edit widget script")
 
     # -- backdrop -------------------------------------------------------
     def _apply_backdrop_title(self, *args, **kwargs):
@@ -1628,6 +1652,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         for item in self.items:
             item.add_selected_controls()
         self._populate_controls()
+        self._commit_edit("Add controls")
 
     def _remove_controls(self):
         item = self._active_item()
@@ -1636,6 +1661,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         for row in self.control_list.selectedItems():
             item.remove_control(row.node())
         self._populate_controls()
+        self._commit_edit("Remove controls")
 
     def _search_replace(self):
         if not self.items:
@@ -1646,6 +1672,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         for item in self.items:
             item.search_and_replace_controls(search=search, replace=replace)
         self._populate_controls()
+        self._commit_edit("Search & replace controls")
 
     # -- action ---------------------------------------------------------
     def _apply_action_mode(self, *args, **kwargs):
@@ -1654,6 +1681,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         custom = self._resolve_tristate(self.custom_action_cb)
         for item in self.items:
             item.set_custom_action_mode(custom)
+        self._commit_edit("Set action mode")
 
     def _edit_action_script(self):
         item = self._active_item()
@@ -1666,6 +1694,7 @@ class ItemEditPanel(QtWidgets.QWidget):
             return
         for target in self.items:
             target.set_custom_action_script(cmd)
+        self._commit_edit("Edit action script")
 
     def _edit_menu(self, list_item):
         item = self._active_item()
@@ -1682,6 +1711,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         menus[index] = [name, cmd]
         item.set_custom_menus(menus)
         self._populate_action()
+        self._commit_edit("Edit custom menu")
 
     def _new_menu(self):
         item = self._active_item()
@@ -1694,6 +1724,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         menus.append([name, cmd])
         item.set_custom_menus(menus)
         self._populate_action()
+        self._commit_edit("Add custom menu")
 
     def _remove_menu(self):
         item = self._active_item()
@@ -1706,6 +1737,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         menus.pop(index)
         item.set_custom_menus(menus)
         self._populate_action()
+        self._commit_edit("Remove custom menu")
 
     # ------------------------------------------------------------------
     def closeEvent(self, event):

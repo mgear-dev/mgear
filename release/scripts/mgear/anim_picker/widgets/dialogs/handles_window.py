@@ -97,6 +97,14 @@ class HandlesPositionWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, *args, **kwargs):
         self.display_handles_index(status=False)
+        # Commit the handle-position edits made here as one editor undo step
+        # (handles are part of the item serialization, so the snapshot diff
+        # captures the change).
+        view = None
+        if self.picker_item is not None:
+            view = self.picker_item.scene().parent()
+        if view is not None and hasattr(view, "commit_edit"):
+            view.commit_edit("Edit handle positions")
         return QtWidgets.QMainWindow.closeEvent(self, *args, **kwargs)
 
     def show(self, *args, **kwargs):

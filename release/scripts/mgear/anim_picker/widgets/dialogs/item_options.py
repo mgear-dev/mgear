@@ -3,8 +3,6 @@
 Extracted from picker_widgets.py during the Phase 2 decomposition.
 """
 
-import copy
-
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
@@ -34,15 +32,9 @@ class ItemOptionsWindow(QtWidgets.QMainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         self.picker_item = picker_item
 
-        # undo ----------------------------------------------------------------
+        # Undo: this window edits the item live; the whole session is committed
+        # as one editor undo step on close (see closeEvent).
         self.main_view = self.picker_item.scene().parent()
-        self.tmp_picker_pos_info = {}
-        self.tmp_picker_pos_info[picker_item.uuid] = [
-            picker_item.x(),
-            picker_item.y(),
-            picker_item.rotation(),
-        ]
-        # undo ----------------------------------------------------------------
 
         # Define size
         self.default_width = 270
@@ -116,34 +108,11 @@ class ItemOptionsWindow(QtWidgets.QMainWindow):
             except Exception:
                 pass
 
-        # undo ----------------------------------------------------------------
-        current_position = [
-            self.picker_item.x(),
-            self.picker_item.y(),
-            self.picker_item.rotation(),
-        ]
-
-        orig_position = self.tmp_picker_pos_info.get(
-            self.picker_item.uuid, None
-        )
-        if orig_position is not None and orig_position != current_position:
-            self.tmp_picker_pos_info[self.picker_item.uuid].extend(
-                current_position
-            )
-            if self.main_view.undo_move_order_index in [-1]:
-                self.main_view.undo_move_order.append(
-                    copy.deepcopy(self.tmp_picker_pos_info)
-                )
-            else:
-                self.main_view.undo_move_order = self.undo_move_order[
-                    : self.main_view.undo_move_order_index
-                ]
-                self.main_view.undo_move_order.append(
-                    copy.deepcopy(self.tmp_picker_pos_info)
-                )
-            self.undo_move_order_index = -1
-            self.tmp_picker_pos_info = {}
-        # undo ----------------------------------------------------------------
+        # Commit any change made in this window as one editor undo step.
+        if self.main_view is not None and hasattr(
+            self.main_view, "commit_edit"
+        ):
+            self.main_view.commit_edit("Edit item options")
 
         QtWidgets.QMainWindow.closeEvent(self, *args, **kwargs)
 
