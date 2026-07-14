@@ -96,9 +96,6 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.drag_active = False
         self.pan_active = False
         self.zoom_active = False
-        # True while a wheel-zoom step runs, so the passthrough mask is
-        # suspended (full UI back) like a drag instead of reshaped per step.
-        self._wheel_zooming = False
         self.auto_frame_active = True
 
         # Disable scroll bars
@@ -434,16 +431,18 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         # Apply zoom
         self.scale(factor, factor)
-        # Suspend the passthrough mask for the wheel burst (re-applied once it
-        # settles) so the window is not reshaped on every wheel step.
-        self._wheel_zooming = True
+        # A wheel is a brief zoom gesture: flag it as zoom so the passthrough
+        # mask is suspended (re-applied once it settles) instead of reshaped on
+        # every step. Save / restore in case a wheel lands mid drag-zoom.
+        was_zooming = self.zoom_active
+        self.zoom_active = True
         try:
             # Keep viewport-pinned items locked to their screen anchors.
             self._update_pinned_items()
             # Zoom changed; re-evaluate zoom-level visibility conditions.
             self.refresh_item_visibility()
         finally:
-            self._wheel_zooming = False
+            self.zoom_active = was_zooming
         self._suspend_passthrough()
 
     # =====================================================================
@@ -2047,10 +2046,19 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         comes back, no per-frame reshape); when not moving (fit / resize /
         load / release) the mask is re-applied.
         """
-        if self.pan_active or self.zoom_active or self._wheel_zooming:
+        if self._view_in_motion():
             self._suspend_passthrough()
         else:
             self._notify_passthrough()
+
+    def _view_in_motion(self):
+        """True while the viewport is being interactively panned or zoomed.
+
+        A wheel step flags itself as a zoom for its duration, so this single
+        check covers pan, drag-zoom and wheel -- and the passthrough mask is
+        suspended rather than rebuilt per frame.
+        """
+        return self.pan_active or self.zoom_active
 
     def _notify_passthrough(self):
         """Ask the window to (re-)apply its click-through mask now.

@@ -169,13 +169,7 @@ class MainDockWindow(QtWidgets.QWidget):
             # Floating passthrough toggle shown by the move grip while
             # passthrough masks out the character-selector row; hidden until
             # then. Mirrors the in-row checkbox.
-            self.passthrough_cb_float = QtWidgets.QCheckBox(
-                "Passthrough", self
-            )
-            self.passthrough_cb_float.setToolTip(
-                self.passthrough_cb.toolTip()
-            )
-            self.passthrough_cb_float.toggled.connect(self._toggle_passthrough)
+            self.passthrough_cb_float = self._make_passthrough_checkbox(self)
             self.passthrough_cb_float.hide()
             # Re-applies the click mask shortly after a pan / zoom stops, so
             # the window shape is not reshaped every frame during motion.
@@ -272,7 +266,17 @@ class MainDockWindow(QtWidgets.QWidget):
         """
         self._passthrough_enabled = checked
         self._sync_passthrough_checks(checked)
-        if checked:
+        self._apply_passthrough_opacity(checked)
+        self.update_passthrough_mask()
+
+    def _apply_passthrough_opacity(self, on):
+        """Set the opacity so passthrough visibly engages / disengages.
+
+        Activating an opaque window drops it to the remembered transparency
+        (Auto opacity is turned off -- mutually exclusive); deactivating
+        restores 100% and remembers the last transparency for next time.
+        """
+        if on:
             if self.auto_opacity_btn.isChecked():
                 self.auto_opacity_btn.setChecked(False)
             if self.opacity_slider.value() >= 100:
@@ -281,7 +285,6 @@ class MainDockWindow(QtWidgets.QWidget):
             if self.opacity_slider.value() < 100:
                 self._last_passthrough_opacity = self.opacity_slider.value()
             self.opacity_slider.setValue(100)
-        self.update_passthrough_mask()
 
     def _sync_passthrough_checks(self, checked):
         """Set `checked` on both passthrough toggles without re-emitting."""
@@ -302,6 +305,21 @@ class MainDockWindow(QtWidgets.QWidget):
         cb.move(x, y)
         cb.show()
         cb.raise_()
+
+    def _make_passthrough_checkbox(self, parent=None):
+        """Build a passthrough toggle wired to the per-window enable.
+
+        Shared by the in-row checkbox and the floating one (shown when
+        passthrough masks the character-selector row out); both mirror the
+        single ``_passthrough_enabled`` state.
+        """
+        cb = QtWidgets.QCheckBox("Passthrough", parent)
+        cb.setToolTip(
+            "Click through the empty picker area (when the window is "
+            "transparent and Auto opacity is off)"
+        )
+        cb.toggled.connect(self._toggle_passthrough)
+        return cb
 
     def _items_region(self, view):
         """Return a pixel-exact region of a view's rendered items (window).
@@ -520,12 +538,7 @@ class MainDockWindow(QtWidgets.QWidget):
 
         # Passthrough toggle, to the left of the Sync Namespace checkbox (only
         # the floating window supports the click-through mask).
-        self.passthrough_cb = QtWidgets.QCheckBox("Passthrough")
-        self.passthrough_cb.setToolTip(
-            "Click through the empty picker area (when the window is "
-            "transparent and Auto opacity is off)"
-        )
-        self.passthrough_cb.toggled.connect(self._toggle_passthrough)
+        self.passthrough_cb = self._make_passthrough_checkbox()
         if not __EDIT_MODE__.get() and not self.is_dockable:
             btns_layout.addWidget(self.passthrough_cb)
 
