@@ -1,7 +1,6 @@
 """Main dockable window and launcher for the anim picker.
 
-Extracted from gui.py during the Phase 2 decomposition. Also hosts the
-passthrough event filter used by the main window.
+Extracted from gui.py during the Phase 2 decomposition.
 """
 
 from functools import partial
@@ -15,7 +14,6 @@ from mgear.core import pyqt
 from mgear.core import callbackManager
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
-from mgear.vendor.Qt import QtCompat
 from mgear.vendor.Qt import QtWidgets
 
 from mgear.anim_picker import menu
@@ -41,41 +39,35 @@ from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
 
 
-class APPassthroughEventFilter(QtCore.QObject):
-    """AnimPicker eventFilter for MayaMainWindow when enabling
-    click passthrough for the GUI.
+class _PassthroughMoveHandle(QtWidgets.QLabel):
+    """A small grip shown in opacity-passthrough mode.
+
+    While passthrough masks the window down to the items + tabs, the frame is
+    gone, so this handle is the one solid spot left to drag the window by.
     """
 
-    # Animpicker gui reference
-    APUI = None
+    def __init__(self, window):
+        super(_PassthroughMoveHandle, self).__init__("··· move", window)
+        self._window = window
+        self._grab = None
+        self.setToolTip("Drag to move the picker (opacity passthrough)")
+        self.setStyleSheet(
+            "background: rgba(30, 30, 30, 210); color: #dddddd;"
+            " border: 1px solid #555555; border-radius: 3px; padding: 1px 6px;"
+        )
+        self.setCursor(QtCore.Qt.SizeAllCursor)
+        self.hide()
 
-    def eventFilter(self, QObject, event):
-        """Filter for changing the windowFlags on the animPicker gui"""
-        modifiers = None
-        if QtCompat.isValid(self.APUI):
-            modifiers = QtWidgets.QApplication.queryKeyboardModifiers()
-            auto_state = self.APUI.auto_opacity_btn.isChecked()
-            flag_state = self.APUI.testAttribute(
-                QtCore.Qt.WA_TransparentForMouseEvents
-            )
-            if auto_state and modifiers == QtCore.Qt.ShiftModifier:
-                # if the window is passthrough enabled
-                if flag_state:
-                    pos = QtGui.QCursor().pos()
-                    widgetRect = self.APUI.geometry()
-                    if widgetRect.contains(pos):
-                        self.APUI.set_mouseEvent_passthrough(False)
-                # if the window is passthrough enabled and the feature disabled
-            elif flag_state and not menu.get_option_var_passthrough_state():
-                self.APUI.set_mouseEvent_passthrough(False)
-            else:
-                pass
-        else:
-            try:
-                self.deleteLater()
-            except RuntimeError:
-                pass
-        return super().eventFilter(QObject, event)
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self._grab = QtGui.QCursor.pos() - self._window.pos()
+
+    def mouseMoveEvent(self, event):
+        if self._grab is not None:
+            self._window.move(QtGui.QCursor.pos() - self._grab)
+
+    def mouseReleaseEvent(self, event):
+        self._grab = None
 
 
 class MainDockWindow(QtWidgets.QWidget):
@@ -103,6 +95,11 @@ class MainDockWindow(QtWidgets.QWidget):
         # Active canvas tool (Photoshop-style left toolbar); the view reads
         # this to decide whether the transform manipulator is shown/active.
         self.active_tool = tool_bar.TOOL_SELECT
+        # Whether a click-through mask is applied (opacity passthrough) so we
+        # only clear it once when the mode turns off.
+        self._mask_applied = False
+        # Drag grip shown only in passthrough mode (created in setup).
+        self.move_handle = None
 
         __EDIT_MODE__.set_init(edit)
         self.is_dockable = dockable
@@ -113,12 +110,6 @@ class MainDockWindow(QtWidgets.QWidget):
         # Setup ui
         self.cb_manager = callbackManager.CallbackManager()
         self.setup()
-
-        # experimental passthrough feature
-        self.original_flags = self.windowFlags()
-        self.passthrough_eventFilter_installed = False
-        self.ap_eventFilter = APPassthroughEventFilter()
-        self.ap_eventFilter.APUI = self
 
     def setup(self):
         """Setup interface"""
@@ -150,13 +141,21 @@ class MainDockWindow(QtWidgets.QWidget):
             self.auto_opacity_btn = QtWidgets.QPushButton("Auto opacity")
             self.auto_opacity_btn.setCheckable(True)
             self.auto_opacity_btn.toggled.connect(self.change_opacity)
-            self.auto_opacity_btn.toggled.connect(
-                self.toggle_passthrough_eventFilter
-            )
+            # Auto-opacity and passthrough are mutually exclusive (passthrough
+            # needs a static manual opacity); re-evaluate the mask when it
+            # toggles.
+            self.auto_opacity_btn.toggled.connect(self.update_passthrough_mask)
             self.installEventFilter(self)
             opacity_layout.addWidget(self.opacity_slider)
             opacity_layout.addWidget(self.auto_opacity_btn)
             self.main_vertical_layout.addLayout(opacity_layout)
+            # Drag grip for moving the (otherwise click-through) window while
+            # passthrough is active; hidden until then.
+            self.move_handle = _PassthroughMoveHandle(self)
+            # Switching tabs changes the visible items, so realign the mask.
+            tab_widget = getattr(self.tab_area, "tab_widget", None)
+            if tab_widget is not None:
+                tab_widget.currentChanged.connect(self.update_passthrough_mask)
 
         self.add_overlays()
         self.resize(self.default_width, self.default_height)
@@ -164,39 +163,136 @@ class MainDockWindow(QtWidgets.QWidget):
         # off before everything is created)
         self.ready = True
 
-    def toggle_passthrough_eventFilter(self):
-        """enable the eventFilter for changing the AP gui windowFlags state"""
-        # this feature is beta and is off by default
-        if (
-            menu.get_option_var_passthrough_state() == 0
-            or not self.window_parent
-        ):
-            return
-        if self.auto_opacity_btn.isChecked():
-            self.window_parent.installEventFilter(self.ap_eventFilter)
-            self.passthrough_eventFilter_installed = True
-        else:
-            self.window_parent.removeEventFilter(self.ap_eventFilter)
-            self.passthrough_eventFilter_installed = False
+    # =====================================================================
+    # Opacity passthrough (click-through on empty canvas) ---
+    def _passthrough_active(self):
+        """Return True when empty-area click-through should be masked in.
 
-    def set_mouseEvent_passthrough(self, state):
-        """set the state of the passthrough feature for anim picker
-
-        Args:
-            state (bool): enable or disable
+        Engaged only for a floating (non-dockable) window with the feature
+        enabled, auto-opacity off, and a manual transparency (opacity < 1) --
+        matching "some transparency and auto opacity is off".
         """
-        if state and self.passthrough_eventFilter_installed:
-            self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
-            self.setWindowFlags(
-                self.original_flags & QtCore.Qt.WA_TransparentForMouseEvents
+        # Order the cheap widget checks first so the common case (fully opaque)
+        # short-circuits before the Maya optionVar query -- this runs on every
+        # pan / zoom frame via the mask hook.
+        return (
+            not self.is_dockable
+            and self.windowOpacity() < 1.0
+            and not self.auto_opacity_btn.isChecked()
+            and bool(menu.get_option_var_passthrough_state())
+        )
+
+    def update_passthrough_mask(self, *args):
+        """Mask the window to the visible items + tabs + move grip (or clear).
+
+        Everything else (the frame, canvas background, character selector and
+        opacity bar) is left out, so it is see-through and click-through -- you
+        see only the item buttons and the tabs. Runs per frame during a pan /
+        zoom so the holes follow the items (no ghost, no full-UI flash); cheap
+        when passthrough is off.
+        """
+        if not getattr(self, "ready", False) or self.move_handle is None:
+            return
+        if not self._passthrough_active():
+            if self._mask_applied:
+                self.clearMask()
+                self.move_handle.hide()
+                self._mask_applied = False
+            return
+        region = QtGui.QRegion()
+        for view in self.tab_area.all_views():
+            region = region.united(self._items_region(view))
+        # Keep the tab bar (to switch tabs) and the move grip interactive.
+        region = region.united(self._tab_bar_region())
+        self._place_move_handle()
+        region = region.united(self._widget_region(self.move_handle))
+        self.setMask(region)
+        self._mask_applied = True
+
+    def _items_region(self, view):
+        """Return a pixel-exact region of a view's rendered items (window).
+
+        Renders the scene's *visible* items (no background) to a transparent
+        image and takes the region of the painted pixels, so the mask matches
+        exactly what is drawn -- glyph holes, curved / concave / stroke SVGs,
+        rounded backdrops, the selection border -- with no per-shape math.
+        Hidden items (e.g. a checkbox-toggled group that is off) are not drawn,
+        so they stay fully passthrough.
+        """
+        if view is None or not view.isVisible():
+            return QtGui.QRegion()
+        viewport = view.viewport()
+        if not viewport.isVisible() or viewport.size().isEmpty():
+            return QtGui.QRegion()
+        image = QtGui.QImage(
+            viewport.size(), QtGui.QImage.Format_ARGB32_Premultiplied
+        )
+        image.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(image)
+        # Render through the view (its exact paint path + transform, so strokes
+        # and the Y-flip are handled) but with the canvas background cleared,
+        # so only the item pixels are opaque.
+        saved_brush = view.backgroundBrush()
+        view.setBackgroundBrush(QtCore.Qt.NoBrush)
+        try:
+            view.render(
+                painter,
+                QtCore.QRectF(0.0, 0.0, image.width(), image.height()),
+                viewport.rect(),
             )
-            self.show()
-        elif state and not self.passthrough_eventFilter_installed:
-            self.toggle_passthrough_eventFilter()
+        finally:
+            view.setBackgroundBrush(saved_brush)
+            painter.end()
+        # createAlphaMask() thresholds coverage near 50%, which erases thin
+        # antialiased strokes (arrows, open SVGs) whose pixels never reach it.
+        # Additively stack the render onto itself so any painted pixel is
+        # pushed to full alpha; then anything drawn survives the threshold.
+        boosted = image.copy()
+        boost = QtGui.QPainter(boosted)
+        boost.setCompositionMode(QtGui.QPainter.CompositionMode_Plus)
+        # 4 extra additive passes -> ~5x alpha, enough to clear the ~50%
+        # coverage threshold for even faint single-pixel strokes.
+        alpha_boost_passes = 4
+        for _ in range(alpha_boost_passes):
+            boost.drawImage(0, 0, image)
+        boost.end()
+        alpha = boosted.createAlphaMask()
+        region = QtGui.QRegion(QtGui.QBitmap.fromImage(alpha))
+        region.translate(viewport.mapTo(self, QtCore.QPoint(0, 0)))
+        return region
+
+    def _widget_region(self, widget):
+        """Return a visible child widget's rect as a window-coord region."""
+        if widget is None or not widget.isVisible():
+            return QtGui.QRegion()
+        top_left = widget.mapTo(self, QtCore.QPoint(0, 0))
+        return QtGui.QRegion(QtCore.QRect(top_left, widget.size()))
+
+    def _tab_bar_widget(self):
+        """Return the tab bar widget (tabbed mode), or None."""
+        tab_widget = getattr(self.tab_area, "tab_widget", None)
+        getter = getattr(tab_widget, "tabBar", None)
+        return getter() if getter is not None else None
+
+    def _tab_bar_region(self):
+        """Return the tab bar's region so the tabs stay visible + clickable."""
+        return self._widget_region(self._tab_bar_widget())
+
+    def _place_move_handle(self):
+        """Show the move grip at the right end, level with the tab bar."""
+        handle = self.move_handle
+        handle.adjustSize()
+        margin = pyqt.dpi_scale(8)
+        x = self.width() - handle.width() - margin
+        tab_bar = self._tab_bar_widget()
+        if tab_bar is not None and tab_bar.isVisible():
+            top = tab_bar.mapTo(self, QtCore.QPoint(0, 0)).y()
+            y = top + max(0, (tab_bar.height() - handle.height()) // 2)
         else:
-            self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
-            self.setWindowFlags(self.original_flags)
-            self.show()
+            y = pyqt.dpi_scale(6)
+        handle.move(x, y)
+        handle.show()
+        handle.raise_()
 
     def eventFilter(self, QObject, event):
         """event filter for general override
@@ -211,40 +307,17 @@ class MainDockWindow(QtWidgets.QWidget):
         Returns:
             bool: accepting event or not
         """
-        modifiers = None
+        # Auto opacity: opaque while the mouse is over the window, faded to the
+        # slider value when it leaves. (Passthrough is handled by the window
+        # mask, and is mutually exclusive with auto opacity.)
         if self.auto_opacity_btn.isChecked():
-            modifiers = QtWidgets.QApplication.queryKeyboardModifiers()
-
-        if event.type() == QtCore.QEvent.Type.Enter:
-            shift_state = modifiers == QtCore.Qt.ShiftModifier
-            flag_state = self.testAttribute(
-                QtCore.Qt.WA_TransparentForMouseEvents
-            )
-            if self.auto_opacity_btn.isChecked():
-                if flag_state and shift_state:
-                    self.setWindowOpacity(100)
-                    return True
-                elif not flag_state:
-                    self.setWindowOpacity(100)
-                    return True
-        else:
+            if event.type() == QtCore.QEvent.Type.Enter:
+                self.setWindowOpacity(1.0)
+                return True
             if event.type() == QtCore.QEvent.Type.Leave:
-                opacity_state = self.auto_opacity_btn.isChecked()
-                flag_state = self.testAttribute(
-                    QtCore.Qt.WA_TransparentForMouseEvents
-                )
-                if opacity_state:
-                    pos = QtGui.QCursor().pos()
-                    widgetRect = self.geometry()
-                    if not widgetRect.contains(pos):
-                        self.change_opacity()
-                        # check the option var if it is enabled
-                        if menu.get_option_var_passthrough_state():
-                            self.set_mouseEvent_passthrough(True)
-                elif flag_state and not opacity_state:
-                    self.set_mouseEvent_passthrough(False)
+                if not self.geometry().contains(QtGui.QCursor.pos()):
+                    self.change_opacity()
 
-        # QtCore.QEvent.Type.ScreenChangeInternal
         # hide main tab widget for os compatibility
         if QObject in getattr(self, "overlays", []):
             if event.type() == QtCore.QEvent.Type.Show:
@@ -257,9 +330,15 @@ class MainDockWindow(QtWidgets.QWidget):
         return False
 
     def change_opacity(self):
-        """Change the  windows opacity"""
+        """Change the window opacity and re-evaluate the passthrough mask."""
         opacity_value = self.opacity_slider.value()
         self.setWindowOpacity(opacity_value / 100.0)
+        self.update_passthrough_mask()
+
+    def resizeEvent(self, event):
+        """Keep the passthrough mask aligned to the resized window."""
+        super().resizeEvent(event)
+        self.update_passthrough_mask()
 
     def reset_default_size(self):
         """Reset window size to default"""
@@ -693,6 +772,8 @@ class MainDockWindow(QtWidgets.QWidget):
         if panel is not None:
             panel.sync()
         self.update_tool_commands()
+        # Items may have moved / been added or removed -- realign the mask.
+        self.update_passthrough_mask()
 
     def _cmd_add_item(self):
         view = self._current_view()
@@ -1005,11 +1086,6 @@ class MainDockWindow(QtWidgets.QWidget):
                 item.edit_window.close()
             except Exception:
                 pass
-
-        try:
-            self.window_parent.removeEventFilter(self.ap_eventFilter)
-        except Exception:
-            pass
 
         # Only the dockable window owns a workspaceControl; closing it from the
         # floating window would tear down the (separate) docked picker. Derive

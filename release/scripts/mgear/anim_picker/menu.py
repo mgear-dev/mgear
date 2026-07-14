@@ -22,24 +22,24 @@ anim_picker.load(True, False)
 """
 
 
-def force_disable_passthrough(*args):
-    """force all the anim picker gui's to disable passthrough feature
+def refresh_passthrough(*args):
+    """Re-evaluate the click-through mask on every open anim picker.
+
+    Each floating picker applies or clears its empty-area passthrough mask
+    based on its current opacity / auto-opacity state.
 
     Args:
         *args: n/a
     """
-
     widgets = pyqt.get_top_level_widgets(class_name="MainDockWindow")
     for ap in widgets:
-        if (
-            hasattr(ap, "__OBJ_NAME__")
-            and ap.__OBJ_NAME__ == "ctrl_picker_window"
-        ):
-            ap.set_mouseEvent_passthrough(False)
+        update = getattr(ap, "update_passthrough_mask", None)
+        if update is not None:
+            update()
 
 
 def get_option_var_passthrough_state():
-    """set option var for the anim picker passthrough feature
+    """Return the anim picker opacity-passthrough option var.
 
     Returns:
         int: 0 or 1
@@ -51,18 +51,13 @@ def get_option_var_passthrough_state():
 
 
 def set_mgear_ap_passthrough_state(state):
-    """set the override state with maya option variable
+    """Set the opacity-passthrough option var and refresh open pickers.
 
     Args:
         state (bool, int): 0, 1, True, False
     """
     cmds.optionVar(intValue=("mgear_ap_passthrough_OV", int(state)))
-    if state:
-        print("---------------------------------------------------")
-        print("Anim Picker passthrough enabled. (Beta)")
-        print("Hold 'Shift' while hovering over the Anim Picker UI")
-    else:
-        force_disable_passthrough()
+    refresh_passthrough()
 
 
 def install():
@@ -85,10 +80,13 @@ def install():
     pm.menuItem(divider=True)
     cmds.menuItem(label="Edit Anim Picker", command=str_open_edit_mode)
     pm.menuItem(divider=True)
-    msg = "Experimental passthrough click when auto opacity enabled."
+    msg = (
+        "Click through empty picker areas to the viewport when the window is "
+        "transparent (opacity < 100%) and Auto opacity is off."
+    )
     cmds.menuItem(
         "mgear_ap_passthrough_menuitem",
-        label="Enable opacity passthrough (Beta)",
+        label="Enable opacity passthrough",
         command=set_mgear_ap_passthrough_state,
         checkBox=state,
         ann=msg,

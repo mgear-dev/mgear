@@ -413,12 +413,12 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             self.viewport().update()
 
         self.drag_active = False
+        # A pan / drag-zoom just ended (or an item moved) -- realign the mask.
+        self._notify_passthrough()
         return result
 
     def wheelEvent(self, event):
         """Wheel event to add zoom support"""
-        if self.window().testAttribute(QtCore.Qt.WA_TransparentForMouseEvents):
-            return False
         self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
 
         # Run default event
@@ -435,6 +435,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self._update_pinned_items()
         # Zoom changed; re-evaluate zoom-level visibility conditions.
         self.refresh_item_visibility()
+        # Realign the opacity-passthrough mask to the new zoom.
+        self._notify_passthrough()
 
     # =====================================================================
     # Editor undo/redo ---
@@ -864,6 +866,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # refreshed here: an auto-frame fit already did (via fit_scene_content),
         # and without a fit a resize does not change the zoom scale.
         self._update_pinned_items()
+        # The canvas resized -- realign the opacity-passthrough mask.
+        self._notify_passthrough()
         return result
 
     def fit_scene_content(self):
@@ -873,6 +877,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # The fit changed the view transform; re-anchor pins + re-eval zoom.
         self._update_pinned_items()
         self.refresh_item_visibility()
+        self._notify_passthrough()
 
     def set_auto_frame_view(self):
         """Enable auto fit when a resize event happens"""
@@ -2014,16 +2019,31 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         item's scene position, so it stays fixed to the viewport through pan /
         zoom / resize. A no-op when nothing is pinned.
         """
-        if not self._has_pinned_items:
-            return
-        size = self._viewport_size()
-        # Scene accessor (no draw-order reverse) since order is irrelevant to
-        # repositioning; this runs per pan / zoom frame while pins exist.
-        for item in self.scene().get_picker_items():
-            if not item.pinned:
-                continue
-            px, py = overlay.anchor_point(size, item.anchor, item.offset)
-            item.setPos(self.mapToScene(int(round(px)), int(round(py))))
+        if self._has_pinned_items:
+            size = self._viewport_size()
+            # Scene accessor (no draw-order reverse) since order is irrelevant
+            # to repositioning; runs per pan / zoom frame while pins exist.
+            for item in self.scene().get_picker_items():
+                if not item.pinned:
+                    continue
+                px, py = overlay.anchor_point(size, item.anchor, item.offset)
+                item.setPos(self.mapToScene(int(round(px)), int(round(py))))
+        # Per-frame during a pan: rebuild the passthrough mask each frame so
+        # the item holes track the moving content (no ghost); the rebuild is a
+        # cheap no-op when passthrough is off.
+        self._notify_passthrough()
+
+    def _notify_passthrough(self):
+        """Ask the window to realign its click-through mask.
+
+        Called on every viewport change including per pan frame (so the mask
+        follows moving items without ghosting); it is a cheap no-op when the
+        opacity-passthrough mode is not active.
+        """
+        window = self.main_window
+        update = getattr(window, "update_passthrough_mask", None)
+        if update is not None:
+            update()
 
     # -- conditional visibility -----------------------------------------
     def _recompute_conditional_flag(self):
@@ -2081,6 +2101,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         hidden = self._group_hidden_items()
         for item in self.scene().get_picker_items():
             item.evaluate_visibility(zoom, item in hidden)
+        # Items were shown / hidden (e.g. a checkbox group toggled) -- realign
+        # the passthrough mask so revealed items appear at once.
+        self._notify_passthrough()
 
     def refresh_widget_states(self):
         """Re-read every interactive widget's bound attribute into its display.

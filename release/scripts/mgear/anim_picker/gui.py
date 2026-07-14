@@ -17,7 +17,6 @@ from mgear.anim_picker.constants import DEFAULT_RELATIVE_IMAGES_PATH
 from mgear.anim_picker.scene import OrderedGraphicsScene
 from mgear.anim_picker.view import GraphicViewWidget
 from mgear.anim_picker.tab_widget import ContextMenuTabWidget
-from mgear.anim_picker.main_window import APPassthroughEventFilter
 from mgear.anim_picker.main_window import MainDockWindow
 from mgear.anim_picker.main_window import MainDockableWindow
 from mgear.anim_picker.main_window import load
@@ -33,7 +32,6 @@ __all__ = [
     "OrderedGraphicsScene",
     "GraphicViewWidget",
     "ContextMenuTabWidget",
-    "APPassthroughEventFilter",
     "MainDockWindow",
     "MainDockableWindow",
     "load",

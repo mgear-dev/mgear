@@ -351,9 +351,11 @@ class Polygon(DefaultPolygon):
             brush = QtGui.QBrush(color)
             painter.fillPath(path, brush)
 
-        # Border status feedback
+        # Border status feedback. Cosmetic so the selection / hover outline
+        # keeps a constant screen width and stays readable when zoomed far out.
         border_pen = QtGui.QPen(self.__DEFAULT_SELECT_COLOR__)
         border_pen.setWidthF(2)
+        border_pen.setCosmetic(True)
 
         if self.selected:
             painter.setPen(border_pen)
@@ -660,7 +662,11 @@ class BackdropGraphic(DefaultPolygon):
 
     def shape(self):
         path = QtGui.QPainterPath()
-        path.addRect(self._item_rect())
+        radius = max(0.0, self.corner_radius)
+        if radius > 0:
+            path.addRoundedRect(self._item_rect(), radius, radius)
+        else:
+            path.addRect(self._item_rect())
         return path
 
     def _selected(self):
@@ -692,13 +698,14 @@ class BackdropGraphic(DefaultPolygon):
             )
             pen = QtGui.QPen(border)
             pen.setWidthF(1.5)
+        # Cosmetic so the outline keeps a constant screen width at any zoom.
+        pen.setCosmetic(True)
         painter.setPen(pen)
-        radius = max(0.0, self.corner_radius)
-        if radius > 0:
-            painter.drawRoundedRect(rect, radius, radius)
-        else:
-            painter.drawRect(rect)
+        # Reuse shape() so the drawn outline and the click/mask silhouette are
+        # always the same rounded-or-square rect.
+        painter.drawPath(self.shape())
         if self.title:
+            radius = max(0.0, self.corner_radius)
             self._paint_title(painter, rect, color, radius)
 
     def _paint_title(self, painter, rect, color, radius):
@@ -888,6 +895,8 @@ class VectorGraphic(DefaultPolygon):
         if self.selected:
             border = QtGui.QPen(self.__DEFAULT_SELECT_COLOR__)
             border.setWidthF(2.0)
+            # Cosmetic: constant screen width so it reads when zoomed far out.
+            border.setCosmetic(True)
             painter.setPen(border)
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawPath(self._path)
