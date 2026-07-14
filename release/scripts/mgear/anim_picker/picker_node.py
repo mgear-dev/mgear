@@ -1,17 +1,13 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 # python
-import sys
 import os
+import json
 
 # dcc
 from maya import cmds
 import mgear.pymaya as pm
 
-# anim picker
+# mgear
+import mgear
 import mgear.anim_picker
 from .handlers import maya_handlers
 from .handlers import file_handlers
@@ -109,11 +105,10 @@ class DataNode(object):
         return cmds.referenceQuery(self.name, inr=True)
 
     def _assert_not_referenced(self):
-        assert (
-            self.is_referenced
-        ), "Data node '{}' is referenced, and can not \
-        be modified.".format(
-            self.name
+        assert not self.is_referenced(), (
+            "Data node '{}' is referenced, and can not be modified.".format(
+                self.name
+            )
         )
 
     def create(self, node=None):
@@ -131,7 +126,7 @@ class DataNode(object):
         if node:
             if node.hasAttr("picker_datas_node"):
                 pm.displayWarning(
-                    "{} have anim picker data".formant(node.name())
+                    "{} have anim picker data".format(node.name())
                 )
             else:
                 node = node.name()
@@ -139,13 +134,16 @@ class DataNode(object):
         else:
             # Abort if node already exists
             if cmds.objExists(self.name):
-                sys.stderr.write("node '{}' already exists.".format(self.name))
+                mgear.log(
+                    "node '{}' already exists.".format(self.name),
+                    mgear.sev_warning,
+                )
                 return self.name
 
             # Create data node (render sphere for outliner "icon")
             shp = cmds.createNode("renderSphere")
             cmds.setAttr("{}.radius".format(shp), 0)
-            cmds.setAttr("{}.v".format(shp, 0))
+            cmds.setAttr("{}.v".format(shp), 0)
 
             # Rename data node
             node = cmds.listRelatives(shp, p=True)[0]
@@ -230,19 +228,28 @@ class DataNode(object):
             file_handlers.write_data_file(file_path, data=data)
             self._set_str_attr(self.__FILE_ATTR__, value=file_path)
 
-        # Write data to node attribute
+        # Write data to node attribute as JSON
         if to_node:
-            self._set_str_attr(self.__DATAS_ATTR__, value=data)
+            self._set_str_attr(self.__DATAS_ATTR__, value=json.dumps(data))
+            self.set_version()
 
     def read_data_from_node(self):
         """Read data from data node or data file"""
         # Init data dict
         data = {}
 
-        # Get data from attribute
+        # Get data from attribute (stored as JSON)
         attr_data = self._get_attr(self.__DATAS_ATTR__)
         if attr_data:
-            data = eval(attr_data)
+            try:
+                data = json.loads(attr_data)
+            except (ValueError, TypeError) as exc:
+                mgear.log(
+                    "anim_picker: could not parse picker data on '{}' as "
+                    "JSON, ignoring legacy data ({})".format(self.name, exc),
+                    mgear.sev_warning,
+                )
+                data = {}
 
         return data
 

@@ -1,10 +1,4 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
-
-import pprint
+import mgear
 
 
 def safe_code_exec(cmd, env=None):
@@ -14,4 +8,7 @@ def safe_code_exec(cmd, env=None):
     try:
         exec(cmd, env)
     except Exception as e:
-        pprint.pprint(e)
+        mgear.log(
+            "anim_picker: custom action failed: {}".format(e),
+            mgear.sev_error,
+        )

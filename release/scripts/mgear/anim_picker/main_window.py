@@ -1,0 +1,1647 @@
+"""Main dockable window and launcher for the anim picker.
+
+Extracted from gui.py during the Phase 2 decomposition.
+"""
+
+from functools import partial
+
+from maya import cmds
+import mgear.pymaya as pm
+
+from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
+
+from mgear.core import pyqt
+from mgear.core import callbackManager
+from mgear.vendor.Qt import QtGui
+from mgear.vendor.Qt import QtCore
+from mgear.vendor.Qt import QtWidgets
+
+from mgear.anim_picker import version
+from mgear.anim_picker import picker_node
+from mgear.anim_picker.constants import ANIM_PICKER_TITLE
+from mgear.anim_picker.constants import GROUPBOX_BG_CSS
+from mgear.anim_picker.constants import _mgear_version
+from mgear.anim_picker.view import GraphicViewWidget
+from mgear.anim_picker.tab_widget import ContextMenuTabWidget
+from mgear.anim_picker.widgets import basic
+from mgear.anim_picker.widgets import edit_panel
+from mgear.anim_picker.widgets import tool_bar
+from mgear.anim_picker.widgets import widget_binding
+from mgear.anim_picker.widgets import alignment
+from mgear.anim_picker.widgets import color_palette
+from mgear.anim_picker.widgets import tiled_view
+from mgear.anim_picker.widgets import overlay_widgets
+from mgear.anim_picker.widgets.dialogs.shape_library_dialog import (
+    ShapeLibraryDialog,
+)
+from mgear.anim_picker.handlers import __EDIT_MODE__
+from mgear.anim_picker.handlers import __SELECTION__
+
+
+class _PassthroughMoveHandle(QtWidgets.QLabel):
+    """A small grip shown in opacity-passthrough mode.
+
+    While passthrough masks the window down to the items + tabs, the frame is
+    gone, so this handle is the one solid spot left to drag the window by.
+    """
+
+    def __init__(self, window):
+        super(_PassthroughMoveHandle, self).__init__("··· move", window)
+        self._window = window
+        self._grab = None
+        self.setToolTip("Drag to move the picker (opacity passthrough)")
+        self.setStyleSheet(
+            "background: rgba(30, 30, 30, 210); color: #dddddd;"
+            " border: 1px solid #555555; border-radius: 3px; padding: 1px 6px;"
+        )
+        self.setCursor(QtCore.Qt.SizeAllCursor)
+        self.hide()
+
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self._grab = QtGui.QCursor.pos() - self._window.pos()
+
+    def mouseMoveEvent(self, event):
+        if self._grab is not None:
+            self._window.move(QtGui.QCursor.pos() - self._grab)
+
+    def mouseReleaseEvent(self, event):
+        self._grab = None
+
+
+class MainDockWindow(QtWidgets.QWidget):
+    __OBJ_NAME__ = "ctrl_picker_window"
+    __TITLE__ = ANIM_PICKER_TITLE.format(
+        m_version=_mgear_version, ap_version=version.version
+    )
+
+    def __init__(self, parent=None, edit=False, dockable=False):
+        super().__init__(parent=parent)
+        self.window_parent = parent
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        self.setWindowFlags(QtCore.Qt.Window)
+        self.ready = False
+
+        # Window size
+        # (default size to provide a 450/700 for tab area and proper img size)
+        self.default_width = pyqt.dpi_scale(476)
+        self.default_height = pyqt.dpi_scale(837)
+
+        # Default vars
+        self.status = False
+        self.childs = []
+        self.script_jobs = []
+        # Active canvas tool (Photoshop-style left toolbar); the view reads
+        # this to decide whether the transform manipulator is shown/active.
+        self.active_tool = tool_bar.TOOL_SELECT
+        # Whether a click-through mask is applied (opacity passthrough) so we
+        # only clear it once when the mode turns off.
+        self._mask_applied = False
+        # Drag grip shown only in passthrough mode (created in setup).
+        self.move_handle = None
+        # Re-applies the mask a moment after a pan / zoom settles (created in
+        # setup); during motion the mask is dropped so the window is not
+        # reshaped every frame -- the full UI comes back until you stop.
+        self._pt_settle_timer = None
+        # Per-window opacity-passthrough enable (toggled from the in-UI
+        # checkbox only; affects this picker, not every open picker).
+        self._passthrough_enabled = False
+        # In-UI passthrough toggles: one lives in the character-selector row
+        # (normal), one floats by the move grip (passthrough, where the row is
+        # masked out). Both drive the same state and stay in sync.
+        self.passthrough_cb = None
+        self.passthrough_cb_float = None
+        # Opacity restored when the toggle re-activates passthrough from an
+        # opaque window (so it visibly engages without touching the slider).
+        self._last_passthrough_opacity = 70
+
+        __EDIT_MODE__.set_init(edit)
+        self.is_dockable = dockable
+        # mGear dockable convention: toolName is the attribute core.pyqt
+        # (showDialog / deleteInstances) reads to name the workspaceControl.
+        self.toolName = self.__OBJ_NAME__
+
+        # Setup ui
+        self.cb_manager = callbackManager.CallbackManager()
+        self.setup()
+
+    def setup(self):
+        """Setup interface"""
+        # Only the dockable window gets an object name: Maya derives its
+        # workspaceControl name from it. Giving the floating window the same
+        # name makes Maya swap/confuse the two when both are open (opacity UI
+        # leaking, close-one-closes-both), so leave the floating window unnamed.
+        if self.is_dockable:
+            self.setObjectName(self.__OBJ_NAME__)
+        self.setWindowTitle(self.__TITLE__)
+
+        # Add main widget and vertical layout
+        self.main_vertical_layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.main_vertical_layout)
+
+        # Add window fields
+        self.add_character_selector()
+        self.add_tab_widget()
+
+        # if the window is not dockable we can control the opacity
+        # MayaQWidgetDockableMixin overrides setWindowsOpacity
+        self.auto_opacity_btn = QtWidgets.QPushButton("")
+        if not self.is_dockable:
+            opacity_layout = QtWidgets.QHBoxLayout()
+            self.opacity_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+            self.opacity_slider.setRange(10, 100)
+            self.opacity_slider.setValue(100)
+            self.opacity_slider.valueChanged.connect(self.change_opacity)
+            self.auto_opacity_btn = QtWidgets.QPushButton("Auto opacity")
+            self.auto_opacity_btn.setCheckable(True)
+            self.auto_opacity_btn.toggled.connect(self.change_opacity)
+            # Auto-opacity and passthrough are mutually exclusive (passthrough
+            # needs a static manual opacity); re-evaluate the mask when it
+            # toggles.
+            self.auto_opacity_btn.toggled.connect(self.update_passthrough_mask)
+            self.installEventFilter(self)
+            opacity_layout.addWidget(self.opacity_slider)
+            opacity_layout.addWidget(self.auto_opacity_btn)
+            self.main_vertical_layout.addLayout(opacity_layout)
+            # Drag grip for moving the (otherwise click-through) window while
+            # passthrough is active; hidden until then.
+            self.move_handle = _PassthroughMoveHandle(self)
+            # Floating passthrough toggle shown by the move grip while
+            # passthrough masks out the character-selector row; hidden until
+            # then. Mirrors the in-row checkbox.
+            self.passthrough_cb_float = self._make_passthrough_checkbox(self)
+            self.passthrough_cb_float.hide()
+            # Re-applies the click mask shortly after a pan / zoom stops, so
+            # the window shape is not reshaped every frame during motion.
+            self._pt_settle_timer = QtCore.QTimer(self)
+            self._pt_settle_timer.setSingleShot(True)
+            self._pt_settle_timer.setInterval(120)
+            self._pt_settle_timer.timeout.connect(self.update_passthrough_mask)
+            # Switching tabs changes the visible items, so realign the mask.
+            tab_widget = getattr(self.tab_area, "tab_widget", None)
+            if tab_widget is not None:
+                tab_widget.currentChanged.connect(self.update_passthrough_mask)
+
+        self.add_overlays()
+        self.resize(self.default_width, self.default_height)
+        # Creating is done (workaround for signals being fired
+        # off before everything is created)
+        self.ready = True
+
+    # =====================================================================
+    # Opacity passthrough (click-through on empty canvas) ---
+    def _passthrough_active(self):
+        """Return True when empty-area click-through should be masked in.
+
+        Engaged only for a floating (non-dockable) window with the feature
+        enabled, auto-opacity off, and a manual transparency (opacity < 1) --
+        matching "some transparency and auto opacity is off".
+        """
+        # Order the cheap widget checks first so the common case (fully opaque)
+        # short-circuits before the Maya optionVar query -- this runs on every
+        # pan / zoom frame via the mask hook.
+        return (
+            not self.is_dockable
+            and self.windowOpacity() < 1.0
+            and not self.auto_opacity_btn.isChecked()
+            and self._passthrough_enabled
+        )
+
+    def update_passthrough_mask(self, *args):
+        """Mask the window to the visible items + tabs + move grip (or clear).
+
+        Everything else (the frame, canvas background, character selector and
+        opacity bar) is left out, so it is see-through and click-through -- you
+        see only the item buttons and the tabs. Applied at rest; during a pan /
+        zoom it is dropped (see ``suspend_passthrough_mask``) so the window is
+        not reshaped every frame. A cheap no-op when passthrough is off.
+        """
+        if not getattr(self, "ready", False) or self.move_handle is None:
+            return
+        if not self._passthrough_active():
+            if self._mask_applied:
+                self.clearMask()
+                self.move_handle.hide()
+                self._mask_applied = False
+            if self.passthrough_cb_float is not None:
+                self.passthrough_cb_float.hide()
+            return
+        region = QtGui.QRegion()
+        for view in self.tab_area.all_views():
+            region = region.united(self._items_region(view))
+        # Keep the tab bar, the move grip and the floating passthrough toggle
+        # interactive (the character-selector row is masked out here).
+        region = region.united(self._tab_bar_region())
+        self._place_move_handle()
+        region = region.united(self._widget_region(self.move_handle))
+        self._place_passthrough_float()
+        region = region.united(self._widget_region(self.passthrough_cb_float))
+        self.setMask(region)
+        self._mask_applied = True
+
+    def suspend_passthrough_mask(self):
+        """Drop the click mask during a pan / zoom, re-applying it once motion
+        settles -- so the window is not reshaped every frame (the redraw
+        glitch). The full window (all UI) comes back while you move.
+        """
+        if not getattr(self, "ready", False) or self.move_handle is None:
+            return
+        if not self._passthrough_active():
+            return
+        if self._mask_applied:
+            self.clearMask()
+            self.move_handle.hide()
+            self.passthrough_cb_float.hide()
+            self._mask_applied = False
+        if self._pt_settle_timer is not None:
+            self._pt_settle_timer.start()
+
+    def _toggle_passthrough(self, checked):
+        """Activate / deactivate opacity passthrough for THIS picker.
+
+        Enables it per-window (other open pickers are unaffected) and, so an
+        opaque window visibly engages, drops it to a transparent default
+        (restored on deactivate). Auto opacity is turned off -- mutually
+        exclusive.
+        """
+        self._passthrough_enabled = checked
+        self._sync_passthrough_checks(checked)
+        self._apply_passthrough_opacity(checked)
+        self.update_passthrough_mask()
+
+    def _apply_passthrough_opacity(self, on):
+        """Set the opacity so passthrough visibly engages / disengages.
+
+        Activating an opaque window drops it to the remembered transparency
+        (Auto opacity is turned off -- mutually exclusive); deactivating
+        restores 100% and remembers the last transparency for next time.
+        """
+        if on:
+            if self.auto_opacity_btn.isChecked():
+                self.auto_opacity_btn.setChecked(False)
+            if self.opacity_slider.value() >= 100:
+                self.opacity_slider.setValue(self._last_passthrough_opacity)
+        else:
+            if self.opacity_slider.value() < 100:
+                self._last_passthrough_opacity = self.opacity_slider.value()
+            self.opacity_slider.setValue(100)
+
+    def _sync_passthrough_checks(self, checked):
+        """Set `checked` on both passthrough toggles without re-emitting."""
+        for cb in (self.passthrough_cb, self.passthrough_cb_float):
+            if cb is not None and cb.isChecked() != checked:
+                cb.blockSignals(True)
+                cb.setChecked(checked)
+                cb.blockSignals(False)
+
+    def _place_passthrough_float(self):
+        """Show the floating passthrough toggle just left of the move grip."""
+        cb = self.passthrough_cb_float
+        cb.adjustSize()
+        gap = pyqt.dpi_scale(8)
+        handle = self.move_handle
+        x = handle.x() - cb.width() - gap
+        y = handle.y() + max(0, (handle.height() - cb.height()) // 2)
+        cb.move(x, y)
+        cb.show()
+        cb.raise_()
+
+    def _make_passthrough_checkbox(self, parent=None):
+        """Build a passthrough toggle wired to the per-window enable.
+
+        Shared by the in-row checkbox and the floating one (shown when
+        passthrough masks the character-selector row out); both mirror the
+        single ``_passthrough_enabled`` state.
+        """
+        cb = QtWidgets.QCheckBox("Passthrough", parent)
+        cb.setToolTip(
+            "Click through the empty picker area (when the window is "
+            "transparent and Auto opacity is off)"
+        )
+        cb.toggled.connect(self._toggle_passthrough)
+        return cb
+
+    def _items_region(self, view):
+        """Return a pixel-exact region of a view's rendered items (window).
+
+        Renders the scene's *visible* items (no background) to a transparent
+        image and takes the region of the painted pixels, so the mask matches
+        exactly what is drawn -- glyph holes, curved / concave / stroke SVGs,
+        rounded backdrops, the selection border -- with no per-shape math.
+        Hidden items (e.g. a checkbox-toggled group that is off) are not drawn,
+        so they stay fully passthrough.
+        """
+        if view is None or not view.isVisible():
+            return QtGui.QRegion()
+        viewport = view.viewport()
+        if not viewport.isVisible() or viewport.size().isEmpty():
+            return QtGui.QRegion()
+        image = QtGui.QImage(
+            viewport.size(), QtGui.QImage.Format_ARGB32_Premultiplied
+        )
+        image.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(image)
+        # Render through the view (its exact paint path + transform, so strokes
+        # and the Y-flip are handled) but with the canvas background cleared,
+        # so only the item pixels are opaque.
+        saved_brush = view.backgroundBrush()
+        view.setBackgroundBrush(QtCore.Qt.NoBrush)
+        try:
+            view.render(
+                painter,
+                QtCore.QRectF(0.0, 0.0, image.width(), image.height()),
+                viewport.rect(),
+            )
+        finally:
+            view.setBackgroundBrush(saved_brush)
+            painter.end()
+        # createAlphaMask() thresholds coverage near 50%, which erases thin
+        # antialiased strokes (arrows, open SVGs) whose pixels never reach it.
+        # Additively stack the render onto itself so any painted pixel is
+        # pushed to full alpha; then anything drawn survives the threshold.
+        boosted = image.copy()
+        boost = QtGui.QPainter(boosted)
+        boost.setCompositionMode(QtGui.QPainter.CompositionMode_Plus)
+        # 4 extra additive passes -> ~5x alpha, enough to clear the ~50%
+        # coverage threshold for even faint single-pixel strokes.
+        alpha_boost_passes = 4
+        for _ in range(alpha_boost_passes):
+            boost.drawImage(0, 0, image)
+        boost.end()
+        alpha = boosted.createAlphaMask()
+        region = QtGui.QRegion(QtGui.QBitmap.fromImage(alpha))
+        # Trim the outer ring so the 1-bit mask edge lands just inside the
+        # solid fill, not on the item's antialiased edge (which the render
+        # blends into the dark canvas and would show as a dark hairline).
+        region = self._erode_region(region, 1)
+        region.translate(viewport.mapTo(self, QtCore.QPoint(0, 0)))
+        return region
+
+    def _erode_region(self, region, px):
+        """Return `region` shrunk by `px` pixels on every side.
+
+        A pixel is kept only if it and its neighbours `px` away are all inside,
+        so the outer boundary ring is dropped. Used to shave the antialiased
+        fringe off the passthrough mask (setMask is 1-bit, so it cannot
+        antialias the edge itself).
+        """
+        if region.isEmpty():
+            return region
+        eroded = region
+        for dx, dy in ((px, 0), (-px, 0), (0, px), (0, -px)):
+            eroded = eroded.intersected(region.translated(dx, dy))
+        return eroded
+
+    def _widget_region(self, widget):
+        """Return a visible child widget's rect as a window-coord region."""
+        if widget is None or not widget.isVisible():
+            return QtGui.QRegion()
+        top_left = widget.mapTo(self, QtCore.QPoint(0, 0))
+        return QtGui.QRegion(QtCore.QRect(top_left, widget.size()))
+
+    def _tab_bar_widget(self):
+        """Return the tab bar widget (tabbed mode), or None."""
+        tab_widget = getattr(self.tab_area, "tab_widget", None)
+        getter = getattr(tab_widget, "tabBar", None)
+        return getter() if getter is not None else None
+
+    def _tab_bar_region(self):
+        """Return the tab bar's region so the tabs stay visible + clickable."""
+        return self._widget_region(self._tab_bar_widget())
+
+    def _place_move_handle(self):
+        """Show the move grip at the right end, level with the tab bar."""
+        handle = self.move_handle
+        handle.adjustSize()
+        margin = pyqt.dpi_scale(8)
+        x = self.width() - handle.width() - margin
+        tab_bar = self._tab_bar_widget()
+        if tab_bar is not None and tab_bar.isVisible():
+            top = tab_bar.mapTo(self, QtCore.QPoint(0, 0)).y()
+            y = top + max(0, (tab_bar.height() - handle.height()) // 2)
+        else:
+            y = pyqt.dpi_scale(6)
+        handle.move(x, y)
+        handle.show()
+        handle.raise_()
+
+    def eventFilter(self, QObject, event):
+        """event filter for general override
+        current use
+        -Auto opacityfilter
+        -hide the GraphicsView for compatibility with MacOs
+
+        Args:
+            QObject (QObject): the object getting the event
+            event (QEvent): event type
+
+        Returns:
+            bool: accepting event or not
+        """
+        # Auto opacity: opaque while the mouse is over the window, faded to the
+        # slider value when it leaves. (Passthrough is handled by the window
+        # mask, and is mutually exclusive with auto opacity.)
+        if self.auto_opacity_btn.isChecked():
+            if event.type() == QtCore.QEvent.Type.Enter:
+                self.setWindowOpacity(1.0)
+                return True
+            if event.type() == QtCore.QEvent.Type.Leave:
+                if not self.geometry().contains(QtGui.QCursor.pos()):
+                    self.change_opacity()
+
+        # hide main tab widget for os compatibility
+        if QObject in getattr(self, "overlays", []):
+            if event.type() == QtCore.QEvent.Type.Show:
+                self.tab_area.hide()
+                return True
+            elif event.type() == QtCore.QEvent.Type.Hide:
+                self.tab_area.show()
+                return True
+
+        return False
+
+    def change_opacity(self):
+        """Change the window opacity and re-evaluate the passthrough mask."""
+        opacity_value = self.opacity_slider.value()
+        self.setWindowOpacity(opacity_value / 100.0)
+        self.update_passthrough_mask()
+
+    def resizeEvent(self, event):
+        """Keep the passthrough mask aligned to the resized window."""
+        super().resizeEvent(event)
+        self.update_passthrough_mask()
+
+    def reset_default_size(self):
+        """Reset window size to default"""
+        self.resize(self.default_width, self.default_height)
+
+    def toggle_character_selector(self, *args):
+        """Toggle the visibility of the character select widget"""
+        if self.character_box.isChecked():
+            self.char_select_widget.show()
+        else:
+            self.char_select_widget.hide()
+
+    def add_character_selector(self):
+        """Add Character comboBox selector"""
+        # Create group box
+        self.character_box = QtWidgets.QGroupBox("Character Selector")
+        bg_color = self.palette().color(QtGui.QPalette.Window).getRgb()
+        cc_style_sheet = GROUPBOX_BG_CSS.format(color=bg_color)
+        self.character_box.setStyleSheet(cc_style_sheet)
+        self.character_box.setContentsMargins(0, 0, 0, 0)
+        self.character_box.setMinimumHeight(0)
+        self.character_box.setMaximumHeight(pyqt.dpi_scale(80))
+        self.character_box.setCheckable(True)
+        self.character_box.setChecked(True)
+        self.character_box.clicked.connect(self.toggle_character_selector)
+
+        self.char_select_widget = QtWidgets.QWidget()
+        self.char_select_widget.setContentsMargins(0, 5, 0, 0)
+        tmp_layout = QtWidgets.QHBoxLayout(self.character_box)
+        tmp_layout.setSpacing(0)
+        tmp_layout.addWidget(self.char_select_widget)
+
+        # Create layout
+        layout = QtWidgets.QHBoxLayout(self.char_select_widget)
+
+        # Create character picture widget
+        self.pic_widget = basic.SnapshotWidget()
+
+        box_layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(box_layout)
+        layout.addWidget(self.pic_widget, QtCore.Qt.AlignCenter)
+
+        # Add combo box
+        self.char_selector_cb = basic.CallbackComboBox(
+            callback=self.selector_change_event
+        )
+        box_layout.addWidget(self.char_selector_cb)
+
+        # Init combo box data
+        self.char_selector_cb.nodes = []
+
+        # Add option buttons
+        btns_layout = QtWidgets.QHBoxLayout()
+        box_layout.addLayout(btns_layout)
+        # Kept so add_tab_widget can append the view-mode selector here.
+        self.char_btns_layout = btns_layout
+
+        # Add horizont spacer
+        spacer = QtWidgets.QSpacerItem(
+            10,
+            0,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Minimum,
+        )
+        btns_layout.addItem(spacer)
+
+        # Passthrough toggle, to the left of the Sync Namespace checkbox (only
+        # the floating window supports the click-through mask).
+        self.passthrough_cb = self._make_passthrough_checkbox()
+        if not __EDIT_MODE__.get() and not self.is_dockable:
+            btns_layout.addWidget(self.passthrough_cb)
+
+        # sync checkbox
+        self.checkbox = QtWidgets.QCheckBox("Sync Namespace")
+        if not __EDIT_MODE__.get():
+            btns_layout.addWidget(self.checkbox)
+
+        # About btn
+        about_btn = basic.CallbackButton(callback=self.show_about_infos)
+        about_btn.setText("?")
+        about_btn.setToolTip("Show help/about informations")
+        btns_layout.addWidget(about_btn)
+
+        # laod btn
+        load_btn = basic.CallbackButton(callback=self.show_load_widget)
+        load_btn.setText("Load")
+        load_btn.setToolTip("Load from file")
+        btns_layout.addWidget(load_btn)
+
+        # Refresh button
+        self.char_refresh_btn = basic.CallbackButton(callback=self.refresh)
+        self.char_refresh_btn.setText("Refresh")
+        btns_layout.addWidget(self.char_refresh_btn)
+
+        # Edit buttons
+        self.new_char_btn = None
+        self.save_char_btn = None
+        if __EDIT_MODE__.get():
+            # Add New  button
+            self.new_char_btn = basic.CallbackButton(
+                callback=self.new_character
+            )
+            self.new_char_btn.setText("New")
+            self.new_char_btn.setFixedWidth(pyqt.dpi_scale(40))
+
+            btns_layout.addWidget(self.new_char_btn)
+
+            # Add Save  button
+            self.save_char_btn = basic.CallbackButton(
+                callback=self.save_character
+            )
+            self.save_char_btn.setText("Save")
+            self.save_char_btn.setFixedWidth(pyqt.dpi_scale(40))
+
+            btns_layout.addWidget(self.save_char_btn)
+        self.main_vertical_layout.addWidget(self.character_box)
+
+    def add_tab_widget(self, name="default"):
+        """Add control display field"""
+        self.tab_widget = ContextMenuTabWidget(self, main_window=self)
+
+        # Right-docked inline item editor (edit mode only). The tab widget and
+        # the panel share a resizable, collapsible splitter, so the classic
+        # single-pane view is simply the panel-hidden state.
+        self.edit_panel = edit_panel.ItemEditPanel(main_window=self)
+        self.edit_panel.setMinimumWidth(pyqt.dpi_scale(220))
+
+        # Wrap the tab widget so it can also be presented as a tiled multi-tab
+        # view (grid / vertical / horizontal); the area is the state-sensitive
+        # facade (active view, all views, data, fit) used across the window.
+        self.tab_area = tiled_view.PickerTabArea(
+            self.tab_widget, main_window=self
+        )
+        self._build_view_mode_selector()
+
+        self.editor_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        self.editor_splitter.addWidget(self.tab_area)
+        self.editor_splitter.addWidget(self.edit_panel)
+        self.editor_splitter.setStretchFactor(0, 1)
+        self.editor_splitter.setStretchFactor(1, 0)
+        self.editor_splitter.setCollapsible(0, False)
+        self.editor_splitter.setCollapsible(1, True)
+
+        # Photoshop-style tool strip on the left of the canvas + the splitter.
+        self.left_toolbar = tool_bar.PickerToolBar(main_window=self)
+        # Quick-access commands below the tools; selection-dependent ones are
+        # collected so they can be enabled/disabled with the selection.
+        self.left_toolbar.add_command(
+            "Add",
+            "Add a new item at the origin",
+            self._cmd_add_item,
+            tool_bar.mgear_icon("mgear_plus-square"),
+        )
+        self.left_toolbar.add_command(
+            "SVG",
+            "Import an .svg file as a vector shape "
+            "(or drag one onto the canvas)",
+            self._cmd_import_svg,
+            tool_bar.mgear_icon("mgear_image"),
+        )
+        # Shape library: a create / browse hub grouped with the other create
+        # tools (Add, SVG). Always enabled -- it also drag-creates and creates
+        # from the Maya selection, so it needs no picker selection.
+        self.left_toolbar.add_command(
+            "Lib",
+            "Open the shape library (apply, drag to create, or "
+            "create-from-selection)",
+            self._cmd_shapes,
+            tool_bar.mgear_icon("mgear_grid"),
+        )
+        dup_btn = self.left_toolbar.add_command(
+            "Dup",
+            "Duplicate selected items",
+            self._cmd_duplicate,
+            tool_bar.mgear_icon("mgear_copy"),
+        )
+        dup_mirror_btn = self.left_toolbar.add_command(
+            "DupM",
+            "Duplicate and mirror the selection (linked as a pair)",
+            self._cmd_duplicate_mirror,
+            tool_bar.mgear_icon("mgear_duplicate_sym"),
+        )
+        mirror_btn = self.left_toolbar.add_command(
+            "MirS",
+            "Mirror the selected shapes",
+            self._cmd_mirror_shape,
+            tool_bar.mgear_icon("mgear_mirror_controls"),
+        )
+        pin_btn = self.left_toolbar.add_command(
+            "Pin",
+            "Pin / unpin the selection to the viewport (HUD overlay)",
+            self._cmd_toggle_pin,
+            tool_bar.mgear_icon("mgear_map-pin"),
+        )
+        self._selection_commands = [
+            dup_btn,
+            dup_mirror_btn,
+            mirror_btn,
+            pin_btn,
+        ]
+        # Trace: one silhouette button per selected Maya control. Not gated on
+        # a picker selection (it reads the Maya selection); the drop-down picks
+        # the projection plane, a plain click uses Front.
+        trace_btn = self.left_toolbar.add_command(
+            "Trc",
+            "Trace a silhouette button per selected control (Front)",
+            partial(self._cmd_trace, "front"),
+            tool_bar.mgear_icon("mgear_camera"),
+        )
+        trace_menu = QtWidgets.QMenu(trace_btn)
+        for label, plane in (("Front", "front"), ("Side", "side"),
+                             ("Top", "top")):
+            trace_menu.addAction(label).triggered.connect(
+                partial(self._cmd_trace, plane)
+            )
+        trace_btn.setMenu(trace_menu)
+        trace_btn.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
+
+        # Align / distribute the current multi-selection. Two columns: the left
+        # column is horizontal ops (left / H-center / right / distribute-H),
+        # the right column vertical (top / V-center / bottom / distribute-V).
+        self.left_toolbar.add_separator()
+        self.left_toolbar.add_section_label("Align")
+        align_specs = (
+            ("mgear_align_left", "Align left edges",
+             partial(self._align_selected, "left")),
+            ("mgear_align_top", "Align top edges",
+             partial(self._align_selected, "top")),
+            ("mgear_align_hcenter", "Align horizontal centers",
+             partial(self._align_selected, "hcenter")),
+            ("mgear_align_vcenter", "Align vertical centers",
+             partial(self._align_selected, "vcenter")),
+            ("mgear_align_right", "Align right edges",
+             partial(self._align_selected, "right")),
+            ("mgear_align_bottom", "Align bottom edges",
+             partial(self._align_selected, "bottom")),
+            ("mgear_distribute_h", "Distribute horizontally (3+ to redistribute)",
+             partial(self._distribute_selected, "h")),
+            ("mgear_distribute_v", "Distribute vertically (3+ to redistribute)",
+             partial(self._distribute_selected, "v")),
+            ("mgear_expand_h", "Expand horizontal spacing (spread apart)",
+             partial(self._expand_selected, "h")),
+            ("mgear_expand_v", "Expand vertical spacing (spread apart)",
+             partial(self._expand_selected, "v")),
+            ("mgear_contract_h", "Contract horizontal spacing (bring closer)",
+             partial(self._contract_selected, "h")),
+            ("mgear_contract_v", "Contract vertical spacing (bring closer)",
+             partial(self._contract_selected, "v")),
+        )
+        self.left_toolbar.add_button_grid(
+            [
+                (tooltip, callback, tool_bar.mgear_icon(icon))
+                for icon, tooltip, callback in align_specs
+            ],
+            columns=2,
+        )
+
+        # Drag-to-canvas creation palette: drag a tile onto the canvas to create
+        # that item / widget at the drop position (the primary way to add).
+        self.left_toolbar.add_separator()
+        self.left_toolbar.add_section_label("Drag to add")
+        # Each tile drops to create at the drop point, or double-click to
+        # create at the canvas center (a backdrop double-click wraps the
+        # current selection).
+        palette_specs = (
+            ("Btn", "Drag to add a button (double-click = center)",
+             widget_binding.WIDGET_BUTTON, "mgear_widget_button"),
+            ("Chk", "Drag to add a checkbox (double-click = center)",
+             widget_binding.WIDGET_CHECKBOX, "mgear_widget_checkbox"),
+            ("Sld", "Drag to add a slider (double-click = center)",
+             widget_binding.WIDGET_SLIDER, "mgear_widget_slider"),
+            ("2D", "Drag to add a 2D slider (double-click = center)",
+             widget_binding.WIDGET_SLIDER2D, "mgear_widget_slider2d"),
+            ("Bkd", "Drag to add a backdrop (double-click = wrap selection)",
+             tool_bar.BACKDROP_PAYLOAD, "mgear_widget_backdrop"),
+        )
+        for label, tooltip, payload, icon in palette_specs:
+            self.left_toolbar.add_palette_item(
+                label,
+                tooltip,
+                payload,
+                tool_bar.mgear_icon(icon),
+                double_callback=partial(self._palette_create, payload),
+            )
+        canvas_row = QtWidgets.QHBoxLayout()
+        canvas_row.setContentsMargins(0, 0, 0, 0)
+        canvas_row.setSpacing(0)
+        canvas_row.addWidget(self.left_toolbar)
+        canvas_row.addWidget(self.editor_splitter)
+        self.main_vertical_layout.addLayout(canvas_row)
+
+        # Preset L/R/center color palette along the bottom (edit mode only).
+        self.color_palette = color_palette.ColorPaletteBar(main_window=self)
+        self.main_vertical_layout.addWidget(self.color_palette)
+
+        # Add default first tab
+        view = GraphicViewWidget(main_window=self)
+        self.tab_widget.addTab(view, name)
+
+        # ensure the picker area retains its size when hidden (overlay filter)
+        sp_retain = self.tab_area.sizePolicy()
+        sp_retain.setRetainSizeWhenHidden(True)
+        self.tab_area.setSizePolicy(sp_retain)
+
+        # Editor panel, tool strip and palette are edit-mode only; refresh the
+        # panel when the tab changes.
+        self.edit_panel.setVisible(__EDIT_MODE__.get())
+        self.left_toolbar.setVisible(__EDIT_MODE__.get())
+        self.color_palette.setVisible(__EDIT_MODE__.get())
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
+        # In anim mode the panel is hidden; hand the whole splitter to the
+        # picker area so the canvas / tiled view fills the full width.
+        if not __EDIT_MODE__.get():
+            self.editor_splitter.setSizes([1, 0])
+
+        # Restore the last-used view mode / grid column count.
+        self._apply_saved_view_mode()
+
+    # =====================================================================
+    # View mode (tabbed / tiled multi-tab) ---
+    _VIEW_MODES = (
+        tiled_view.MODE_TABBED,
+        tiled_view.MODE_GRID,
+        tiled_view.MODE_VERTICAL,
+        tiled_view.MODE_HORIZONTAL,
+    )
+
+    def _build_view_mode_selector(self):
+        """Add the Tabbed / Grid / Rows / Columns selector to the char bar."""
+        self.char_btns_layout.addWidget(QtWidgets.QLabel("View"))
+        self.view_mode_cb = QtWidgets.QComboBox()
+        self.view_mode_cb.addItems(["Tabbed", "Grid", "Rows", "Columns"])
+        self.view_mode_cb.setToolTip(
+            "Show one tab at a time, or all tabs tiled at once"
+        )
+        self.view_mode_cb.currentIndexChanged.connect(
+            self._on_view_mode_changed
+        )
+        self.char_btns_layout.addWidget(self.view_mode_cb)
+
+        self.grid_cols_sb = QtWidgets.QSpinBox()
+        self.grid_cols_sb.setRange(0, 12)
+        self.grid_cols_sb.setToolTip("Grid columns (0 = auto)")
+        self.grid_cols_sb.setEnabled(False)
+        self.grid_cols_sb.valueChanged.connect(self._on_grid_cols_changed)
+        self.char_btns_layout.addWidget(self.grid_cols_sb)
+
+    def _view_settings(self):
+        """Return the QSettings store for anim picker UI preferences."""
+        return QtCore.QSettings("mgear", "anim_picker")
+
+    def _apply_saved_view_mode(self):
+        """Restore the persisted view mode + grid columns, without re-saving."""
+        settings = self._view_settings()
+        mode = settings.value("tab_view_mode", tiled_view.MODE_TABBED)
+        try:
+            columns = int(settings.value("tab_grid_columns", 0) or 0)
+        except (TypeError, ValueError):
+            columns = 0
+        if mode not in self._VIEW_MODES:
+            mode = tiled_view.MODE_TABBED
+
+        self.grid_cols_sb.blockSignals(True)
+        self.grid_cols_sb.setValue(columns)
+        self.grid_cols_sb.blockSignals(False)
+        self.tab_area.set_grid_columns(columns or None)
+
+        index = self._VIEW_MODES.index(mode)
+        self.view_mode_cb.blockSignals(True)
+        self.view_mode_cb.setCurrentIndex(index)
+        self.view_mode_cb.blockSignals(False)
+        self._set_view_mode(mode)
+
+    def _on_view_mode_changed(self, index):
+        """Apply and persist the selected view mode."""
+        mode = self._VIEW_MODES[index]
+        self._view_settings().setValue("tab_view_mode", mode)
+        self._set_view_mode(mode)
+
+    def _on_grid_cols_changed(self, value):
+        """Apply and persist the grid column count (0 = auto)."""
+        self._view_settings().setValue("tab_grid_columns", value)
+        self.tab_area.set_grid_columns(value or None)
+
+    def _set_view_mode(self, mode):
+        """Switch the picker area to ``mode`` and refresh dependent UI."""
+        self.tab_area.set_view_mode(mode)
+        self.grid_cols_sb.setEnabled(mode == tiled_view.MODE_GRID)
+        self.tab_area.fit_contents()
+        self._on_tab_changed()
+
+    def _on_tab_changed(self, *args):
+        """Rebind the inline editor to the newly active tab's selection."""
+        panel = getattr(self, "edit_panel", None)
+        if panel is not None:
+            panel.sync()
+        self.update_tool_commands()
+
+    def set_active_tool(self, name):
+        """Set the active canvas tool and repaint so the overlay updates.
+
+        Args:
+            name (str): a ``tool_bar`` tool id (TOOL_SELECT / TOOL_TRANSFORM).
+        """
+        self.active_tool = name
+        view = self.tab_area.active_view()
+        if view is not None:
+            view.viewport().update()
+
+    # =====================================================================
+    # Tool-strip quick commands ---
+    def _current_view(self):
+        """Return the active graphics view, or None."""
+        return self.tab_area.active_view()
+
+    def _selected_items(self):
+        """Return the current view's selected picker items."""
+        view = self._current_view()
+        return view.scene().get_selected_items() if view is not None else []
+
+    def update_tool_commands(self):
+        """Enable/disable the selection-dependent command buttons."""
+        has = bool(self._selected_items())
+        for button in getattr(self, "_selection_commands", []):
+            button.setEnabled(has)
+
+    def _after_command(self):
+        """Refresh the canvas, inline panel and command states after an op."""
+        view = self._current_view()
+        if view is not None:
+            # Record the command's item changes as one editor undo step (a
+            # no-op when the command changed nothing).
+            view.commit_edit()
+            view.viewport().update()
+        panel = getattr(self, "edit_panel", None)
+        if panel is not None:
+            panel.sync()
+        self.update_tool_commands()
+        # Items may have moved / been added or removed -- realign the mask.
+        self.update_passthrough_mask()
+
+    def _cmd_add_item(self):
+        view = self._current_view()
+        if view is not None:
+            view.add_picker_item_gui(QtCore.QPointF(0, 0))
+        self._after_command()
+
+    def _cmd_import_svg(self):
+        """Import one or more .svg files as vector items (file dialog)."""
+        view = self._current_view()
+        if view is None:
+            return
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, "Import SVG", "", "SVG files (*.svg)"
+        )
+        for path in paths or []:
+            view.add_svg_item(path, view.get_center_pos())
+        if paths:
+            self._after_command()
+
+    def _cmd_duplicate(self):
+        items = self._selected_items()
+        if items:
+            items[0].duplicate_selected()
+        self._after_command()
+
+    def _cmd_shapes(self):
+        dialog = ShapeLibraryDialog(
+            parent=self,
+            apply_callback=self._apply_shape_to_selection,
+            create_callback=self._create_shape_from_selection,
+            current_shape_getter=self._current_library_shape,
+        )
+        dialog.show()
+
+    def _current_library_shape(self):
+        """Return the current selection's save-able shape, or None (live)."""
+        items = self._selected_items()
+        return items[-1].get_library_shape() if items else None
+
+    def _apply_shape_to_selection(self, shape):
+        for item in self._selected_items():
+            item.apply_library_shape(shape)
+        self._after_command()
+
+    def _create_shape_from_selection(self, shape, axis):
+        view = self._current_view()
+        if view is not None:
+            view.create_shape_from_selection(shape, axis)
+        self._after_command()
+
+    def _cmd_mirror(self, method_name):
+        """Run a PickerItem mirror op on the selection and propagate it."""
+        view = self._current_view()
+        items = self._selected_items()
+        for item in items:
+            getattr(item, method_name)()
+        if view is not None:
+            view.apply_mirror_for(items)
+        self._after_command()
+
+    def _cmd_mirror_shape(self):
+        self._cmd_mirror("mirror_shape")
+
+    def _cmd_toggle_pin(self):
+        """Pin / unpin the selection to the viewport (anchored to its region).
+
+        Toggles based on the first item's state so a mixed selection resolves
+        to a single, predictable result.
+        """
+        view = self._current_view()
+        items = self._selected_items()
+        if not (view and items):
+            return
+        target = not items[0].get_pinned()
+        for item in items:
+            view.set_item_pinned(item, target)
+        view.viewport().update()
+        self._after_command()
+
+    def _palette_create(self, payload):
+        """Create a palette item at the canvas center (double-click path).
+
+        A backdrop wraps the current selection when one exists (auto-sized),
+        otherwise it (and every other tile) is created at the viewport center.
+
+        Args:
+            payload (str): the palette payload (widget type / backdrop).
+        """
+        view = self._current_view()
+        if view is None:
+            return
+        if payload == tool_bar.BACKDROP_PAYLOAD:
+            view.add_backdrop_item(
+                mouse_pos=view.get_center_pos(),
+                fit_items=self._selected_items() or None,
+            )
+        else:
+            view.add_widget_item(payload, view.get_center_pos())
+        self._after_command()
+
+    def _item_scene_rect(self, item):
+        """Return an item's scene bounding box as ``(x0, y0, x1, y1)``."""
+        rect = item.sceneBoundingRect()
+        return (rect.left(), rect.top(), rect.right(), rect.bottom())
+
+    def _apply_item_offsets(self, min_count, offsets_fn):
+        """Move the current selection by per-item ``(dx, dy)`` offsets.
+
+        Args:
+            min_count (int): minimum selection size to act on.
+            offsets_fn (callable): ``rects -> [(dx, dy), ...]``.
+        """
+        items = self._selected_items()
+        if len(items) < min_count:
+            return
+        rects = [self._item_scene_rect(item) for item in items]
+        for item, (dx, dy) in zip(items, offsets_fn(rects)):
+            item.setPos(item.x() + dx, item.y() + dy)
+        self._after_command()
+
+    def _align_selected(self, mode):
+        """Align the selected items by ``mode`` (needs 2+)."""
+        self._apply_item_offsets(
+            2, partial(alignment.align_offsets, mode=mode)
+        )
+
+    def _distribute_selected(self, axis):
+        """Distribute the selected items along ``axis`` by bounding box (2+).
+
+        Spreads items with even edge gaps when they have room, and fans a
+        stack of overlapping items into a row / column.
+        """
+        self._apply_item_offsets(
+            2, partial(alignment.distribute_offsets, axis=axis)
+        )
+
+    # Spread step for the expand / contract fine-tune tools. Contract is the
+    # inverse of expand, so an expand then a contract returns near the start.
+    _SPREAD_STEP = 1.1
+
+    def _expand_selected(self, axis):
+        """Spread the selection apart along ``axis`` a step (fine-tune, 2+)."""
+        self._apply_item_offsets(
+            2,
+            partial(
+                alignment.scale_spread_offsets,
+                axis=axis,
+                factor=self._SPREAD_STEP,
+            ),
+        )
+
+    def _contract_selected(self, axis):
+        """Pull the selection closer along ``axis`` a step (fine-tune, 2+)."""
+        self._apply_item_offsets(
+            2,
+            partial(
+                alignment.scale_spread_offsets,
+                axis=axis,
+                factor=1.0 / self._SPREAD_STEP,
+            ),
+        )
+
+    def _cmd_trace(self, plane):
+        """Trace a silhouette button per selected control onto ``plane``.
+
+        Args:
+            plane (str): projection plane ("front" / "side" / "top").
+        """
+        view = self._current_view()
+        if view is not None:
+            view.add_picker_item_trace(plane=plane)
+        self._after_command()
+
+    def apply_palette_color(self, side, level):
+        """Apply a preset color to the selection, mirroring by side to partners.
+
+        The selected item(s) get the clicked (side, level) color; each item's
+        mirror partner (when not itself selected) gets the same level on the
+        opposite side. Presets never repaint items that already used the color.
+
+        Args:
+            side (str): "left" / "center" / "right".
+            level (str): "primary" / "secondary".
+        """
+        view = self._current_view()
+        if view is None:
+            return
+        color = self.color_palette.color_for(side, level)
+        if color is None:
+            return
+        mirror_side = color_palette.MIRROR_SIDE.get(side, side)
+        partner_color = self.color_palette.color_for(mirror_side, level)
+        items = self._selected_items()
+        selected = set(items)
+        for item in items:
+            self._set_item_rgb(item, color)
+            partner = view.get_mirror_partner(item)
+            if (
+                partner is not None
+                and partner not in selected
+                and partner_color is not None
+            ):
+                self._set_item_rgb(partner, partner_color)
+        view.viewport().update()
+        self._after_command()
+
+    def _set_item_rgb(self, item, color):
+        """Set an item's RGB from ``color`` while preserving its alpha."""
+        result = QtGui.QColor(color)
+        result.setAlpha(item.get_color().alpha())
+        item.set_color(result)
+
+    def _cmd_duplicate_mirror(self):
+        view = self._current_view()
+        items = self._selected_items()
+        if not (view and items):
+            return
+        # Reuse the existing duplicate+mirror (handles the search/replace
+        # prompt once); link each returned pair as a persistent mirror.
+        pairs = items[0].duplicate_and_mirror_selected() or []
+        for source, new_item in pairs:
+            view.link_mirror_pair(source, new_item)
+            self._apply_mirror_color_from_palette(source, new_item)
+        self._after_command()
+
+    def _apply_mirror_color_from_palette(self, source, new_item):
+        """Color a mirrored copy from the palette (opposite side, same level).
+
+        If the source's color matches a palette swatch, the new item gets the
+        opposite-side preset at the same level; otherwise the source color is
+        copied (never the old red/blue swap that duplicate_and_mirror applied).
+        """
+        slot = self.color_palette.match_color(source.get_color())
+        if slot is None:
+            new_item.set_color(source.get_color())
+            return
+        side, level = slot
+        mirror_side = color_palette.MIRROR_SIDE.get(side, side)
+        color = self.color_palette.color_for(mirror_side, level)
+        if color is not None:
+            self._set_item_rgb(new_item, color)
+
+    def _sync_edit_panel(self):
+        """Show/hide the inline editor + tool strip with the mode."""
+        edit = __EDIT_MODE__.get()
+        toolbar = getattr(self, "left_toolbar", None)
+        if toolbar is not None:
+            toolbar.setVisible(edit)
+        palette = getattr(self, "color_palette", None)
+        if palette is not None:
+            palette.setVisible(edit)
+        panel = getattr(self, "edit_panel", None)
+        if panel is None:
+            return
+        panel.setVisible(edit)
+        # Give the whole splitter to the picker area when the panel is hidden
+        # (anim mode), so the canvas / tiled view fills the full width.
+        splitter = getattr(self, "editor_splitter", None)
+        if splitter is not None:
+            if edit:
+                splitter.setSizes([pyqt.dpi_scale(600), pyqt.dpi_scale(240)])
+            else:
+                splitter.setSizes([1, 0])
+        if edit:
+            panel.sync()
+        self.update_tool_commands()
+
+    def add_overlays(self):
+        """Add transparent overlay widgets"""
+        self.about_widget = overlay_widgets.AboutOverlayWidget(self)
+        self.load_widget = overlay_widgets.LoadOverlayWidget(self)
+        self.save_widget = overlay_widgets.SaveOverlayWidget(self)
+        self.overlays = [self.about_widget, self.load_widget, self.save_widget]
+
+        # specificaly hiding and showing the main layer for OS compatibility
+        for layer in self.overlays:
+            layer.installEventFilter(self)
+
+    def get_picker_items(self):
+        """Return picker items for current active tab"""
+        return self.tab_area.get_current_picker_items()
+
+    def get_all_picker_items(self):
+        """Return all picker items for current picker"""
+        return self.tab_area.get_all_picker_items()
+
+    def dockCloseEventTriggered(self):
+        self.close()
+
+    def closeEvent(self, evnt):
+        self.close()
+
+    def close(self):
+        """Overwriting close event to close child windows too"""
+        # Delete script jobs
+        self.cb_manager.removeAllManagedCB()
+        # Close childs
+        for child in self.childs:
+            try:
+                child.close()
+            except Exception:
+                pass
+
+        # Close ctrls options windows
+        for item in self.get_all_picker_items():
+            try:
+                if not item.edit_window:
+                    continue
+                item.edit_window.close()
+            except Exception:
+                pass
+
+        # Only the dockable window owns a workspaceControl; closing it from the
+        # floating window would tear down the (separate) docked picker. Derive
+        # the name the same way pyqt.showDialog does (toolName + suffix).
+        if self.is_dockable:
+            work_name = self.toolName + "WorkspaceControl"
+            try:
+                cmds.workspaceControl(work_name, e=True, close=True)
+            except (ValueError, RuntimeError):
+                pass
+        self.deleteLater()
+
+    def showEvent(self, *args, **kwargs):
+        """Default showEvent overload"""
+        # Prevent firing this event before the window is set up
+        if not self.ready:
+            return
+
+        # Default close
+        super().showEvent(*args, **kwargs)
+
+        # Force char load
+        self.refresh()
+
+        # Add script jobs
+        self.add_callback()
+
+    def resizeEvent(self, event):
+        """Resize about overlay on resize event"""
+        # Prevent firing this event before the window is set up
+        if not self.ready:
+            return
+
+        size = self.size()
+
+        self.about_widget.resize(size)
+
+        self.save_widget.resize(size)
+
+        self.load_widget.resize(size)
+
+        return super().resizeEvent(event)
+
+    def show_about_infos(self):
+        """Open animation picker about and help infos"""
+        self.about_widget.show()
+
+    def show_load_widget(self):
+        """Open animation picker about and help infos"""
+        self.load_widget.show()
+
+    # =========================================================================
+    # Character selector handlers ---
+    def selector_change_event(self, index):
+        """Will load data node relative to selector index"""
+        self.load_character()
+
+    def populate_char_selector(self):
+        """Will populate char selector combo box"""
+        # Get char nodes
+        nodes = picker_node.get_nodes()
+        self.char_selector_cb.nodes = nodes
+
+        # Empty combo box
+        self.char_selector_cb.clear()
+
+        # Populate
+        for data_node in nodes:
+            # text = data_node.get_namespace() or data_node.name
+            text = data_node.name
+            self.char_selector_cb.addItem(text)
+
+        # Set elements active status
+        self.set_field_status()
+
+    def set_field_status(self):
+        """Will toggle elements active status"""
+        # Define status from node list
+        self.status = False
+        if self.char_selector_cb.count():
+            self.status = True
+
+        # Set status
+        self.char_selector_cb.setEnabled(self.status)
+        self.tab_area.setEnabled(self.status)
+        if self.save_char_btn:
+            self.save_char_btn.setEnabled(self.status)
+
+        # Reset tabs
+        if not self.status:
+            self.load_default_tabs()
+
+    def load_default_tabs(self):
+        """Will reset and load default empty tabs"""
+        # Return to tabbed so the tab widget owns the (about to be replaced)
+        # views before clearing.
+        self.tab_area.ensure_tabbed()
+        self.tab_widget.clear()
+        self.tab_widget.addTab(GraphicViewWidget(main_window=self), "None")
+
+    def refresh(self):
+        """Refresh char selector and window"""
+        # Get current active node
+        current_node = None
+        data_node = self.get_current_data_node()
+        if data_node and data_node.exists():
+            current_node = data_node.name
+
+        # Check/abort on possible data changes
+        if __EDIT_MODE__.get() and current_node:
+            if not self.check_for_data_change():
+                return
+
+        # Re-populate selector
+        self.populate_char_selector()
+
+        # Set proper index
+        if current_node:
+            self.make_node_active(current_node)
+
+        # Refresh selection check
+        self.selection_change_event()
+
+        # Force view resize
+        self.tab_area.fit_contents()
+
+        # Sync the inline editor's visibility/content with the current mode.
+        self._sync_edit_panel()
+
+        # Set focus on view
+        active_view = self.tab_area.active_view()
+        if active_view is not None:
+            active_view.setFocus()
+
+    def load_from_sel_node(self):
+        """Will try to load character for selected node"""
+        sel = cmds.ls(sl=True)
+        if not sel:
+            return
+        data_node = picker_node.get_node_for_object(sel[0])
+        if not data_node:
+            return
+        self.make_node_active(data_node.name)
+
+    def make_node_active(self, data_node):
+        """Will set character selector to specified data_node"""
+        index = 0
+        for i in range(len(self.char_selector_cb.nodes)):
+            node = self.char_selector_cb.nodes[i]
+            if not data_node == node.name or data_node == node:
+                continue
+            index = i
+            break
+        self.char_selector_cb.setCurrentIndex(index)
+
+    def new_character(self):
+        """
+        Will create a new data node, and init a new window
+        (edit mode only)
+        """
+        # Open input window
+        name, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "New character",
+            "Node name",
+            QtWidgets.QLineEdit.Normal,
+            "PICKER_DATA",
+        )
+        if not (ok and name):
+            return
+
+        # Check for possible data changes/loss
+        if not self.check_for_data_change():
+            return
+
+        # Create new data node
+        data_node = picker_node.DataNode(name=str(name))
+        data_node.create()
+        self.refresh()
+        self.make_node_active(data_node)
+
+    # =========================================================================
+    # Data ---
+    def check_for_data_change(self):
+        """
+        Check if data changed
+        If changes are detected will ask user if he wants to proceed any
+        way and loose thoses changes
+        Return user answer
+        """
+        # Get current data node
+        data_node = self.get_current_data_node()
+        if not (data_node and data_node.exists()):
+            return True
+
+        # Return true if no changes were detected
+        if data_node == self.get_character_data():
+            return True
+
+        # Open question window
+        msg = "Any changes will be lost, proceed any way ?"
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Changes detected",
+            msg,
+            buttons=QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+        )
+        return answer == QtWidgets.QMessageBox.Yes
+
+    def get_current_namespace(self):
+        return self.get_current_data_node().get_namespace()
+
+    def get_current_data_node(self):
+        """Return current character data node"""
+        # Empty list case
+        if not self.char_selector_cb.count():
+            return None
+
+        # Return node from combo box index
+        index = self.char_selector_cb.currentIndex()
+        return self.char_selector_cb.nodes[index]
+
+    def load_character(self):
+        """Load currently selected data node"""
+        # Get DataNode
+        data_node = self.get_current_data_node()
+        if not data_node:
+            return
+        picker_data = data_node.get_data()
+
+        # Load snapshot
+        path = picker_data.get("snapshot", None)
+        self.pic_widget.set_background(path)
+
+        # load tabs (set_data returns the area to the tabbed presentation)
+        tabs_data = picker_data.get("tabs", {})
+        self.tab_area.set_data(tabs_data)
+
+        # Default tab
+        if not self.tab_widget.count():
+            self.tab_widget.addTab(
+                GraphicViewWidget(main_window=self), "default"
+            )
+        else:
+            # Return to first tab
+            self.tab_widget.setCurrentIndex(0)
+
+        # Re-apply the persisted view mode over the freshly loaded tabs.
+        self._apply_saved_view_mode()
+
+        # Fit content
+        self.tab_area.fit_contents()
+
+        # Update selection states
+        self.selection_change_event()
+
+    def save_character(self):
+        """Save data to current selected data_node"""
+        # Get DataNode
+        data_node = self.get_current_data_node()
+        assert data_node, "No data_node found/selected"
+
+        # Block save in anim mode
+        if not __EDIT_MODE__.get():
+            QtWidgets.QMessageBox.warning(
+                self, "Warning", "Save is not permited in anim mode"
+            )
+            return
+
+        # Block save on referenced nodes
+        if data_node.is_referenced():
+            msg = "Save is not permited on referenced nodes"
+            QtWidgets.QMessageBox.warning(self, "Warning", msg)
+            return
+
+        self.save_widget.show()
+
+    def get_character_data(self):
+        """Return window data"""
+        picker_data = {}
+
+        # Add snapshot path data
+        snapshot_data = self.pic_widget.get_data()
+        if snapshot_data:
+            picker_data["snapshot"] = snapshot_data
+
+        # Add tabs data (from the area, so it works in tabbed or tiled view)
+        tabs_data = self.tab_area.get_data()
+        if tabs_data:
+            picker_data["tabs"] = tabs_data
+
+        return picker_data
+
+    # =========================================================================
+    # Script jobs handling ---
+    def add_callback(self):
+        """Will add maya scripts job events"""
+        # Clear any existing scrip jobs
+        self.cb_manager.removeAllManagedCB()
+
+        # Add selection change event
+        self.cb_manager.selectionChangedCB(
+            "anim_picker_selection", self.selection_change_event
+        )
+        # Add scene open event
+        self.cb_manager.newSceneCB(
+            "anim_picker_newScene", self.selection_change_event
+        )
+        # No time-change callback: channel-state visibility is not refreshed
+        # per playback frame (that would read the rig every frame). A manual /
+        # animated channel change is picked up on mouse-over (enterEvent ->
+        # refresh_from_rig) instead -- on-demand, never polling.
+
+    def selection_change_event(self, *args):
+        """
+        Event called with a script job from maya on selection change.
+        Will properly parse poly_ctrls associated node, and set border
+        visible if content is selected
+        """
+        # Abort in Edit mode
+        if __EDIT_MODE__.get():
+            return
+
+        # Update selection data
+        __SELECTION__.update()
+
+        # sync with namespce
+        if not __EDIT_MODE__.get():
+            sel = pm.selected()
+            sync = self.checkbox.isChecked()
+            if sel and sync:
+                ns = sel[0].namespace()
+                if ns:
+                    for i, n in enumerate(self.char_selector_cb.nodes):
+                        if ns in str(n):
+                            self.char_selector_cb.setCurrentIndex(i)
+                            break
+        # Update controls for active tab
+        for item in self.get_picker_items():
+            item.run_selection_check()
+
+        # Re-evaluate conditional visibility for the new selection / rig state
+        # (channel-state conditions may now pass or fail).
+        self.refresh_item_visibility()
+
+    def refresh_item_visibility(self, *args):
+        """Re-evaluate conditional-visibility items across every live view.
+
+        Each view computes the zoom once and applies its items' show/hide.
+        Wired to selection- and time-change callbacks so channel-state
+        conditions update as the animator selects or scrubs; iterating every
+        view (not just the active one) keeps the multi-tab tiled presentation
+        live, and is cheap since each view early-outs when it has none.
+        """
+        for view in self.tab_area.all_views():
+            if view is not None:
+                view.refresh_item_visibility()
+
+    def enterEvent(self, event):
+        """Refresh rig-driven display when the mouse enters the picker.
+
+        Like the Channel Master tool, a mouse-enter (no focus needed) re-reads
+        the bound Maya attributes so interactive widgets and conditional-
+        visibility items reflect the current rig even after a change that fired
+        no selection / time callback (e.g. a manual channel-box edit). It is
+        on-demand only -- it never polls the rig.
+        """
+        super().enterEvent(event)
+        self.refresh_from_rig()
+
+    def refresh_from_rig(self, *args):
+        """Re-sync widgets + conditional visibility from the rig (all views).
+
+        One pass per live view reads each interactive widget's attribute and
+        re-evaluates the conditional-visibility items. A no-op in edit mode
+        (nothing reads the rig while authoring).
+        """
+        if __EDIT_MODE__.get():
+            return
+        for view in self.tab_area.all_views():
+            if view is None:
+                continue
+            view.refresh_widget_states()
+            view.refresh_item_visibility()
+
+
+# version of the anim picker ui that uses MayaQWidgetDockableMixin for docking
+class MainDockableWindow(MayaQWidgetDockableMixin, MainDockWindow):
+    def __init__(self, parent=None, edit=False, dockable=True):
+        # Pass edit/dockable through: MayaQWidgetDockableMixin forwards extra
+        # kwargs down the MRO to MainDockWindow, so is_dockable/edit are set
+        # (dropping them left is_dockable False and showed the opacity UI).
+        super().__init__(parent=parent, edit=edit, dockable=dockable)
+
+
+# =============================================================================
+# Load user interface function
+# =============================================================================
+def load(edit=False, dockable=False):
+    """Launch the anim picker UI (a fresh instance each call).
+
+    Args:
+        edit (bool, optional): open in edit mode.
+        dockable (bool, optional): open as a dockable workspaceControl.
+
+    Returns:
+        MainDockWindow: the created window instance.
+    """
+    if dockable:
+        # Launch through the shared mGear docking helper, the same path the
+        # other dockable tools (crank, channel master, spring manager) use.
+        # A partial supplies the edit/dockable args because showDialog builds
+        # the window with no arguments; showDialog also closes any stale
+        # <toolName>WorkspaceControl before showing.
+        return pyqt.showDialog(
+            partial(MainDockableWindow, edit=edit, dockable=True),
+            dockable=True,
+        )
+
+    ANIM_PKR_UI = MainDockWindow(parent=pyqt.get_main_window(), edit=edit)
+    ANIM_PKR_UI.show()
+    return ANIM_PKR_UI

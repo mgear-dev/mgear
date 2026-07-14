@@ -1,8 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
 # python
 import os
 
@@ -10,15 +5,11 @@ import os
 import maya.cmds as cmds
 
 # mgear
+import mgear
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
 from mgear.core import string
-
-# debugging
-# from PySide2 import QtGui
-# from PySide2 import QtCore
-# from PySide2 import QtWidgets
 
 # module
 from mgear.anim_picker import picker_node
@@ -26,10 +17,7 @@ from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.handlers import file_handlers
 
 # constants -------------------------------------------------------------------
-try:
-    _LAST_USED_DIRECTORY
-except NameError as e:
-    _LAST_USED_DIRECTORY = None
+_LAST_USED_DIRECTORY = None
 
 
 class OverlayWidget(QtWidgets.QWidget):
@@ -381,7 +369,7 @@ class LoadOverlayWidget(OverlayWidget):
     def check_selection(self, index):
         if self.namespace_cbox.currentText() == "-Refresh-":
             self.update_namespaces()
-            print("Namespaces refreshed...")
+            mgear.log("anim_picker: namespaces refreshed", mgear.sev_info)
 
     def load_namespace_options(self):
         layout = QtWidgets.QHBoxLayout()

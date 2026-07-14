@@ -1,16 +1,10 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
-
 from mgear.core import anim_utils
 from mgear.core.anim_utils import stripNamespace
 
 from mgear.core import pyqt
 from mgear.vendor.Qt import QtWidgets
 
-# from PySide2 import QtWidgets
+import mgear
 
 
 class SpaceChangeList(QtWidgets.QMenu):
@@ -28,7 +22,7 @@ class SpaceChangeList(QtWidgets.QMenu):
     def __init__(
         self, namespace, ui_host, combo_attr, ctl, self_widget, *args, **kwargs
     ):
-        super(SpaceChangeList, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.namespace = namespace
         if namespace:
             ui_host = namespace + ":" + ui_host
@@ -125,12 +119,11 @@ def show_space_chage_list(
             pyqt.position_window(ql)
             ql.exec_()
     except Exception as e:
-        print(
-            "Could not build space change list for ctl {}. Rig components renamed?".format(
-                ctl
-            )
+        mgear.log(
+            "Could not build space change list for ctl {}. Rig components "
+            "renamed? Error: {}".format(ctl, e),
+            mgear.sev_error,
         )
-        print("Error: " + str(e))
         return
 
 

@@ -1,8 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
-
 # python
 import os
 
@@ -13,11 +8,6 @@ import maya.cmds as cmds
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
-
-# debugging
-# from PySide2 import QtGui
-# from PySide2 import QtCore
-# from PySide2 import QtWidgets
 
 # module
 from mgear.core import pyqt
@@ -424,82 +414,262 @@ class SnapshotWidget(BackgroundWidget):
 
 
 class BackgroundOptionsDialog(QtWidgets.QDialog):
-    """minimal ui for adjusting the background image"""
+    """Layer manager for a tab's composite background.
+
+    Lists the current tab's background layers and lets the user add, remove,
+    reorder, reposition, and resize each layer. No fixed size cap (issue #108).
+    """
 
     def __init__(self, tabWidget, parent=None):
-        super(BackgroundOptionsDialog, self).__init__(parent)
-        self.setWindowTitle("Set background size")
+        super().__init__(parent)
+        self.setWindowTitle("Background layers")
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
 
         self.tabWidget = tabWidget
         self.keep_aspect_ratio = True
+        # Guard to avoid write-back while the fields are being populated.
+        self._syncing = False
+        # View whose background-edit sub-mode this panel drives.
+        self._edit_view = None
 
-        if not self.tabWidget.currentWidget().get_background(0):
-            cmds.warning("Current view has no background!")
-            return None
+        # Layer list + list actions
+        self.layer_list = QtWidgets.QListWidget()
+        self.layer_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.ExtendedSelection
+        )
+        self.add_button = QtWidgets.QPushButton("Add Layer")
+        self.remove_button = QtWidgets.QPushButton("Remove Layer")
+        self.up_button = QtWidgets.QPushButton("Move Up")
+        self.down_button = QtWidgets.QPushButton("Move Down")
 
-        width_label = QtWidgets.QLabel("Width")
-        self.width_box = QtWidgets.QSpinBox()
-        self.width_box.setRange(1, 6000)
-        height_label = QtWidgets.QLabel("Height")
-        self.height_box = QtWidgets.QSpinBox()
-        self.height_box.setRange(1, 6000)
+        # Per-layer fields
         self.aspect_button = QtWidgets.QPushButton("Maintain Aspect Ratio")
         self.aspect_button.setCheckable(True)
         self.aspect_button.setChecked(True)
-        self.reset_button = QtWidgets.QPushButton("Reset Size")
+        self.pos_x_box = QtWidgets.QSpinBox()
+        self.pos_y_box = QtWidgets.QSpinBox()
+        self.width_box = QtWidgets.QSpinBox()
+        self.height_box = QtWidgets.QSpinBox()
+        for box in (self.pos_x_box, self.pos_y_box):
+            box.setRange(-1000000, 1000000)
+        for box in (self.width_box, self.height_box):
+            box.setRange(1, 1000000)
 
+        self.build_layout()
+        self.connectSignals()
+        self.refresh_layer_list()
+
+        # Activate on-canvas manipulation for the current view.
+        self._edit_view = self.gfx_view()
+        if self._edit_view:
+            self._edit_view.enter_background_edit()
+
+    def build_layout(self):
         self.main_layout = QtWidgets.QVBoxLayout(self)
+        self.main_layout.addWidget(self.layer_list)
+
+        list_buttons = QtWidgets.QHBoxLayout()
+        list_buttons.addWidget(self.add_button)
+        list_buttons.addWidget(self.remove_button)
+        list_buttons.addWidget(self.up_button)
+        list_buttons.addWidget(self.down_button)
+        self.main_layout.addLayout(list_buttons)
 
         self.main_layout.addWidget(self.aspect_button)
-        self.main_layout.addWidget(width_label)
-        self.main_layout.addWidget(self.width_box)
-        self.main_layout.addWidget(height_label)
-        self.main_layout.addWidget(self.height_box)
-        self.main_layout.addWidget(self.reset_button)
-
-        self.update_ui_width_value()
-        self.update_ui_height_value()
-
-        self.connectSignals()
+        form = QtWidgets.QFormLayout()
+        form.addRow("X", self.pos_x_box)
+        form.addRow("Y", self.pos_y_box)
+        form.addRow("Width", self.width_box)
+        form.addRow("Height", self.height_box)
+        self.main_layout.addLayout(form)
 
     def connectSignals(self):
+        self.add_button.clicked.connect(self.add_layer)
+        self.remove_button.clicked.connect(self.remove_layer)
+        self.up_button.clicked.connect(self.move_up)
+        self.down_button.clicked.connect(self.move_down)
+        self.layer_list.currentRowChanged.connect(self.on_selection_changed)
+        self.layer_list.itemSelectionChanged.connect(
+            self.on_list_selection_changed
+        )
         self.aspect_button.clicked.connect(self.toggle_aspect_value)
-        self.width_box.editingFinished.connect(self.update_background_width)
-        self.width_box.editingFinished.connect(self.update_ui_height_value)
-        self.height_box.editingFinished.connect(self.update_background_height)
-        self.height_box.editingFinished.connect(self.update_ui_width_value)
-        self.reset_button.clicked.connect(self.reset_size)
+        self.pos_x_box.editingFinished.connect(self.apply_position)
+        self.pos_y_box.editingFinished.connect(self.apply_position)
+        self.width_box.editingFinished.connect(self.apply_width)
+        self.height_box.editingFinished.connect(self.apply_height)
 
-    def update_ui_width_value(self, *args):
-        if not self.keep_aspect_ratio:
+    def gfx_view(self):
+        """Return the current tab's graphics view (or None)."""
+        return self.tabWidget.currentWidget()
+
+    def current_index(self):
+        """Return the selected layer index (-1 if none)."""
+        return self.layer_list.currentRow()
+
+    def _selected_rows(self):
+        """Return the sorted list of selected layer rows."""
+        return sorted({idx.row() for idx in self.layer_list.selectedIndexes()})
+
+    def refresh_layer_list(self):
+        """Rebuild the layer list from the view, preserving the selection."""
+        view = self.gfx_view()
+        layers = view.get_background_layers() if view else []
+        keep = self.current_index()
+
+        self._syncing = True
+        self.layer_list.clear()
+        for loaded in layers:
+            name = os.path.basename(loaded.layer.path or "layer")
+            self.layer_list.addItem(name)
+        # Select inside the guard so currentRowChanged is suppressed; the
+        # explicit populate_fields() below then runs exactly once.
+        if layers:
+            row = keep if 0 <= keep < len(layers) else 0
+            self.layer_list.setCurrentRow(row)
+        self._syncing = False
+
+        self.populate_fields()
+
+        # Keep the canvas manipulator selection in step with the rebuilt list.
+        self.on_list_selection_changed()
+
+    def populate_fields(self):
+        """Load the selected layer's position/size into the fields."""
+        view = self.gfx_view()
+        layers = view.get_background_layers() if view else []
+        index = self.current_index()
+        has = 0 <= index < len(layers)
+        for widget in (
+            self.pos_x_box,
+            self.pos_y_box,
+            self.width_box,
+            self.height_box,
+            self.remove_button,
+            self.up_button,
+            self.down_button,
+        ):
+            widget.setEnabled(has)
+        if not has:
             return
-        size = self.tabWidget.currentWidget().get_background_size()
-        self.width_box.setValue(size.width())
 
-    def update_ui_height_value(self, *args):
-        if not self.keep_aspect_ratio:
+        layer = layers[index].layer
+        self._syncing = True
+        self.pos_x_box.setValue(int(layer.position[0]))
+        self.pos_y_box.setValue(int(layer.position[1]))
+        self.width_box.setValue(int(layer.size[0]))
+        self.height_box.setValue(int(layer.size[1]))
+        self._syncing = False
+
+    def on_selection_changed(self, *args):
+        if self._syncing:
             return
-        size = self.tabWidget.currentWidget().get_background_size()
-        self.height_box.setValue(size.height())
+        self.populate_fields()
 
-    def update_background_width(self):
-        gfx_view = self.tabWidget.currentWidget()
-        gfx_view.set_background_width(
-            int(self.width_box.text()), keepAspectRatio=self.keep_aspect_ratio
-        )
+    def on_list_selection_changed(self):
+        """Push the list's multi-selection to the canvas manipulator."""
+        if self._syncing:
+            return
+        view = self.gfx_view()
+        if view:
+            view.set_selected_bg_indices(self._selected_rows())
 
-    def update_background_height(self):
-        gfx_view = self.tabWidget.currentWidget()
-        gfx_view.set_background_height(
-            int(self.height_box.text()), keepAspectRatio=self.keep_aspect_ratio
-        )
+    def on_canvas_selection_changed(self):
+        """Reflect the canvas selection back into the list (called by view)."""
+        if self._syncing:
+            return
+        view = self.gfx_view()
+        if not view:
+            return
+        indices = view.get_selected_bg_indices()
+        self._syncing = True
+        self.layer_list.clearSelection()
+        for i in indices:
+            item = self.layer_list.item(i)
+            if item is not None:
+                item.setSelected(True)
+        if indices:
+            self.layer_list.setCurrentRow(indices[-1])
+        self._syncing = False
+        self.populate_fields()
+
+    def refresh_active_fields(self):
+        """Refresh the fields from the active layer (called during a drag)."""
+        self.populate_fields()
+
+    def closeEvent(self, event):
+        """Deactivate the canvas sub-mode when the panel closes."""
+        if self._edit_view is not None:
+            self._edit_view.exit_background_edit()
+            self._edit_view = None
+        super().closeEvent(event)
+
+    def add_layer(self):
+        view = self.gfx_view()
+        if not view:
+            return
+        view.set_background_event()
+        self.refresh_layer_list()
+        count = self.layer_list.count()
+        if count:
+            self.layer_list.setCurrentRow(count - 1)
+
+    def remove_layer(self):
+        index = self.current_index()
+        if index < 0:
+            return
+        self.gfx_view().remove_background_layer(index)
+        self.refresh_layer_list()
+
+    def move_up(self):
+        index = self.current_index()
+        if index <= 0:
+            return
+        self.gfx_view().move_background_layer(index, index - 1)
+        self.refresh_layer_list()
+        self.layer_list.setCurrentRow(index - 1)
+
+    def move_down(self):
+        index = self.current_index()
+        if index < 0 or index >= self.layer_list.count() - 1:
+            return
+        self.gfx_view().move_background_layer(index, index + 1)
+        self.refresh_layer_list()
+        self.layer_list.setCurrentRow(index + 1)
 
     def toggle_aspect_value(self):
         self.keep_aspect_ratio = not self.keep_aspect_ratio
 
-    def reset_size(self):
-        path = self.tabWidget.currentWidget().background_image_path
-        self.tabWidget.currentWidget().set_background(path)
-        self.update_ui_width_value()
-        self.update_ui_height_value()
+    def apply_position(self):
+        if self._syncing:
+            return
+        index = self.current_index()
+        if index < 0:
+            return
+        self.gfx_view().set_layer_position(
+            index, self.pos_x_box.value(), self.pos_y_box.value()
+        )
+
+    def apply_width(self):
+        if self._syncing:
+            return
+        index = self.current_index()
+        if index < 0:
+            return
+        self.gfx_view().set_background_width(
+            index, self.width_box.value(), keepAspectRatio=self.keep_aspect_ratio
+        )
+        # Reflect an aspect-adjusted height back into the fields.
+        self.populate_fields()
+
+    def apply_height(self):
+        if self._syncing:
+            return
+        index = self.current_index()
+        if index < 0:
+            return
+        self.gfx_view().set_background_height(
+            index,
+            self.height_box.value(),
+            keepAspectRatio=self.keep_aspect_ratio,
+        )
+        self.populate_fields()

@@ -28,6 +28,7 @@ Welcome to mGear: Rigging Framework for Autodesk Maya
    official-unofficial-workflow
    shifterUserDocumentation
    animbitsUserDocumentation
+   animPickerUserDocumentation
    rigbitsUserDocumentation
    utilbitsUserDocumentation
    ueGearUserDocumentation
