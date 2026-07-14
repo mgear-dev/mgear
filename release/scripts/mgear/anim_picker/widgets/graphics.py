@@ -751,6 +751,44 @@ class BackdropGraphic(DefaultPolygon):
         painter.restore()
 
 
+def build_vector_path(subpaths):
+    """Build a ``QPainterPath`` from ``svg_import`` M / L / C / Z subpaths.
+
+    Curves are real (``cubicTo``) and overlapping subpaths cut holes (even-odd
+    fill). Shared by the vector item body and the shape-library icon preview so
+    both render identical geometry.
+
+    Args:
+        subpaths (list): normalized subpaths, each a list of command tuples
+            (``("M", x, y)`` / ``("L", x, y)`` / ``("C", ...)`` / ``("Z",)``).
+
+    Returns:
+        QtGui.QPainterPath: the compound path.
+    """
+    path = QtGui.QPainterPath()
+    # Even-odd so overlapping subpaths cut holes (typical icon glyphs).
+    path.setFillRule(QtCore.Qt.OddEvenFill)
+    for sub in subpaths or []:
+        for segment in sub:
+            command = segment[0]
+            if command == "M":
+                path.moveTo(segment[1], segment[2])
+            elif command == "L":
+                path.lineTo(segment[1], segment[2])
+            elif command == "C":
+                path.cubicTo(
+                    segment[1],
+                    segment[2],
+                    segment[3],
+                    segment[4],
+                    segment[5],
+                    segment[6],
+                )
+            elif command == "Z":
+                path.closeSubpath()
+    return path
+
+
 class VectorGraphic(DefaultPolygon):
     """Vector (curved) shape drawn as the item's body, from imported SVG.
 
@@ -802,28 +840,7 @@ class VectorGraphic(DefaultPolygon):
     @staticmethod
     def _build_path(subpaths):
         """Build a ``QPainterPath`` from M / L / C / Z segments."""
-        path = QtGui.QPainterPath()
-        # Even-odd so overlapping subpaths cut holes (typical icon glyphs).
-        path.setFillRule(QtCore.Qt.OddEvenFill)
-        for sub in subpaths:
-            for segment in sub:
-                command = segment[0]
-                if command == "M":
-                    path.moveTo(segment[1], segment[2])
-                elif command == "L":
-                    path.lineTo(segment[1], segment[2])
-                elif command == "C":
-                    path.cubicTo(
-                        segment[1],
-                        segment[2],
-                        segment[3],
-                        segment[4],
-                        segment[5],
-                        segment[6],
-                    )
-                elif command == "Z":
-                    path.closeSubpath()
-        return path
+        return build_vector_path(subpaths)
 
     def boundingRect(self):
         # Pad for the selection border / stroke width / antialias so a moving

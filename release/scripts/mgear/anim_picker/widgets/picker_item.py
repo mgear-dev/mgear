@@ -457,11 +457,7 @@ class PickerItem(DefaultPolygon):
         # Init context menu
         menu = QtWidgets.QMenu(self.parent())
 
-        # Build edit context menu
-        options_action = QtWidgets.QAction("Options", None)
-        options_action.triggered.connect(self.edit_options)
-        menu.addAction(options_action)
-
+        # Build edit context menu (item options live in the inline edit panel).
         handles_action = QtWidgets.QAction("Toggle handles", None)
         handles_action.triggered.connect(self.toggle_edit_status)
         menu.addAction(handles_action)
@@ -707,6 +703,10 @@ class PickerItem(DefaultPolygon):
 
     def set_edit_status(self, status):
         """Set picker item edit status (handle visibility etc.)"""
+        # A vector (SVG) item has no editable per-point handles; force them
+        # hidden so "Toggle handles" is a no-op and never shows dead handles.
+        if self.is_vector_shape():
+            status = False
         self._edit_status = status
 
         for handle in self.handles:
@@ -1216,6 +1216,11 @@ class PickerItem(DefaultPolygon):
         self.vector_graphic.setVisible(bool(self.svg))
         if self.svg:
             self.backdrop_graphic.setVisible(False)
+            # A vector item has no per-point handles; hide any that were shown
+            # (e.g. when converting a polygon whose handles were toggled on).
+            self._edit_status = False
+            for handle in self.handles:
+                handle.setVisible(False)
         # The item's shape()/boundingRect derive from the vector path, so tell
         # the scene of the geometry change (the item itself paints nothing).
         self.prepareGeometryChange()
@@ -1255,6 +1260,45 @@ class PickerItem(DefaultPolygon):
             return
         self.svg["stroke_width"] = width
         self.vector_graphic.set_stroke_width(width)
+
+    def apply_library_shape(self, shape):
+        """Apply a shape-library entry to this item (polygon or vector).
+
+        A vector entry (carrying ``subpaths``) swaps in the curved shape; a
+        polygon entry replaces the handle points, reverting any vector body
+        first. Both stay editable afterward and round-trip in the item data.
+
+        Args:
+            shape (dict): a resolved ``shape_library`` entry -- vector with
+                ``subpaths`` (+ ``mode``), or polygon with ``handles``.
+        """
+        if shape.get("subpaths"):
+            self.set_svg_shape(
+                {
+                    "name": shape.get("name", ""),
+                    "subpaths": shape["subpaths"],
+                    "mode": shape.get("mode", svg_import.MODE_FILL),
+                }
+            )
+        else:
+            # Revert a vector body to a polygon before setting handle points.
+            if self.is_vector_shape():
+                self.set_svg_shape(None)
+            self.set_handles([list(point) for point in shape["handles"]])
+
+    def get_library_shape(self):
+        """Return this item's shape as a save-able library dict, or None.
+
+        A vector item yields ``{subpaths, mode}``; a polygon item yields
+        ``{handles}`` -- the shape the library's "Save current shape" stores.
+        """
+        if self.is_vector_shape():
+            subpaths = self.get_svg_subpaths()
+            if subpaths:
+                return {"subpaths": subpaths, "mode": self.get_svg_mode()}
+            return None
+        handles = [[handle.x(), handle.y()] for handle in self.handles]
+        return {"handles": handles} if handles else None
 
     # =========================================================================
     # Backdrop container ---

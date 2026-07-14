@@ -30,6 +30,7 @@ from mgear.anim_picker.widgets import background_model
 from mgear.anim_picker.widgets import background_manipulator
 from mgear.anim_picker.widgets import item_manipulator
 from mgear.anim_picker.widgets import edit_undo
+from mgear.anim_picker.widgets import shape_library
 from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
@@ -1116,6 +1117,12 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             tool_bar.WIDGET_MIME
         )
 
+    def _is_shape_drag(self, event):
+        """Return True when ``event`` is a shape tile drag we accept."""
+        return __EDIT_MODE__.get() and event.mimeData().hasFormat(
+            shape_library.SHAPE_MIME
+        )
+
     def _svg_drop_paths(self, event):
         """Return the ``.svg`` local file paths in a file-URL drag (edit mode).
 
@@ -1143,27 +1150,45 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             return event.pos()
 
     def dragEnterEvent(self, event):
-        """Accept a palette drag or an ``.svg`` file drag in edit mode."""
-        if self._is_palette_drag(event) or self._svg_drop_paths(event):
+        """Accept a palette / shape / ``.svg`` file drag in edit mode."""
+        if (
+            self._is_palette_drag(event)
+            or self._is_shape_drag(event)
+            or self._svg_drop_paths(event)
+        ):
             event.acceptProposedAction()
         else:
             QtWidgets.QGraphicsView.dragEnterEvent(self, event)
 
     def dragMoveEvent(self, event):
-        """Keep accepting a palette / ``.svg`` drag while it hovers the canvas."""
-        if self._is_palette_drag(event) or self._svg_drop_paths(event):
+        """Keep accepting a palette / shape / ``.svg`` drag over the canvas."""
+        if (
+            self._is_palette_drag(event)
+            or self._is_shape_drag(event)
+            or self._svg_drop_paths(event)
+        ):
             event.acceptProposedAction()
         else:
             QtWidgets.QGraphicsView.dragMoveEvent(self, event)
 
     def dropEvent(self, event):
-        """Create the dropped widget / SVG item at the drop position (edit)."""
+        """Create the dropped widget / shape / SVG item at the drop (edit)."""
         if self._is_palette_drag(event):
             widget_type = bytes(
                 event.mimeData().data(tool_bar.WIDGET_MIME)
             ).decode("utf-8")
             scene_pos = self.mapToScene(self._drop_view_pos(event))
             self.add_widget_item(widget_type, scene_pos)
+            event.acceptProposedAction()
+            return
+        if self._is_shape_drag(event):
+            name = bytes(
+                event.mimeData().data(shape_library.SHAPE_MIME)
+            ).decode("utf-8")
+            shape = shape_library.get_shape(name)
+            if shape is not None:
+                scene_pos = self.mapToScene(self._drop_view_pos(event))
+                self.create_item_with_shape(shape, scene_pos)
             event.acceptProposedAction()
             return
         svg_paths = self._svg_drop_paths(event)
@@ -1217,6 +1242,68 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             created_ctrls.append(ctrl)
 
         return created_ctrls
+
+    def create_item_with_shape(self, shape, scene_pos=None):
+        """Create one item carrying ``shape`` at ``scene_pos`` (drag-create).
+
+        Args:
+            shape (dict): a resolved ``shape_library`` entry.
+            scene_pos (QPointF, optional): drop position (scene coords).
+
+        Returns:
+            PickerItem: the created (and selected) item.
+        """
+
+        def _do():
+            ctrl = self.add_picker_item()
+            if scene_pos is not None:
+                ctrl.setPos(scene_pos)
+            ctrl.apply_library_shape(shape)
+            self.scene().select_picker_items([ctrl])
+            return ctrl
+
+        return self.record_edit("Add shape", _do)
+
+    def create_shape_from_selection(self, shape, axis="vertical"):
+        """Stamp one item with ``shape`` per selected Maya control.
+
+        The items are laid out in a column (``axis`` "vertical") or a row
+        ("horizontal"), centered on the canvas, and each is linked to (and
+        colored from) its control -- reusing the trace group-centering helper.
+        Fine-tune the spacing afterward with the expand / contract tools.
+
+        Args:
+            shape (dict): a resolved ``shape_library`` entry.
+            axis (str): "vertical" (column) or "horizontal" (row).
+
+        Returns:
+            list: the created PickerItem instances.
+        """
+        selection = cmds.ls(sl=True) or []
+        if not selection:
+            return []
+
+        def _do():
+            gap = 50.0
+            created = []
+            for index, ctrl in enumerate(selection):
+                item = self.add_picker_item()
+                item.apply_library_shape(shape)
+                item.set_control_list([ctrl])
+                item.set_color(
+                    color=self.get_color_picker_override(item, ctrl)
+                )
+                # Scene is Y-up: a column stacks downward (negative y).
+                if axis == "horizontal":
+                    item.setPos(index * gap, 0)
+                else:
+                    item.setPos(0, -index * gap)
+                created.append(item)
+            self._center_items_on(created, self.get_center_pos())
+            self.scene().select_picker_items(created)
+            return created
+
+        return self.record_edit("Create shapes from selection", _do)
 
     def add_picker_item_trace(self, plane="front", mouse_pos=None):
         """Create one silhouette button per selected control (trace tool).

@@ -45,19 +45,20 @@ def mgear_icon(name):
         return QtGui.QIcon()
 
 
-class PaletteButton(QtWidgets.QToolButton):
-    """A draggable palette tile that creates a picker item/widget on drop.
+class DragTileButton(QtWidgets.QToolButton):
+    """A draggable tile: a drag carries ``payload`` as ``mime`` to the drop.
 
-    Dragging the tile onto the canvas starts a drag carrying the widget-type
-    payload (``WIDGET_MIME``); the view's drop handler creates the item at the
-    drop position. A plain click does nothing (creation is drag-driven).
+    The drop target (the picker view) reads the payload and creates the item at
+    the drop position. A plain click still emits ``clicked``; an optional
+    double-click callback offers a create-at-center alternative to dragging.
+    Shared by the left-strip palette tiles and the shape-library tiles.
     """
 
-    _ICON_SIZE = 22
-
-    def __init__(self, payload, parent=None):
-        super(PaletteButton, self).__init__(parent)
+    def __init__(self, mime, payload, icon_size=22, parent=None):
+        super(DragTileButton, self).__init__(parent)
+        self._mime = mime
         self._payload = payload
+        self._icon_size = icon_size
         self._press_pos = None
         self._double_callback = None
 
@@ -68,34 +69,48 @@ class PaletteButton(QtWidgets.QToolButton):
     def mouseDoubleClickEvent(self, event):
         if self._double_callback is not None:
             self._double_callback()
-        super(PaletteButton, self).mouseDoubleClickEvent(event)
+        super(DragTileButton, self).mouseDoubleClickEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
             self._press_pos = event.pos()
-        super(PaletteButton, self).mousePressEvent(event)
+        super(DragTileButton, self).mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        # Start the drag once the cursor has moved past the drag threshold.
+        # Start the drag once the cursor has moved past the drag threshold;
+        # below it, fall through so a plain click still registers.
         if (
             not (event.buttons() & QtCore.Qt.LeftButton)
             or self._press_pos is None
         ):
-            super(PaletteButton, self).mouseMoveEvent(event)
+            super(DragTileButton, self).mouseMoveEvent(event)
             return
         moved = (event.pos() - self._press_pos).manhattanLength()
         if moved < QtWidgets.QApplication.startDragDistance():
-            super(PaletteButton, self).mouseMoveEvent(event)
+            super(DragTileButton, self).mouseMoveEvent(event)
             return
         drag = QtGui.QDrag(self)
         mime = QtCore.QMimeData()
-        mime.setData(WIDGET_MIME, self._payload.encode("utf-8"))
+        mime.setData(self._mime, self._payload.encode("utf-8"))
         drag.setMimeData(mime)
         icon = self.icon()
         if not icon.isNull():
-            drag.setPixmap(icon.pixmap(self._ICON_SIZE, self._ICON_SIZE))
+            drag.setPixmap(icon.pixmap(self._icon_size, self._icon_size))
         drag.exec_(QtCore.Qt.CopyAction)
         self._press_pos = None
+
+
+class PaletteButton(DragTileButton):
+    """A palette tile that creates a picker item / widget on drop.
+
+    A thin ``DragTileButton`` carrying the widget type as ``WIDGET_MIME`` (the
+    view's drop handler creates the item at the drop position).
+    """
+
+    def __init__(self, payload, parent=None):
+        super(PaletteButton, self).__init__(
+            WIDGET_MIME, payload, parent=parent
+        )
 
 
 class PickerToolBar(QtWidgets.QWidget):

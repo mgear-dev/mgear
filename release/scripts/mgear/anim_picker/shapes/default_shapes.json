@@ -239,5 +239,69 @@
         -20
       ]
     ]
+  },
+  {
+    "name": "Gear",
+    "svg": "gear.svg"
+  },
+  {
+    "name": "Face",
+    "svg": "face.svg"
+  },
+  {
+    "name": "Hand",
+    "svg": "hand.svg"
+  },
+  {
+    "name": "Foot",
+    "svg": "foot.svg"
+  },
+  {
+    "name": "Arrow 2-Way",
+    "svg": "arrow_2dir.svg"
+  },
+  {
+    "name": "Arrow 4-Way",
+    "svg": "arrow_4dir.svg"
+  },
+  {
+    "name": "Rounded Square",
+    "svg": "rounded_square.svg"
+  },
+  {
+    "name": "Rounded Rect",
+    "svg": "rounded_rect.svg"
+  },
+  {
+    "name": "Heart",
+    "svg": "heart.svg"
+  },
+  {
+    "name": "Plus",
+    "svg": "plus.svg"
+  },
+  {
+    "name": "Minus",
+    "svg": "minus.svg"
+  },
+  {
+    "name": "Cross",
+    "svg": "cross.svg"
+  },
+  {
+    "name": "Check",
+    "svg": "check.svg"
+  },
+  {
+    "name": "Ring",
+    "svg": "ring.svg"
+  },
+  {
+    "name": "Eye",
+    "svg": "eye.svg"
+  },
+  {
+    "name": "Lock",
+    "svg": "lock.svg"
   }
 ]

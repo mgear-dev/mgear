@@ -1408,24 +1408,30 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.handles_window.raise_()
 
     def _open_shape_library(self):
-        if not self.items:
-            return
-        active = self._active_item()
-        current = None
-        if active is not None:
-            current = [[h.x(), h.y()] for h in active.handles]
         dialog = ShapeLibraryDialog(
             parent=self,
             apply_callback=self._apply_shape,
-            current_handles=current,
+            create_callback=self._create_shape_from_selection,
+            current_shape_getter=self._current_library_shape,
         )
         dialog.show()
 
-    def _apply_shape(self, handles):
+    def _current_library_shape(self):
+        """Return the active item's save-able shape, or None (live)."""
+        active = self._active_item()
+        return active.get_library_shape() if active else None
+
+    def _apply_shape(self, shape):
         if not self.items:
             return
         for item in self.items:
-            item.set_handles([list(point) for point in handles])
+            item.apply_library_shape(shape)
+        self._repaint_view()
+
+    def _create_shape_from_selection(self, shape, axis):
+        view = self._view
+        if view is not None and hasattr(view, "create_shape_from_selection"):
+            view.create_shape_from_selection(shape, axis)
         self._repaint_view()
 
     # -- mirror ---------------------------------------------------------

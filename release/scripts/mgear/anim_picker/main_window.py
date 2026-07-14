@@ -414,37 +414,45 @@ class MainDockWindow(QtWidgets.QWidget):
             self._cmd_import_svg,
             tool_bar.mgear_icon("mgear_image"),
         )
+        # Shape library: a create / browse hub grouped with the other create
+        # tools (Add, SVG). Always enabled -- it also drag-creates and creates
+        # from the Maya selection, so it needs no picker selection.
+        self.left_toolbar.add_command(
+            "Lib",
+            "Open the shape library (apply, drag to create, or "
+            "create-from-selection)",
+            self._cmd_shapes,
+            tool_bar.mgear_icon("mgear_grid"),
+        )
+        dup_btn = self.left_toolbar.add_command(
+            "Dup",
+            "Duplicate selected items",
+            self._cmd_duplicate,
+            tool_bar.mgear_icon("mgear_copy"),
+        )
+        dup_mirror_btn = self.left_toolbar.add_command(
+            "DupM",
+            "Duplicate and mirror the selection (linked as a pair)",
+            self._cmd_duplicate_mirror,
+            tool_bar.mgear_icon("mgear_duplicate_sym"),
+        )
+        mirror_btn = self.left_toolbar.add_command(
+            "MirS",
+            "Mirror the selected shapes",
+            self._cmd_mirror_shape,
+            tool_bar.mgear_icon("mgear_mirror_controls"),
+        )
+        pin_btn = self.left_toolbar.add_command(
+            "Pin",
+            "Pin / unpin the selection to the viewport (HUD overlay)",
+            self._cmd_toggle_pin,
+            tool_bar.mgear_icon("mgear_map-pin"),
+        )
         self._selection_commands = [
-            self.left_toolbar.add_command(
-                "Dup",
-                "Duplicate selected items",
-                self._cmd_duplicate,
-                tool_bar.mgear_icon("mgear_copy"),
-            ),
-            self.left_toolbar.add_command(
-                "DupM",
-                "Duplicate and mirror the selection (linked as a pair)",
-                self._cmd_duplicate_mirror,
-                tool_bar.mgear_icon("mgear_duplicate_sym"),
-            ),
-            self.left_toolbar.add_command(
-                "MirS",
-                "Mirror the selected shapes",
-                self._cmd_mirror_shape,
-                tool_bar.mgear_icon("mgear_mirror_controls"),
-            ),
-            self.left_toolbar.add_command(
-                "Shp",
-                "Apply a premade / saved shape to the selection",
-                self._cmd_shapes,
-                tool_bar.mgear_icon("mgear_replace_shape"),
-            ),
-            self.left_toolbar.add_command(
-                "Pin",
-                "Pin / unpin the selection to the viewport (HUD overlay)",
-                self._cmd_toggle_pin,
-                tool_bar.mgear_icon("mgear_map-pin"),
-            ),
+            dup_btn,
+            dup_mirror_btn,
+            mirror_btn,
+            pin_btn,
         ]
         # Trace: one silhouette button per selected Maya control. Not gated on
         # a picker selection (it reads the Maya selection); the drop-down picks
@@ -712,20 +720,28 @@ class MainDockWindow(QtWidgets.QWidget):
         self._after_command()
 
     def _cmd_shapes(self):
-        items = self._selected_items()
-        if not items:
-            return
-        current = [[h.x(), h.y()] for h in items[-1].handles]
         dialog = ShapeLibraryDialog(
             parent=self,
             apply_callback=self._apply_shape_to_selection,
-            current_handles=current,
+            create_callback=self._create_shape_from_selection,
+            current_shape_getter=self._current_library_shape,
         )
         dialog.show()
 
-    def _apply_shape_to_selection(self, handles):
+    def _current_library_shape(self):
+        """Return the current selection's save-able shape, or None (live)."""
+        items = self._selected_items()
+        return items[-1].get_library_shape() if items else None
+
+    def _apply_shape_to_selection(self, shape):
         for item in self._selected_items():
-            item.set_handles([list(point) for point in handles])
+            item.apply_library_shape(shape)
+        self._after_command()
+
+    def _create_shape_from_selection(self, shape, axis):
+        view = self._current_view()
+        if view is not None:
+            view.create_shape_from_selection(shape, axis)
         self._after_command()
 
     def _cmd_mirror(self, method_name):
