@@ -96,6 +96,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.drag_active = False
         self.pan_active = False
         self.zoom_active = False
+        # True while a wheel-zoom step runs, so the passthrough mask is
+        # suspended (full UI back) like a drag instead of reshaped per step.
+        self._wheel_zooming = False
         self.auto_frame_active = True
 
         # Disable scroll bars
@@ -431,12 +434,17 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         # Apply zoom
         self.scale(factor, factor)
-        # Keep viewport-pinned items locked to their screen anchors.
-        self._update_pinned_items()
-        # Zoom changed; re-evaluate zoom-level visibility conditions.
-        self.refresh_item_visibility()
-        # Realign the opacity-passthrough mask to the new zoom.
-        self._notify_passthrough()
+        # Suspend the passthrough mask for the wheel burst (re-applied once it
+        # settles) so the window is not reshaped on every wheel step.
+        self._wheel_zooming = True
+        try:
+            # Keep viewport-pinned items locked to their screen anchors.
+            self._update_pinned_items()
+            # Zoom changed; re-evaluate zoom-level visibility conditions.
+            self.refresh_item_visibility()
+        finally:
+            self._wheel_zooming = False
+        self._suspend_passthrough()
 
     # =====================================================================
     # Editor undo/redo ---
@@ -2028,22 +2036,41 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                     continue
                 px, py = overlay.anchor_point(size, item.anchor, item.offset)
                 item.setPos(self.mapToScene(int(round(px)), int(round(py))))
-        # Per-frame during a pan: rebuild the passthrough mask each frame so
-        # the item holes track the moving content (no ghost); the rebuild is a
-        # cheap no-op when passthrough is off.
-        self._notify_passthrough()
+        # During a pan / zoom, drop the mask so the full window shows and is
+        # not reshaped every frame (avoids the glitch); re-apply it at rest.
+        self._notify_or_suspend_passthrough()
+
+    def _notify_or_suspend_passthrough(self):
+        """Suspend the mask mid-gesture, else re-apply it at rest.
+
+        During a pan / zoom / wheel the window shape is dropped (the full UI
+        comes back, no per-frame reshape); when not moving (fit / resize /
+        load / release) the mask is re-applied.
+        """
+        if self.pan_active or self.zoom_active or self._wheel_zooming:
+            self._suspend_passthrough()
+        else:
+            self._notify_passthrough()
 
     def _notify_passthrough(self):
-        """Ask the window to realign its click-through mask.
+        """Ask the window to (re-)apply its click-through mask now.
 
-        Called on every viewport change including per pan frame (so the mask
-        follows moving items without ghosting); it is a cheap no-op when the
-        opacity-passthrough mode is not active.
+        A cheap no-op when the opacity-passthrough mode is not active.
         """
         window = self.main_window
         update = getattr(window, "update_passthrough_mask", None)
         if update is not None:
             update()
+
+    def _suspend_passthrough(self):
+        """Ask the window to drop its click mask for the duration of a gesture.
+
+        A cheap no-op when the opacity-passthrough mode is not active.
+        """
+        window = self.main_window
+        suspend = getattr(window, "suspend_passthrough_mask", None)
+        if suspend is not None:
+            suspend()
 
     # -- conditional visibility -----------------------------------------
     def _recompute_conditional_flag(self):
@@ -2102,8 +2129,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         for item in self.scene().get_picker_items():
             item.evaluate_visibility(zoom, item in hidden)
         # Items were shown / hidden (e.g. a checkbox group toggled) -- realign
-        # the passthrough mask so revealed items appear at once.
-        self._notify_passthrough()
+        # the passthrough mask (or suspend it mid-zoom) so they appear at once.
+        self._notify_or_suspend_passthrough()
 
     def refresh_widget_states(self):
         """Re-read every interactive widget's bound attribute into its display.

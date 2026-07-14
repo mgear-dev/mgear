@@ -16,7 +16,6 @@ from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
 
-from mgear.anim_picker import menu
 from mgear.anim_picker import version
 from mgear.anim_picker import picker_node
 from mgear.anim_picker.constants import ANIM_PICKER_TITLE
@@ -100,6 +99,21 @@ class MainDockWindow(QtWidgets.QWidget):
         self._mask_applied = False
         # Drag grip shown only in passthrough mode (created in setup).
         self.move_handle = None
+        # Re-applies the mask a moment after a pan / zoom settles (created in
+        # setup); during motion the mask is dropped so the window is not
+        # reshaped every frame -- the full UI comes back until you stop.
+        self._pt_settle_timer = None
+        # Per-window opacity-passthrough enable (toggled from the in-UI
+        # checkbox only; affects this picker, not every open picker).
+        self._passthrough_enabled = False
+        # In-UI passthrough toggles: one lives in the character-selector row
+        # (normal), one floats by the move grip (passthrough, where the row is
+        # masked out). Both drive the same state and stay in sync.
+        self.passthrough_cb = None
+        self.passthrough_cb_float = None
+        # Opacity restored when the toggle re-activates passthrough from an
+        # opaque window (so it visibly engages without touching the slider).
+        self._last_passthrough_opacity = 70
 
         __EDIT_MODE__.set_init(edit)
         self.is_dockable = dockable
@@ -152,6 +166,23 @@ class MainDockWindow(QtWidgets.QWidget):
             # Drag grip for moving the (otherwise click-through) window while
             # passthrough is active; hidden until then.
             self.move_handle = _PassthroughMoveHandle(self)
+            # Floating passthrough toggle shown by the move grip while
+            # passthrough masks out the character-selector row; hidden until
+            # then. Mirrors the in-row checkbox.
+            self.passthrough_cb_float = QtWidgets.QCheckBox(
+                "Passthrough", self
+            )
+            self.passthrough_cb_float.setToolTip(
+                self.passthrough_cb.toolTip()
+            )
+            self.passthrough_cb_float.toggled.connect(self._toggle_passthrough)
+            self.passthrough_cb_float.hide()
+            # Re-applies the click mask shortly after a pan / zoom stops, so
+            # the window shape is not reshaped every frame during motion.
+            self._pt_settle_timer = QtCore.QTimer(self)
+            self._pt_settle_timer.setSingleShot(True)
+            self._pt_settle_timer.setInterval(120)
+            self._pt_settle_timer.timeout.connect(self.update_passthrough_mask)
             # Switching tabs changes the visible items, so realign the mask.
             tab_widget = getattr(self.tab_area, "tab_widget", None)
             if tab_widget is not None:
@@ -179,7 +210,7 @@ class MainDockWindow(QtWidgets.QWidget):
             not self.is_dockable
             and self.windowOpacity() < 1.0
             and not self.auto_opacity_btn.isChecked()
-            and bool(menu.get_option_var_passthrough_state())
+            and self._passthrough_enabled
         )
 
     def update_passthrough_mask(self, *args):
@@ -187,9 +218,9 @@ class MainDockWindow(QtWidgets.QWidget):
 
         Everything else (the frame, canvas background, character selector and
         opacity bar) is left out, so it is see-through and click-through -- you
-        see only the item buttons and the tabs. Runs per frame during a pan /
-        zoom so the holes follow the items (no ghost, no full-UI flash); cheap
-        when passthrough is off.
+        see only the item buttons and the tabs. Applied at rest; during a pan /
+        zoom it is dropped (see ``suspend_passthrough_mask``) so the window is
+        not reshaped every frame. A cheap no-op when passthrough is off.
         """
         if not getattr(self, "ready", False) or self.move_handle is None:
             return
@@ -198,16 +229,79 @@ class MainDockWindow(QtWidgets.QWidget):
                 self.clearMask()
                 self.move_handle.hide()
                 self._mask_applied = False
+            if self.passthrough_cb_float is not None:
+                self.passthrough_cb_float.hide()
             return
         region = QtGui.QRegion()
         for view in self.tab_area.all_views():
             region = region.united(self._items_region(view))
-        # Keep the tab bar (to switch tabs) and the move grip interactive.
+        # Keep the tab bar, the move grip and the floating passthrough toggle
+        # interactive (the character-selector row is masked out here).
         region = region.united(self._tab_bar_region())
         self._place_move_handle()
         region = region.united(self._widget_region(self.move_handle))
+        self._place_passthrough_float()
+        region = region.united(self._widget_region(self.passthrough_cb_float))
         self.setMask(region)
         self._mask_applied = True
+
+    def suspend_passthrough_mask(self):
+        """Drop the click mask during a pan / zoom, re-applying it once motion
+        settles -- so the window is not reshaped every frame (the redraw
+        glitch). The full window (all UI) comes back while you move.
+        """
+        if not getattr(self, "ready", False) or self.move_handle is None:
+            return
+        if not self._passthrough_active():
+            return
+        if self._mask_applied:
+            self.clearMask()
+            self.move_handle.hide()
+            self.passthrough_cb_float.hide()
+            self._mask_applied = False
+        if self._pt_settle_timer is not None:
+            self._pt_settle_timer.start()
+
+    def _toggle_passthrough(self, checked):
+        """Activate / deactivate opacity passthrough for THIS picker.
+
+        Enables it per-window (other open pickers are unaffected) and, so an
+        opaque window visibly engages, drops it to a transparent default
+        (restored on deactivate). Auto opacity is turned off -- mutually
+        exclusive.
+        """
+        self._passthrough_enabled = checked
+        self._sync_passthrough_checks(checked)
+        if checked:
+            if self.auto_opacity_btn.isChecked():
+                self.auto_opacity_btn.setChecked(False)
+            if self.opacity_slider.value() >= 100:
+                self.opacity_slider.setValue(self._last_passthrough_opacity)
+        else:
+            if self.opacity_slider.value() < 100:
+                self._last_passthrough_opacity = self.opacity_slider.value()
+            self.opacity_slider.setValue(100)
+        self.update_passthrough_mask()
+
+    def _sync_passthrough_checks(self, checked):
+        """Set `checked` on both passthrough toggles without re-emitting."""
+        for cb in (self.passthrough_cb, self.passthrough_cb_float):
+            if cb is not None and cb.isChecked() != checked:
+                cb.blockSignals(True)
+                cb.setChecked(checked)
+                cb.blockSignals(False)
+
+    def _place_passthrough_float(self):
+        """Show the floating passthrough toggle just left of the move grip."""
+        cb = self.passthrough_cb_float
+        cb.adjustSize()
+        gap = pyqt.dpi_scale(8)
+        handle = self.move_handle
+        x = handle.x() - cb.width() - gap
+        y = handle.y() + max(0, (handle.height() - cb.height()) // 2)
+        cb.move(x, y)
+        cb.show()
+        cb.raise_()
 
     def _items_region(self, view):
         """Return a pixel-exact region of a view's rendered items (window).
@@ -258,8 +352,27 @@ class MainDockWindow(QtWidgets.QWidget):
         boost.end()
         alpha = boosted.createAlphaMask()
         region = QtGui.QRegion(QtGui.QBitmap.fromImage(alpha))
+        # Trim the outer ring so the 1-bit mask edge lands just inside the
+        # solid fill, not on the item's antialiased edge (which the render
+        # blends into the dark canvas and would show as a dark hairline).
+        region = self._erode_region(region, 1)
         region.translate(viewport.mapTo(self, QtCore.QPoint(0, 0)))
         return region
+
+    def _erode_region(self, region, px):
+        """Return `region` shrunk by `px` pixels on every side.
+
+        A pixel is kept only if it and its neighbours `px` away are all inside,
+        so the outer boundary ring is dropped. Used to shave the antialiased
+        fringe off the passthrough mask (setMask is 1-bit, so it cannot
+        antialias the edge itself).
+        """
+        if region.isEmpty():
+            return region
+        eroded = region
+        for dx, dy in ((px, 0), (-px, 0), (0, px), (0, -px)):
+            eroded = eroded.intersected(region.translated(dx, dy))
+        return eroded
 
     def _widget_region(self, widget):
         """Return a visible child widget's rect as a window-coord region."""
@@ -404,6 +517,17 @@ class MainDockWindow(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Minimum,
         )
         btns_layout.addItem(spacer)
+
+        # Passthrough toggle, to the left of the Sync Namespace checkbox (only
+        # the floating window supports the click-through mask).
+        self.passthrough_cb = QtWidgets.QCheckBox("Passthrough")
+        self.passthrough_cb.setToolTip(
+            "Click through the empty picker area (when the window is "
+            "transparent and Auto opacity is off)"
+        )
+        self.passthrough_cb.toggled.connect(self._toggle_passthrough)
+        if not __EDIT_MODE__.get() and not self.is_dockable:
+            btns_layout.addWidget(self.passthrough_cb)
 
         # sync checkbox
         self.checkbox = QtWidgets.QCheckBox("Sync Namespace")
