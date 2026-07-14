@@ -47,6 +47,20 @@ def _dpi(value):
     return value * _DPI_FACTOR
 
 
+def _edit_mode_active():
+    """Return True when the picker is in edit mode.
+
+    ``__EDIT_MODE__`` is imported lazily (the handlers package touches Maya) to
+    keep this module import-free of Maya at load; returns False if unavailable.
+    """
+    try:
+        from mgear.anim_picker.handlers import __EDIT_MODE__
+
+        return __EDIT_MODE__.get()
+    except Exception:
+        return False
+
+
 class DefaultPolygon(QtWidgets.QGraphicsObject):
     """Default polygon class, with move and hover support"""
 
@@ -900,7 +914,9 @@ class VectorGraphic(DefaultPolygon):
             painter.setPen(border)
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawPath(self._path)
-        if self._hovered:
+        # The "SVG" badge is an authoring cue, so show it on hover only while
+        # editing -- in animation mode a hovered vector item stays uncluttered.
+        if self._hovered and _edit_mode_active():
             self._paint_svg_badge(painter)
 
     def _paint_svg_badge(self, painter):
