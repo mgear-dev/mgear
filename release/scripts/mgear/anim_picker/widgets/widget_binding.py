@@ -16,7 +16,12 @@ The item stores two additive dictionaries alongside its ``widget`` type:
         {"attr": "node.attr", "min": 0.0, "max": 1.0,          # checkbox / 1D
          "attr_x": "node.tx", "min_x": -1.0, "max_x": 1.0,     # 2D X
          "attr_y": "node.ty", "min_y": -1.0, "max_y": 1.0,     # 2D Y
-         "orientation": "horizontal", "recenter": False}
+         "orientation": "horizontal", "recenter": False,
+         "visibility_group": "", "visibility_invert": False}   # checkbox only
+
+    A checkbox with a ``visibility_group`` is a group controller: toggling it
+    shows / hides every item tagged with that group (``visibility_invert``
+    flips the polarity). Both keys are optional, ignored by the other widgets.
 
 ``scripts``
     Optional per-state scripts run in addition to (or instead of) the
@@ -133,6 +138,8 @@ def default_binding():
         "max_y": 1.0,
         "orientation": ORIENT_HORIZONTAL,
         "recenter": False,
+        "visibility_group": "",
+        "visibility_invert": False,
     }
 
 

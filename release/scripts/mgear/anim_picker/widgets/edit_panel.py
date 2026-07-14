@@ -129,12 +129,16 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.widget_min_y_sb = None
         self.widget_max_y_sb = None
         self.widget_recenter_cb = None
+        self.widget_group_combo = None
+        self.widget_invert_cb = None
         self._wx_attr_row = None
         self._wx_checkbox_box = None
+        self._wx_group_box = None
         self._wx_slider_box = None
         self._wx_2d_box = None
         self.backdrop_title_field = None
         self.backdrop_radius_sb = None
+        self.group_combo = None
         self.vis_mode_combo = None
         self.vis_attr_field = None
         self.vis_operator_combo = None
@@ -632,6 +636,30 @@ class ItemEditPanel(QtWidgets.QWidget):
         cb_row.addWidget(self._widget_script_button("Off Script...", "off"))
         section.addWidget(self._wx_checkbox_box)
 
+        # Checkbox: master-toggle a named item group's visibility.
+        self._wx_group_box = QtWidgets.QWidget()
+        group_layout = QtWidgets.QVBoxLayout(self._wx_group_box)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        cg_form = QtWidgets.QFormLayout()
+        self.widget_group_combo = QtWidgets.QComboBox()
+        self.widget_group_combo.setEditable(True)
+        self.widget_group_combo.setToolTip(
+            "Toggling this checkbox shows / hides every item tagged with this "
+            "group (leave empty for no group control)."
+        )
+        self.widget_group_combo.activated.connect(self._apply_binding)
+        self.widget_group_combo.lineEdit().editingFinished.connect(
+            self._apply_binding
+        )
+        self._fields.append(self.widget_group_combo)
+        cg_form.addRow("Controls group", self.widget_group_combo)
+        group_layout.addLayout(cg_form)
+        self.widget_invert_cb = QtWidgets.QCheckBox("Invert (show when off)")
+        self.widget_invert_cb.clicked.connect(self._apply_binding)
+        self._fields.append(self.widget_invert_cb)
+        group_layout.addWidget(self.widget_invert_cb)
+        section.addWidget(self._wx_group_box)
+
         # 1D slider range + orientation + value script.
         self._wx_slider_box = QtWidgets.QWidget()
         slider_layout = QtWidgets.QVBoxLayout(self._wx_slider_box)
@@ -729,6 +757,21 @@ class ItemEditPanel(QtWidgets.QWidget):
 
     def _build_visibility_section(self):
         section = self._add_section("Visibility")
+
+        # Item group tag: a checkbox widget can master-toggle every item that
+        # shares this group name (editable combo of the names already in use).
+        group_form = QtWidgets.QFormLayout()
+        self.group_combo = QtWidgets.QComboBox()
+        self.group_combo.setEditable(True)
+        self.group_combo.setToolTip(
+            "Tag this item into a named group; a checkbox widget can then "
+            "show / hide the whole group at once. Leave empty for no group."
+        )
+        self.group_combo.activated.connect(self._apply_group)
+        self.group_combo.lineEdit().editingFinished.connect(self._apply_group)
+        self._fields.append(self.group_combo)
+        group_form.addRow("Group", self.group_combo)
+        section.addLayout(group_form)
 
         mode_form = QtWidgets.QFormLayout()
         self.vis_mode_combo = QtWidgets.QComboBox()
@@ -899,12 +942,64 @@ class ItemEditPanel(QtWidgets.QWidget):
         radius = item.get_corner_radius() if is_backdrop else 0.0
         self._set_spin(self.backdrop_radius_sb, round(radius, 4), False)
 
+    def _refresh_visibility(self):
+        """Re-gate the view, re-apply group / conditional visibility, repaint.
+
+        The shared tail of the edits that change a visibility gate (group tag,
+        checkbox controls-group binding, per-item condition): the display is
+        unchanged while editing (edit mode shows all), but this keeps the
+        runtime state correct and records one undo step.
+        """
+        if self._view is not None:
+            self._view._recompute_conditional_flag()
+            self._view.refresh_item_visibility()
+        self._repaint_view()
+
+    def _existing_groups(self):
+        """Return the sorted group names in use across the view's items."""
+        view = self._view
+        if view is None:
+            return []
+        names = set()
+        for item in view.get_picker_items():
+            group = item.get_group()
+            if group:
+                names.add(group)
+        return sorted(names)
+
+    def _fill_group_combo(self, combo, current):
+        """Fill an editable group combo with existing names + a current value.
+
+        Programmatic, so signals are blocked (must not look like a user edit).
+        """
+        combo.blockSignals(True)
+        combo.lineEdit().blockSignals(True)
+        combo.clear()
+        combo.addItems(self._existing_groups())
+        combo.setCurrentText(current or "")
+        combo.lineEdit().blockSignals(False)
+        combo.blockSignals(False)
+
+    def _apply_group(self, *args, **kwargs):
+        if self._syncing or not self.items:
+            return
+        name = str(self.group_combo.currentText()).strip()
+        for item in self.items:
+            item.set_group(name or None)
+        # A group tag change affects the controllers' member sets.
+        self._refresh_visibility()
+
     def _update_visibility_mode(self, mode):
         """Show only the sub-box relevant to ``mode`` (VIS_NONE hides both)."""
         self._vx_channel_box.setVisible(mode == visibility.VIS_CHANNEL)
         self._vx_zoom_box.setVisible(mode == visibility.VIS_ZOOM)
 
     def _populate_visibility(self):
+        group, group_mixed = self._shared(lambda item: item.get_group() or "")
+        self._fill_group_combo(
+            self.group_combo, "" if group_mixed else group
+        )
+
         mode, mode_mixed = self._shared(
             lambda item: item.get_visibility().get("mode", visibility.VIS_NONE)
         )
@@ -937,6 +1032,9 @@ class ItemEditPanel(QtWidgets.QWidget):
             in (widget_binding.WIDGET_CHECKBOX, widget_binding.WIDGET_SLIDER)
         )
         self._wx_checkbox_box.setVisible(
+            widget_type == widget_binding.WIDGET_CHECKBOX
+        )
+        self._wx_group_box.setVisible(
             widget_type == widget_binding.WIDGET_CHECKBOX
         )
         self._wx_slider_box.setVisible(
@@ -974,6 +1072,12 @@ class ItemEditPanel(QtWidgets.QWidget):
         self.widget_min_y_sb.setValue(binding.get("min_y", -1.0))
         self.widget_max_y_sb.setValue(binding.get("max_y", 1.0))
         self.widget_recenter_cb.setChecked(bool(binding.get("recenter")))
+        self._fill_group_combo(
+            self.widget_group_combo, binding.get("visibility_group", "")
+        )
+        self.widget_invert_cb.setChecked(
+            bool(binding.get("visibility_invert"))
+        )
 
         self._update_widget_visibility(None if wtype_mixed else wtype)
 
@@ -1543,6 +1647,10 @@ class ItemEditPanel(QtWidgets.QWidget):
             "min_y": self.widget_min_y_sb.value(),
             "max_y": self.widget_max_y_sb.value(),
             "recenter": self.widget_recenter_cb.isChecked(),
+            "visibility_group": str(
+                self.widget_group_combo.currentText()
+            ).strip(),
+            "visibility_invert": self.widget_invert_cb.isChecked(),
         }
 
     def _apply_binding(self, *args, **kwargs):
@@ -1551,7 +1659,8 @@ class ItemEditPanel(QtWidgets.QWidget):
         binding = self._collect_binding()
         for item in self.items:
             item.set_binding(binding)
-        self._repaint_view()
+        # The controls-group binding may change the set of group controllers.
+        self._refresh_visibility()
 
     def _edit_widget_script(self, key):
         """Edit the widget script for ``key`` and apply it to the selection."""
@@ -1631,13 +1740,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         self._update_visibility_mode(
             condition.get("mode", visibility.VIS_NONE)
         )
-        # Refresh the view's "any conditioned item?" gate and re-apply the
-        # show/hide. The display is unchanged while editing (edit mode forces
-        # everything visible), but this keeps the runtime state correct.
-        if self._view is not None:
-            self._view._recompute_conditional_flag()
-            self._view.refresh_item_visibility()
-        self._repaint_view()
+        self._refresh_visibility()
 
     def _capture_zoom(self, which):
         """Set a zoom bound from the active view's current zoom scale."""

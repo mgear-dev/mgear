@@ -145,6 +145,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # when no item carries a visibility condition (the common case).
         self._has_conditional_items = False
 
+        # Group controllers: a cached "any checkbox controls a group?" flag so
+        # the group show/hide pass is skipped when no controller exists.
+        self._has_group_controllers = False
+
         self.fit_margin = 8
 
         # Editor undo: one snapshot-based stack that every edit records to. A
@@ -2016,24 +2020,60 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
     # -- conditional visibility -----------------------------------------
     def _recompute_conditional_flag(self):
-        """Refresh the cached "any conditioned item?" flag (on edit / load)."""
+        """Refresh the cached visibility gates (on edit / load).
+
+        Two cheap flags keep ``refresh_item_visibility`` a no-op when nothing
+        needs it: any item with a visibility condition, and any checkbox that
+        master-controls a group.
+        """
+        items = self.get_picker_items()
         self._has_conditional_items = any(
-            item.has_visibility_condition() for item in self.get_picker_items()
+            item.has_visibility_condition() for item in items
+        )
+        self._has_group_controllers = any(
+            item.controls_group() for item in items
         )
 
+    def _group_hidden_items(self):
+        """Return the set of items a group controller currently hides.
+
+        Resolves each group-controller checkbox to whether it shows its group
+        (checked XOR invert); an item is hidden when its group is controlled
+        and currently not shown. Multiple controllers for one group apply in
+        item order (last-applied wins, deterministic).
+        """
+        if not self._has_group_controllers:
+            return set()
+        shown = {}
+        for item in self.get_picker_items():
+            target = item.controls_group()
+            if target:
+                shown[target] = item.group_shows()
+        if not shown:
+            return set()
+        hidden = set()
+        for item in self.get_picker_items():
+            group = item.get_group()
+            if group and shown.get(group) is False:
+                hidden.add(item)
+        return hidden
+
     def refresh_item_visibility(self):
-        """Show / hide each conditioned item for the current zoom + rig state.
+        """Show / hide each item for the current zoom, rig state, and groups.
 
         Mirrors ``_update_pinned_items``: the view owns *when* (called from the
-        zoom / pan / fit hooks and the selection / time callbacks) and computes
-        the zoom once, while each item owns its own decision (channel read +
-        pure evaluation). A no-op when no item carries a condition.
+        zoom / pan / fit hooks, the selection / hover callbacks, and a group
+        toggle) and computes the zoom + group gates once, while each item owns
+        its own decision. An item is visible only when its controlling group is
+        shown AND its own condition passes. A no-op when nothing is conditioned
+        or group-controlled.
         """
-        if not self._has_conditional_items:
+        if not (self._has_conditional_items or self._has_group_controllers):
             return
         zoom = abs(self.viewportTransform().m11())
+        hidden = self._group_hidden_items()
         for item in self.scene().get_picker_items():
-            item.evaluate_visibility(zoom)
+            item.evaluate_visibility(zoom, item in hidden)
 
     def refresh_widget_states(self):
         """Re-read every interactive widget's bound attribute into its display.
@@ -2237,6 +2277,7 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self._has_mirror_links = False
         self._has_pinned_items = False
         self._has_conditional_items = False
+        self._has_group_controllers = False
 
     def get_picker_items(self):
         """Return scene picker items in proper order (back to front)"""

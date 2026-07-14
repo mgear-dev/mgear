@@ -131,6 +131,10 @@ class PickerItem(DefaultPolygon):
         self.item_id = None
         self.mirror_id = None
 
+        # Visibility-group tag (optional): a checkbox widget can master-toggle
+        # every item sharing this group name (see set_group / controls_group).
+        self.group = None
+
         # Viewport pin (optional HUD overlay): when pinned the item ignores the
         # canvas pan/zoom and is repositioned by the view to ``anchor`` +
         # ``offset`` (a 3x3 viewport anchor code + inward pixel offset). The
@@ -1043,6 +1047,12 @@ class PickerItem(DefaultPolygon):
                 "on" if state else "off", {"__STATE__": state}
             )
         self.widget_graphic.update()
+        # If this checkbox master-controls a group, reapply group visibility
+        # immediately (the view AND-s it with each member's own condition).
+        if self.controls_group():
+            view = self.parent()
+            if view is not None and hasattr(view, "refresh_item_visibility"):
+                view.refresh_item_visibility()
 
     def _apply_widget_value(self, norm):
         """Write a normalized slider value to the bound attribute(s)/script.
@@ -1150,20 +1160,27 @@ class PickerItem(DefaultPolygon):
         """Return True when the item carries a visibility condition."""
         return bool(self.visibility)
 
-    def evaluate_visibility(self, zoom):
+    def evaluate_visibility(self, zoom, group_hidden=False):
         """Show / hide the item for its condition at the current ``zoom``.
 
         Edit mode always shows the item so a condition can never block editing.
-        A channel condition reads its attribute here (namespace applied, safe
-        read); the pure show/hide decision is delegated to
-        ``widgets.visibility``. A no-op decision (fail-open) keeps the item
-        visible.
+        Otherwise the item is visible only when its controlling group is shown
+        *and* its own condition passes (the group gate AND the item condition):
+        ``group_hidden`` forces it hidden ignoring the condition. A channel
+        condition reads its attribute here (namespace applied, safe read); the
+        pure show/hide decision is delegated to ``widgets.visibility``. A no-op
+        decision (fail-open) keeps the item visible.
 
         Args:
             zoom (float): the view's current zoom scale.
+            group_hidden (bool): True when a controlling checkbox hides the
+                item's group (the group gate is closed).
         """
         if __EDIT_MODE__.get():
             self.setVisible(True)
+            return
+        if group_hidden:
+            self.setVisible(False)
             return
         condition = self.visibility
         if not condition:
@@ -1178,6 +1195,36 @@ class PickerItem(DefaultPolygon):
         self.setVisible(
             visibility.evaluate(condition, {"zoom": zoom, "value": value})
         )
+
+    # =========================================================================
+    # Visibility group (checkbox master-toggle) ---
+    def get_group(self):
+        """Return the item's visibility-group tag, or None."""
+        return self.group
+
+    def set_group(self, group):
+        """Set the item's visibility-group tag (a falsy value clears it)."""
+        self.group = group or None
+
+    def controls_group(self):
+        """Return the group name this checkbox controls, or None.
+
+        Only a checkbox widget with a ``visibility_group`` binding is a group
+        controller; every other item / widget returns None.
+        """
+        if self.widget_type != widget_binding.WIDGET_CHECKBOX:
+            return None
+        return (self.binding or {}).get("visibility_group") or None
+
+    def group_shows(self):
+        """Return True when this controller checkbox currently shows its group.
+
+        ``checked XOR invert``: a normal controller shows the group when
+        checked; an inverted one shows it when unchecked.
+        """
+        checked = bool(self.widget_graphic.checked)
+        invert = bool((self.binding or {}).get("visibility_invert"))
+        return checked != invert
 
     # =========================================================================
     # Vector (SVG) shape ---
@@ -1776,6 +1823,10 @@ class PickerItem(DefaultPolygon):
         if model.svg:
             self.set_svg_shape(model.svg)
 
+        # Visibility-group tag (optional, additive key).
+        if model.group:
+            self.set_group(model.group)
+
     def get_data(self):
         """Get picker item data in dictionary form.
 
@@ -1831,5 +1882,7 @@ class PickerItem(DefaultPolygon):
 
         if self.svg:
             model.svg = dict(self.svg)
+
+        model.group = self.group
 
         return model.to_dict()

@@ -36,6 +36,8 @@ Fields map 1:1 to the schema keys:
                  passes -- see ``widgets.visibility``)
     svg          dict (optional vector shape imported from SVG; normalized
                  subpaths + render mode -- see ``mgear.core.svg_import``)
+    group        str (optional visibility-group tag; a checkbox widget can
+                 master-toggle every item sharing the name)
 """
 
 
@@ -70,6 +72,7 @@ class PickerItemData(object):
         self.corner_radius = None
         self.visibility = None
         self.svg = None
+        self.group = None
 
     @classmethod
     def from_dict(cls, data):
@@ -130,6 +133,8 @@ class PickerItemData(object):
             model.visibility = dict(data["visibility"])
         if data.get("svg"):
             model.svg = dict(data["svg"])
+        if data.get("group"):
+            model.group = data["group"]
 
         return model
 
@@ -213,5 +218,10 @@ class PickerItemData(object):
         # item so old readers and polygon items are unaffected).
         if self.svg:
             data["svg"] = dict(self.svg)
+
+        # Visibility-group tag (additive optional key; only emitted when set so
+        # old readers and ungrouped items are unaffected).
+        if self.group:
+            data["group"] = self.group
 
         return data
