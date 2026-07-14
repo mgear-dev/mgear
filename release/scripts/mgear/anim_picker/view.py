@@ -532,9 +532,16 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 if item is not None:
                     item.remove()
             else:
+                data = copy.deepcopy(state["data"])
                 if item is None:
+                    # A recreated item starts clean; set_data restores it.
                     item = self._recreate_item(key)
-                item.set_data(copy.deepcopy(state["data"]))
+                else:
+                    # set_data is partial (only sets present keys), so first
+                    # clear any optional key the restored data no longer has --
+                    # else undoing an *added* key would leave it behind.
+                    item.clear_keys_absent_from(data)
+                item.set_data(data)
                 item.setZValue(state["z"])
 
     def undo(self):

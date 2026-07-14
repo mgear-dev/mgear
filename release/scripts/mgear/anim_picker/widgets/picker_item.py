@@ -1729,6 +1729,49 @@ class PickerItem(DefaultPolygon):
 
     # =========================================================================
     # Data handling ---
+    def clear_keys_absent_from(self, data):
+        """Reset the optional keys that ``data`` does not carry.
+
+        ``set_data`` is partial -- it only *sets* the optional additive keys it
+        carries -- so on its own it cannot undo the *addition* of a key.
+        The editor-undo restore calls this first so a key added since the
+        snapshot (text / controls / menus / action / mirror / pin / widget /
+        backdrop / visibility / svg / group) is removed when the restored data
+        lacks it. Each reset is guarded to run only when the item actually has
+        the key, so a plain move / property undo does no extra work.
+
+        Args:
+            data (dict): the picker-item data about to be restored.
+        """
+        if self.get_text() and not data.get("text"):
+            self.set_text("")
+        if self.get_text_align() != "center" and not data.get("text_align"):
+            self.set_text_align("center")
+        if self.get_text_offset() and not data.get("text_offset"):
+            self.set_text_offset(0)
+        if self.get_custom_action_mode() and not data.get("action_mode"):
+            self.set_custom_action_mode(False)
+        if self.get_controls() and not data.get("controls"):
+            self.set_control_list([])
+        if self.get_custom_menus() and not data.get("menus"):
+            self.set_custom_menus([])
+        if self.item_id and not data.get("id"):
+            self.item_id = None
+        if self.mirror_id and not data.get("mirror"):
+            self.mirror_id = None
+        if self.pinned and not data.get("pinned"):
+            self.set_pinned(False)
+        if self.is_widget() and not data.get("widget"):
+            self.set_widget_type(widget_binding.WIDGET_BUTTON)
+        if self.get_backdrop() and not data.get("backdrop"):
+            self.set_backdrop(False)
+        if self.get_visibility() and not data.get("visibility"):
+            self.set_visibility(None)
+        if self.is_vector_shape() and not data.get("svg"):
+            self.set_svg_shape(None)
+        if self.get_group() and not data.get("group"):
+            self.set_group(None)
+
     def set_data(self, data):
         """Set picker item from data dictionary.
 
