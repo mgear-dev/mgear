@@ -2,6 +2,11 @@ Release Log
 ===========
 
 
+5.3.5
+------
+**Bug Fix**
+	* Anim Picker: SVG (vector) items now show a hover highlight like other buttons
+
 5.3.4
 ------
 **Enhancements**

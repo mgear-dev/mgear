@@ -892,6 +892,9 @@ class VectorGraphic(DefaultPolygon):
             return
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         color = QtGui.QColor(self._fill_color())
+        # Lighten on hover for a preselection highlight, like polygon items.
+        if self._hovered:
+            color = color.lighter(130)
         if self.mode == svg_import.MODE_STROKE:
             pen = QtGui.QPen(color)
             pen.setWidthF(self.stroke_width)
@@ -906,11 +909,14 @@ class VectorGraphic(DefaultPolygon):
                 painter.fillPath(
                     self._path, QtGui.QBrush(QtGui.QColor(255, 255, 255, 50))
                 )
-        if self.selected:
+        # Selection / hover border (cosmetic, constant screen width); hover is
+        # a dashed outline for a preselection highlight, like polygon items.
+        if self.selected or self._hovered:
             border = QtGui.QPen(self.__DEFAULT_SELECT_COLOR__)
             border.setWidthF(2.0)
-            # Cosmetic: constant screen width so it reads when zoomed far out.
             border.setCosmetic(True)
+            if self._hovered and not self.selected:
+                border.setStyle(QtCore.Qt.DashLine)
             painter.setPen(border)
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawPath(self._path)
