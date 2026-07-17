@@ -722,11 +722,17 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
             return
 
         selection = shifter_utils.get_selection()
-        if not selection:
+
+        # -- Filter out component selections
+        dag_selection = []
+        for item in selection:
+            if hasattr(item, "isDag") and item.isDag():
+                dag_selection.append(item)
+        if not dag_selection:
             return
 
         # -- Take the last selected object
-        last_item = selection[-1]
+        last_item = dag_selection[-1]
 
         # -- Try to find the component root for this object
         comp_root = shifter_utils.find_component_root(last_item)
