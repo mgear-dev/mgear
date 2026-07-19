@@ -15,7 +15,7 @@ from mgear.pymaya import versions
 import mgear
 from . import guide, component, custom_step_widget
 
-from mgear.core import primitive, attribute, skin, dag, icon, node
+from mgear.core import primitive, attribute, skin, dag, icon, node, profile, color
 from mgear import shifter_classic_components
 from mgear import shifter_epic_components
 from mgear.shifter import naming
@@ -802,6 +802,12 @@ class Rig(object):
         # Creation steps
         self.steps = component.Main.steps
         for i, name in enumerate(self.steps):
+            component_colors = dict(
+                zip(
+                    self.componentsIndex,
+                    color.generate_even_srgb_palette(len(self.componentsIndex)),
+                )
+            )
             for compName in self.componentsIndex:
                 if self._checkBuildCancelled():
                     return
@@ -811,7 +817,10 @@ class Rig(object):
                     name + " : " + comp.fullName + " (" + comp.type + ")"
                 )
                 try:
-                    comp.stepMethods[i]()
+                    with profile.add_profiler_tag_to_created_nodes(
+                        compName, component_colors[compName]
+                    ):
+                        comp.stepMethods[i]()
                 except Exception as e:
                     import traceback
 
