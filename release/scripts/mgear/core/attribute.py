@@ -323,8 +323,8 @@ def addEnumAttribute(
 
 
 def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
-    """Add proxy paramenter to a list of target dagNode
-    Duplicated channel policy, stablish the rule in case the channel already
+    """Add proxy parameter to a list of target dagNode
+    Duplicated channel policy, establish the rule in case the channel already
     exist on the target.
 
     Duplicate policy options
@@ -341,7 +341,7 @@ def addProxyAttribute(sourceAttrs, targets, duplicatedPolicy=None):
         sourceAttrs (attr or list of attr): The parameters to be connected as
             proxy
         targets (dagNode or list of dagNode): The list of dagNode to add the
-            proxy paramenter
+            proxy parameter
         duplicatedPolicy (string, optional): Set the duplicated channel policy
     """
     if not isinstance(targets, list):
