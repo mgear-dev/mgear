@@ -1360,6 +1360,7 @@ class Main(object):
         writable=True,
         uihost=None,
         exactName=False,
+        proxyNodes=None,
     ):
         """Add a parameter to the animation property.
 
@@ -1379,6 +1380,8 @@ class Main(object):
             uihost (dagNode): Optional uihost, if none self.uihost will be use
             exactName (bool): if true will use the attr name without prefix
                             from the component name or instance name.(optional)
+            proxyNodes (pm.node._Node or list of pm.node._Node): Add proxy attributes
+                to these nodes. (optional)
 
         Returns:
             pm.Attribute: A pymaya `Attribute` wrapper of the new attribute.
@@ -1426,6 +1429,10 @@ class Main(object):
                     writable=writable,
                 )
 
+        proxyNodes = proxyNodes or []
+        if self.validProxyChannels and proxyNodes:
+            attribute.addProxyAttribute(attr, proxyNodes)
+
         return attr
 
     # Add a parameter to the animation property.\n
@@ -1443,6 +1450,7 @@ class Main(object):
         writable=True,
         uihost=None,
         exactName=False,
+        proxyNodes=None,
     ):
         """Add a parameter to the animation property.
 
@@ -1459,6 +1467,8 @@ class Main(object):
             storable (bool): Set if the attribute is storable or not.(optional)
             writable (bool): Set if the attribute is writable or not.(optional)
             uihost (dagNode): Optional uihost, if none self.uihost will be use
+            proxyNodes (pm.node._Node or list of pm.node._Node): Add proxy attributes
+                to these nodes. (optional)
 
         Returns:
             str: The long name of the new attribute
@@ -1502,6 +1512,10 @@ class Main(object):
                     storable=storable,
                     writable=writable,
                 )
+
+        proxyNodes = proxyNodes or []
+        if self.validProxyChannels and proxyNodes:
+            attribute.addProxyAttribute(attr, proxyNodes)
 
         return attr
 
