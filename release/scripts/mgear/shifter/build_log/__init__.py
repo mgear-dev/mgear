@@ -30,6 +30,16 @@ def show_build_log():
     return BuildLogWindow.show_window()
 
 
+def clear_log():
+    """Clear the live build log window's content, if one is open.
+
+    Called at the start of every Shifter build so each build's log shows
+    only that build's output. Does nothing when no window exists.
+    """
+    if BuildLogWindow._is_instance_alive():
+        BuildLogWindow.get_instance().clear_log()
+
+
 def get_instance():
     """Get the current build log window instance.
 

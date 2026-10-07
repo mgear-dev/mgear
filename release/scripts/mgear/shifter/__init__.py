@@ -1,4 +1,5 @@
 """Shifters Rig Main class."""
+import contextlib
 import datetime
 import getpass
 import os.path
@@ -42,6 +43,10 @@ SHIFTER_COMPONENT_ENV_KEY = "MGEAR_SHIFTER_COMPONENT_PATH"
 _component_directories_cache = None
 _component_module_cache = {}
 
+# Build-in-progress depth. A counter rather than a bool, so a build
+# triggered from a custom step does not clear the outer build's state.
+_build_depth = 0
+
 
 def log_window():
     """Show the Shifter build log window.
@@ -52,6 +57,40 @@ def log_window():
     from .build_log import log_window as _log_window
 
     _log_window()
+
+
+def is_building():
+    """Return True while a Shifter build is running.
+
+    Scene observers (e.g. the Guide Explorer) use this to skip refresh
+    work until the build finishes.
+
+    Returns:
+        bool: True if a build is in progress.
+    """
+    return _build_depth > 0
+
+
+@contextlib.contextmanager
+def build_in_progress():
+    """Context manager marking a Shifter build as in progress.
+
+    Also usable as a decorator: ``@build_in_progress()``.
+
+    On the outermost entry the build log content is cleared, so every
+    build entry point starts from an empty log. The depth is restored on
+    exit, including exceptions and cancellation.
+    """
+    global _build_depth
+    from . import build_log
+
+    if not _build_depth:
+        build_log.clear_log()
+    _build_depth += 1
+    try:
+        yield
+    finally:
+        _build_depth -= 1
 
 
 def getComponentDirectories():
@@ -253,6 +292,7 @@ class Rig(object):
         return False
 
     @core_utils.one_undo
+    @build_in_progress()
     def buildFromDict(self, conf_dict):
         log_window()
         startTime = datetime.datetime.now()
@@ -301,6 +341,7 @@ class Rig(object):
         return build_data
 
     @core_utils.one_undo
+    @build_in_progress()
     def buildFromSelection(self):
         """Build the rig from selected guides."""
 

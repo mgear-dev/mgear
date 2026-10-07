@@ -2294,7 +2294,16 @@ Error messages that include Python file paths (e.g., traceback lines) can be rig
 
 **Live Progress**
 
-The log window updates in real-time during the build via ``QApplication.processEvents()``, showing each component as it is processed. Custom step messages and errors are also captured.
+The log window updates live during the build, showing each component as it is processed. Custom step messages and errors are also captured. To keep the window from slowing the build down, new lines are batched and drawn about ten times per second rather than one at a time. The last lines are always drawn when the build ends, including when it fails.
+
+The log is cleared at the start of every build, whichever tool starts it (Guide Manager, Guide Explorer, or a build from a template file). Opening or raising the window does not clear it, so you can reopen it to read a finished build's log. The view keeps the most recent 20,000 lines; exporting the log still writes every line of the build.
+
+**Repeated Builds and Maya Memory**
+
+Building and deleting a rig many times in one Maya session can make Maya gradually slower, for two reasons that are part of Maya rather than mGear:
+
+- **Undo queue.** Each build, and each rig deletion, is kept in Maya's undo queue. A deleted rig stays in memory for as long as its deletion can be undone, so with an unlimited undo queue every deleted rig stays loaded. If you don't need to undo your builds, run ``cmds.flushUndo()`` between builds to release them, or set a finite undo queue length in Maya's preferences.
+- **Script Editor history.** Every build prints its log to the Script Editor as well, and its history grows for the whole session. Clear it with **Edit > Clear History** in the Script Editor, or keep the Script Editor closed while building.
 
 Toggle Log
 -----------

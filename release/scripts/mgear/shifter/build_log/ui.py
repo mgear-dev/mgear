@@ -7,6 +7,7 @@ right-click file opening, log export, and log comparison.
 import os
 import platform
 import subprocess
+import time
 
 import mgear
 from mgear.core import pyqt
@@ -36,6 +37,15 @@ _FILTER_COLORS = {
 
 _ICON_SIZE = int(pyqt.dpi_scale(16))
 
+# Minimum seconds between log view refreshes during a build. Records
+# arriving in between are batched into a single append and a single
+# Qt event-loop pass.
+_FLUSH_INTERVAL = 0.1
+
+# Maximum lines kept in the log view. Display only: the handler keeps
+# every record for export, filtering, and comparison.
+_MAX_DISPLAY_LINES = 20000
+
 
 class BuildLogWindow(
     MayaQWidgetDockableMixin, QtWidgets.QDialog, pyqt.SettingsMixin
@@ -59,6 +69,14 @@ class BuildLogWindow(
         self._active_severities = set(SEVERITY_MAP.keys())
         self._search_text = ""
         self._font_size = int(pyqt.dpi_scale(12))
+        self._pending_records = []
+        self._last_flush = 0.0
+
+        # Trailing-edge flush: renders records still queued once logging
+        # goes quiet, whether or not a build is running.
+        self._flush_timer = QtCore.QTimer(self)
+        self._flush_timer.setSingleShot(True)
+        self._flush_timer.timeout.connect(self._flush_pending)
 
         # Window setup
         self.setObjectName(self.TOOL_NAME)
@@ -168,9 +186,9 @@ class BuildLogWindow(
         self.compare_btn.setToolTip("Compare two log files")
 
         # --- Log view ---
-        self.log_view = QtWidgets.QTextBrowser()
+        self.log_view = QtWidgets.QPlainTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setOpenLinks(False)
+        self.log_view.setMaximumBlockCount(_MAX_DISPLAY_LINES)
         self.log_view.setContextMenuPolicy(
             QtCore.Qt.CustomContextMenu
         )
@@ -242,49 +260,76 @@ class BuildLogWindow(
     # =================================================================
 
     def _on_record_added(self, record):
-        """Append a new record to the log view.
+        """Queue a new record and refresh the view on a time budget.
+
+        Records are batched and rendered at most once per
+        ``_FLUSH_INTERVAL`` so a build does not pay a full Qt event-loop
+        pass per log line. A single-shot timer renders whatever is still
+        queued once logging goes quiet, so the last lines always show.
 
         Args:
             record: LogRecord instance.
         """
+        if self._passes_filters(record):
+            self._pending_records.append(record)
+
+        if time.perf_counter() - self._last_flush >= _FLUSH_INTERVAL:
+            self._flush_pending()
+        elif not self._flush_timer.isActive():
+            self._flush_timer.start(int(_FLUSH_INTERVAL * 1000))
+
+    def _passes_filters(self, record):
+        """Return True if the record matches the active filters.
+
+        Args:
+            record: LogRecord instance.
+
+        Returns:
+            bool: True if the record should be displayed.
+        """
         if record.severity not in self._active_severities:
-            self._update_status()
-            return
-
+            return False
         if self._search_text and self._search_text not in record.message.lower():
-            self._update_status()
-            return
+            return False
+        return True
 
-        self.log_view.append(
-            _format_record_html(record, self._font_size)
-        )
+    def _flush_pending(self):
+        """Render queued records in one append and pump Qt events once."""
+        self._flush_timer.stop()
+        if self._pending_records:
+            self._append_records(self._pending_records)
+            self._pending_records = []
         self._update_status()
 
         # Flush Qt events so the log is visible during the build
         QtWidgets.QApplication.processEvents()
+        self._last_flush = time.perf_counter()
+
+    def _append_records(self, records):
+        """Append records to the log view as a single HTML chunk.
+
+        Only the last ``_MAX_DISPLAY_LINES`` records are formatted, since
+        the view would discard the rest anyway.
+
+        Args:
+            records (list): LogRecord instances to display.
+        """
+        font_size = self._font_size
+        self.log_view.appendHtml(
+            "".join(
+                _format_record_html(r, font_size) for r in records[-_MAX_DISPLAY_LINES:]
+            )
+        )
 
     def _apply_filters(self):
         """Rebuild the entire log view from stored records."""
+        self._flush_timer.stop()
+        self._pending_records = []
         self.log_view.clear()
-        search = self._search_text
-        font_size = self._font_size
 
-        html_parts = []
-        for record in self.handler.records:
-            if record.severity not in self._active_severities:
-                continue
-            if search and search not in record.message.lower():
-                continue
-            html_parts.append(
-                _format_record_html(record, font_size)
-            )
-
-        if html_parts:
-            self.log_view.setHtml(
-                "<body style='background-color:#1e1e1e;'>"
-                + "".join(html_parts)
-                + "</body>"
-            )
+        records = [r for r in self.handler.records if self._passes_filters(r)]
+        if records:
+            self._append_records(records)
 
         self._update_status()
 
@@ -340,7 +385,7 @@ class BuildLogWindow(
     def _update_log_view_style(self):
         """Apply the current font size to the log view stylesheet."""
         self.log_view.setStyleSheet(
-            "QTextBrowser {{"
+            "QPlainTextEdit {{"
             "    background-color: #1e1e1e;"
             "    font-family: 'Consolas', 'Courier New', monospace;"
             "    font-size: {size}px;"
@@ -458,8 +503,7 @@ class BuildLogWindow(
     def clear_log(self):
         """Clear all log records and the display."""
         self.handler.clear()
-        self.log_view.clear()
-        self._update_status()
+        self._apply_filters()
 
     def _export_log(self):
         """Export the log to a file."""
@@ -528,15 +572,15 @@ class BuildLogWindow(
         """Show the build log window, creating it if needed.
 
         Reuses the existing live instance when one is present, so UI state
-        (filter buttons, font size, search text) survives across builds.
-        Log content from the prior build is cleared on reuse so each
-        build starts with an empty log. Recreates only when the prior
-        instance's C++ peer is gone, after running an explicit teardown
-        so module-level hooks and handler registrations do not leak into
-        the new instance.
+        (filter buttons, font size, search text) and log content survive.
+        Log content is cleared by the build itself (see
+        ``build_log.clear_log``), not by showing the window, so opening
+        the window never wipes a finished build's log. Recreates only when
+        the prior instance's C++ peer is gone, after running an explicit
+        teardown so module-level hooks and handler registrations do not
+        leak into the new instance.
         """
         if cls._is_instance_alive():
-            cls._instance.clear_log()
             cls._instance.raise_()
             cls._instance.show()
             cls._instance.activateWindow()
@@ -690,21 +734,21 @@ class CompareLogsDialog(QtWidgets.QDialog):
             if tag == "remove":
                 html_parts.append(
                     "<div style='color: #cc6666;"
-                    " font-size: {s}px;'>- {m}</div>".format(
+                    " white-space: pre-wrap; font-size: {s}px;'>- {m}</div>".format(
                         s=size, m=escaped
                     )
                 )
             elif tag == "add":
                 html_parts.append(
                     "<div style='color: #89bf72;"
-                    " font-size: {s}px;'>+ {m}</div>".format(
+                    " white-space: pre-wrap; font-size: {s}px;'>+ {m}</div>".format(
                         s=size, m=escaped
                     )
                 )
             else:
                 html_parts.append(
                     "<div style='color: #888;"
-                    " font-size: {s}px;'>  {m}</div>".format(
+                    " white-space: pre-wrap; font-size: {s}px;'>  {m}</div>".format(
                         s=size, m=escaped
                     )
                 )
@@ -734,7 +778,7 @@ def _format_record_html(record, font_size=12):
     escaped = _escape_html(record.message)
     return (
         "<div style='color: {color}; margin: 0; padding: 0;"
-        " font-size: {size}px;'>"
+        " white-space: pre-wrap; font-size: {size}px;'>"
         "<span style='color: #666;'>[{time}]</span> {msg}"
         "</div>"
     ).format(
@@ -758,7 +802,6 @@ def _escape_html(text):
         text.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-        .replace(" ", "&nbsp;")
     )
 
 

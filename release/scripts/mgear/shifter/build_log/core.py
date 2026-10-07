@@ -98,6 +98,7 @@ class BuildLogHandler:
 
     def __init__(self):
         self.records = []
+        self._counts = {}
         self.signal_emitter = _SignalEmitter()
 
     def handle(self, message, severity):
@@ -109,11 +110,14 @@ class BuildLogHandler:
         """
         record = LogRecord(message, severity)
         self.records.append(record)
+        name = record.severity_name
+        self._counts[name] = self._counts.get(name, 0) + 1
         self.signal_emitter.record_added.emit(record)
 
     def clear(self):
         """Remove all stored records."""
         self.records = []
+        self._counts = {}
 
     def get_filtered(self, severities):
         """Return records matching the given severity flags.
@@ -129,14 +133,13 @@ class BuildLogHandler:
     def get_counts(self):
         """Return a dict of severity_name -> count.
 
+        Counts are maintained incrementally, so this does not scan the
+        record buffer.
+
         Returns:
             dict: Counts per severity name.
         """
-        counts = {}
-        for record in self.records:
-            name = record.severity_name
-            counts[name] = counts.get(name, 0) + 1
-        return counts
+        return dict(self._counts)
 
     def export_text(self, file_path):
         """Export log as plain text.

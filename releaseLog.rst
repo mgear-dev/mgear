@@ -2,6 +2,18 @@ Release Log
 ===========
 
 
+5.4.0
+------
+**Enhancements**
+	* Shifter: Build Log: Faster build log window — new lines are batched and drawn about ten times per second instead of pumping the Qt event loop on every line, the status counts are kept incrementally instead of rescanning the whole log per line, and the view uses a lightweight plain-text widget capped at 20,000 displayed lines (export still writes every line); repeated builds no longer get slower with the log window open
+	* Shifter: Guide Explorer: Skip tree refreshes while a build is running and refresh once when the build finishes, instead of rebuilding the tree repeatedly mid-build
+	* Shifter: Add ``shifter.is_building()`` and the ``build_in_progress()`` context manager / decorator so tools can tell when a Shifter build is running; nested builds started from custom steps are handled
+	* Docs: Shifter: Document the build log batching and clear-on-build behaviour, and how the undo queue and Script Editor history grow Maya's memory across repeated build / delete cycles
+
+**Bug Fix**
+	* Shifter: Build Log: The log is now cleared at the start of every build, including builds started from the Guide Explorer, which previously appended to the prior build's log indefinitely
+	* Shifter: Build Log: Opening or raising the log window no longer wipes the finished build's log
+
 5.3.5
 ------
 **Enhancements**

@@ -815,6 +815,12 @@ class GuideTreeWidget(QtWidgets.QTreeWidget):
         if not self._pending_scene_refresh:
             return
 
+        # -- A build pumps Qt events while it runs, which would let this timer
+        # -- fire mid-build. Keep the refresh pending and retry once it ends.
+        if shifter.is_building():
+            self._node_added_timer.start(100)
+            return
+
         # -- Clear the flag first to avoid accidental loops
         self._pending_scene_refresh = False
 
