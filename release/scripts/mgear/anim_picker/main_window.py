@@ -29,6 +29,7 @@ from mgear.anim_picker.widgets import basic
 from mgear.anim_picker.widgets import edit_panel
 from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.widgets import widget_binding
+from mgear.anim_picker.widgets import vector_editor
 from mgear.anim_picker.widgets import alignment
 from mgear.anim_picker.widgets import color_palette
 from mgear.anim_picker.widgets import tiled_view
@@ -762,6 +763,9 @@ class MainDockWindow(QtWidgets.QWidget):
              widget_binding.WIDGET_SLIDER2D, "mgear_widget_slider2d"),
             ("Bkd", "Drag to add a backdrop (double-click = wrap selection)",
              tool_bar.BACKDROP_PAYLOAD, "mgear_widget_backdrop"),
+            ("Vec", "Drag to add a new vector item and draw it "
+             "(double-click = center)",
+             tool_bar.VECTOR_PAYLOAD, "mgear_pen-tool"),
         )
         for label, tooltip, payload, icon in palette_specs:
             self.left_toolbar.add_palette_item(
@@ -881,6 +885,8 @@ class MainDockWindow(QtWidgets.QWidget):
 
     def _on_tab_changed(self, *args):
         """Rebind the inline editor to the newly active tab's selection."""
+        # Switching tab ends an SVG edit session, keeping its edits.
+        vector_editor.end_active_session()
         panel = getattr(self, "edit_panel", None)
         if panel is not None:
             panel.sync()
@@ -1020,6 +1026,10 @@ class MainDockWindow(QtWidgets.QWidget):
         view = self._current_view()
         if view is None:
             return
+        if payload == tool_bar.VECTOR_PAYLOAD:
+            # The SVG edit session records its own undo step on Done.
+            view.add_vector_item(view.get_center_pos())
+            return
         if payload == tool_bar.BACKDROP_PAYLOAD:
             view.add_backdrop_item(
                 mouse_pos=view.get_center_pos(),
@@ -1139,7 +1149,7 @@ class MainDockWindow(QtWidgets.QWidget):
         """Set an item's RGB from ``color`` while preserving its alpha."""
         result = QtGui.QColor(color)
         result.setAlpha(item.get_color().alpha())
-        item.set_color(result)
+        item.apply_color(result)
 
     def _cmd_duplicate_mirror(self):
         view = self._current_view()
@@ -1240,6 +1250,8 @@ class MainDockWindow(QtWidgets.QWidget):
 
     def close(self):
         """Overwriting close event to close child windows too"""
+        # Closing ends an SVG edit session, keeping its edits.
+        vector_editor.end_active_session()
         # Stop autosave prompts
         self._autosave_timer.stop()
         # Delete script jobs

@@ -35,6 +35,8 @@ from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets import widget_binding
 from mgear.anim_picker.widgets import visibility
+from mgear.anim_picker.widgets import vector_model
+from mgear.core import svg_export
 from mgear.core import svg_import
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import __SELECTION__
@@ -448,6 +450,11 @@ class PickerItem(DefaultPolygon):
         if not __EDIT_MODE__.get():
             return
 
+        # Double-clicking a vector item starts an SVG edit session.
+        if self.is_vector_shape() and hasattr(self.parent(), "begin_vector_edit"):
+            self.parent().begin_vector_edit(self)
+            return
+
         self.edit_options()
 
     def contextMenuEvent(self, event):
@@ -470,9 +477,24 @@ class PickerItem(DefaultPolygon):
         menu = QtWidgets.QMenu(self.parent())
 
         # Build edit context menu (item options live in the inline edit panel).
-        handles_action = QtWidgets.QAction("Toggle handles", None)
-        handles_action.triggered.connect(self.toggle_edit_status)
-        menu.addAction(handles_action)
+        # A vector item edits its curves in an SVG edit session instead of
+        # polygon handles.
+        if self.is_vector_shape():
+            edit_svg_action = QtWidgets.QAction("Edit SVG", None)
+            edit_svg_action.triggered.connect(
+                lambda *args: self.parent().begin_vector_edit(self)
+            )
+            menu.addAction(edit_svg_action)
+            export_action = QtWidgets.QAction("Export SVG...", None)
+            export_action.triggered.connect(self.export_svg)
+            menu.addAction(export_action)
+        else:
+            handles_action = QtWidgets.QAction("Toggle handles", None)
+            handles_action.triggered.connect(self.toggle_edit_status)
+            menu.addAction(handles_action)
+            convert_action = QtWidgets.QAction("Convert to vector", None)
+            convert_action.triggered.connect(self.convert_to_vector)
+            menu.addAction(convert_action)
 
         menu.addSeparator()
 
@@ -742,6 +764,33 @@ class PickerItem(DefaultPolygon):
     def set_color(self, color=None):
         """Set polygon color"""
         self.polygon.set_color(color)
+
+    def apply_vector_default_alpha(self):
+        """Make a new vector shape fully opaque by default.
+
+        Polygon items start semi-transparent (the polygon default alpha);
+        vector shapes default to opaque. The alpha is only raised while it
+        still equals the polygon default, so a user-set opacity is kept.
+        """
+        color = self.get_color()
+        if color.alpha() == Polygon.__DEFAULT_COLOR__.alpha():
+            color.setAlpha(255)
+            self.set_color(color)
+
+    def apply_color(self, color):
+        """Set the item color as a user edit.
+
+        Unlike ``set_color`` (also used when loading data), this clears any
+        vector layer colors, so the item color applies to every layer.
+
+        Args:
+            color (QtGui.QColor): The new item color.
+        """
+        self.set_color(color)
+        if self.is_vector_shape():
+            layers = self.get_svg_layers()
+            if vector_model.has_layer_colors(layers):
+                self.set_svg_layers(vector_model.clear_layer_colors(layers))
 
     # =========================================================================
     # Text handling ---
@@ -1266,16 +1315,12 @@ class PickerItem(DefaultPolygon):
 
         Args:
             svg (dict): ``{"subpaths": [...], "name": ...}`` from
-                ``svg_import.parse_svg``, or a falsy value to clear it.
+                ``svg_import.parse_svg`` (optionally with ``layers``, see
+                ``vector_model``), or a falsy value to clear it.
         """
         self.svg = dict(svg) if svg else {}
-        subpaths = self.svg.get("subpaths", []) if self.svg else []
-        # set_subpaths rebuilds the vector path and repaints the child.
-        self.vector_graphic.set_subpaths(subpaths)
-        self.vector_graphic.set_mode(
-            self.svg.get("mode", svg_import.MODE_FILL) if self.svg else None
-        )
-        self.vector_graphic.set_stroke_width(self.svg.get("stroke_width", 2.0))
+        # set_layers rebuilds the per-layer paths and repaints the child.
+        self.vector_graphic.set_layers(vector_model.layers_from_svg(self.svg))
         # The polygon is kept as the fallback body; hide its drawing while the
         # vector graphic is shown (mirrors the backdrop swap). Handles stay
         # hidden for a vector item (no per-point editing in this version). A
@@ -1293,17 +1338,106 @@ class PickerItem(DefaultPolygon):
         # the scene of the geometry change (the item itself paints nothing).
         self.prepareGeometryChange()
 
-    def get_svg_subpaths(self):
-        """Return the vector shape's subpaths (empty when not a vector)."""
-        return self.svg.get("subpaths", []) if self.svg else []
+    def export_svg(self, file_path=None):
+        """Write the item's visible vector layers to an ``.svg`` file.
 
-    def set_svg_subpaths(self, subpaths):
-        """Replace the vector shape's subpaths (scale / mirror bake here)."""
+        Args:
+            file_path (str, optional): Destination; asks the user when None.
+
+        Returns:
+            str: The written path, or None when cancelled or failed.
+        """
+        if not self.is_vector_shape():
+            return None
+        if not file_path:
+            name = self.svg.get("name") or "picker_shape.svg"
+            if not name.lower().endswith(".svg"):
+                name += ".svg"
+            file_path = QtWidgets.QFileDialog.getSaveFileName(
+                self.parent(), "Export SVG", name, "SVG files (*.svg)"
+            )
+            # Filter return result (based on qt version)
+            if isinstance(file_path, tuple):
+                file_path = file_path[0]
+        if not file_path:
+            return None
+        if not file_path.lower().endswith(".svg"):
+            file_path += ".svg"
+        text = svg_export.to_svg(
+            self.get_svg_layers(), flip_y=True, color=self.get_color().name()
+        )
+        try:
+            with open(file_path, "w") as svg_file:
+                svg_file.write(text)
+        except (IOError, OSError) as exc:
+            cmds.warning("Could not export SVG to {}: {}".format(file_path, exc))
+            return None
+        return file_path
+
+    def convert_to_vector(self):
+        """Replace the polygon with an equivalent single-layer vector shape.
+
+        Recorded as one picker undo step.
+        """
+        if self.is_vector_shape():
+            return
+        points = [(handle.x(), handle.y()) for handle in self.handles]
+        if len(points) < 2:
+            return
+        subpath = [("M",) + points[0]] + [("L",) + p for p in points[1:]]
+        if len(points) > 2:
+            subpath.append(("Z",))
+        svg = vector_model.svg_from_layers([vector_model.new_layer(subpaths=[subpath])])
+
+        def convert():
+            self.set_svg_shape(svg)
+            self.apply_vector_default_alpha()
+
+        view = self.parent()
+        if hasattr(view, "record_edit"):
+            view.record_edit("Convert to vector", convert)
+        else:
+            convert()
+
+    def get_svg_layers(self):
+        """Return a copy of the vector shape's layers (empty when not a vector).
+
+        Returns:
+            list: Layer dicts (``vector_model``), back to front.
+        """
+        return vector_model.layers_from_svg(self.svg)
+
+    def set_svg_layers(self, layers):
+        """Replace the vector shape's layers, keeping its source name.
+
+        Args:
+            layers (list): Layer dicts (``vector_model``), back to front.
+        """
+        name = self.svg.get("name", "") if self.svg else ""
+        self.set_svg_shape(vector_model.svg_from_layers(layers, name))
+
+    def get_svg_subpaths(self):
+        """Return every visible layer's subpaths (empty when not a vector)."""
+        return vector_model.flatten(self.get_svg_layers())
+
+    def map_geometry(self, fn):
+        """Apply a geometry transform to every layer (scale / mirror bake).
+
+        Args:
+            fn (callable): Takes and returns a list of subpaths.
+        """
         if not self.svg:
             return
-        self.svg["subpaths"] = subpaths
-        self.vector_graphic.set_subpaths(subpaths)
-        self.prepareGeometryChange()
+        self.set_svg_layers(vector_model.map_layers(self.get_svg_layers(), fn))
+
+    def _set_all_layers(self, key, value):
+        """Set one style key on every layer."""
+        if not self.svg:
+            return
+        layers = self.get_svg_layers()
+        for layer in layers:
+            layer[key] = value
+        self.set_svg_layers(layers)
 
     def get_svg_mode(self):
         """Return the vector render mode (``fill`` / ``stroke``)."""
@@ -1312,42 +1446,37 @@ class PickerItem(DefaultPolygon):
         )
 
     def set_svg_mode(self, mode):
-        """Set the vector render mode (fill vs stroke)."""
-        if not self.svg:
-            return
-        self.svg["mode"] = mode
-        self.vector_graphic.set_mode(mode)
+        """Set the render mode (fill vs stroke) of every layer."""
+        self._set_all_layers("mode", mode)
 
     def get_svg_stroke_width(self):
         """Return the vector stroke width (used in stroke mode)."""
         return self.svg.get("stroke_width", 2.0) if self.svg else 2.0
 
     def set_svg_stroke_width(self, width):
-        """Set the vector stroke width (used in stroke mode)."""
-        if not self.svg:
-            return
-        self.svg["stroke_width"] = width
-        self.vector_graphic.set_stroke_width(width)
+        """Set the stroke width (used in stroke mode) of every layer."""
+        self._set_all_layers("stroke_width", float(width))
 
     def apply_library_shape(self, shape):
         """Apply a shape-library entry to this item (polygon or vector).
 
-        A vector entry (carrying ``subpaths``) swaps in the curved shape; a
-        polygon entry replaces the handle points, reverting any vector body
-        first. Both stay editable afterward and round-trip in the item data.
+        A vector entry (carrying ``subpaths`` and optionally ``layers``) swaps
+        in the curved shape; a polygon entry replaces the handle points,
+        reverting any vector body first. Both stay editable afterward and
+        round-trip in the item data.
 
         Args:
             shape (dict): a resolved ``shape_library`` entry -- vector with
-                ``subpaths`` (+ ``mode``), or polygon with ``handles``.
+                ``subpaths`` (+ ``mode`` / ``stroke_width`` / ``layers``), or
+                polygon with ``handles``.
         """
-        if shape.get("subpaths"):
+        if shape.get("subpaths") or shape.get("layers"):
             self.set_svg_shape(
-                {
-                    "name": shape.get("name", ""),
-                    "subpaths": shape["subpaths"],
-                    "mode": shape.get("mode", svg_import.MODE_FILL),
-                }
+                vector_model.svg_from_layers(
+                    vector_model.layers_from_svg(shape), shape.get("name", "")
+                )
             )
+            self.apply_vector_default_alpha()
         else:
             # Revert a vector body to a polygon before setting handle points.
             if self.is_vector_shape():
@@ -1357,14 +1486,16 @@ class PickerItem(DefaultPolygon):
     def get_library_shape(self):
         """Return this item's shape as a save-able library dict, or None.
 
-        A vector item yields ``{subpaths, mode}``; a polygon item yields
-        ``{handles}`` -- the shape the library's "Save current shape" stores.
+        A vector item yields ``{subpaths, mode, stroke_width}`` plus
+        ``layers`` when it has several; a polygon item yields ``{handles}``
+        -- the shape the library's "Save current shape" stores.
         """
         if self.is_vector_shape():
-            subpaths = self.get_svg_subpaths()
-            if subpaths:
-                return {"subpaths": subpaths, "mode": self.get_svg_mode()}
-            return None
+            if not self.get_svg_subpaths():
+                return None
+            shape = vector_model.svg_from_layers(self.get_svg_layers())
+            shape.pop("name", None)
+            return shape
         handles = [[handle.x(), handle.y()] for handle in self.handles]
         return {"handles": handles} if handles else None
 
@@ -1440,8 +1571,8 @@ class PickerItem(DefaultPolygon):
     def mirror_shape(self):
         """Mirror the item's shape on X (vector subpaths or handles)."""
         if self.svg:
-            self.set_svg_subpaths(
-                svg_import.scale_subpaths(self.get_svg_subpaths(), -1.0, 1.0)
+            self.map_geometry(
+                lambda subpaths: svg_import.scale_subpaths(subpaths, -1.0, 1.0)
             )
             return
         handles = [[handle.x(), handle.y()] for handle in self.handles]
@@ -1450,7 +1581,7 @@ class PickerItem(DefaultPolygon):
     def mirror_color(self):
         """Will reverse red/bleu rgb values for the polygon color"""
         new_color = mirror.mirror_color(self.get_color().getRgb())
-        self.set_color(QtGui.QColor(*new_color))
+        self.apply_color(QtGui.QColor(*new_color))
 
     def duplicate_selected(self, *args, **kwargs):
         selected_pickers = self.scene().get_selected_items()

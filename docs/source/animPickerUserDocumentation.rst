@@ -310,6 +310,125 @@ You can also build a shape from Maya curves: draw the outline as NURBS curves,
 select them, and the picker traces them into an item's shape.
 
 
+Editing vector (SVG) shapes
+---------------------------
+
+Vector items can be drawn and edited directly in the picker, without an
+external editor.
+
+**Starting and ending an edit.** In edit mode, right-click a vector item and
+choose **Edit SVG**, or double-click it. The other items dim and a floating
+**SVG Edit** toolbar opens beside the picker. Click **Done** (or press
+**Enter**) to keep your changes; the whole edit is then a single picker undo
+step. **Cancel** puts the item back exactly as it was. Switching tab, leaving
+edit mode, or closing the toolbar counts as Done. **Esc** never cancels: it
+finishes the path you are drawing, or clears the selection. Right-clicking the
+canvas during an edit offers Done and Cancel.
+
+**Creating a vector item.** Drag the **Vec** tile from the left toolbar's
+**Drag to add** section onto the canvas (or double-click it to create at the
+view center), or right-click empty canvas and choose **New vector item**: an
+empty item is created and the Pen tool is ready.
+If you click Done without drawing anything, the empty item is removed. To turn
+an existing polygon button into an editable curve, right-click it and choose
+**Convert to vector**.
+
+**Tools** (shortcuts work while the canvas has focus):
+
+* **Select (V)** picks whole shapes. Drag to move them; the box around the
+  selection scales them (Shift keeps proportions) and its top circle rotates
+  them (Shift snaps to 15°).
+* **Node (A)** picks points. Click, Shift-click, or drag a marquee; drag to
+  move; arrow keys nudge (Shift for a bigger step). Dragging a curve handle of
+  a smooth point keeps it smooth. **Alt**-drag a handle to move it on its own
+  (a sharp corner), Alt-drag a point with no handles to pull out new curve
+  handles, and Alt-click a segment to add a point there.
+* **Pen (P)**: click for a corner point, click-and-drag for a curved point,
+  click the first point to close the shape. Enter, Esc, or a double-click
+  finishes an open line. Shift keeps segments at 45° steps.
+* **Rectangle (R)**, **Ellipse (E)**, **Polygon / Star (Y)**, and **Line
+  (L)**. Drag to draw; Shift draws squares, circles, and 45° lines.
+
+The mouse pointer changes with the tool: Select, Node, and Pen use their icon
+(the click point is the tip), and the drawing tools show a crosshair with a
+small badge of the shape.
+
+**Tool options** under the tools change with the active tool:
+
+* **Rectangle:** **Corner radius** for rounded corners.
+* **Polygon / Star:** number of **Sides**, and a **Star** percentage (above 0
+  makes a star with that inner radius).
+* **Line** and **Pen:** **Start arrow** / **End arrow** and the arrow
+  **Size**. An arrowhead is drawn as part of the line itself (one path), and
+  follows the direction of the line at each end: on a **Fill** layer it is a
+  solid triangle, on a **Stroke** layer an outlined head. Pen arrows apply to
+  open paths only. In the Node tool the arrow's tip shows as two points on
+  top of each other, because the path passes through the tip twice.
+* Other tools show "No options for this tool".
+
+.. note::
+    A line (or an open Pen path) has no area, so on a **Fill** layer only its
+    arrowheads show: draw lines on a **Stroke** layer.
+
+**Node operations** act on the selected points: add a point between two
+selected neighbours, delete points (also **Delete**), make points **Corner**
+(no handles), **Smooth**, or **Sym** (smooth with equal handles), and reverse
+the path's direction. Three of them open, close, or cut paths:
+
+* **Break** cuts the path at the selected point. An open path becomes two
+  paths that meet there; a closed shape becomes one open path that starts and
+  ends at that point.
+* **Join** connects two selected *end points*: the ends of two different open
+  paths merge them into one path, and the two ends of the same path close it.
+* **Close/Open** works on the whole path without picking points: it closes an
+  open path with a segment from its last point back to its first, or opens a
+  closed shape by removing that segment. Use **Break** to open a shape at a
+  point of your choice.
+
+**Path operations** act on the selected shapes: **Union**, **Subtract** (the
+top-most selected shape is cut out of the others), **Intersect**, and
+**Exclude**; **Flip H** / **Flip V**; duplicate; delete. Boolean results are
+re-fitted into smooth curves, so they stay easy to edit.
+
+**Precision and view.** The **X** / **Y** fields show and set the selected
+point (or the centre of the selection). **Snap grid** (with a grid size) and
+**Snap nodes** apply while you draw and drag. **Outline** shows every shape
+as a thin wireframe, and **Grid** draws the snap grid; neither changes the
+saved item.
+
+**Layers.** An item can have several layers, drawn back to front (the top of
+the list is in front). Each layer has its own visibility (eye), lock, **Fill**
+or **Stroke** mode, stroke width, and **Color**. Use the buttons under the
+list to add, duplicate, delete, reorder, and merge a layer into the one below,
+and to move the selected shapes onto the highlighted layer. New drawings go
+onto the highlighted layer. Double-click a name to rename it. Hidden and
+locked layers can't be selected. Shapes only cut holes in each other when they
+are on the same layer.
+
+**Layer colors.** A layer uses the item's color until you give it its own:
+click the layer's color swatch to pick one, and right-click it and choose
+**Use item color** to go back. This makes two-tone icons possible in a single
+item. The layer color sets the hue; the item's opacity still applies. Changing
+the item's color later (Item Editor color, the palette, or mirror color)
+resets every layer to the new item color, just as the Shape panel's stroke
+width applies to every layer.
+
+**Undo while editing.** Ctrl+Z / Ctrl+Shift+Z (or the toolbar arrows) step
+through the edits of the current session without leaving it.
+
+**Opacity.** New vector items are fully opaque by default (polygon buttons
+start slightly transparent). An opacity you set yourself is kept when you
+convert a polygon to a vector or apply an SVG shape to it.
+
+**Exporting.** Right-click a vector item and choose **Export SVG...** to save
+its visible layers as a standard ``.svg`` file. **Save current shape...** in
+the Shape Library keeps the layers too.
+
+.. note::
+    Pickers saved with multi-layer vector items still open in older versions
+    of the anim picker, which draw the shapes in a single fill or stroke style.
+
+
 The Item Editor
 ===============
 
@@ -355,8 +474,9 @@ Controls for the item's outline: **Show handles** to edit the polygon points
 on the canvas, the **Vtx count**, **Handles Positions...** for numeric point
 entry, **Shapes...** to open the library, and **Import SVG...** to load a
 vector shape from a ``.svg`` file. Vector items expose a **Render** mode
-(**Fill** or **Stroke**) and a stroke width. (Vector items have no editable
-points, so *Show handles* is a no-op for them.)
+(**Fill** or **Stroke**) and a stroke width, applied to all of the item's
+layers. Vector items have no polygon handles; edit their curves with **Edit
+SVG** instead (see `Editing vector (SVG) shapes`_).
 
 
 Controls

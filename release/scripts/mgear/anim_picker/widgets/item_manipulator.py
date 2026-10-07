@@ -17,6 +17,7 @@ from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
 
 from mgear.anim_picker.widgets import manipulator_transform
+from mgear.anim_picker.widgets import vector_model
 from mgear.core import svg_import
 from mgear.core import pyqt
 
@@ -121,12 +122,11 @@ class ItemManipulator(object):
         self._orig_items = []
         for item in self.selected_items():
             handles = [[h.x(), h.y()] for h in item.handles]
-            # Capture the vector subpaths too, so a vector item scales its
-            # curve (baked into the subpaths) rather than its hidden handles.
-            svg_subpaths = item.get_svg_subpaths()
+            # Capture the vector layers too, so a vector item scales its
+            # curves (baked into every layer) rather than its hidden handles.
+            svg_layers = item.get_svg_layers()
             self._orig_items.append(
-                (item, item.x(), item.y(), item.rotation(), handles,
-                 svg_subpaths)
+                (item, item.x(), item.y(), item.rotation(), handles, svg_layers)
             )
 
     def update_drag(self, x, y, keep_aspect=False):
@@ -150,8 +150,13 @@ class ItemManipulator(object):
             # its subpaths (baked); a polygon scales its handles. Non-uniform
             # scale of a rotated item shears it (v1 limitation); uniform exact.
             if item.is_vector_shape():
-                item.set_svg_subpaths(
-                    svg_import.scale_subpaths(osvg, sx, sy)
+                item.set_svg_layers(
+                    vector_model.map_layers(
+                        osvg,
+                        lambda subpaths: svg_import.scale_subpaths(
+                            subpaths, sx, sy
+                        ),
+                    )
                 )
             else:
                 for handle, (hx, hy) in zip(item.handles, ohandles):

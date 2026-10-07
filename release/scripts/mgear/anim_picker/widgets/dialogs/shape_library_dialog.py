@@ -254,6 +254,8 @@ class ShapeLibraryDialog(QtWidgets.QDialog):
             handles=shape.get("handles"),
             subpaths=shape.get("subpaths"),
             mode=shape.get("mode"),
+            stroke_width=shape.get("stroke_width"),
+            layers=shape.get("layers"),
         )
         self._rebuild_grid()
         # Show the tab the saved shape landed in (vector -> the SVG tab).

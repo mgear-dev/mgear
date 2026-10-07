@@ -13,10 +13,19 @@ Release Log
 	* Core: Add a reusable ``mgear.core.screen_capture.capture_screen_region`` that lets the user select a screen region and returns it as a ``QImage`` (full resolution on high-DPI displays, any monitor), hiding and restoring the caller's windows and giving focus back to the previously active window; it never writes files
 	* Core: Add ``mgear.core.utils.get_workspace_folder`` to get the current Maya project's folder for a file rule (e.g. ``images``), falling back to the project root and then the home folder
 	* Docs: Anim Picker: Document capturing a screen region as a background layer, including the save location defaults and the macOS Screen Recording permission
+	* Anim Picker: SVG editor — draw and edit vector (SVG) items directly in the picker: "Edit SVG" (or double-click) on a vector item opens an edit session with a floating toolbar of Select, Node, Pen, Rectangle, Ellipse, Polygon / Star and Line tools, node operations (add / delete, corner / smooth / symmetric, break, join, close / open, reverse), path booleans (union, subtract, intersect, exclude) re-fitted into editable curves, flip / duplicate / delete, X / Y fields, snap to grid / nodes, outline and grid views, and its own undo; Done records the whole session as one picker undo step and Cancel restores the item
+	* Anim Picker: SVG layers — a vector item can have several layers, each with its own visibility, lock, fill or stroke mode, stroke width and optional color (two-tone icons in one item); changing the item color afterwards resets the layer colors, and multi-layer pickers still open in older versions with a flattened fallback
+	* Anim Picker: SVG tool options follow the active tool (rectangle corner radius, polygon sides / star, line and pen start / end arrows drawn as part of the line's path) and each tool has its own mouse pointer
+	* Anim Picker: Create a new vector item from the canvas right-click menu or the new "Vec" Drag to add tile, convert a polygon item to a vector, and export a vector item's layers with "Export SVG..."; the shape library saves and applies multi-layer vector shapes
+	* Core: Add ``mgear.core.vector_path`` (Qt-free vector subpath editing: node operations, hit-testing, exact bounds, primitive and arrow builders, curve fitting) and ``mgear.core.svg_export`` (layers to SVG text); ``svg_import`` now shares its ellipse and scaling code with ``vector_path``
+	* Docs: Anim Picker: Document the SVG editor, its tools, shortcuts, layers, layer colors and export
 
 **Bug Fix**
 	* Shifter: Build Log: The log is now cleared at the start of every build, including builds started from the Guide Explorer, which previously appended to the prior build's log indefinitely
 	* Shifter: Build Log: Opening or raising the log window no longer wipes the finished build's log
+	* Anim Picker: The "SVG" hover badge keeps a small constant on-screen size at any zoom instead of scaling with the canvas
+	* Anim Picker: New vector items (imported or dropped SVGs, new vector items, SVG library shapes, converted polygons) are fully opaque by default instead of inheriting the polygons' semi-transparent default; a user-set opacity is kept
+	* Anim Picker: "Toggle handles" no longer appears as a dead entry on vector items; it is replaced by "Edit SVG"
 
 5.3.5
 ------

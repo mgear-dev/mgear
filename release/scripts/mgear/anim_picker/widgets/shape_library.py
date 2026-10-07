@@ -153,6 +153,10 @@ def _resolve_entry(entry, builtin):
             subpaths=entry["subpaths"],
             mode=entry.get("mode", _DEFAULT_MODE),
         )
+        # Multi-layer vector shapes (SVG editor) carry their layers and width.
+        for key in ("stroke_width", "layers"):
+            if entry.get(key):
+                resolved[key] = entry[key]
         return resolved
     svg_name = entry.get("svg")
     if svg_name:
@@ -222,14 +226,20 @@ def _write_user_shapes(shapes):
         json.dump(shapes, shape_file, indent=2)
 
 
-def save_user_shape(name, handles=None, subpaths=None, mode=None):
+def save_user_shape(
+    name, handles=None, subpaths=None, mode=None, stroke_width=None, layers=None
+):
     """Add or replace a user shape by name (polygon handles or vector).
 
     Args:
         name (str): shape name.
         handles (list, optional): ``[[x, y], ...]`` for a polygon shape.
-        subpaths (list, optional): subpaths for a vector shape.
+        subpaths (list, optional): subpaths for a vector shape (for a
+            layered shape, the flattened fallback).
         mode (str, optional): vector render mode (fill / stroke).
+        stroke_width (float, optional): vector stroke width.
+        layers (list, optional): the vector shape's layers, when it has
+            more than one default layer.
 
     Returns:
         bool: True on success.
@@ -244,6 +254,10 @@ def save_user_shape(name, handles=None, subpaths=None, mode=None):
             "subpaths": subpaths,
             "mode": mode or _DEFAULT_MODE,
         }
+        if stroke_width:
+            entry["stroke_width"] = stroke_width
+        if layers:
+            entry["layers"] = layers
     else:
         return False
     shapes = load_user_shapes()

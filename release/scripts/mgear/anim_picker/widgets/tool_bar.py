@@ -31,6 +31,9 @@ WIDGET_MIME = "application/x-mgear-anim-picker-item"
 # Palette payload for a backdrop container (not a widget_binding type).
 BACKDROP_PAYLOAD = "backdrop"
 
+# Palette payload for a new (empty) vector item drawn in the SVG editor.
+VECTOR_PAYLOAD = "vector"
+
 
 def maya_icon(resource):
     """Return a QIcon for a Maya resource path (e.g. ``:/aselect.png``)."""

@@ -811,68 +811,96 @@ def build_vector_path(subpaths):
 
 
 class VectorGraphic(DefaultPolygon):
-    """Vector (curved) shape drawn as the item's body, from imported SVG.
+    """Vector (curved) shape drawn as the item's body, from SVG layers.
 
-    A vector item hides its plain polygon and shows this instead: a compound
-    ``QPainterPath`` (with curves and holes) built from the item's normalized
-    subpaths, drawn either **filled** in the item's color or **stroked** as
-    lines of a given width (so line-art icons read correctly). Clicks fall
-    through to the parent item, but it accepts hover so a hovered vector item
-    shows an "SVG" badge (a distinct hover cue, not a border lighten).
-    ``shape()`` delegates hit-testing to the path. Subpaths / mode / width are
-    set by the item from its ``svg`` data.
+    A vector item hides its plain polygon and shows this instead: one compound
+    ``QPainterPath`` (with curves and holes) per visible layer, each drawn
+    either **filled** in the item's color or **stroked** as lines of the
+    layer's width (so line-art icons read correctly), back to front. Clicks
+    fall through to the parent item, but it accepts hover so a hovered vector
+    item shows an "SVG" badge (a distinct hover cue, not a border lighten).
+    ``shape()`` hit-tests what is drawn. Layers are set by the item from its
+    ``svg`` data (see ``vector_model``).
     """
 
     __DEFAULT_SELECT_COLOR__ = QtGui.QColor(230, 230, 230, 240)
+    # Badge size in screen pixels (before DPI scaling).
     _BADGE = QtCore.QRectF(0.0, 0.0, 34.0, 18.0)
+    _BADGE_TEXT = "SVG"
 
     def __init__(self, parent=None):
         DefaultPolygon.__init__(self, parent=parent)
-        self.subpaths = []
+        # (path, mode, stroke_width, color or None) per visible layer, back
+        # to front; a None color draws in the item color.
+        self._layers = []
+        # Every visible layer's path combined: bounds, border, badge.
         self._path = QtGui.QPainterPath()
+        # Hit-test shape: fill areas plus stroke outlines.
+        self._shape = QtGui.QPainterPath()
+        self._max_stroke = 0.0
         self.selected = False
-        self.mode = svg_import.MODE_FILL
-        self.stroke_width = 2.0
+        # Editor outline view: thin outlines instead of fill / stroke.
+        self.outline_mode = False
         # Accept hover (for the SVG badge) but no mouse buttons, so a click
         # falls through to the parent PickerItem for selection.
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(QtCore.Qt.NoButton)
         self.setVisible(False)
 
-    def set_subpaths(self, subpaths):
-        """Set the normalized subpaths and rebuild the cached path."""
+    def set_layers(self, layers):
+        """Set the layers to draw and rebuild the cached paths.
+
+        Args:
+            layers (list): Layer dicts (``vector_model``), back to front.
+                Hidden and empty layers are skipped.
+        """
         self.prepareGeometryChange()
-        self.subpaths = [list(sub) for sub in (subpaths or [])]
-        self._path = self._build_path(self.subpaths)
+        self._layers = []
+        combined = QtGui.QPainterPath()
+        combined.setFillRule(QtCore.Qt.OddEvenFill)
+        shape = QtGui.QPainterPath()
+        shape.setFillRule(QtCore.Qt.WindingFill)
+        self._max_stroke = 0.0
+        for layer in layers or []:
+            if not layer.get("visible", True) or not layer.get("subpaths"):
+                continue
+            path = build_vector_path(layer["subpaths"])
+            mode = layer.get("mode") or svg_import.MODE_FILL
+            width = max(0.1, float(layer.get("stroke_width", 2.0)))
+            color = QtGui.QColor(layer["color"]) if layer.get("color") else None
+            self._layers.append((path, mode, width, color))
+            combined.addPath(path)
+            # A stroked layer is clickable on its interior too, so thin
+            # line-art stays easy to pick; its outline adds the line width.
+            shape.addPath(path)
+            if mode == svg_import.MODE_STROKE:
+                stroker = QtGui.QPainterPathStroker()
+                stroker.setWidth(width)
+                shape.addPath(stroker.createStroke(path))
+                self._max_stroke = max(self._max_stroke, width)
+        self._path = combined
+        self._shape = shape
         self.update()
 
-    def set_mode(self, mode):
-        """Set the render mode (``MODE_FILL`` / ``MODE_STROKE``)."""
-        self.prepareGeometryChange()
-        self.mode = mode or svg_import.MODE_FILL
-        self.update()
+    def set_outline_mode(self, state):
+        """Draw thin outlines instead of fill / stroke (editor view).
 
-    def set_stroke_width(self, width):
-        """Set the stroke width (used in ``MODE_STROKE``)."""
-        self.prepareGeometryChange()
-        self.stroke_width = max(0.1, float(width))
+        Args:
+            state (bool): Outline view on or off.
+        """
+        self.outline_mode = bool(state)
         self.update()
-
-    @staticmethod
-    def _build_path(subpaths):
-        """Build a ``QPainterPath`` from M / L / C / Z segments."""
-        return build_vector_path(subpaths)
 
     def boundingRect(self):
         # Pad for the selection border / stroke width / antialias so a moving
         # selection or a thick stroke never leaves a paint ghost.
-        margin = max(2.0, self.stroke_width)
-        return self._path.boundingRect().adjusted(
-            -margin, -margin, margin, margin
-        )
+        margin = max(2.0, self._max_stroke)
+        if self._hovered and _edit_mode_active():
+            margin = max(margin, self._badge_margin())
+        return self._path.boundingRect().adjusted(-margin, -margin, margin, margin)
 
     def shape(self):
-        return self._path
+        return self._shape
 
     def set_selected_state(self, state):
         if state == self.selected:
@@ -895,19 +923,17 @@ class VectorGraphic(DefaultPolygon):
         # Lighten on hover for a preselection highlight, like polygon items.
         if self._hovered:
             color = color.lighter(130)
-        if self.mode == svg_import.MODE_STROKE:
+        if self.outline_mode:
             pen = QtGui.QPen(color)
-            pen.setWidthF(self.stroke_width)
-            pen.setCapStyle(QtCore.Qt.RoundCap)
-            pen.setJoinStyle(QtCore.Qt.RoundJoin)
+            pen.setWidthF(1.0)
+            pen.setCosmetic(True)
             painter.setPen(pen)
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawPath(self._path)
         else:
-            painter.fillPath(self._path, QtGui.QBrush(color))
-            if self.selected:
-                painter.fillPath(
-                    self._path, QtGui.QBrush(QtGui.QColor(255, 255, 255, 50))
+            for path, mode, width, layer_color in self._layers:
+                self._paint_layer(
+                    painter, path, mode, width, self._layer_color(layer_color, color)
                 )
         # Selection / hover border (cosmetic, constant screen width); hover is
         # a dashed outline for a preselection highlight, like polygon items.
@@ -925,36 +951,90 @@ class VectorGraphic(DefaultPolygon):
         if self._hovered and _edit_mode_active():
             self._paint_svg_badge(painter)
 
-    def _paint_svg_badge(self, painter):
-        """Draw a small upright "SVG" badge over the shape center on hover."""
-        text = "SVG"
-        # Font sized from the reference badge height (scene units) so it scales
-        # with zoom and stays crisp on HDPI; not DPI-scaled (scene geometry).
-        font = QtGui.QFont(painter.font())
-        font.setBold(True)
-        font.setPixelSize(max(1, int(self._BADGE.height() * 0.55)))
-        # Size the pill to the text so it never clips (grows past the reference
-        # width for a wider font / label).
+    def _layer_color(self, layer_color, item_color):
+        """Return a layer's draw color: its own RGB with the item's alpha."""
+        if layer_color is None:
+            return item_color
+        color = QtGui.QColor(layer_color)
+        color.setAlpha(item_color.alpha())
+        if self._hovered:
+            color = color.lighter(130)
+        return color
+
+    def _paint_layer(self, painter, path, mode, width, color):
+        """Draw one layer filled or stroked in ``color``."""
+        if mode == svg_import.MODE_STROKE:
+            pen = QtGui.QPen(color)
+            pen.setWidthF(width)
+            pen.setCapStyle(QtCore.Qt.RoundCap)
+            pen.setJoinStyle(QtCore.Qt.RoundJoin)
+            painter.setPen(pen)
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawPath(path)
+            return
+        painter.fillPath(path, QtGui.QBrush(color))
+        if self.selected:
+            painter.fillPath(path, QtGui.QBrush(QtGui.QColor(255, 255, 255, 50)))
+
+    def _badge_rect_px(self):
+        """Return the badge rect size in screen pixels (DPI-scaled)."""
+        height = _dpi(self._BADGE.height())
+        font = self._badge_font(height)
         metrics = QtGui.QFontMetricsF(font)
         try:
-            text_w = metrics.horizontalAdvance(text)
+            text_w = metrics.horizontalAdvance(self._BADGE_TEXT)
         except AttributeError:
-            text_w = metrics.width(text)
-        width = max(self._BADGE.width(), text_w + 12.0)
-        badge = QtCore.QRectF(0.0, 0.0, width, self._BADGE.height())
-        badge.moveCenter(self._path.boundingRect().center())
+            text_w = metrics.width(self._BADGE_TEXT)
+        width = max(_dpi(self._BADGE.width()), text_w + _dpi(12.0))
+        return QtCore.QRectF(0.0, 0.0, width, height), font
+
+    @staticmethod
+    def _badge_font(height):
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setPixelSize(max(1, int(height * 0.55)))
+        return font
+
+    def _badge_margin(self):
+        """Return the badge's half extent in scene units at the current zoom.
+
+        The badge has a constant screen size, so when zoomed out it can be
+        larger than the shape; the bounding rect grows by this while hovered
+        so un-hovering repaints the whole badge.
+        """
+        scene = self.scene()
+        views = scene.views() if scene is not None else []
+        scale = abs(views[0].transform().m11()) if views else 1.0
+        rect, _font = self._badge_rect_px()
+        return (max(rect.width(), rect.height()) / 2.0 + 2.0) / (scale or 1.0)
+
+    def hoverEnterEvent(self, event=None):
+        # The bounding rect includes the badge while hovered.
+        self.prepareGeometryChange()
+        super(VectorGraphic, self).hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event=None):
+        self.prepareGeometryChange()
+        super(VectorGraphic, self).hoverLeaveEvent(event)
+
+    def _paint_svg_badge(self, painter):
+        """Draw a small "SVG" badge over the shape center on hover.
+
+        Drawn in screen pixels, so it keeps a constant, DPI-scaled size at any
+        zoom and always reads upright.
+        """
+        center = painter.worldTransform().map(self._path.boundingRect().center())
+        badge, font = self._badge_rect_px()
+        badge.moveCenter(center)
         painter.save()
-        # Counter the view's Y-flip so the label reads upright.
-        center = badge.center()
-        painter.translate(center)
-        painter.scale(1.0, -1.0)
-        painter.translate(-center)
+        painter.resetTransform()
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(QtGui.QBrush(QtGui.QColor(20, 20, 20, 175)))
-        painter.drawRoundedRect(badge, 4.0, 4.0)
+        radius = _dpi(4.0)
+        painter.drawRoundedRect(badge, radius, radius)
         painter.setPen(QtGui.QPen(QtGui.QColor(235, 235, 235, 255)))
         painter.setFont(font)
-        painter.drawText(badge, QtCore.Qt.AlignCenter, text)
+        painter.drawText(badge, QtCore.Qt.AlignCenter, self._BADGE_TEXT)
         painter.restore()
 
 

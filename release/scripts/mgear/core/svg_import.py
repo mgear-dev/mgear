@@ -40,6 +40,8 @@ import math
 import re
 import xml.etree.ElementTree as ElementTree
 
+from mgear.core import vector_path
+
 
 # Default fitted extent: the imported shape's larger side is scaled to this.
 DEFAULT_SIZE = 40.0
@@ -63,7 +65,7 @@ SUPPORTED_TAGS = (
 _CONTAINER_TAGS = ("svg", "g")
 
 # A cubic quarter-circle control-point constant (kappa) for arc / ellipse fits.
-_KAPPA = 0.5522847498307936
+_KAPPA = vector_path.KAPPA
 
 
 def _local(tag):
@@ -489,17 +491,7 @@ def _rect_subpaths(element):
 def _ellipse_subpaths(cx, cy, rx, ry):
     if rx <= 0 or ry <= 0:
         return []
-    ox, oy = rx * _KAPPA, ry * _KAPPA
-    return [
-        [
-            ("M", cx + rx, cy),
-            ("C", cx + rx, cy + oy, cx + ox, cy + ry, cx, cy + ry),
-            ("C", cx - ox, cy + ry, cx - rx, cy + oy, cx - rx, cy),
-            ("C", cx - rx, cy - oy, cx - ox, cy - ry, cx, cy - ry),
-            ("C", cx + ox, cy - ry, cx + rx, cy - oy, cx + rx, cy),
-            ("Z",),
-        ]
-    ]
+    return [vector_path.ellipse(cx, cy, rx, ry)]
 
 
 def _poly_subpaths(element, close):
@@ -679,7 +671,7 @@ def scale_subpaths(subpaths, sx, sy):
     Returns:
         list: the scaled subpaths.
     """
-    return _map_subpaths(subpaths, lambda x, y: (x * sx, y * sy))
+    return vector_path.scale(subpaths, sx, sy)
 
 
 # =============================================================================

@@ -39,6 +39,9 @@ from mgear.anim_picker.widgets import mirror
 from mgear.anim_picker.widgets import overlay
 from mgear.anim_picker.widgets import silhouette
 from mgear.anim_picker.widgets import widget_binding
+from mgear.anim_picker.widgets import vector_editor
+from mgear.anim_picker.widgets import vector_model
+from mgear.anim_picker.widgets import vector_toolbar
 from mgear.core import svg_import
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import maya_handlers
@@ -152,6 +155,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
         # On-canvas picker item scale/rotate manipulator (edit mode only).
         self.item_manipulator = item_manipulator.ItemManipulator(self)
+        # SVG edit session controller and its floating toolbar (lazy).
+        self.vector_editor = vector_editor.VectorEditor(self)
+        self.vector_toolbar = None
         self._item_dragging = False
 
         # Persistent mirror relationships: the symmetry axis (scene x), a
@@ -202,6 +208,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         # otherwise leave focus elsewhere and the shortcuts would not fire).
         if __EDIT_MODE__.get():
             self.setFocus()
+        # An SVG edit session owns left-click on the canvas.
+        if self.vector_editor.is_active() and self.vector_editor.mouse_press(event):
+            return
         # Background layer manipulation intercepts left-click when active.
         if self.background_edit and self._bg_mouse_press(event):
             return
@@ -276,6 +285,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             )
 
     def mouseMoveEvent(self, event):
+        # An SVG edit session owns movement (except pan / zoom drags).
+        if self.vector_editor.is_active() and self.vector_editor.mouse_move(event):
+            return
         # Background layer drag / marquee intercepts movement when active.
         if self.background_edit and self._bg_mouse_move(event):
             return
@@ -331,6 +343,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         """Overload to clear selection on empty area"""
+        if self.vector_editor.is_active() and self.vector_editor.mouse_release(event):
+            return
         # Background layer drag / marquee release when active.
         if self.background_edit and self._bg_mouse_release(event):
             return
@@ -519,6 +533,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         Args:
             label (str, optional): a human label for the step (diagnostics).
         """
+        # An SVG edit session records itself as one step when it ends; a
+        # commit from another command mid-session would split it.
+        editor = getattr(self, "vector_editor", None)
+        if editor is not None and editor.is_active():
+            return
         current = self._snapshot_items()
         if self._undo_baseline is None:
             self._undo_baseline = current
@@ -698,6 +717,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         Args:
             event (QtCore.QEvent): keyboard event.
         """
+        # An SVG edit session owns the keyboard (tools, session undo).
+        if self.vector_editor.is_active() and self.vector_editor.key_press(event):
+            event.accept()
+            return
+
         key = event.key()
         mods = event.modifiers()
         ctrl = bool(mods & QtCore.Qt.ControlModifier)
@@ -757,6 +781,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         if event.modifiers() == QtCore.Qt.AltModifier:
             # alt may indicate zooming enabled so no menu
             return
+        if self.vector_editor.is_active():
+            self._vector_session_menu(event)
+            return
         # Item area
         picker_item = [
             item for item in self.get_picker_items() if item._hovered
@@ -785,6 +812,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
                 partial(self.add_picker_item_selected, mapped_pos)
             )
             menu.addAction(add_action1)
+
+            vector_action = QtWidgets.QAction("New vector item", None)
+            vector_action.triggered.connect(partial(self.add_vector_item, mapped_pos))
+            menu.addAction(vector_action)
 
             add_action2 = QtWidgets.QAction("Add item per selected", None)
             add_action2.triggered.connect(
@@ -1009,6 +1040,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         """
         if widget_type == tool_bar.BACKDROP_PAYLOAD:
             return self.add_backdrop_item(mouse_pos)
+        if widget_type == tool_bar.VECTOR_PAYLOAD:
+            return self.add_vector_item(mouse_pos)
         ctrl = self.add_picker_item()
         if mouse_pos is not None:
             ctrl.setPos(mouse_pos)
@@ -1080,8 +1113,64 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         ctrl.set_data(
             {"svg": {"name": name, "subpaths": subpaths, "mode": mode}}
         )
+        ctrl.apply_vector_default_alpha()
         self.scene().select_picker_items([ctrl])
         return ctrl
+
+    def mouseDoubleClickEvent(self, event):
+        """Route double-clicks to an active SVG edit session."""
+        if self.vector_editor.is_active():
+            self.vector_editor.mouse_double_click(event)
+            return
+        return QtWidgets.QGraphicsView.mouseDoubleClickEvent(self, event)
+
+    def begin_vector_edit(self, item, tool=None, is_new=False, flush=True):
+        """Start an SVG edit session on a vector item.
+
+        Args:
+            item (PickerItem): The vector item to edit.
+            tool (str, optional): The tool to start with (default: Node).
+            is_new (bool, optional): The item was just created for this
+                session (removed again if the session ends empty).
+            flush (bool, optional): Commit pending picker undo first.
+        """
+        if not __EDIT_MODE__.get() or not item.is_vector_shape():
+            return
+        if self.vector_toolbar is None:
+            self.vector_toolbar = vector_toolbar.VectorToolbar(
+                self.vector_editor, parent=self.main_window or self.window()
+            )
+        self.vector_editor.begin(
+            item, tool or vector_editor.TOOL_NODE, is_new=is_new, flush=flush
+        )
+
+    def add_vector_item(self, scene_pos=None):
+        """Create an empty vector item and start drawing it with the Pen.
+
+        Args:
+            scene_pos (QPointF, optional): scene position for the new item.
+
+        Returns:
+            PickerItem: The new item.
+        """
+        # Flush first, so creating the item and drawing it commit together.
+        self.commit_edit()
+        ctrl = self.add_picker_item()
+        if scene_pos is not None:
+            ctrl.setPos(scene_pos)
+        ctrl.set_svg_shape(vector_model.svg_from_layers([vector_model.new_layer()]))
+        ctrl.apply_vector_default_alpha()
+        self.begin_vector_edit(ctrl, vector_editor.TOOL_PEN, is_new=True, flush=False)
+        return ctrl
+
+    def _vector_session_menu(self, event):
+        """Right-click menu while an SVG edit session is active."""
+        menu = QtWidgets.QMenu(self)
+        done_action = menu.addAction("Done")
+        done_action.triggered.connect(self.vector_editor.done)
+        cancel_action = menu.addAction("Cancel")
+        cancel_action.triggered.connect(self.vector_editor.cancel)
+        menu.exec_(event.globalPos())
 
     def add_backdrop_item(self, mouse_pos=None, fit_items=None):
         """Create a backdrop container, sent behind the picker items.
@@ -1536,6 +1625,9 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         """Will toggle UI edition mode"""
         if not self.main_window:
             return
+
+        # Leaving edit mode ends an SVG edit session, keeping its edits.
+        vector_editor.end_active_session()
 
         # Check for possible data change/loss
         if __EDIT_MODE__.get():
@@ -2032,8 +2124,8 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         dst.setRotation(mirror.mirror_rotation(src.rotation()))
         if src.is_vector_shape():
             dst.set_svg_shape(dict(src.get_svg_shape()))
-            dst.set_svg_subpaths(
-                svg_import.scale_subpaths(src.get_svg_subpaths(), -1.0, 1.0)
+            dst.map_geometry(
+                lambda subpaths: svg_import.scale_subpaths(subpaths, -1.0, 1.0)
             )
         else:
             src_handles = [[h.x(), h.y()] for h in src.handles]
@@ -2583,7 +2675,11 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             self.draw_overlay_axis(painter, rect)
             # Item scale/rotate manipulator overlay: opt-in via the Transform
             # tool and suppressed while manipulating background layers.
-            if not self.background_edit and self._transform_tool_active():
+            if (
+                not self.background_edit
+                and not self.vector_editor.is_active()
+                and self._transform_tool_active()
+            ):
                 self.item_manipulator.paint(painter)
             # Symmetry-axis guide + pink dotted outline on linked items,
             # shown once any mirror pair exists.
@@ -2595,6 +2691,10 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         if self.background_edit:
             self.bg_manipulator.paint(painter)
             self._draw_bg_marquee(painter)
+
+        # SVG edit session overlay: paths, anchors, handles, tool previews.
+        if self.vector_editor.is_active():
+            self.vector_editor.paint(painter)
 
         return result
 

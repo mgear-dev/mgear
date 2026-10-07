@@ -1404,7 +1404,7 @@ class ItemEditPanel(QtWidgets.QWidget):
         for item in self.items:
             new_color = QtGui.QColor(color)
             new_color.setAlpha(item.get_color().alpha())
-            item.set_color(new_color)
+            item.apply_color(new_color)
         self._repaint_view()
         self._guarded(self._populate_appearance)
 

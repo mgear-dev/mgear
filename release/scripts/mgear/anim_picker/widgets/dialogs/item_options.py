@@ -618,7 +618,7 @@ class ItemOptionsWindow(QtWidgets.QMainWindow):
         color.setAlpha(alpha)
 
         # Update color
-        self.picker_item.set_color(color)
+        self.picker_item.apply_color(color)
 
     def rotate_event(self, rotMinus=None, rotPlus=None):
         """Will rotate polygon based on angle value from spin box"""
