@@ -1,6 +1,10 @@
 """mGear Qt custom widgets"""
 
+import json
+import os
+
 from mgear.vendor.Qt import QtCore, QtWidgets, QtGui
+from maya import cmds
 import maya.OpenMaya as api
 from mgear.core import pyqt
 
@@ -382,6 +386,335 @@ class CollapsibleWidget(QtWidgets.QWidget):
 
     def on_header_clicked(self):
         self.set_expanded(not self.header_wgt.is_expanded())
+
+
+class ColorSwatchButton(QtWidgets.QPushButton):
+    """Button that shows an RGB color and edits it with a color picker.
+
+    Colors are 0-1 RGB tuples. ``colorChanged`` is emitted when the color
+    changes, either from the picker or from :meth:`set_color`.
+    """
+
+    colorChanged = QtCore.Signal(tuple)
+
+    def __init__(self, color=(1.0, 1.0, 1.0), width=60, parent=None):
+        """Initialize the swatch.
+
+        Args:
+            color (tuple, optional): Initial RGB color, 0-1 range.
+            width (int, optional): Fixed button width in pixels.
+            parent (QtWidgets.QWidget, optional): Parent widget.
+        """
+        super(ColorSwatchButton, self).__init__(parent)
+        self._color = tuple(color)
+        self.setFixedWidth(width)
+        self.clicked.connect(self._pick_color)
+        self._update_swatch()
+
+    def color(self):
+        """Return the current color.
+
+        Returns:
+            tuple: RGB color, 0-1 range.
+        """
+        return self._color
+
+    def set_color(self, color):
+        """Set the current color.
+
+        Args:
+            color (tuple): RGB color, 0-1 range.
+        """
+        color = tuple(float(c) for c in color[:3])
+        if color == self._color:
+            return
+        self._color = color
+        self._update_swatch()
+        self.colorChanged.emit(color)
+
+    def settings_value(self):
+        """Return the color for pyqt.SettingsMixin.
+
+        Returns:
+            list: RGB values, 0-1 range.
+        """
+        return list(self._color)
+
+    def set_settings_value(self, value):
+        """Set the color from a stored value (pyqt.SettingsMixin).
+
+        Invalid values are ignored.
+
+        Args:
+            value (object): RGB list / tuple, or a comma-separated string.
+        """
+        if isinstance(value, str):
+            value = value.split(",")
+        try:
+            rgb = [float(c) for c in value]
+        except (TypeError, ValueError):
+            return
+        if len(rgb) >= 3:
+            self.set_color(rgb)
+
+    def settings_signal(self):
+        """Return the signal emitted when the color changes.
+
+        Returns:
+            QtCore.Signal: ``colorChanged``.
+        """
+        return self.colorChanged
+
+    def _pick_color(self):
+        """Open the color picker and apply the chosen color."""
+        chosen = QtWidgets.QColorDialog.getColor(
+            QtGui.QColor.fromRgbF(*self._color), self
+        )
+        if chosen.isValid():
+            self.set_color((chosen.redF(), chosen.greenF(), chosen.blueF()))
+
+    def _update_swatch(self):
+        """Paint the button with the current color."""
+        r, g, b = (int(round(c * 255)) for c in self._color)
+        self.setStyleSheet("background-color: rgb({}, {}, {});".format(r, g, b))
+
+
+class NodeListWidget(QtWidgets.QWidget):
+    """List of Maya nodes with "Add Selected" and "Remove" buttons.
+
+    Rows show short names (the full path is in the tooltip) while
+    :meth:`nodes` returns full DAG paths, so nodes with the same short name
+    under different parents stay distinct. ``nodesChanged`` is emitted
+    when rows are added or removed.
+    """
+
+    nodesChanged = QtCore.Signal()
+
+    def __init__(self, parent=None):
+        """Initialize the widget.
+
+        Args:
+            parent (QtWidgets.QWidget, optional): Parent widget.
+        """
+        super(NodeListWidget, self).__init__(parent)
+        self.list_widget = QtWidgets.QListWidget()
+        self.add_button = QtWidgets.QPushButton("Add Selected")
+        self.remove_button = QtWidgets.QPushButton("Remove")
+
+        self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.list_widget.setMinimumHeight(90)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.list_widget)
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addWidget(self.add_button)
+        button_layout.addWidget(self.remove_button)
+        layout.addLayout(button_layout)
+
+        self.add_button.clicked.connect(self.add_selected)
+        self.remove_button.clicked.connect(self.remove_selected)
+
+    def nodes(self):
+        """Return the listed nodes.
+
+        Returns:
+            list: Full DAG paths (or plain names for non-DAG nodes).
+        """
+        return [
+            self.list_widget.item(i).data(QtCore.Qt.UserRole)
+            for i in range(self.list_widget.count())
+        ]
+
+    def set_nodes(self, nodes):
+        """Replace the list contents.
+
+        Args:
+            nodes (list): Node names or full DAG paths.
+        """
+        self.list_widget.clear()
+        self._add(nodes or [])
+        self.nodesChanged.emit()
+
+    def settings_value(self):
+        """Return the nodes for pyqt.SettingsMixin.
+
+        Returns:
+            list: Full DAG paths.
+        """
+        return self.nodes()
+
+    def set_settings_value(self, value):
+        """Set the nodes from a stored value (pyqt.SettingsMixin).
+
+        Args:
+            value (object): List of names, or a single name (QSettings
+                returns a one-item list as a plain string).
+        """
+        if not value:
+            value = []
+        elif isinstance(value, str):
+            value = [value]
+        self.set_nodes([str(n) for n in value if n])
+
+    def settings_signal(self):
+        """Return the signal emitted when the nodes change.
+
+        Returns:
+            QtCore.Signal: ``nodesChanged``.
+        """
+        return self.nodesChanged
+
+    def add_selected(self):
+        """Add the selected Maya nodes, skipping ones already listed."""
+        added = self._add(cmds.ls(selection=True, long=True) or [])
+        if added:
+            self.nodesChanged.emit()
+
+    def remove_selected(self):
+        """Remove the selected rows."""
+        items = self.list_widget.selectedItems()
+        for item in items:
+            self.list_widget.takeItem(self.list_widget.row(item))
+        if items:
+            self.nodesChanged.emit()
+
+    def _add(self, nodes):
+        """Append nodes that are not listed yet.
+
+        Args:
+            nodes (list): Node names or full DAG paths.
+
+        Returns:
+            int: Number of rows added.
+        """
+        existing = set(self.nodes())
+        added = 0
+        for node in nodes:
+            if node in existing:
+                continue
+            item = QtWidgets.QListWidgetItem(node.split("|")[-1])
+            item.setData(QtCore.Qt.UserRole, node)
+            item.setToolTip(node)
+            self.list_widget.addItem(item)
+            existing.add(node)
+            added += 1
+        return added
+
+
+#############################################
+# Recent files menu
+#############################################
+
+
+class RecentFilesMenu(QtWidgets.QMenu):
+    """Menu listing recently used files, persisted in mGear user settings.
+
+    Entries are most recent first, without duplicates, and capped at
+    ``max_entries``. Picking an entry emits ``fileTriggered(path)``.
+
+    Example:
+        >>> menu = RecentFilesMenu("myTool_recent", parent=file_menu)
+        >>> menu.fileTriggered.connect(self.load_file)
+        >>> file_menu.addMenu(menu)
+        >>> menu.add_file(path)  # after a successful load or save
+    """
+
+    fileTriggered = QtCore.Signal(str)
+
+    def __init__(
+        self,
+        settings_key,
+        title="Recent Files",
+        max_entries=10,
+        settings=None,
+        parent=None,
+    ):
+        """Initialize the menu.
+
+        Args:
+            settings_key (str): Key used to store the list in the mGear
+                user settings. Must be unique per tool.
+            title (str, optional): Menu title.
+            max_entries (int, optional): Maximum number of files kept.
+            settings (QtCore.QSettings, optional): Settings object to use,
+                e.g. a tool's ``SettingsMixin.settings``. Defaults to
+                ``pyqt.get_user_settings()``.
+            parent (QtWidgets.QWidget, optional): Parent widget.
+        """
+        super(RecentFilesMenu, self).__init__(title, parent)
+        self.settings_key = settings_key
+        self.max_entries = max_entries
+        self.settings = settings or pyqt.get_user_settings()
+        self.rebuild()
+
+    def files(self):
+        """Return the stored recent files.
+
+        Returns:
+            list: File paths, most recent first.
+        """
+        raw = self.settings.value(self.settings_key, "")
+        if not raw:
+            return []
+        try:
+            paths = raw if isinstance(raw, list) else json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+        return [p for p in paths if p]
+
+    def add_file(self, path):
+        """Move or add a file to the top of the list.
+
+        Args:
+            path (str): File path.
+        """
+        path = os.path.abspath(path)
+        paths = [p for p in self.files() if p != path]
+        paths.insert(0, path)
+        self._store(paths[: self.max_entries])
+
+    def clear_files(self):
+        """Remove every entry without asking."""
+        self._store([])
+
+    def rebuild(self):
+        """Repopulate the menu from the stored list."""
+        self.clear()
+        paths = self.files()
+        if not paths:
+            empty = self.addAction("(empty)")
+            empty.setEnabled(False)
+        for path in paths:
+            action = self.addAction(path)
+            action.triggered.connect(
+                lambda checked=False, p=path: self.fileTriggered.emit(p)
+            )
+        self.addSeparator()
+        clear_action = self.addAction("Clear Recent")
+        clear_action.setEnabled(bool(paths))
+        clear_action.triggered.connect(self._confirm_clear)
+
+    def _store(self, paths):
+        """Persist the list and refresh the menu.
+
+        Args:
+            paths (list): File paths, most recent first.
+        """
+        self.settings.setValue(self.settings_key, json.dumps(paths))
+        self.settings.sync()
+        self.rebuild()
+
+    def _confirm_clear(self):
+        """Ask before clearing the list."""
+        answer = QtWidgets.QMessageBox.question(
+            self.parentWidget(),
+            "Clear Recent",
+            "Clear the list of recent files?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if answer == QtWidgets.QMessageBox.Yes:
+            self.clear_files()
 
 
 ##################

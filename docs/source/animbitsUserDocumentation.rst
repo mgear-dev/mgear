@@ -389,6 +389,53 @@ Record and apply world space transforms to selected objects across timeline rang
 * Match character movement to objects
 
 
+Blocking Ghosts
+===============
+
+See your key poses side by side while you block. Blocking Ghosts creates static, semi-transparent copies ("ghosts") of the character at the keyframes of the controls you choose, and keeps them in step with the timeline and the camera.
+
+**Key Features:**
+
+* Ghosts at every keyframe of a set of watched controls inside a frame range, including the pose on the current frame
+* New, deleted or moved keys are picked up automatically when you move the timeline
+* Previous ghosts and next ghosts get their own color; the ghost on the current frame is hidden, since the live rig already shows that pose
+* Spread the ghosts sideways along the camera's right axis so overlapping poses can be read, following the camera as you tumble; positive or negative spacing picks which side the previous poses go
+* Click a ghost to jump to its frame; your rig selection is kept
+* When you change a pose and move on, its ghost is updated from the new pose
+* Switch between the ghost colors and the character's own shaders (multi-material meshes included)
+* Works with referenced, namespaced rigs
+
+**Workflow:**
+
+1. Add the character meshes to **Objects to ghost** (select them, then **Add Selected**)
+2. Add the controls whose keys define the poses to **Watch controls**
+3. Set the **Frame range**, or click **Timeline** to use the timeline's playback range
+4. Click **Generate**
+5. Scrub or click ghosts to move between poses; adjust **Transparency**, **Spacing** and **Shading** at any time
+6. Click **Clear** to remove the ghosts
+
+**Options:**
+
+* **Frame range** - Start and end frame. Every key of the watched controls in this range gets a ghost. More than 30 poses asks for confirmation first.
+* **Timeline** - Set the frame range to the timeline's playback range
+* **Previous color / Post color** - Colors of the ghosts before and after the current frame
+* **Transparency** - Ghost transparency, from opaque (0) to clear (1). Applies to **Pre / Post Color** shading only.
+* **Spacing** - Distance between poses along the camera's right axis, in world units. 0 keeps every ghost in place. Positive values place previous poses on the right and next poses on the left; negative values swap them.
+* **Shading** - **Pre / Post Color** or **Original Shader**
+
+**Menus:**
+
+* **File Menu** - Export / Import configurations (``.bgh``; ``.json`` files are also accepted) and a list of recent configurations
+
+**Notes:**
+
+* When you add, delete or move a key of a watched control inside the frame range, the ghosts are updated the next time you move the timeline (once it stops).
+* **Original Shader** shows the character's own materials, so the transparency slider is disabled in that mode.
+* Ghosts are hidden while the timeline plays.
+* Ghosts are never saved with the scene, and nothing the tool does goes into the undo queue, so **Ctrl+Z** only undoes your own edits. To remove ghosts, use **Clear**.
+* Closing the window, opening a scene or creating a new scene removes the ghosts.
+
+
 Spring Manager
 ==============
 

@@ -19,6 +19,12 @@ Release Log
 	* Anim Picker: Create a new vector item from the canvas right-click menu or the new "Vec" Drag to add tile, convert a polygon item to a vector, and export a vector item's layers with "Export SVG..."; the shape library saves and applies multi-layer vector shapes
 	* Core: Add ``mgear.core.vector_path`` (Qt-free vector subpath editing: node operations, hit-testing, exact bounds, primitive and arrow builders, curve fitting) and ``mgear.core.svg_export`` (layers to SVG text); ``svg_import`` now shares its ellipse and scaling code with ``vector_path``
 	* Docs: Anim Picker: Document the SVG editor, its tools, shortcuts, layers, layer colors and export
+	* Animbits: Blocking Ghosts — new tool (Animbits > Blocking Ghosts) that shows static, semi-transparent ghosts of the character at every keyframe of a set of watched controls inside a frame range (with a button to use the timeline range); ghosts follow added, deleted and moved keys when you move the timeline; previous / next ghosts get their own color and the ghost on the current frame hides, ghosts spread along the camera's right axis (positive spacing puts previous poses on the right, negative on the left) and follow the camera, clicking a ghost jumps to its frame, a ghost re-captures the new pose when you leave its frame, and the shading toggles between ghost colors and the original (multi-material) shaders; works on referenced / namespaced rigs, never saves ghosts into the scene, never touches the undo queue, and uses no scriptJobs
+	* Core: Add ``mgear.core.shading`` — capture and restore per-face shading group assignments (``get_face_shader_mapping`` / ``apply_face_shader_mapping``), ``index_ranges``, and a flat, lighting-independent transparent shader (``create_flat_shader`` / ``set_shader_transparency``)
+	* Core: Add ``utils.undo_disabled()`` (quiet context manager that stops undo recording without flushing the queue and restores the previous state; ``undo_off`` now uses it), ``utils.viewport_suspended()``, ``utils.get_active_camera`` and ``utils.get_camera_axis``, ``anim_utils.get_keyframe_times`` (one batched query) and ``node.set_hide_on_playback`` (native attribute, no controller tag)
+	* Core: ``CallbackManager`` gains OpenMaya API 2.0 ``timerCB``, ``eventCB``, ``conditionCB`` and ``sceneMessageCB`` (no scriptJobs)
+	* Core: Add reusable ``widgets.ColorSwatchButton``, ``widgets.NodeListWidget`` (shows short names, keeps full DAG paths) and ``widgets.RecentFilesMenu``; ``pyqt.SettingsMixin`` now also saves spin boxes, sliders and checkable buttons, supports widgets that save their own value (``settings_value`` / ``set_settings_value`` / ``settings_signal``), and exposes ``get_widget_value`` / ``set_widget_value``; ``pyqt.get_user_settings`` returns the shared mGear settings object
+	* Docs: Animbits: Document Blocking Ghosts
 
 **Bug Fix**
 	* Shifter: Build Log: The log is now cleared at the start of every build, including builds started from the Guide Explorer, which previously appended to the prior build's log indefinitely
@@ -26,6 +32,7 @@ Release Log
 	* Anim Picker: The "SVG" hover badge keeps a small constant on-screen size at any zoom instead of scaling with the canvas
 	* Anim Picker: New vector items (imported or dropped SVGs, new vector items, SVG library shapes, converted polygons) are fully opaque by default instead of inheriting the polygons' semi-transparent default; a user-set opacity is kept
 	* Anim Picker: "Toggle handles" no longer appears as a dead entry on vector items; it is replaced by "Edit SVG"
+	* Core: ``callbackManager``: ``removeManagedCB``, ``removeAllSessionCB`` and ``removeNamespaceCB`` no longer raise under Python 3 (dict changed size during iteration), and ``removeCBviaMayaID`` no longer uses the Python 2 ``iteritems``
 
 5.3.5
 ------

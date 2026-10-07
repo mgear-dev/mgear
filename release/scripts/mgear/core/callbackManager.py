@@ -64,7 +64,8 @@ def removeAllSessionCB():
     """Remove all the callbacks created in this session, provided they are in
     the RECORDED_CALLBACKS dict
     """
-    [removeCB(cb) for cb in RECORDED_CALLBACKS.keys()]
+    for cb in list(RECORDED_CALLBACKS.keys()):
+        removeCB(cb)
 
 
 def removeCBviaMayaID(mayaID, callback_info=RECORDED_CALLBACKS):
@@ -75,7 +76,7 @@ def removeCBviaMayaID(mayaID, callback_info=RECORDED_CALLBACKS):
         mayaID (long): maya point to a callback
         callback_info (dict, optional): remove it from desired cb recorder
     """
-    for callback_name, callback_id in RECORDED_CALLBACKS.iteritems():
+    for callback_name, callback_id in list(callback_info.items()):
         if callback_id == mayaID:
             removeCB(callback_name, callback_info=callback_info)
 
@@ -112,7 +113,7 @@ def removeNamespaceCB(namespace):
     Args:
         namespace (str): uuid or other type of namespace
     """
-    for cb in RECORDED_CALLBACKS.keys():
+    for cb in list(RECORDED_CALLBACKS.keys()):
         if cb.startswith(namespace):
             removeCB(cb)
 
@@ -260,6 +261,76 @@ def userTimeChangedCB(callback_name, func):
 
 
 @registerSessionCB
+def timerCB(callback_name, func, period):
+    """Call the provided function at a fixed interval
+
+    Args:
+        callback_name (str): name you want to assign cb
+        func (function): called with (elapsedTime, lastTime, clientData)
+        period (float): interval in seconds
+
+    Returns:
+        long: maya id to created callback
+    """
+    callback_id = om.MTimerMessage.addTimerCallback(period, func)
+    return callback_id
+
+
+@registerSessionCB
+def eventCB(callback_name, func, event):
+    """Call the provided function when the named Maya event fires
+
+    Use om.MEventMessage.getEventNames() for the list of valid events,
+    e.g. "timeChanged" or "SelectionChanged".
+
+    Args:
+        callback_name (str): name you want to assign cb
+        func (function): called with (clientData)
+        event (str): Maya event name
+
+    Returns:
+        long: maya id to created callback
+    """
+    callback_id = om.MEventMessage.addEventCallback(event, func)
+    return callback_id
+
+
+@registerSessionCB
+def conditionCB(callback_name, func, condition):
+    """Call the provided function when the named Maya condition changes
+
+    Use om.MConditionMessage.getConditionNames() for the list of valid
+    conditions, e.g. "playingBack".
+
+    Args:
+        callback_name (str): name you want to assign cb
+        func (function): called with (state, clientData)
+        condition (str): Maya condition name
+
+    Returns:
+        long: maya id to created callback
+    """
+    callback_id = om.MConditionMessage.addConditionCallback(condition, func)
+    return callback_id
+
+
+@registerSessionCB
+def sceneMessageCB(callback_name, func, message):
+    """Call the provided function on a scene message
+
+    Args:
+        callback_name (str): name you want to assign cb
+        func (function): called with (clientData)
+        message (int): om.MSceneMessage type, e.g. kBeforeNew, kBeforeOpen
+
+    Returns:
+        long: maya id to created callback
+    """
+    callback_id = om.MSceneMessage.addCallback(message, func)
+    return callback_id
+
+
+@registerSessionCB
 def sampleCallback(callback_name, func):
     """argument order is important. Callback_name and func must always be first
     must always return the mayaID to the callback
@@ -378,7 +449,7 @@ class CallbackManager(object):
         Args:
             callback_name (str): name
         """
-        for callback_id in self.MANAGER_CALLBACKS.keys():
+        for callback_id in list(self.MANAGER_CALLBACKS.keys()):
             if callback_id.endswith(callback_name):
                 removeCB(callback_id, callback_info=self.MANAGER_CALLBACKS)
                 removeCB(callback_id)
@@ -469,4 +540,24 @@ class CallbackManager(object):
     @registerManagerCB
     def userTimeChangedCB(self, callback_name, func):
         callback_id = userTimeChangedCB(callback_name, func)
+        return callback_id
+
+    @registerManagerCB
+    def timerCB(self, callback_name, func, period):
+        callback_id = timerCB(callback_name, func, period)
+        return callback_id
+
+    @registerManagerCB
+    def eventCB(self, callback_name, func, event):
+        callback_id = eventCB(callback_name, func, event)
+        return callback_id
+
+    @registerManagerCB
+    def conditionCB(self, callback_name, func, condition):
+        callback_id = conditionCB(callback_name, func, condition)
+        return callback_id
+
+    @registerManagerCB
+    def sceneMessageCB(self, callback_name, func, message):
+        callback_id = sceneMessageCB(callback_name, func, message)
         return callback_id

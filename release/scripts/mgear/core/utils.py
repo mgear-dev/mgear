@@ -1,6 +1,7 @@
 """Utility functions"""
 
 
+import contextlib
 import datetime
 import getpass
 import os
@@ -286,18 +287,54 @@ def undo_off(func):
     def wrap(*args, **kwargs):
         # type: (*str, **str) -> None
 
-        try:
-            cmds.undoInfo(stateWithoutFlush=False)
+        with undo_disabled():
             pm.displayInfo("Undo off for: {}".format(func.__name__))
             return func(*args, **kwargs)
 
-        except Exception as e:
-            raise e
-
-        finally:
-            cmds.undoInfo(stateWithoutFlush=True)
-
     return wrap
+
+
+@contextlib.contextmanager
+def viewport_suspended():
+    """Context manager - Suspend viewport refresh while the block runs.
+
+    Lighter than :func:`viewport_off`: the viewport is not redrawn, but
+    the main pane stays managed, so the UI does not flicker. Refresh is
+    resumed even if the block raises.
+
+    Example:
+        >>> with viewport_suspended():
+        ...     for frame in frames:
+        ...         cmds.currentTime(frame, edit=True)
+    """
+    cmds.refresh(suspend=True)
+    try:
+        yield
+    finally:
+        cmds.refresh(suspend=False)
+
+
+@contextlib.contextmanager
+def undo_disabled():
+    """Context manager - Stop undo recording without flushing the queue.
+
+    Edits made inside the block are not recorded and the existing undo
+    queue is kept intact. The previous undo state is restored on exit, even
+    if the block raises, so nesting is safe. Silent, so it is suitable for
+    callbacks that run on every frame.
+
+    Example:
+        >>> with undo_disabled():
+        ...     cmds.setAttr("ghost_grp.visibility", False)
+    """
+    was_enabled = cmds.undoInfo(query=True, state=True)
+    if was_enabled:
+        cmds.undoInfo(stateWithoutFlush=False)
+    try:
+        yield
+    finally:
+        if was_enabled:
+            cmds.undoInfo(stateWithoutFlush=True)
 
 
 def timeFunc(func):
@@ -529,3 +566,60 @@ def get_user_metadata():
         "maya_version": str(mel.eval("getApplicationVersionAsFloat")),
         "gear_version": mgear.getVersion(),
     }
+
+
+# -----------------------------------------------------------------------------
+# Viewport camera
+# -----------------------------------------------------------------------------
+
+
+def get_active_camera():
+    """Return the camera transform of the active viewport.
+
+    Falls back to ``persp`` when there is no active model panel (for
+    example in batch mode).
+
+    Returns:
+        str: Camera transform long name, or None when no camera is found.
+    """
+    try:
+        editor = cmds.playblast(activeEditor=True)
+        camera = cmds.modelEditor(editor, query=True, camera=True)
+    except RuntimeError:
+        camera = None
+    if not camera or not cmds.objExists(camera):
+        camera = "persp" if cmds.objExists("persp") else None
+    if not camera:
+        return None
+    if cmds.objectType(camera, isAType="camera"):
+        parents = cmds.listRelatives(camera, parent=True, fullPath=True)
+        return parents[0] if parents else None
+    return cmds.ls(camera, long=True)[0]
+
+
+def get_camera_axis(camera, axis="x", matrix=None):
+    """Return a camera's normalized world-space axis direction.
+
+    Args:
+        camera (str): Camera transform name. None or a missing node is
+            allowed.
+        axis (str, optional): "x" (right), "y" (up) or "z" (back).
+        matrix (list, optional): The camera's flat world matrix, when the
+            caller already has it, to skip the query.
+
+    Returns:
+        tuple: ``(x, y, z)`` unit vector. The matching world axis when the
+        camera is missing or its matrix row is degenerate.
+    """
+    index = "xyz".index(axis)
+    fallback = tuple(1.0 if i == index else 0.0 for i in range(3))
+    if matrix is None:
+        if not camera or not cmds.objExists(camera):
+            return fallback
+        matrix = cmds.xform(camera, query=True, matrix=True, worldSpace=True)
+    row = OpenMaya.MVector(matrix[index * 4 : index * 4 + 3])
+    length = row.length()
+    if length < 1e-6:
+        return fallback
+    row /= length
+    return (row.x, row.y, row.z)

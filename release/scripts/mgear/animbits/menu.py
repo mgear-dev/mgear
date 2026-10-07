@@ -12,6 +12,8 @@ def install():
         ("Human IK Mapper", str_mocap_humanIKMapper, "mgear_mocap.svg"),
         ("Space Recorder", str_space_recorder, "mgear_key.svg"),
         ("-----", None),
+        ("Blocking Ghosts", str_blocking_ghosts, "mgear_blocking_ghosts.svg"),
+        ("-----", None),
         ("Smart Reset Attribute/SRT", str_smart_reset, "mgear_smart_reset.svg"),
         ("-----", None),
         ("Spring Manager", str_openSpringManager, "mgear_spring.svg"),
@@ -40,6 +42,11 @@ run_cache_mamanger()
 str_smart_reset = """
 from mgear.core import attribute
 attribute.smart_reset()
+"""
+
+str_blocking_ghosts = """
+from mgear.animbits import blocking_ghosts
+blocking_ghosts.show()
 """
 
 str_space_recorder = """

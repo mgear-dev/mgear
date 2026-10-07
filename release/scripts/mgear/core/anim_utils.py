@@ -211,6 +211,26 @@ def recordNodesMatrices(nodes, desiredTime):
     return nodeToMat_dict
 
 
+def get_keyframe_times(nodes):
+    """Return the sorted, unique keyframe times found on a list of nodes.
+
+    Missing nodes are ignored. All nodes are queried in a single
+    ``cmds.keyframe`` call.
+
+    Args:
+        nodes (list): Node names to query.
+
+    Returns:
+        list: Sorted unique keyframe times (float). Empty when no keyframe
+        is found.
+    """
+    nodes = cmds.ls(nodes) if nodes else []
+    if not nodes:
+        return []
+    times = cmds.keyframe(nodes, query=True, timeChange=True) or []
+    return sorted(set(times))
+
+
 def getRootNode():
     """Returns the root node from a selected node
 

@@ -1,6 +1,8 @@
 """Functions to create and connect nodes."""
 
 
+from maya import cmds
+
 import mgear.pymaya as pm
 from mgear.pymaya import versions
 import mgear.pymaya.datatypes as datatypes
@@ -1006,3 +1008,25 @@ def controller_tag_connect(ctt, tagParent):
         ni = attribute.get_next_available_index(tpTagNode.children)
         pm.disconnectAttr(ctt.parent)
         pm.connectAttr(ctt.parent, tpTagNode.attr("children[%s]" % str(ni)))
+
+
+def set_hide_on_playback(nodes, enabled=True):
+    """Hide DAG nodes in the viewport while the timeline plays.
+
+    Sets the native ``hideOnPlayback`` attribute. Only on Maya versions
+    without that attribute is the node tagged as a controller (which
+    exposes it), so no controller tag is created on current versions.
+
+    Args:
+        nodes (list): DAG node names.
+        enabled (bool, optional): True to hide on playback.
+    """
+    for node in nodes:
+        if not cmds.attributeQuery("hideOnPlayback", node=node, exists=True):
+            if not cmds.controller(node, query=True):
+                cmds.controller(node)
+            if not cmds.attributeQuery(
+                "hideOnPlayback", node=node, exists=True
+            ):
+                continue
+        cmds.setAttr(node + ".hideOnPlayback", enabled)

@@ -446,77 +446,169 @@ def dpi_scale(value, default=96, min_=1, max_=2):
 #############################################
 
 
+def get_user_settings():
+    """Return the shared mGear user settings object.
+
+    Settings are stored in ``mGear_user_settings.ini`` in the Maya user
+    prefs folder.
+
+    Returns:
+        QtCore.QSettings: The settings object (INI format).
+    """
+    prefs_folder = cmds.internalVar(userPrefDir=True)
+    settings_file_path = os.path.join(prefs_folder, "mGear_user_settings.ini")
+    return QtCore.QSettings(settings_file_path, QtCore.QSettings.IniFormat)
+
+
 class SettingsMixin(object):
+    """Save and restore widget values in the mGear user settings.
+
+    Fill ``self.user_settings`` with ``{key: (widget, default)}`` and call
+    :meth:`load_settings`; values are then saved on every change.
+
+    Supported widgets: check boxes, actions and checkable buttons, combo
+    boxes, line edits, spin boxes and sliders, plus any widget that
+    implements the settings protocol: ``settings_value()``,
+    ``set_settings_value(value)`` and ``settings_signal()`` returning the
+    signal emitted on change (for example ``widgets.ColorSwatchButton`` and
+    ``widgets.NodeListWidget``).
+    """
+
     def __init__(self, parent=None):
         self.settings = self.create_qsettings_object()
         self.user_settings = {}
 
     def create_qsettings_object(self):
-        prefs_folder = cmds.internalVar(userPrefDir=True)
-        settings_file_path = os.path.join(
-            prefs_folder, "mGear_user_settings.ini"
-        )
-        return QtCore.QSettings(settings_file_path, QtCore.QSettings.IniFormat)
+        return get_user_settings()
 
     def load_settings(self):
         for key, (widget, default_value) in self.user_settings.items():
             value = self.settings.value(key, defaultValue=default_value)
-            # Convert string values to appropriate types based on widget
-            if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QAction)):
-                # For checkboxes/actions, convert string to bool
-                if value in ["true", "True", True]:
-                    value = True
-                elif value in ["false", "False", False]:
-                    value = False
-                else:
-                    value = bool(default_value)
-            elif isinstance(widget, QtWidgets.QComboBox):
-                # For combo boxes, ensure integer
-                try:
-                    value = int(value)
-                except (ValueError, TypeError):
-                    value = int(default_value) if default_value else 0
-            elif isinstance(widget, QtWidgets.QLineEdit):
-                # For line edits, ensure string
-                if value is None:
-                    value = str(default_value) if default_value else ""
-                else:
-                    value = str(value)
-            self._set_widget_value(widget, value)
+            self.set_widget_value(widget, value, default_value)
             self._connect_widget_signal(widget)
 
     def save_settings(self):
         for key, (widget, _) in self.user_settings.items():
-            value = self._get_widget_value(widget)
-            self.settings.setValue(key, value)
+            self.settings.setValue(key, self.get_widget_value(widget))
         self.settings.sync()
 
-    def _get_widget_value(self, widget):
-        if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QAction)):
-            return widget.isChecked()
-        elif isinstance(widget, QtWidgets.QComboBox):
-            return widget.currentIndex()
-        elif isinstance(widget, QtWidgets.QLineEdit):
-            return widget.text()
-        # Add support for other widget types as needed.
-        # ...
+    def get_widget_value(self, widget):
+        """Return a widget's value in a settings / JSON friendly form.
 
-    def _set_widget_value(self, widget, value):
-        if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QAction)):
-            widget.setChecked(value)
+        Args:
+            widget (QtWidgets.QWidget): A supported widget.
+
+        Returns:
+            object: The value (bool, int, float, str or list).
+        """
+        if _has_settings_protocol(widget):
+            return widget.settings_value()
+        if _is_toggle_widget(widget):
+            return widget.isChecked()
+        if isinstance(widget, QtWidgets.QComboBox):
+            return widget.currentIndex()
+        if isinstance(widget, QtWidgets.QLineEdit):
+            return widget.text()
+        if isinstance(widget, _VALUE_WIDGETS):
+            return widget.value()
+        return None
+
+    def set_widget_value(self, widget, value, default=None):
+        """Set a widget from a stored value, converting its type.
+
+        Values read back from QSettings are often strings; they are
+        converted to the widget's type, falling back to ``default``.
+
+        Args:
+            widget (QtWidgets.QWidget): A supported widget.
+            value (object): Stored value.
+            default (object, optional): Fallback when ``value`` is unusable.
+        """
+        if _has_settings_protocol(widget):
+            widget.set_settings_value(default if value is None else value)
+        elif _is_toggle_widget(widget):
+            if value in ("true", "True", True):
+                widget.setChecked(True)
+            elif value in ("false", "False", False):
+                widget.setChecked(False)
+            else:
+                widget.setChecked(bool(default))
         elif isinstance(widget, QtWidgets.QComboBox):
-            widget.setCurrentIndex(int(value))
+            widget.setCurrentIndex(_to_number(value, default, int))
         elif isinstance(widget, QtWidgets.QLineEdit):
-            widget.setText(value)
-        # Add support for other widget types as needed.
-        # ...
+            if value is None:
+                value = default or ""
+            widget.setText(str(value))
+        elif isinstance(widget, QtWidgets.QDoubleSpinBox):
+            widget.setValue(_to_number(value, default, float))
+        elif isinstance(widget, _VALUE_WIDGETS):
+            widget.setValue(_to_number(value, default, int))
 
     def _connect_widget_signal(self, widget):
-        if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QAction)):
+        if _has_settings_protocol(widget):
+            widget.settings_signal().connect(self.save_settings)
+        elif _is_toggle_widget(widget):
             widget.toggled.connect(self.save_settings)
         elif isinstance(widget, QtWidgets.QComboBox):
             widget.currentIndexChanged.connect(self.save_settings)
         elif isinstance(widget, QtWidgets.QLineEdit):
             widget.textChanged.connect(self.save_settings)
-        # Add support for other widget types as needed.
-        # ...
+        elif isinstance(widget, _VALUE_WIDGETS):
+            widget.valueChanged.connect(self.save_settings)
+
+
+_VALUE_WIDGETS = (
+    QtWidgets.QSpinBox,
+    QtWidgets.QDoubleSpinBox,
+    QtWidgets.QAbstractSlider,
+)
+
+
+def _has_settings_protocol(widget):
+    """Return True for widgets that save and restore their own value.
+
+    Args:
+        widget (QtWidgets.QWidget): Widget to test.
+
+    Returns:
+        bool: True when the widget implements ``settings_value``,
+        ``set_settings_value`` and ``settings_signal``.
+    """
+    return all(
+        hasattr(widget, name)
+        for name in ("settings_value", "set_settings_value", "settings_signal")
+    )
+
+
+def _is_toggle_widget(widget):
+    """Return True for widgets holding a checked state.
+
+    Check boxes, actions and any checkable button (e.g. a toggle
+    QPushButton).
+
+    Args:
+        widget (QtWidgets.QWidget): Widget to test.
+
+    Returns:
+        bool: True when the widget's value is its checked state.
+    """
+    if isinstance(widget, (QtWidgets.QCheckBox, QtWidgets.QAction)):
+        return True
+    return isinstance(widget, QtWidgets.QAbstractButton) and widget.isCheckable()
+
+
+def _to_number(value, default, cast):
+    """Convert a stored settings value to a number.
+
+    Args:
+        value (object): Value read from QSettings, often a string.
+        default (object): Fallback when the value can not be converted.
+        cast (type): ``int`` or ``float``.
+
+    Returns:
+        int or float: The converted value.
+    """
+    try:
+        return cast(float(value))
+    except (TypeError, ValueError):
+        return cast(default or 0)

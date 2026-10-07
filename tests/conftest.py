@@ -57,3 +57,56 @@ def run_with_maya_standalone():
 def run_with_maya_pymel():
     import pymel.core
     yield
+
+
+def pytest_configure(config):
+    """Create the GUI QApplication before Maya starts.
+
+    Widget tests need a GUI QApplication, and maya.standalone.initialize()
+    creates a non-GUI one if none exists yet. This hook runs before test
+    collection, so before the run_with_maya_standalone fixture. Skipped when
+    no PySide binding is installed (e.g. CI without Maya).
+    """
+    try:
+        from PySide6 import QtWidgets
+    except ImportError:
+        try:
+            from PySide2 import QtWidgets
+        except ImportError:
+            return
+    config._mgear_qt_app = QtWidgets.QApplication.instance() or (
+        QtWidgets.QApplication([])
+    )
+
+
+@pytest.fixture
+def qt_app(run_with_maya_standalone, setup_path):
+    """GUI QApplication running alongside maya.standalone.
+
+    Skips the test when only a non-GUI application is available.
+    """
+    from mgear.vendor.Qt import QtWidgets
+
+    app = QtWidgets.QApplication.instance()
+    if not isinstance(app, QtWidgets.QApplication):
+        pytest.skip("No GUI QApplication available")
+    yield app
+
+
+@pytest.fixture
+def clean_settings(qt_app):
+    """mGear user settings, restored to their prior state after the test.
+
+    Yields the shared settings object (mgear.core.pyqt.get_user_settings).
+    """
+    from mgear.core import pyqt
+
+    settings = pyqt.get_user_settings()
+    saved = {key: settings.value(key) for key in settings.allKeys()}
+    yield settings
+    for key in settings.allKeys():
+        if key not in saved:
+            settings.remove(key)
+    for key, value in saved.items():
+        settings.setValue(key, value)
+    settings.sync()
