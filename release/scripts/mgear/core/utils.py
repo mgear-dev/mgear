@@ -433,6 +433,29 @@ def get_os():
     return cmds.about(os=True)
 
 
+def get_workspace_folder(rule="images"):
+    """Return the current Maya project's folder for a file rule.
+
+    Falls back to the project root, then the user's home folder, when the
+    rule's folder does not exist.
+
+    Args:
+        rule (str, optional): Workspace file rule name, e.g. "images" or
+            "scenes".
+
+    Returns:
+        str: An existing folder path.
+    """
+    entry = cmds.workspace(fileRuleEntry=rule) or ""
+    for folder in (
+        cmds.workspace(expandName=entry) if entry else "",
+        cmds.workspace(query=True, rootDirectory=True),
+    ):
+        if folder and os.path.isdir(folder):
+            return folder
+    return os.path.expanduser("~")
+
+
 def reveal_in_file_browser(path):
     """Open the OS file browser with the given path selected.
 

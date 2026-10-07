@@ -12,6 +12,7 @@ from mgear.vendor.Qt import QtWidgets
 # module
 from mgear.core import pyqt
 from mgear.core import utils
+from mgear.anim_picker.widgets import tool_bar
 from mgear.anim_picker.handlers import __EDIT_MODE__
 
 # =============================================================================
@@ -440,6 +441,11 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         )
         self.layer_list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.add_button = QtWidgets.QPushButton("Add Layer")
+        self.capture_button = QtWidgets.QPushButton("Capture Region")
+        self.capture_button.setIcon(tool_bar.mgear_icon("mgear_crop"))
+        self.capture_button.setToolTip(
+            "Capture an area of the screen and add it as a background layer"
+        )
         self.remove_button = QtWidgets.QPushButton("Remove Layer")
         self.up_button = QtWidgets.QPushButton("Move Up")
         self.down_button = QtWidgets.QPushButton("Move Down")
@@ -472,6 +478,7 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
 
         list_buttons = QtWidgets.QHBoxLayout()
         list_buttons.addWidget(self.add_button)
+        list_buttons.addWidget(self.capture_button)
         list_buttons.addWidget(self.remove_button)
         list_buttons.addWidget(self.up_button)
         list_buttons.addWidget(self.down_button)
@@ -487,6 +494,7 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
 
     def connectSignals(self):
         self.add_button.clicked.connect(self.add_layer)
+        self.capture_button.clicked.connect(self.capture_layer)
         self.remove_button.clicked.connect(self.remove_layer)
         self.up_button.clicked.connect(self.move_up)
         self.down_button.clicked.connect(self.move_down)
@@ -638,6 +646,9 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         """Deactivate the canvas sub-mode when the panel closes."""
         if self._edit_view is not None:
             self._edit_view.exit_background_edit()
+            # Drop the view's reference so it never holds a deleted panel.
+            if self._edit_view.bg_ui is self:
+                self._edit_view.bg_ui = None
             self._edit_view = None
         super().closeEvent(event)
 
@@ -646,6 +657,22 @@ class BackgroundOptionsDialog(QtWidgets.QDialog):
         if not view:
             return
         view.set_background_event()
+        self._select_last_layer()
+
+    def capture_layer(self):
+        """Capture a screen region and add it as a new background layer.
+
+        The panel is hidden (not closed) during the capture, so the canvas
+        stays in background-edit mode.
+        """
+        view = self.gfx_view()
+        if not view:
+            return
+        view.capture_background_event()
+        self._select_last_layer()
+
+    def _select_last_layer(self):
+        """Refresh the layer list and select the topmost (last) layer."""
         self.refresh_layer_list()
         count = self.layer_list.count()
         if count:

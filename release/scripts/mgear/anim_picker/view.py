@@ -4,6 +4,7 @@ Extracted from gui.py during the Phase 2 decomposition.
 """
 
 import os
+import contextlib
 import copy
 import json
 import uuid
@@ -14,7 +15,9 @@ import mgear.pymaya as pm
 
 import mgear
 from mgear.core import attribute
+from mgear.core import screen_capture
 from mgear.core import string
+from mgear.core import utils
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtWidgets
@@ -39,6 +42,30 @@ from mgear.anim_picker.widgets import widget_binding
 from mgear.core import svg_import
 from mgear.anim_picker.handlers import __EDIT_MODE__
 from mgear.anim_picker.handlers import maya_handlers
+
+# Folder the user last saved a screen capture to in this Maya session.
+_last_capture_dir = None
+
+
+def _unique_capture_path(folder, base_name):
+    """Return a free ``<base_name>_bg.png`` path inside ``folder``.
+
+    Adds ``_1``, ``_2``, ... when the plain name already exists.
+
+    Args:
+        folder (str): Target folder.
+        base_name (str): Name to derive the file name from (e.g. tab name).
+
+    Returns:
+        str: A path in ``folder`` that does not exist yet.
+    """
+    name = "{}_bg".format(string.normalize(base_name) if base_name else "picker")
+    candidate = os.path.join(folder, name + ".png")
+    index = 1
+    while os.path.exists(candidate):
+        candidate = os.path.join(folder, "{}_{}.png".format(name, index))
+        index += 1
+    return candidate
 
 
 def _united_scene_rect(items):
@@ -790,6 +817,12 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             background_action.triggered.connect(self.set_background_event)
             menu.addAction(background_action)
 
+            capture_action = QtWidgets.QAction(
+                tool_bar.mgear_icon("mgear_crop"), "Capture Screen Region", None
+            )
+            capture_action.triggered.connect(self.capture_background_event)
+            menu.addAction(capture_action)
+
             background_size_action = QtWidgets.QAction(
                 "Background layers...", None
             )
@@ -1523,30 +1556,41 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
         self.main_window.reset_default_size()
         self.main_window.refresh()
 
+    def get_relative_images_dir(self):
+        """Return the folder relative background images resolve from.
+
+        That is the folder of the ``.pkr`` the current picker was loaded
+        from, joined with ``ANIM_PICKER_RELATIVE_IMAGES``. Images stored
+        there travel with the ``.pkr``.
+
+        Returns:
+            str: Absolute folder path, or None when the picker was not
+                loaded from a ``.pkr`` file.
+        """
+        # "source_file_path" is added to the data node when a pkr is loaded
+        # from file
+        window = self.main_window or self.window()
+        data = window.get_current_data_node().read_data_from_node()
+        pkr_path = data.get("source_file_path", None)
+        if not pkr_path:
+            return None
+        rel_path_token = os.environ.get(
+            ANIM_PICKER_RELATIVE_IMAGES, DEFAULT_RELATIVE_IMAGES_PATH
+        )
+        return os.path.realpath(os.path.join(os.path.dirname(pkr_path), rel_path_token))
+
     def apply_background_fallback_logic(self, path):
         # test if the original path exists
         if os.path.exists(path):
             return path
-        # check the data node for the "source_file_path" that is added when
-        # pkr is loaded from file
-        data = self.window().get_current_data_node().read_data_from_node()
-        pkr_path = data.get("source_file_path", None)
-        if not pkr_path or pkr_path is None:
+        images_dir = self.get_relative_images_dir()
+        if not images_dir:
             return path
-        # looking in the neighboring directories for images dir
-        pkr_dir = os.path.dirname(pkr_path)
-        rel_path_token = os.environ.get(
-            ANIM_PICKER_RELATIVE_IMAGES, DEFAULT_RELATIVE_IMAGES_PATH
-        )
-        base_name = os.path.basename(path)
-        relative_image_path = os.path.realpath(
-            os.path.join(pkr_dir, rel_path_token, base_name)
-        )
+        relative_image_path = os.path.join(images_dir, os.path.basename(path))
         # only return if path exists
         if os.path.exists(relative_image_path):
             return relative_image_path
-        else:
-            return path
+        return path
 
     def get_resolved_layer_path(self, layer):
         """Return the on-disk path a background layer resolves to.
@@ -2265,6 +2309,84 @@ class GraphicViewWidget(QtWidgets.QGraphicsView):
             return
 
         # Set background
+        self.set_background(file_path)
+
+    def get_capture_save_dir(self):
+        """Return the default folder for saving a screen capture.
+
+        Prefers the picker's relative images folder (so the image travels
+        with the ``.pkr``), then the folder last used for a capture in this
+        session, then the Maya project's images folder.
+
+        Returns:
+            str: An existing folder path.
+        """
+        try:
+            images_dir = self.get_relative_images_dir()
+        except (AttributeError, RuntimeError):
+            # No current data node to source the .pkr folder from.
+            images_dir = None
+        for folder in (images_dir, _last_capture_dir):
+            if folder and os.path.isdir(folder):
+                return folder
+        return utils.get_workspace_folder("images")
+
+    def _tab_name(self):
+        """Return this view's tab name, or "picker" if it is not in a tab.
+
+        Returns:
+            str: Tab name.
+        """
+        tab_widget = getattr(self.main_window, "tab_widget", None)
+        index = tab_widget.indexOf(self) if tab_widget is not None else -1
+        if index < 0:
+            return "picker"
+        return tab_widget.tabText(index)
+
+    def capture_background_event(self, event=None):
+        """Capture a screen region, save it, and add it as a background layer.
+
+        The picker window and the Background layers panel are hidden while
+        the user selects the region. The user then picks where to save the
+        image; cancelling either step adds nothing.
+        """
+        global _last_capture_dir
+
+        window = self.main_window or self.window()
+        # Re-showing the picker must not reload it from the scene node, which
+        # would rebuild the tabs (dropping this view) and lose unsaved edits.
+        suspend = getattr(window, "suspend_show_refresh", None)
+        with suspend() if suspend else contextlib.nullcontext():
+            image = screen_capture.capture_screen_region(
+                hide_widgets=[window, self.bg_ui]
+            )
+        if image is None:
+            return
+
+        default_path = _unique_capture_path(
+            self.get_capture_save_dir(), self._tab_name()
+        )
+        file_path = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save captured background",
+            default_path,
+            "PNG image (*.png);;JPEG image (*.jpg *.jpeg)",
+        )
+        # Filter return result (based on qt version)
+        if isinstance(file_path, tuple):
+            file_path = file_path[0]
+        if not file_path:
+            return
+        if not os.path.splitext(file_path)[1]:
+            file_path += ".png"
+
+        if not image.save(file_path):
+            pm.displayWarning(
+                "Could not save the captured image to: {}".format(file_path)
+            )
+            return
+
+        _last_capture_dir = os.path.dirname(file_path)
         self.set_background(file_path)
 
     def reset_background_event(self, event=None):

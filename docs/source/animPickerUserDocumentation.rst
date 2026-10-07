@@ -218,6 +218,42 @@ There is no size cap on the artwork — the canvas grows to span the layers and
 the buttons, so pan and zoom always reach all of it.
 
 
+Capture a screen region as a background
++++++++++++++++++++++++++++++++++++++++
+
+Instead of saving a screenshot in another tool first, you can capture any area
+of the screen straight into a background layer. Right-click the canvas and
+choose **Capture Screen Region**, or click **Capture Region** in the
+**Background layers** dialog.
+
+1. The picker window (and the Background layers dialog, if open) hides and the
+   screen freezes, dimmed. This lets you capture the Maya viewport or anything
+   else behind the picker.
+2. **Drag** a rectangle over the area you want. The size in pixels is shown as
+   you drag. Press **Esc** or **right-click** to cancel. A click without a drag
+   is ignored, so you can just drag again.
+3. A **save dialog** asks where to store the image (PNG by default, JPG also
+   accepted). Cancel it to discard the capture.
+4. The saved image is added as a new layer **in front of** the existing ones,
+   and the picker windows come back.
+
+The save dialog opens in the folder the picker loads relative images from,
+next to the ``.pkr`` the picker was loaded from (or its
+``ANIM_PICKER_RELATIVE_IMAGES`` sub-folder, see below), so the image travels
+with the picker file. If the picker wasn't loaded from a ``.pkr``, it opens in
+the folder you last saved a capture to in this session, or else in the Maya
+project's ``images`` folder. The proposed file name is based on the tab name
+(for example ``Body_bg.png``) and never overwrites an existing file.
+
+Captures are taken at full resolution on high-DPI displays, and you can capture
+on any monitor; a single selection stays within one monitor.
+
+.. note::
+    On **macOS**, Maya needs **Screen Recording** permission (System Settings >
+    Privacy & Security). Without it the frozen screen shows only the desktop
+    wallpaper.
+
+
 Where background images are loaded from
 +++++++++++++++++++++++++++++++++++++++
 

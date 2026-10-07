@@ -3,6 +3,7 @@
 Extracted from gui.py during the Phase 2 decomposition.
 """
 
+import contextlib
 import json
 from functools import partial
 
@@ -123,6 +124,8 @@ class MainDockWindow(QtWidgets.QWidget):
         self._autosave_timer.timeout.connect(self._autosave_prompt)
         # Guards re-prompting once a save-on-close prompt has been resolved.
         self._closing = False
+        # While > 0, showEvent skips its data reload (see suspend_show_refresh).
+        self._suspend_show_refresh = 0
         # Normalized snapshot of the picker data as last loaded / saved. Change
         # detection compares against this (UI-serialized vs UI-serialized) so it
         # is not fooled by node-vs-UI structural differences. None until a
@@ -1268,6 +1271,23 @@ class MainDockWindow(QtWidgets.QWidget):
                 pass
         self.deleteLater()
 
+    @contextlib.contextmanager
+    def suspend_show_refresh(self):
+        """Keep the picker's in-memory state while it is briefly hidden.
+
+        ``showEvent`` normally reloads the picker from the scene node, which
+        rebuilds the tabs and drops unsaved edits. Wrap a temporary
+        hide / show (e.g. a screen capture) in this so re-showing the window
+        keeps the current views.
+        """
+        self._suspend_show_refresh += 1
+        try:
+            yield
+        finally:
+            # Deliver any show events queued by the re-show while suspended.
+            QtWidgets.QApplication.processEvents()
+            self._suspend_show_refresh -= 1
+
     def showEvent(self, *args, **kwargs):
         """Default showEvent overload"""
         # Prevent firing this event before the window is set up
@@ -1276,6 +1296,10 @@ class MainDockWindow(QtWidgets.QWidget):
 
         # Default close
         super().showEvent(*args, **kwargs)
+
+        # A temporary hide / show must not reload and rebuild the tabs.
+        if self._suspend_show_refresh:
+            return
 
         # Force char load
         self.refresh()

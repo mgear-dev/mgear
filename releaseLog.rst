@@ -9,6 +9,10 @@ Release Log
 	* Shifter: Guide Explorer: Skip tree refreshes while a build is running and refresh once when the build finishes, instead of rebuilding the tree repeatedly mid-build
 	* Shifter: Add ``shifter.is_building()`` and the ``build_in_progress()`` context manager / decorator so tools can tell when a Shifter build is running; nested builds started from custom steps are handled
 	* Docs: Shifter: Document the build log batching and clear-on-build behaviour, and how the undo queue and Script Editor history grow Maya's memory across repeated build / delete cycles
+	* Anim Picker: Capture Screen Region — capture any area of the screen straight into a background layer, from the canvas right-click menu or the Background layers dialog's "Capture Region" button; the picker hides while you drag a rectangle over a frozen snapshot of the screen (Esc / right-click cancels), then a save dialog asks where to store the image, defaulting to the folder the picker loads relative images from so the image travels with the ``.pkr``; unsaved picker edits are kept across the capture
+	* Core: Add a reusable ``mgear.core.screen_capture.capture_screen_region`` that lets the user select a screen region and returns it as a ``QImage`` (full resolution on high-DPI displays, any monitor), hiding and restoring the caller's windows and giving focus back to the previously active window; it never writes files
+	* Core: Add ``mgear.core.utils.get_workspace_folder`` to get the current Maya project's folder for a file rule (e.g. ``images``), falling back to the project root and then the home folder
+	* Docs: Anim Picker: Document capturing a screen region as a background layer, including the save location defaults and the macOS Screen Recording permission
 
 **Bug Fix**
 	* Shifter: Build Log: The log is now cleared at the start of every build, including builds started from the Guide Explorer, which previously appended to the prior build's log indefinitely
