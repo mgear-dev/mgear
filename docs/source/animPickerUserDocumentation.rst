@@ -180,8 +180,9 @@ Drag to add — widgets & backdrops
     :scale: 100%
 
 The **Drag to add** section lets you drag ready-made items onto the canvas:
-interactive **widgets** (checkbox, slider, 2D slider), a plain **button**, and
-a **backdrop**. Drop one where you want it, then configure it in the Item
+interactive **widgets** (checkbox, slider, 2D slider), a plain **button**, a
+**backdrop**, and a **vector item** (the **Vec** pen tile, see `Editing vector
+(SVG) shapes`_). Drop one where you want it, then configure it in the Item
 Editor.
 
 
@@ -220,6 +221,10 @@ the buttons, so pan and zoom always reach all of it.
 
 Capture a screen region as a background
 +++++++++++++++++++++++++++++++++++++++
+
+.. image:: images/animpicker/right_click_menu_capture_region.png
+    :align: center
+    :scale: 100%
 
 Instead of saving a screenshot in another tool first, you can capture any area
 of the screen straight into a background layer. Right-click the canvas and
@@ -312,6 +317,10 @@ select them, and the picker traces them into an item's shape.
 
 Editing vector (SVG) shapes
 ---------------------------
+
+.. image:: images/animpicker/SVG_edit.png
+    :align: center
+    :scale: 80%
 
 Vector items can be drawn and edited directly in the picker, without an
 external editor.
