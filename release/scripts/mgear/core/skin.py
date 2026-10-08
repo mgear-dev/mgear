@@ -18,18 +18,27 @@ import mgear.pymaya as pm
 from maya import cmds
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaAnim as OpenMayaAnim
+import maya.api.OpenMaya as om2
+
 string_types = str
 from mgear.vendor.Qt import QtWidgets
 from mgear.vendor.Qt import QtCore
 from mgear.vendor.Qt import QtGui
 from mgear.core import pyqt
 from mgear.core import applyop
+from mgear.core import node_remap
 from mgear.core import utils
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 FILE_EXT = ".gSkin"
 FILE_JSON_EXT = ".jSkin"
 PACK_EXT = ".gSkinPack"
+MAP_EXT = ".gSkinMap"
+
+# Results of the missing-items policy for one skin file
+REMAP_APPLY = "apply"
+REMAP_SKIP_FILE = "skip_file"
+REMAP_CANCEL = "cancel"
 
 ######################################
 # Skin getters
@@ -350,18 +359,100 @@ def collectInfluenceWeights(skinCls, dagPath, components, dataDic):
 
     numComponentsPerInfluence = int(weights.length() / numInfluences)
     for ii in range(influencePaths.length()):
-        influenceName = influencePaths[ii].partialPathName()
-        influenceWithoutNamespace = pm.PyNode(influenceName).stripNamespace()
         # build a dictionary of {vtx: weight}. Skip 0.0 weights.
         inf_w = {
             jj: weights[jj * numInfluences + ii]
             for jj in range(numComponentsPerInfluence)
             if weights[jj * numInfluences + ii] != 0.0
         }
+        dataDic["weights"][_influence_key(influencePaths[ii])] = inf_w
 
-        # cast influenceWithoutNamespace as string otherwise it can end up
-        # as DependNodeName(u'jointName') in the data.
-        dataDic["weights"][str(influenceWithoutNamespace)] = inf_w
+
+def _influence_key(dagPath):
+    """Return the name used to store an influence in skin files.
+
+    Args:
+        dagPath (MDagPath): The influence DAG path.
+
+    Returns:
+        str: Namespace-stripped partial path name.
+    """
+    return node_remap.strip_namespace_path(dagPath.partialPathName())
+
+
+def _bind_position(bindPrePlug, node):
+    """Return the bind-pose world position of an influence.
+
+    Args:
+        bindPrePlug (str): The skinCluster ``bindPreMatrix[i]`` plug of the
+            influence, or None if it isn't an influence.
+        node (str): The influence node, used for the current world position
+            when there is no usable bindPreMatrix.
+
+    Returns:
+        list: [x, y, z]
+    """
+    if bindPrePlug:
+        try:
+            bindPre = om2.MMatrix(cmds.getAttr(bindPrePlug))
+            return list(bindPre.inverse())[12:15]
+        except (RuntimeError, ValueError, TypeError):
+            pass
+    return cmds.xform(node, query=True, worldSpace=True, translation=True)
+
+
+def get_influence_bind_positions(skinCls):
+    """Get the bind-pose world position of each influence of a skinCluster.
+
+    The position comes from the inverse of the skinCluster bindPreMatrix at
+    the influence logical index, so it does not depend on the current pose.
+    Falls back to the current world position if bindPreMatrix is not set.
+
+    Args:
+        skinCls (str or PyNode): The skinCluster.
+
+    Returns:
+        dict: ``{stored influence name: [x, y, z]}``
+    """
+    skinName = str(skinCls)
+    skinFn = get_skin_cluster_fn(skinName)
+    influencePaths = OpenMaya.MDagPathArray()
+    skinFn.influenceObjects(influencePaths)
+
+    positions = {}
+    for ii in range(influencePaths.length()):
+        path = influencePaths[ii]
+        plug = "{}.bindPreMatrix[{}]".format(
+            skinName, skinFn.indexForInfluenceObject(path)
+        )
+        positions[_influence_key(path)] = _bind_position(plug, path.fullPathName())
+    return positions
+
+
+def get_bind_world_positions(nodes):
+    """Get the bind-pose world position of transform nodes.
+
+    Uses the bindPreMatrix of the first skinCluster the node drives, and
+    the current world position for nodes that are not influences.
+
+    Args:
+        nodes (list): Transform node names or paths.
+
+    Returns:
+        dict: ``{node: [x, y, z]}`` for the nodes that exist.
+    """
+    positions = {}
+    for node in nodes:
+        if not cmds.objExists(node):
+            continue
+        plugs = cmds.listConnections(
+            node + ".worldMatrix", type="skinCluster", plugs=True
+        )
+        bindPlug = None
+        if plugs:
+            bindPlug = plugs[0].replace(".matrix[", ".bindPreMatrix[")
+        positions[node] = _bind_position(bindPlug, node)
+    return positions
 
 
 def collectBlendWeights(skinCls, dagPath, components, dataDic):
@@ -472,8 +563,8 @@ def exportSkin(filePath=None, objs=None, storePositions=False, *args):
             # change to the skin, but it will remove infinitely small weights.
             # Otherwise, compressing will do almost nothing!
             # if isinstance(obj.getShape(), pm.nodetypes.Mesh):
-                # TODO: Implement pruning on nurbs. Less straight-forward
-                # pm.skinPercent(skinCls, obj, pruneWeights=0.0001)
+            # TODO: Implement pruning on nurbs. Less straight-forward
+            # pm.skinPercent(skinCls, obj, pruneWeights=0.0001)
 
             dataDic = {
                 "weights": {},
@@ -486,9 +577,11 @@ def exportSkin(filePath=None, objs=None, storePositions=False, *args):
             }
 
             dataDic["objName"] = obj.name()
+            dataDic["objLongName"] = obj.longName()
             dataDic["nameSpace"] = obj.namespace()
 
             collectData(skinCls, dataDic)
+            dataDic["influencePositions"] = get_influence_bind_positions(skinCls)
 
             # Store vertex positions for volume-based import if requested
             if storePositions:
@@ -515,6 +608,32 @@ def exportSkin(filePath=None, objs=None, storePositions=False, *args):
                 json.dump(packDic, fp, indent=4, sort_keys=True)
 
         return True
+
+
+def _skin_file_name(objName, usedNames):
+    """Build a portable, unique skin file name for an object in a pack.
+
+    ``|`` becomes ``-`` and ``:`` becomes ``.``. Neither can appear in a
+    Maya name, so the label stays readable and unambiguous. A ``_N``
+    suffix is added when the name is already used in the pack.
+
+    Args:
+        objName (str): Object name, may include namespace and DAG path.
+        usedNames (set): Lowercase names already used in the pack. The
+            returned name is added to it.
+
+    Returns:
+        str: File name without extension.
+    """
+    base = objName.lstrip("|").replace("|", "-").replace(":", ".")
+    fileName = base
+    index = 1
+    # Compare lowercase: Windows and macOS file systems ignore case.
+    while fileName.lower() in usedNames:
+        fileName = "{}_{}".format(base, index)
+        index += 1
+    usedNames.add(fileName.lower())
+    return fileName
 
 
 @utils.timeFunc
@@ -558,8 +677,9 @@ def exportSkinPack(packPath=None, objs=None, use_json=False, storePositions=Fals
 
     packDic["rootPath"], packName = os.path.split(packPath)
 
+    usedNames = set()
     for obj in objs:
-        fileName = obj.stripNamespace() + file_ext
+        fileName = _skin_file_name(obj.name(), usedNames) + file_ext
         filePath = os.path.join(packDic["rootPath"], fileName)
         if exportSkin(filePath, [obj], storePositions=storePositions):
             packDic["packFiles"].append(fileName)
@@ -611,6 +731,26 @@ def exportJsonSkinPackWithPositions(packPath=None, objs=None, *args):
 ######################################
 
 
+def _influence_index_map(influencePaths):
+    """Map influence names and full DAG paths to their influence index.
+
+    Full paths let resolved skin data address influences unambiguously,
+    while node names keep older callers working.
+
+    Args:
+        influencePaths (MDagPathArray): The skinCluster influences.
+
+    Returns:
+        dict: ``{name or full path: index}``
+    """
+    influenceMap = {}
+    for ii in range(influencePaths.length()):
+        path = influencePaths[ii]
+        influenceMap[OpenMaya.MFnDependencyNode(path.node()).name()] = ii
+        influenceMap[path.fullPathName()] = ii
+    return influenceMap
+
+
 # @utils.timeFunc
 def setInfluenceWeights(skinCls, dagPath, components, dataDic, compressed):
     """Sets influence weights for a given skin cluster.
@@ -631,11 +771,7 @@ def setInfluenceWeights(skinCls, dagPath, components, dataDic, compressed):
 
     numComponentsPerInfluence = int(weights.length() / numInfluences)
 
-    # Precompute influence names (Avoiding PyMEL)
-    influenceMap = {
-        OpenMaya.MFnDependencyNode(influencePaths[ii].node()).name(): ii
-        for ii in range(influencePaths.length())
-    }
+    influenceMap = _influence_index_map(influencePaths)
 
     for importedInfluence, wtValues in dataDic["weights"].items():
         influenceIndex = influenceMap.get(importedInfluence)
@@ -736,11 +872,7 @@ def setVertexWeights(skinCluster, vertexWeights, normalize=False):
     influencePaths = OpenMaya.MDagPathArray()
     numInfluences = skinFn.influenceObjects(influencePaths)
 
-    # Build influence name to index map
-    influenceMap = {}
-    for i in range(influencePaths.length()):
-        infName = OpenMaya.MFnDependencyNode(influencePaths[i].node()).name()
-        influenceMap[infName] = i
+    influenceMap = _influence_index_map(influencePaths)
 
     numVerts = int(weightsArray.length() / numInfluences)
 
@@ -778,18 +910,11 @@ def getInfluenceMap(skinCluster):
         skinCluster (str): Name of the skin cluster.
 
     Returns:
-        dict: Mapping of {influence_name: index, ...}
+        dict: Mapping of {influence_name or full path: index, ...}
     """
-    skinFn = get_skin_cluster_fn(skinCluster)
     influencePaths = OpenMaya.MDagPathArray()
-    skinFn.influenceObjects(influencePaths)
-
-    influenceMap = {}
-    for i in range(influencePaths.length()):
-        infName = OpenMaya.MFnDependencyNode(influencePaths[i].node()).name()
-        influenceMap[infName] = i
-
-    return influenceMap
+    get_skin_cluster_fn(skinCluster).influenceObjects(influencePaths)
+    return _influence_index_map(influencePaths)
 
 
 def initializeToInfluence(skinCluster, influenceName):
@@ -923,22 +1048,25 @@ def _findClosestSourceVertices(targetPositions, sourcePositions, positionLookup)
 
     # Setup progress bar
     numTargets = len(targetPositions)
-    gMainProgressBar = pm.mel.eval("$tmp = $gMainProgressBar")
-    cmds.progressBar(
-        gMainProgressBar,
-        edit=True,
-        beginProgress=True,
-        isInterruptable=True,
-        status="Mapping skin weights by position...",
-        maxValue=numTargets,
-    )
+    # No main progress bar in batch mode (mayapy builds)
+    gMainProgressBar = None
+    if not cmds.about(batch=True):
+        gMainProgressBar = pm.mel.eval("$tmp = $gMainProgressBar")
+        cmds.progressBar(
+            gMainProgressBar,
+            edit=True,
+            beginProgress=True,
+            isInterruptable=True,
+            status="Mapping skin weights by position...",
+            maxValue=numTargets,
+        )
 
     try:
         updateInterval = max(1, numTargets // 100)  # Update every 1%
 
         for i, (targetIdx, targetPos) in enumerate(targetPositions.items()):
             # Check for cancel
-            if i % updateInterval == 0:
+            if gMainProgressBar and i % updateInterval == 0:
                 if cmds.progressBar(gMainProgressBar, query=True, isCancelled=True):
                     pm.displayWarning("Skin import cancelled by user")
                     return mapping, exactMatches, closestMatches, True
@@ -980,7 +1108,8 @@ def _findClosestSourceVertices(targetPositions, sourcePositions, positionLookup)
             closestMatches += 1
 
     finally:
-        cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
+        if gMainProgressBar:
+            cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
 
     return mapping, exactMatches, closestMatches, False
 
@@ -1114,6 +1243,22 @@ def _importSkinVolumeMethod(objNode, targetSkinCluster, dataDic, compressed):
         return False
 
 
+def _load_skin_file(filePath):
+    """Load the data of a .gSkin or .jSkin file.
+
+    Args:
+        filePath (str): Skin file path.
+
+    Returns:
+        dict: The skin data pack with ``objs`` and ``objDDic`` keys.
+    """
+    if filePath.endswith(FILE_EXT):
+        with open(filePath, "rb") as fp:
+            return pickle.load(fp)
+    with open(filePath, "r") as fp:
+        return json.load(fp)
+
+
 def _getObjsFromSkinFile(filePath=None, *args):
     # retrive the object names inside gSkin file
     if not filePath:
@@ -1129,14 +1274,7 @@ def _getObjsFromSkinFile(filePath=None, *args):
     if not isinstance(filePath, string_types):
         filePath = filePath[0]
 
-    # Read in the file
-    with open(filePath, "r") as fp:
-        if filePath.endswith(FILE_EXT):
-            data = pickle.load(fp)
-        else:
-            data = json.load(fp)
-
-        return data["objs"]
+    return _load_skin_file(filePath)["objs"]
 
 
 def getObjsFromSkinFile(filePath=None, *args):
@@ -1146,8 +1284,707 @@ def getObjsFromSkinFile(filePath=None, *args):
             print(x)
 
 
+######################################
+# Skin import name resolution
+######################################
+
+
+def load_skin_mapping(mapping=None):
+    """Return a normalized skin remap mapping.
+
+    Args:
+        mapping (dict or str, optional): Mapping dict, or path to a
+            ``.gSkinMap`` file. Missing sections are allowed.
+
+    Returns:
+        dict: ``{"geometry": {exported: scene}, "influences": {exported:
+            scene}}``. Always a new dict.
+    """
+    result = {"geometry": {}, "influences": {}}
+    if not mapping:
+        return result
+    if isinstance(mapping, string_types):
+        with open(mapping, "r") as fp:
+            mapping = json.load(fp)
+    for key, table in result.items():
+        table.update(mapping.get(key) or {})
+    return result
+
+
+def save_skin_mapping(mapping, filePath):
+    """Save a skin remap mapping as a ``.gSkinMap`` JSON file.
+
+    Args:
+        mapping (dict): Mapping with ``geometry`` and ``influences`` tables.
+        filePath (str): Destination file path.
+
+    Returns:
+        str: The written file path.
+    """
+    data = {"version": 1}
+    data.update(load_skin_mapping(mapping))
+    with open(filePath, "w") as fp:
+        json.dump(data, fp, indent=4, sort_keys=True)
+    return filePath
+
+
+class SkinRemapReport(object):
+    """Unresolved geometry and influences of one skin file.
+
+    Attributes:
+        file_path (str): The skin file the report belongs to.
+        geometry (list): One dict per missing or ambiguous object with
+            ``name``, ``long_name`` and ``candidates`` (scene paths).
+        influences (dict): ``{name: info}`` per missing influence, with
+            ``position`` (bind position or None), ``users`` (object names)
+            and ``candidates`` (ambiguous scene paths).
+        influence_pool (list): Influences of the target skinClusters that
+            already exist. Preferred match candidates; empty if no target
+            is skinned yet.
+    """
+
+    def __init__(self, file_path=None):
+        self.file_path = file_path
+        self.geometry = []
+        self.influences = {}
+        self.influence_pool = []
+
+    def is_empty(self):
+        """Return True when nothing is missing or ambiguous.
+
+        Returns:
+            bool: True if the report has no items.
+        """
+        return not self.geometry and not self.influences
+
+    def item_keys(self):
+        """Return a key per reported item.
+
+        Returns:
+            set: ``("geometry", name)`` and ``("influence", name)`` tuples.
+        """
+        keys = {("geometry", geo["name"]) for geo in self.geometry}
+        keys.update(("influence", name) for name in self.influences)
+        return keys
+
+    def subset(self, keys):
+        """Return a copy of the report with only some items.
+
+        Args:
+            keys (set): Item keys to keep, see item_keys.
+
+        Returns:
+            SkinRemapReport: The narrowed report.
+        """
+        report = SkinRemapReport(self.file_path)
+        report.geometry = [
+            geo for geo in self.geometry if ("geometry", geo["name"]) in keys
+        ]
+        report.influences = {
+            name: info
+            for name, info in self.influences.items()
+            if ("influence", name) in keys
+        }
+        report.influence_pool = self.influence_pool
+        return report
+
+    def summary(self):
+        """Return a readable multi-line description of the report.
+
+        Returns:
+            str: One line per unresolved item.
+        """
+        label = os.path.basename(self.file_path or "skin data")
+        lines = []
+        for geo in self.geometry:
+            if geo["candidates"]:
+                lines.append(
+                    "{}: ambiguous object '{}' ({})".format(
+                        label, geo["name"], ", ".join(geo["candidates"])
+                    )
+                )
+            else:
+                lines.append("{}: object '{}' not found".format(label, geo["name"]))
+        for name, info in sorted(self.influences.items()):
+            lines.append(
+                "{}: influence '{}' not found (used by {})".format(
+                    label, name, ", ".join(info["users"])
+                )
+            )
+        return "\n".join(lines)
+
+
+class SkinRemapError(RuntimeError):
+    """Raised by skin import when ``on_missing="error"`` finds issues.
+
+    Attributes:
+        reports (list): SkinRemapReport per skin file with issues.
+    """
+
+    def __init__(self, reports):
+        self.reports = reports
+        message = "Skin import has unresolved items:\n" + "\n".join(
+            report.summary() for report in reports
+        )
+        super(SkinRemapError, self).__init__(message)
+
+
+class SkinRemapSession(object):
+    """Choices made during one skin import, shared by its remap dialogs.
+
+    Attributes:
+        mapping (dict): Normalized mapping (see load_skin_mapping) with the
+            mapping passed to the import plus every choice made so far.
+            Later files of a skin pack reuse it.
+        save_path (str): ``.gSkinMap`` file rewritten each time choices are
+            added, or None. Set by the dialog's Save mapping.
+        scene_geometry (dict): Cache for get_skinnable_geometry, or None.
+            Point counts don't change during an import.
+    """
+
+    def __init__(self, mapping=None):
+        self.mapping = load_skin_mapping(mapping)
+        self.save_path = None
+        self.scene_geometry = None
+
+    def merged(self, extra=None):
+        """Return a copy of the session mapping with extra choices.
+
+        Args:
+            extra (dict or str, optional): Mapping dict or ``.gSkinMap``
+                path merged on top.
+
+        Returns:
+            dict: Normalized mapping.
+        """
+        mapping = load_skin_mapping(self.mapping)
+        for key, table in load_skin_mapping(extra).items():
+            mapping[key].update(table)
+        return mapping
+
+    def add(self, mapping):
+        """Merge choices into the session and update the saved file.
+
+        Args:
+            mapping (dict or str): Mapping dict or ``.gSkinMap`` path.
+        """
+        self.mapping = self.merged(mapping)
+        self.save()
+
+    def save(self, extra=None):
+        """Write the session mapping to save_path, if set.
+
+        Args:
+            extra (dict, optional): Choices not added yet, e.g. the rows of
+                an open dialog.
+        """
+        if self.save_path:
+            save_skin_mapping(self.merged(extra), self.save_path)
+
+    def get_scene_geometry(self):
+        """Return the skinnable scene geometry, queried once per import.
+
+        Returns:
+            dict: ``{transform full path: point count}``
+        """
+        if self.scene_geometry is None:
+            self.scene_geometry = get_skinnable_geometry()
+        return self.scene_geometry
+
+
+def _resolve_mapped(name, table):
+    """Return the scene path a user mapping assigns to a name.
+
+    Args:
+        name (str): Exported name.
+        table (dict): ``{exported: scene}`` mapping table.
+
+    Returns:
+        str: The unique full path, or None.
+    """
+    target = table.get(name) or table.get(node_remap.strip_namespace_path(name))
+    if not target:
+        return None
+    hits = cmds.ls(target, long=True) or []
+    return hits[0] if len(hits) == 1 else None
+
+
+def _skin_influence_paths(skinCls):
+    """Return the full DAG paths of a skinCluster influences.
+
+    Args:
+        skinCls (str or PyNode): The skinCluster.
+
+    Returns:
+        list: Full paths.
+    """
+    influencePaths = OpenMaya.MDagPathArray()
+    get_skin_cluster_fn(str(skinCls)).influenceObjects(influencePaths)
+    return [influencePaths[ii].fullPathName() for ii in range(influencePaths.length())]
+
+
+def _resolve_influence(name, existingIndex, namespace, mapping, cache):
+    """Resolve a stored influence name to a scene node.
+
+    Args:
+        name (str): Stored influence name.
+        existingIndex (dict): Influences of the target skinCluster grouped
+            by short name, see node_remap.group_by_short_name. Empty if
+            not skinned.
+        namespace (str): Forced namespace, or None for automatic.
+        mapping (dict): Normalized user mapping.
+        cache (dict): Scene lookups already done, reused across objects
+            and files sharing the same joints.
+
+    Returns:
+        tuple: (full path or None, ambiguous candidates)
+    """
+    mapped = _resolve_mapped(name, mapping["influences"])
+    if mapped:
+        return mapped, []
+    if existingIndex and namespace is None:
+        hits = node_remap.filter_by_path_suffix(
+            existingIndex.get(node_remap.short_name(name), []),
+            node_remap.strip_namespace_path(name),
+        )
+        if len(hits) == 1:
+            return hits[0], []
+    key = (name, namespace)
+    if key not in cache:
+        cache[key] = node_remap.find_node_candidates(
+            name, node_type="transform", namespace=namespace
+        )
+    hits = cache[key]
+    if len(hits) == 1:
+        return hits[0], []
+    return None, hits
+
+
+def _resolve_skin_data(dataPack, filePath, namespace, mapping, cache=None):
+    """Resolve the objects and influences of one skin file to the scene.
+
+    Args:
+        dataPack (dict): Loaded skin file data.
+        filePath (str): Skin file path, for reporting.
+        namespace (str): Forced namespace, or None for automatic.
+        mapping (dict): Normalized user mapping, see load_skin_mapping.
+        cache (dict, optional): Influence lookup cache shared between the
+            files of a pack.
+
+    Returns:
+        tuple: (resolved, report). ``resolved`` is a list of
+            ``(data, geometry path, {stored influence: scene path})`` for
+            the objects found. ``report`` is a SkinRemapReport.
+    """
+    cache = {} if cache is None else cache
+    report = SkinRemapReport(filePath)
+    resolved = []
+    pool = []
+    for data in dataPack["objDDic"]:
+        objName = data["objName"]
+        geoPath = _resolve_mapped(objName, mapping["geometry"])
+        if not geoPath:
+            hits = node_remap.find_node_candidates(
+                objName,
+                long_name=data.get("objLongName"),
+                node_type="transform",
+                namespace=namespace,
+            )
+            if len(hits) != 1:
+                report.geometry.append(
+                    {
+                        "name": objName,
+                        "long_name": data.get("objLongName"),
+                        "point_count": _stored_point_count(data),
+                        "candidates": hits,
+                    }
+                )
+                continue
+            geoPath = hits[0]
+
+        skinCls = getSkinCluster(geoPath)
+        existing = _skin_influence_paths(skinCls) if skinCls else []
+        existingIndex = node_remap.group_by_short_name(existing)
+        pool.extend(existing)
+        positions = data.get("influencePositions") or {}
+        influenceMap = {}
+        for name in data["weights"]:
+            path, candidates = _resolve_influence(
+                name, existingIndex, namespace, mapping, cache
+            )
+            if path:
+                influenceMap[name] = path
+                continue
+            info = report.influences.setdefault(
+                name,
+                {"position": positions.get(name), "users": [], "candidates": []},
+            )
+            info["users"].append(objName)
+            for candidate in candidates:
+                if candidate not in info["candidates"]:
+                    info["candidates"].append(candidate)
+        resolved.append((data, geoPath, influenceMap))
+
+    report.influence_pool = list(dict.fromkeys(pool))
+    return resolved, report
+
+
+def _remap_weights(weights, influenceMap, compressed):
+    """Rekey stored weights from influence names to scene paths.
+
+    Unresolved influences are dropped. Influences mapped to the same scene
+    node have their weights added together. Weights are only copied when
+    they are merged, otherwise the stored values are shared.
+
+    Args:
+        weights (dict): Stored ``{influence: weights}``.
+        influenceMap (dict): ``{stored influence: scene path}``.
+        compressed (bool): True for ``{vtx: weight}`` values, False for
+            per-vertex lists.
+
+    Returns:
+        dict: ``{scene path: weights}``
+    """
+    remapped = {}
+    merged = set()
+    for name, values in weights.items():
+        target = influenceMap.get(name)
+        if not target:
+            continue
+        if target not in remapped:
+            remapped[target] = values
+        elif compressed:
+            if target not in merged:
+                remapped[target] = dict(remapped[target])
+                merged.add(target)
+            current = remapped[target]
+            for key, wt in values.items():
+                current[key] = current.get(key, 0.0) + wt
+        else:
+            remapped[target] = [a + b for a, b in zip(remapped[target], values)]
+    return remapped
+
+
+def _stored_point_count(data):
+    """Return the vertex or CV count stored for one object of a skin file.
+
+    Args:
+        data (dict): One object entry of a skin file.
+
+    Returns:
+        int: Point count of the exported geometry.
+    """
+    if data.get("skinDataFormat") == "compressed":
+        return data["vertexCount"]
+    return len(data["blendWeights"])
+
+
+def get_skinnable_geometry():
+    """Return the scene meshes, nurbs surfaces and curves with point counts.
+
+    Point counts of transforms with several shapes are added together,
+    like _geometry_point_count.
+
+    Returns:
+        dict: ``{transform full path: vertex or CV count}``
+    """
+    shapes = cmds.ls(
+        type=("mesh", "nurbsSurface", "nurbsCurve"),
+        noIntermediate=True,
+        long=True,
+    )
+    selection = om2.MSelectionList()
+    for shape in shapes or []:
+        selection.add(shape)
+
+    geometry = {}
+    for ii in range(selection.length()):
+        path = selection.getDagPath(ii)
+        if path.hasFn(om2.MFn.kMesh):
+            count = om2.MFnMesh(path).numVertices
+        elif path.hasFn(om2.MFn.kNurbsSurface):
+            surface = om2.MFnNurbsSurface(path)
+            count = surface.numCVsInU * surface.numCVsInV
+        else:
+            count = om2.MFnNurbsCurve(path).numCVs
+        parent = path.fullPathName().rsplit("|", 1)[0]
+        geometry[parent] = geometry.get(parent, 0) + count
+    return geometry
+
+
+def _geometry_point_count(objNode):
+    """Return the number of vertices or CVs of a skinnable object.
+
+    Args:
+        objNode (PyNode): Mesh, nurbsSurface or nurbsCurve transform.
+
+    Returns:
+        int: Point count, 0 for unsupported types.
+    """
+    # use getShapes() else meshes with 2+ shapes will fail.
+    # noIntermediate otherwise it will count shapeOrig nodes.
+    objShapes = objNode.getShapes(noIntermediate=True)
+    shape = objNode.getShape()
+    if isinstance(shape, pm.nodetypes.Mesh):
+        return pm.polyEvaluate(objShapes, vertex=True)
+    count = 0
+    if isinstance(shape, pm.nodetypes.NurbsSurface):
+        for shp in objShapes:
+            name = shp.name()
+            spansU = cmds.getAttr(name + ".spansU")
+            spansV = cmds.getAttr(name + ".spansV")
+            degreeU = cmds.getAttr(name + ".degreeU")
+            degreeV = cmds.getAttr(name + ".degreeV")
+            count += (spansU + degreeU) * (spansV + degreeV)
+    elif isinstance(shape, pm.nodetypes.NurbsCurve):
+        for shp in objShapes:
+            name = shp.name()
+            count += cmds.getAttr(name + ".spans") + cmds.getAttr(name + ".degree")
+    # TODO: Implement other skinnable objs like lattices.
+    return count
+
+
+def _create_skin_cluster(geoPath, influences, skinName):
+    """Create a skinCluster on resolved influences.
+
+    Args:
+        geoPath (str): Geometry full path.
+        influences (list): Influence full paths.
+        skinName (str): Exported skinCluster name.
+
+    Returns:
+        PyNode: The new skinCluster.
+    """
+    # The exported name may carry a path or a namespace that doesn't exist
+    # in this scene. Either would make the skinCluster command fail.
+    skinCls = pm.skinCluster(
+        influences,
+        geoPath,
+        toSelectedBones=True,
+        normalizeWeights=2,
+        name=node_remap.short_name(skinName),
+    )
+    if isinstance(skinCls, list):
+        skinCls = skinCls[0]
+    return skinCls
+
+
+def _add_missing_influences(skinCls, influences):
+    """Add resolved influences that the target skinCluster doesn't have.
+
+    Args:
+        skinCls (PyNode): Target skinCluster.
+        influences (list): Influence full paths.
+    """
+    existing = set(_skin_influence_paths(skinCls))
+    missing = [inf for inf in influences if inf not in existing]
+    if missing:
+        cmds.skinCluster(skinCls.name(), edit=True, addInfluence=missing, weight=0.0)
+        pm.displayInfo("Added influences to {}: {}".format(skinCls.name(), missing))
+
+
+def _apply_skin_data(data, geoPath, influenceMap, vertexMismatchMode="auto"):
+    """Apply one object's skin data using resolved scene names.
+
+    Args:
+        data (dict): One object entry of a skin file.
+        geoPath (str): Resolved geometry full path.
+        influenceMap (dict): ``{stored influence: scene path}``.
+        vertexMismatchMode (str, optional): ``"skip"``, ``"closestPoint"``
+            or ``"auto"``. See importSkin.
+
+    Returns:
+        str: ``"index"`` or ``"volume"`` for the method used, None if the
+            object was skipped.
+    """
+    compressed = data.get("skinDataFormat") == "compressed"
+    objName = data["objName"]
+    objNode = pm.PyNode(geoPath)
+
+    remapped = dict(data)
+    remapped["weights"] = _remap_weights(data["weights"], influenceMap, compressed)
+    if not remapped["weights"]:
+        pm.displayWarning(
+            "Object: {} Skipped. None of its influences were found in the "
+            "scene".format(objName)
+        )
+        return None
+
+    importedVertices = _stored_point_count(data)
+    try:
+        meshVertices = _geometry_point_count(objNode)
+        vertexMismatch = meshVertices != importedVertices
+    except Exception:
+        vertexMismatch = False
+
+    if vertexMismatch and vertexMismatchMode == "skip":
+        pm.displayWarning(
+            "Vertex counts on {} do not match. {} != {}".format(
+                objName, meshVertices, importedVertices
+            )
+        )
+        return None
+
+    influences = list(remapped["weights"])
+    skinCls = getSkinCluster(objNode)
+    if skinCls:
+        _add_missing_influences(skinCls, influences)
+    else:
+        try:
+            skinCls = _create_skin_cluster(geoPath, influences, data["skinClsName"])
+        except Exception as e:
+            pm.displayWarning(
+                "Object: {} Skipped. Can't create skinCluster: {}".format(objName, e)
+            )
+            return None
+
+    if vertexMismatch and vertexMismatchMode in ("closestPoint", "auto"):
+        pm.displayInfo(
+            "Vertex count mismatch on {}. Using closest-point "
+            "matching ({} -> {} vertices)...".format(
+                objName, importedVertices, meshVertices
+            )
+        )
+        if _importSkinVolumeMethod(objNode, skinCls, remapped, compressed):
+            print("Imported skin (volume method) for: {}".format(objName))
+            return "volume"
+        print(
+            "Skipped skin import for: {} (volume method failed, "
+            "see warning above)".format(objName)
+        )
+        return None
+
+    setData(skinCls, remapped, compressed)
+    print("Imported skin for: {}".format(objName))
+    return "index"
+
+
+def _run_missing_policy(report, on_missing, session, index=None, total=None):
+    """Run the caller-chosen policy for a skin file with missing items.
+
+    Args:
+        report (SkinRemapReport): The file report.
+        on_missing (str or callable): ``"skip"``, ``"error"``, ``"ui"`` or
+            a callable taking the report and returning a mapping or None.
+        session (SkinRemapSession): Choices made so far in this import.
+        index (int, optional): File position in a pack, from 1.
+        total (int, optional): Number of files in the pack.
+
+    Returns:
+        tuple: (status, mapping). status is REMAP_APPLY, REMAP_SKIP_FILE
+            or REMAP_CANCEL.
+
+    Raises:
+        SkinRemapError: When ``on_missing`` is ``"error"``.
+        ValueError: When ``on_missing`` is not a valid policy.
+    """
+    if on_missing == "skip":
+        return REMAP_APPLY, None
+    if on_missing == "error":
+        raise SkinRemapError([report])
+    if on_missing == "ui":
+        from mgear.core import skin_remap_ui
+
+        return skin_remap_ui.run_remap_dialog(
+            report, index=index, total=total, session=session
+        )
+    if callable(on_missing):
+        mapping = on_missing(report)
+        if mapping is None:
+            return REMAP_CANCEL, None
+        return REMAP_APPLY, mapping
+    raise ValueError("Invalid on_missing policy: {}".format(on_missing))
+
+
+def _apply_resolved(resolved, vertexMismatchMode):
+    """Apply the resolved objects of one skin file.
+
+    Args:
+        resolved (list): Output of _resolve_skin_data.
+        vertexMismatchMode (str): See importSkin.
+
+    Returns:
+        list: Object names imported with the volume method.
+    """
+    volumeImported = []
+    for data, geoPath, influenceMap in resolved:
+        try:
+            method = _apply_skin_data(data, geoPath, influenceMap, vertexMismatchMode)
+        except Exception as e:
+            pm.displayWarning("Object: {} Skipped. {}".format(data["objName"], e))
+            continue
+        if method == "volume":
+            volumeImported.append(data["objName"])
+    return volumeImported
+
+
+def _import_skin_file(
+    filePath,
+    vertexMismatchMode,
+    namespace,
+    on_missing,
+    session,
+    cache,
+    index=None,
+    total=None,
+):
+    """Resolve, run the missing policy and apply one skin file.
+
+    Args:
+        filePath (str): Skin file path.
+        vertexMismatchMode (str): See importSkin.
+        namespace (str): Forced namespace, or None for automatic.
+        on_missing (str or callable): See importSkin.
+        session (SkinRemapSession): Choices made so far in this import.
+            Updated with the choices made by the policy, so later files
+            reuse them.
+        cache (dict): Influence lookup cache, see _resolve_influence.
+        index (int, optional): File position in a pack, from 1.
+        total (int, optional): Number of files in the pack.
+
+    Returns:
+        tuple: (status, object names imported with the volume method)
+    """
+    dataPack = _load_skin_file(filePath)
+    resolved, report = _resolve_skin_data(
+        dataPack, filePath, namespace, session.mapping, cache
+    )
+
+    # A user mapping can reveal new missing items, e.g. the influences of an
+    # object picked as target. Ask again, only about the new items.
+    asked = set()
+    while not report.is_empty():
+        new = report.item_keys() - asked
+        if not new:
+            break
+        asked.update(new)
+        status, userMapping = _run_missing_policy(
+            report.subset(new), on_missing, session, index, total
+        )
+        if status != REMAP_APPLY:
+            pm.displayWarning("Skin file not imported: {}".format(filePath))
+            return status, []
+        if not userMapping:
+            break
+        session.add(userMapping)
+        resolved, report = _resolve_skin_data(
+            dataPack, filePath, namespace, session.mapping, cache
+        )
+    if not report.is_empty():
+        pm.displayWarning("Skipped unresolved items:\n" + report.summary())
+
+    return REMAP_APPLY, _apply_resolved(resolved, vertexMismatchMode)
+
+
 # @utils.timeFunc
-def importSkin(filePath=None, vertexMismatchMode="auto", *args):
+def importSkin(
+    filePath=None,
+    vertexMismatchMode="auto",
+    namespace=None,
+    on_missing="skip",
+    mapping=None,
+    *args
+):
     """Import skinCluster data from file.
 
     Args:
@@ -1156,6 +1993,18 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
             - "skip": Skip import with warning
             - "closestPoint": Use closest point matching to transfer weights
             - "auto": Index-based first, fallback to closestPoint (default)
+        namespace (str, optional): Force the namespace of the target
+            geometry and influences, e.g. ``"char:"`` or ``""`` for root.
+            None resolves names automatically.
+        on_missing (str or callable, optional): What to do when objects or
+            influences can't be resolved:
+            - "skip": Skip them with a warning (default)
+            - "error": Raise SkinRemapError before applying any weights
+            - "ui": Open the remap dialog
+            - callable: Called with the SkinRemapReport; returns a mapping
+              dict, or None to cancel the import
+        mapping (dict or str, optional): Remap mapping, or path to a
+            ``.gSkinMap`` file, applied before automatic resolution.
 
     Returns:
         list: Object names that were imported using the volume method.
@@ -1174,179 +2023,47 @@ def importSkin(filePath=None, vertexMismatchMode="auto", *args):
     if not isinstance(filePath, string_types):
         filePath = filePath[0]
 
-    # Read in the file
-    if filePath.endswith(FILE_EXT):
-        with open(filePath, "rb") as fp:
-            dataPack = pickle.load(fp)
-    else:
-        with open(filePath, "r") as fp:
-            dataPack = json.load(fp)
-
-    volumeImported = []
-
-    for data in dataPack["objDDic"]:
-        # This checks if the jSkin file has the new style compressed format.
-        # use a skinDataFormat key to check for backwards compatibility.
-        # If it doesn't exist, just continue with the old method.
-        compressed = False
-        if "skinDataFormat" in data:
-            if data["skinDataFormat"] == "compressed":
-                compressed = True
-
-        try:
-            skinCluster = False
-            objName = data["objName"]
-            objNode = pm.PyNode(objName)
-
-            try:
-                # use getShapes() else meshes with 2+ shapes will fail.
-                # TODO: multiple shape nodes is not currently supported in
-                # the file structure! It should raise an error.
-                # Also noIntermediate otherwise it will count shapeOrig nodes.
-                objShapes = objNode.getShapes(noIntermediate=True)
-
-                if isinstance(objNode.getShape(), pm.nodetypes.Mesh):
-                    meshVertices = pm.polyEvaluate(objShapes, vertex=True)
-                elif isinstance(objNode.getShape(), pm.nodetypes.NurbsSurface):
-                    # if nurbs, count the cvs instead of the vertices.
-                    # Use cmds to get spans and degree for CV count
-                    meshVertices = 0
-                    for shape in objShapes:
-                        shapeName = shape.name()
-                        spansU = cmds.getAttr(shapeName + ".spansU")
-                        spansV = cmds.getAttr(shapeName + ".spansV")
-                        degreeU = cmds.getAttr(shapeName + ".degreeU")
-                        degreeV = cmds.getAttr(shapeName + ".degreeV")
-                        meshVertices += (spansU + degreeU) * (spansV + degreeV)
-                elif isinstance(objNode.getShape(), pm.nodetypes.NurbsCurve):
-                    # Use cmds to get spans and degree for CV count
-                    meshVertices = 0
-                    for shape in objShapes:
-                        shapeName = shape.name()
-                        spans = cmds.getAttr(shapeName + ".spans")
-                        degree = cmds.getAttr(shapeName + ".degree")
-                        meshVertices += spans + degree
-                else:
-                    # TODO: Implement other skinnable objs like lattices.
-                    meshVertices = 0
-
-                if compressed:
-                    importedVertices = data["vertexCount"]
-                else:
-                    importedVertices = len(data["blendWeights"])
-
-                vertexMismatch = meshVertices != importedVertices
-            except Exception:
-                vertexMismatch = False
-
-            # Handle vertex count mismatch based on mode
-            if vertexMismatch:
-                if vertexMismatchMode == "skip":
-                    warningMsg = "Vertex counts on {} do not match. {} != {}"
-                    pm.displayWarning(
-                        warningMsg.format(
-                            objName, meshVertices, importedVertices
-                        )
-                    )
-                    continue
-                elif vertexMismatchMode in ("closestPoint", "auto"):
-                    pm.displayInfo(
-                        "Vertex count mismatch on {}. Using closest-point "
-                        "matching ({} -> {} vertices)...".format(
-                            objName, importedVertices, meshVertices
-                        )
-                    )
-                    # Ensure skin cluster exists for volume import
-                    skinCluster = getSkinCluster(objNode)
-                    if not skinCluster:
-                        try:
-                            joints = list(data["weights"].keys())
-                            skinName = data["skinClsName"].replace("|", "")
-                            skinCluster = pm.skinCluster(
-                                joints, objNode, tsb=True, nw=2, n=skinName
-                            )
-                            if isinstance(skinCluster, list):
-                                skinCluster = skinCluster[0]
-                        except Exception:
-                            sceneJoints = set(
-                                [pm.PyNode(x).name() for x in pm.ls(type="joint")]
-                            )
-                            notFound = []
-                            for j in data["weights"].keys():
-                                if j not in sceneJoints:
-                                    notFound.append(str(j))
-                            pm.displayWarning(
-                                "Object: {} Skipped. Can't find corresponding "
-                                "joints: {}".format(objName, notFound)
-                            )
-                            continue
-
-                    # Use volume-based import
-                    success = _importSkinVolumeMethod(
-                        objNode, skinCluster, data, compressed
-                    )
-                    if success:
-                        volumeImported.append(objName)
-                        print(
-                            "Imported skin (volume method) for: {}".format(objName)
-                        )
-                    else:
-                        print(
-                            "Skipped skin import for: {} (volume method failed, "
-                            "see warning above)".format(objName)
-                        )
-                    continue
-
-            # Standard index-based import (vertex counts match)
-            if getSkinCluster(objNode):
-                skinCluster = getSkinCluster(objNode)
-            else:
-                try:
-                    joints = list(data["weights"].keys())
-                    # strip | from longName, or skinCluster command may fail.
-                    skinName = data["skinClsName"].replace("|", "")
-                    skinCluster = pm.skinCluster(
-                        joints, objNode, tsb=True, nw=2, n=skinName
-                    )
-                except Exception:
-                    sceneJoints = set(
-                        [pm.PyNode(x).name() for x in pm.ls(type="joint")]
-                    )
-                    notFound = []
-                    for j in data["weights"].keys():
-                        if j not in sceneJoints:
-                            notFound.append(str(j))
-                    pm.displayWarning(
-                        "Object: " + objName + " Skiped. Can't "
-                        "found corresponding deformer for the "
-                        "following joints: " + str(notFound)
-                    )
-                    continue
-
-            if isinstance(skinCluster, list):
-                skinCluster = skinCluster[0]
-
-            if skinCluster:
-                setData(skinCluster, data, compressed)
-                print("Imported skin for: {}".format(objName))
-
-        except Exception:
-            warningMsg = "Object: {} Skipped. Can NOT be found in the scene"
-            pm.displayWarning(warningMsg.format(objName))
-
+    _, volumeImported = _import_skin_file(
+        filePath,
+        vertexMismatchMode,
+        namespace,
+        on_missing,
+        SkinRemapSession(mapping),
+        {},
+    )
     return volumeImported
 
 
 @utils.timeFunc
-def importSkinPack(filePath=None, *args):
+def importSkinPack(
+    filePath=None,
+    vertexMismatchMode="auto",
+    namespace=None,
+    on_missing="skip",
+    mapping=None,
+    *args
+):
     """Import skin data from a skin pack file.
+
+    Files are resolved and applied one at a time. The ``on_missing`` policy
+    runs once per file with missing items, and the choices made for one
+    file are reused for the next ones. With ``on_missing="error"`` every
+    file is checked before any weights are applied.
 
     Args:
         filePath (str, optional): File path for import. If None, opens dialog.
+        vertexMismatchMode (str, optional): See importSkin.
+        namespace (str, optional): See importSkin.
+        on_missing (str or callable, optional): See importSkin.
+        mapping (dict or str, optional): See importSkin.
 
     Returns:
         list: Object names that were imported using the volume method.
             Empty list if all objects used standard index-based import.
+
+    Raises:
+        SkinRemapError: When ``on_missing`` is ``"error"`` and any file has
+            unresolved items.
     """
     if not filePath:
         filePath = pm.fileDialog2(
@@ -1357,13 +2074,56 @@ def importSkinPack(filePath=None, *args):
     if not isinstance(filePath, string_types):
         filePath = filePath[0]
 
-    volumeImported = []
     with open(filePath) as fp:
         packDic = json.load(fp)
-        for pFile in packDic["packFiles"]:
-            skinFilePath = os.path.join(os.path.split(filePath)[0], pFile)
-            result = importSkin(skinFilePath)
-            volumeImported.extend(result)
+    rootPath = os.path.dirname(filePath)
+    skinFiles = [os.path.join(rootPath, f) for f in packDic["packFiles"]]
+    session = SkinRemapSession(mapping)
+
+    cache = {}
+
+    if on_missing == "error":
+        # Check every file before applying any, then reuse the results.
+        checked = []
+        reports = []
+        for skinFile in skinFiles:
+            resolved, report = _resolve_skin_data(
+                _load_skin_file(skinFile),
+                skinFile,
+                namespace,
+                session.mapping,
+                cache,
+            )
+            checked.append(resolved)
+            if not report.is_empty():
+                reports.append(report)
+        if reports:
+            raise SkinRemapError(reports)
+        volumeImported = []
+        for resolved in checked:
+            volumeImported.extend(_apply_resolved(resolved, vertexMismatchMode))
+        return volumeImported
+
+    volumeImported = []
+    total = len(skinFiles)
+    for ii, skinFile in enumerate(skinFiles):
+        status, result = _import_skin_file(
+            skinFile,
+            vertexMismatchMode,
+            namespace,
+            on_missing,
+            session,
+            cache,
+            index=ii + 1,
+            total=total,
+        )
+        volumeImported.extend(result)
+        if status == REMAP_CANCEL:
+            pm.displayWarning(
+                "Skin pack import cancelled. {} of {} files not "
+                "imported.".format(total - ii, total)
+            )
+            break
 
     return volumeImported
 

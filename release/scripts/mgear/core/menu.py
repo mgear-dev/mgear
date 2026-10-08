@@ -35,10 +35,10 @@ def install_skinning_menu():
         ),
         ("Skin Cluster Rename", skin.rename_skin_clusters, "mgear_edit-3.svg"),
         ("-----", None),
-        ("Import Skin", partial(skin.importSkin, None), "mgear_log-in.svg"),
+        ("Import Skin", import_skin_ui, "mgear_log-in.svg"),
         (
             "Import Skin Pack",
-            partial(skin.importSkinPack, None),
+            import_skin_pack_ui,
             "mgear_package_in.svg",
         ),
         ("-----", None),
@@ -78,6 +78,16 @@ def install_skinning_menu():
     )
 
     mgear.menu.install("Skin and Weights", commands, image="mgear_skin.svg")
+
+
+def import_skin_ui(*args):
+    """Import a skin file, opening the remap dialog for missing items."""
+    skin.importSkin(on_missing="ui")
+
+
+def import_skin_pack_ui(*args):
+    """Import a skin pack, opening the remap dialog for missing items."""
+    skin.importSkinPack(on_missing="ui")
 
 
 def install_utils_menu(m):

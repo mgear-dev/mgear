@@ -31,11 +31,20 @@ class CustomShifterStep(cstp.customShifterMainStep):
         # Option 3: Leave as None to show file dialog at runtime
         self.skin_pack_path = None
 
+        # Optional remap file (.gSkinMap) for renamed or namespaced
+        # objects and joints. Save one from the remap dialog shown by
+        # the mGear menu Import Skin Pack.
+        self.skin_map_path = None
+
     def run(self):
         """Import the skin pack weights.
 
         If skin_pack_path is None, a file dialog will be shown
         to select the skin pack file.
+
+        on_missing="error" stops the build, before any weights are
+        applied, if an object or joint can't be resolved. Use "ui" to
+        fix the mapping interactively instead, or "skip" to ignore them.
 
         Returns:
             None
@@ -43,7 +52,11 @@ class CustomShifterStep(cstp.customShifterMainStep):
         self.log("Importing skin pack...")
 
         # importSkinPack will show file dialog if path is None
-        skin.importSkinPack(self.skin_pack_path)
+        skin.importSkinPack(
+            self.skin_pack_path,
+            on_missing="error",
+            mapping=self.skin_map_path,
+        )
 
         self.log("Skin pack import complete.")
         return'''

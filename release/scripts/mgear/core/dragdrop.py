@@ -110,10 +110,10 @@ def mgear_file_drop_action(theFile):
         guide_file_prompt(theFile)
     elif theFile.endswith(skin.PACK_EXT):
         print("Import mGear Skin Pack file: {}".format(theFile))
-        skin.importSkinPack(theFile)
+        skin.importSkinPack(theFile, on_missing="ui")
     elif theFile.endswith(skin.FILE_EXT) or theFile.endswith(skin.FILE_JSON_EXT):
         print("Import mGear Skin  file: {}".format(theFile))
-        skin.importSkin(theFile)
+        skin.importSkin(theFile, on_missing="ui")
     elif theFile.endswith(rbf_io.RBF_FILE_EXTENSION):
         print("Import mGear RBF config file: {}".format(theFile))
         rbf_io.importRBFs(theFile)

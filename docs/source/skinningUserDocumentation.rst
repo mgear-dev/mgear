@@ -142,10 +142,100 @@ Import skin weights from a ``.gSkin`` (binary) or ``.jSkin`` (JSON) file.
 
 The import process:
 
-* Finds the matching object in the scene by name (stored in the file)
+* Finds the matching object and joints in the scene by name (stored in the file), whatever their namespace
 * Creates a skin cluster if the object does not have one
 * Adds any missing joint influences automatically
 * Applies the saved weights
+
+**Namespaces and Clashing Names:**
+
+Objects and joints are matched even when the namespace differs between export and import, for example weights exported from a referenced rig (``char:body``) and imported into the rig file (``body``), or the other way around. When several objects share a short name (``grpA|body`` and ``grpB|body``), the full DAG path stored in the file picks the right one.
+
+**Remap Dialog:**
+
+When an object or joint can't be resolved, the menu and drag-and-drop imports open the **Skin Import Remap** dialog, once per skin file:
+
+* **Geometry** tab: one row per missing or ambiguous object, set to **Skip** by default. The target list shows the scene objects with the same name or, when there are none, objects with a similar name. Each entry shows its point (vertex or CV) count; objects with the same point count as the exported one come first and are marked with ✓. The **...** button next to the list opens a list of every mesh, NURBS surface and curve in the scene, with a name filter and a **Same point count only** option, so you can pick any object while the dialog is open.
+
+  .. image:: images/skinning/skin_import_remap_geo.png
+      :align: center
+
+* **Joints** tab: all the missing joints of the file in one table. Pick a target from the list or type its name, or use the match tools. The tools run on the selected rows, or on all rows when none are selected. Rows where the tool finds a match get the proposed joint (replacing a previous choice); the other rows keep their target. The viewport message shows how many rows matched:
+
+  * **Search/Replace**: replaces text in each exported joint name and proposes the scene joint whose name is exactly the result (see the examples below)
+  * **Prefix**: strip and/or add a name prefix (see the examples below)
+  * **L <-> R**: swap side tokens, using the same rules as the mGear mirror tools
+  * **Similar name**: closest name whose similarity is at least the **Similarity** value, from 0 to 1. ``1.0`` only accepts identical names; the default ``0.80`` accepts small differences such as ``spine_C0_jnt`` and ``spine_C0_0_jnt``. Lower values accept looser matches with more risk of a wrong pick
+  * **Closest position**: joint at the same bind-pose position, within the **Tolerance** distance in world units. Needs skin files that store the joint bind positions; re-export older files to enable it.
+
+  The candidates can be the influences of the target skin cluster, all scene joints, or the joints under the selected root. **Apply** is enabled when every joint has a target; **Skip unresolved** applies what is set and skips the rest.
+
+  .. image:: images/skinning/skin_import_remap_joint.png
+      :align: center
+
+**Search/Replace Examples:**
+
+The tools work on the joint name without its namespace, and only propose a joint when the result is exactly the name of one candidate joint. Without **Regex**, the search text is replaced literally, everywhere it appears in the name:
+
+==============  ===========  ==========================  ==========================
+Search          Replace      Exported joint              Proposed joint
+==============  ===========  ==========================  ==========================
+``_L0_``        ``_L1_``     ``arm_L0_3_jnt``            ``arm_L1_3_jnt``
+``_jnt``        ``_JNT``     ``spine_C0_1_jnt``          ``spine_C0_1_JNT``
+``neck``        ``head``     ``neck_C0_0_jnt``           ``head_C0_0_jnt``
+==============  ===========  ==========================  ==========================
+
+With **Regex** checked, the search is a Python regular expression and the replacement can use the matched groups (``\1``, ``\2``...). There are no ``*`` wildcards: use ``.*`` (any text) or ``.+`` (at least one character) instead.
+
+=========================  ===============  ==========================  ==========================
+Search (regex)             Replace          Exported joint              Proposed joint
+=========================  ===============  ==========================  ==========================
+``_s(\d+)_``               ``_\1_``         ``arm_L0_s1_jnt``           ``arm_L0_1_jnt``
+``^[^_]+_``                (empty)          ``old_spine_C0_jnt``        ``spine_C0_jnt``
+``_\d+_jnt$``              ``_jnt``         ``finger_L0_2_jnt``         ``finger_L0_jnt``
+``^(.*)_jnt$``             ``\1_bone``      ``leg_R0_knee_jnt``         ``leg_R0_knee_bone``
+``(?i)JNT$``               ``jnt``          ``hand_L0_JNT``             ``hand_L0_jnt``
+=========================  ===============  ==========================  ==========================
+
+* ``\d+`` is one or more digits, ``[^_]+`` is text up to the first underscore, ``^`` and ``$`` are the start and end of the name, and ``(?i)`` makes the search ignore case.
+* To try a pattern on a few joints first, select those rows; with no rows selected the tool runs on every row.
+
+**Prefix Examples:**
+
+**Strip prefix** removes the text from the start of the name, if it is there, then **Add prefix** is added. Either field can be empty.
+
+==============  ==============  ==========================  ==========================
+Strip prefix    Add prefix      Exported joint              Proposed joint
+==============  ==============  ==========================  ==========================
+``old_``        (empty)         ``old_spine_C0_jnt``        ``spine_C0_jnt``
+(empty)         ``char_``       ``spine_C0_jnt``            ``char_spine_C0_jnt``
+``L_``          ``left_``       ``L_hand_jnt``              ``left_hand_jnt``
+``rig_``        ``def_``        ``rig_neck_C0_jnt``         ``def_neck_C0_jnt``
+==============  ==============  ==========================  ==========================
+
+Namespaces don't need a prefix: they are already ignored when matching, and the **Candidates** list shows joints from every namespace.
+
+* If you pick a target object whose joints don't match either, the dialog opens again for the same file with only those joints.
+* **Save mapping...** writes every choice made so far in the import to a ``.gSkinMap`` file: the choices from earlier dialogs (earlier files of a skin pack, or a first round of the same file) plus the current one. Once saved, the file is updated each time you click **Apply** or **Skip unresolved** in a later dialog of the same import, or load a mapping (the dialog shows *Updating <file>*). Save on the first dialog of a skin pack and the file ends up holding the remap of the whole pack. **Skip this file** and **Cancel import** don't add that dialog's rows to it.
+* **Load mapping...** fills the rows from a ``.gSkinMap`` file and also uses it for the remaining files of the import, so loading it once covers the whole skin pack.
+* **Skip this file** and **Cancel import** control the rest of a skin pack import.
+
+**Scripting:**
+
+.. code-block:: python
+
+    from mgear.core import skin
+
+    # Default: unresolved objects and joints are skipped with a warning
+    skin.importSkinPack(path)
+
+    # Builds: fail before applying any weights if something is missing
+    skin.importSkinPack(path, on_missing="error", mapping="char.gSkinMap")
+
+    # Force a namespace ("" for the root namespace)
+    skin.importSkin(path, namespace="char:")
+
+``on_missing`` accepts ``"skip"`` (default), ``"error"`` (raises ``skin.SkinRemapError``), ``"ui"`` (remap dialog) or a function that receives the ``skin.SkinRemapReport`` and returns a mapping (``{"geometry": {...}, "influences": {...}}``) or ``None`` to cancel.
 
 **Vertex Count Mismatch Handling:**
 
@@ -166,6 +256,8 @@ Import multiple skin files at once from a ``.gSkinPack`` manifest file.
 1. Run **Import Skin Pack**
 2. Browse to the ``.gSkinPack`` file
 3. All referenced skin files are imported
+
+Each skin file is resolved and applied on its own. The remap dialog opens only for files with missing items, and the choices made for one file are reused for the next ones. With ``on_missing="error"``, every file is checked before any weights are applied.
 
 A skin pack is a directory containing individual skin files along with a manifest that lists them. This is the recommended approach for importing skin weights for an entire character.
 
@@ -200,6 +292,8 @@ Export skin data for multiple meshes as a binary skin pack.
 3. Choose a save location
 
 This creates a ``.gSkinPack`` manifest file along with individual ``.gSkin`` binary files for each selected mesh. Binary files are smaller but not human-readable.
+
+Skin file names keep the namespace and path of the object, with ``:`` written as ``.`` and ``|`` as ``-`` (``char.body.gSkin``, ``grpA-body.gSkin``), so objects with the same short name don't overwrite each other.
 
 
 Export Skin Pack ASCII
@@ -302,6 +396,31 @@ Example directory structure::
         body_geo.jSkin
         head_geo.jSkin
         hands_geo.jSkin
+
+.gSkinMap (Remap)
+------------------
+
+A JSON file that maps the object and joint names stored in skin files to the objects and joints of the current scene. It is written by **Save mapping...** in the Skin Import Remap dialog (with every choice made during that import, see above) and read by **Load mapping...**, or passed to ``importSkin`` / ``importSkinPack`` with ``mapping=`` so builds can reuse an interactive remap without any dialog.
+
+Example::
+
+    {
+        "geometry": {
+            "geo_root|geo_body_00_MMM": "|geo_root|geo_body_01_MMM",
+            "char:geo_hair_00_MMM": "|geo_root|geo_hair_00_MMM"
+        },
+        "influences": {
+            "arm_L0_3_jnt": "|rig|arm_L0_3_jnt",
+            "arm_L0_s1_jnt": "arm_L0_1_jnt"
+        },
+        "version": 1
+    }
+
+* ``geometry``: exported object name, as stored in the skin file (it can include a namespace or a ``|`` path), mapped to the scene object.
+* ``influences``: exported joint name, without namespace, mapped to the scene joint.
+* The scene names can be full DAG paths (what the dialog saves) or any name that is unique in the scene. A name that is missing or not unique is ignored, and the normal automatic matching is used for it.
+* Both sections are optional, so a hand-written mapping can list only the names that need it.
+* Names that the mapping doesn't list are still matched automatically, so the mapping only needs the renamed or ambiguous items.
 
 .wmap (Weight Map)
 -------------------

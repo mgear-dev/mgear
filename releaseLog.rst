@@ -25,8 +25,17 @@ Release Log
 	* Core: ``CallbackManager`` gains OpenMaya API 2.0 ``timerCB``, ``eventCB``, ``conditionCB`` and ``sceneMessageCB`` (no scriptJobs)
 	* Core: Add reusable ``widgets.ColorSwatchButton``, ``widgets.NodeListWidget`` (shows short names, keeps full DAG paths) and ``widgets.RecentFilesMenu``; ``pyqt.SettingsMixin`` now also saves spin boxes, sliders and checkable buttons, supports widgets that save their own value (``settings_value`` / ``set_settings_value`` / ``settings_signal``), and exposes ``get_widget_value`` / ``set_widget_value``; ``pyqt.get_user_settings`` returns the shared mGear settings object
 	* Docs: Animbits: Document Blocking Ghosts
+	* Core: Skin: Skin import matches objects and joints whatever their namespace (e.g. weights exported from a referenced rig imported into the rig file, or the other way around) and uses the stored full DAG path when several objects or joints share a short name; joints that can't be found are now reported instead of silently dropped. Supersedes PR #223 (thanks aurorafreir), mgear4#172
+	* Core: Skin: Skin Import Remap dialog — when objects or joints can't be resolved, the menu and drag-and-drop imports open a dialog once per skin file: pick the target object among same-name or similar-name objects (same point count marked first) or browse any scene geometry, and remap missing joints by hand or with Search/Replace, Prefix, L <-> R, Similar name and Closest (bind) position tools; mappings can be saved / loaded as ``.gSkinMap`` files
+	* Core: Skin: ``importSkin`` / ``importSkinPack`` gain ``namespace``, ``on_missing`` (``"skip"``, ``"error"``, ``"ui"`` or a callable) and ``mapping`` arguments; ``"error"`` checks a whole skin pack before applying any weights, and the Import Skin Pack custom step template uses it with an optional mapping file
+	* Core: Skin: Skin files also store the object full path and the joints' bind-pose positions; older files still import
+	* Core: Add ``mgear.core.node_remap`` — namespace- and path-aware node lookup (``find_node_candidates``) and name / position matchers that return proposed source to target mappings
+	* Docs: Skin and Weights: Document namespace support, the remap dialog and the import scripting options
 
 **Bug Fix**
+	* Core: Skin: Skin pack export no longer writes invalid file names for objects with clashing names, and objects with the same name in different namespaces no longer overwrite each other's file (``nsA.body.jSkin``, ``grpA-body.jSkin``)
+	* Core: Skin: Importing with a vertex count mismatch no longer fails in batch mode (mayapy builds) on the missing main progress bar
+	* Core: Skin: The Import Skin menu item no longer passes Maya's callback value as the vertex mismatch mode
 	* Shifter: Build Log: The log is now cleared at the start of every build, including builds started from the Guide Explorer, which previously appended to the prior build's log indefinitely
 	* Shifter: Build Log: Opening or raising the log window no longer wipes the finished build's log
 	* Anim Picker: The "SVG" hover badge keeps a small constant on-screen size at any zoom instead of scaling with the canvas
