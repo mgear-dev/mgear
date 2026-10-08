@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Lattice cage: left column straight, right columns bulged by deformation -->
+  <line x1="3" y1="4" x2="3" y2="20"/>
+  <path d="M11 4 Q14 12 11 20"/>
+  <path d="M19 4 Q22 12 19 20"/>
+  <!-- Lattice rows -->
+  <line x1="3" y1="4" x2="19" y2="4"/>
+  <line x1="3" y1="12" x2="20.5" y2="12"/>
+  <line x1="3" y1="20" x2="19" y2="20"/>
+  <!-- Corner lattice points -->
+  <circle cx="3" cy="4" r="1.5" fill="white" stroke="none"/>
+  <circle cx="19" cy="4" r="1.5" fill="white" stroke="none"/>
+  <circle cx="3" cy="20" r="1.5" fill="white" stroke="none"/>
+  <circle cx="19" cy="20" r="1.5" fill="white" stroke="none"/>
+  <!-- Deformed lattice points (colored) -->
+  <circle cx="3" cy="12" r="2" fill="#7cb5a0" stroke="none"/>
+  <circle cx="12.5" cy="12" r="2" fill="#7cb5a0" stroke="none"/>
+  <circle cx="20.5" cy="12" r="2" fill="#7cb5a0" stroke="none"/>
+</svg>

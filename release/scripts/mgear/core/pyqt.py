@@ -3,9 +3,10 @@
 #############################################
 # GLOBAL
 #############################################
+import contextlib
+import logging
 import os
 import traceback
-import contextlib
 import maya.OpenMayaUI as omui
 import mgear.pymaya as pm
 from mgear.pymaya import versions
@@ -612,3 +613,83 @@ def _to_number(value, default, cast):
         return cast(float(value))
     except (TypeError, ValueError):
         return cast(default or 0)
+
+
+#############################################
+# Logging
+#############################################
+
+
+class _LogEmitter(QtCore.QObject):
+    """Carry log messages to the GUI thread through a Qt signal."""
+
+    message = QtCore.Signal(str)
+
+
+class QtLogHandler(logging.Handler):
+    """Logging handler that appends records to a text widget.
+
+    Records are sent through a Qt signal, so messages logged from worker
+    threads are delivered safely in the GUI thread. Use :meth:`attach` and
+    :meth:`detach` to connect it to a logger: the logger level is lowered
+    while attached so INFO messages reach the widget, then restored. The
+    handler detaches itself when the widget is destroyed.
+
+    Example:
+        >>> self.log_handler = QtLogHandler(self.log_output)
+        >>> self.log_handler.attach(logging.getLogger("mgear.rigbits.my_tool"))
+        >>> ...
+        >>> self.log_handler.detach()  # e.g. in closeEvent
+    """
+
+    def __init__(self, widget, fmt=None):
+        """Initialize the handler.
+
+        Args:
+            widget (QtWidgets.QPlainTextEdit): Output widget. Any widget
+                with an ``appendPlainText(str)`` method works.
+            fmt (str, optional): Log format. Defaults to
+                ``"%(levelname)s: %(message)s"``.
+        """
+        super(QtLogHandler, self).__init__()
+        self.setFormatter(logging.Formatter(fmt or "%(levelname)s: %(message)s"))
+        self.emitter = _LogEmitter()
+        self.emitter.message.connect(widget.appendPlainText)
+        self.logger = None
+        self.previous_level = logging.NOTSET
+        widget.destroyed.connect(self.detach)
+
+    def attach(self, logger, level=logging.INFO):
+        """Add the handler to a logger.
+
+        Args:
+            logger (logging.Logger): Logger to show in the widget.
+            level (int, optional): Level set on the logger while attached,
+                only if the logger has no level of its own.
+        """
+        self.detach()
+        self.logger = logger
+        self.previous_level = logger.level
+        logger.addHandler(self)
+        if logger.level == logging.NOTSET:
+            logger.setLevel(level)
+
+    def detach(self, *args):
+        """Remove the handler from its logger and restore the level."""
+        if self.logger is None:
+            return
+        self.logger.removeHandler(self)
+        self.logger.setLevel(self.previous_level)
+        self.logger = None
+
+    def emit(self, record):
+        """Send a formatted record to the widget.
+
+        Args:
+            record (logging.LogRecord): Log record.
+        """
+        try:
+            self.emitter.message.emit(self.format(record))
+        except RuntimeError:
+            # The widget or emitter was deleted
+            pass

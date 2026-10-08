@@ -1040,6 +1040,108 @@ Scripting Access
     core.run_from_config(config)
 
 
+.. _lattice-io:
+
+Lattice IO
+==========
+
+Lattice IO exports ffd lattice deformers to a ``.lat`` file and rebuilds them, so hand-placed lattices survive a rig rebuild. Use the tool to export, then rebuild the lattices in the Shifter build with the **Import Lattice Configuration** custom step template.
+
+Access from the menu: **mGear > Rigbits > Lattice IO**
+
+What is Saved
+-------------
+
+- **ffd settings**: local influence, outside lattice and falloff, partial resolution, bind to original geometry, freeze geometry and envelope
+- **Lattice and base**: names, parent, world matrix and visibility
+- **Lattice shape**: divisions and the position of every lattice point
+- **Affected geometry**: the deformed shapes, their deformer set members or component tag expression, and the weight map (only the weights that are not 1.0 are stored)
+- **Deformer order**: the deformer stack of each geometry and the order mode chosen on export
+
+Export
+------
+
+.. image:: images/rigbits/lattice_IO_export.png
+    :align: center
+    :scale: 80%
+
+1. Open the **Export** tab. It lists the lattices in the scene. Use **From Selection** to select the lattices of the selected objects (lattices, base lattices or deformed geometry).
+2. Choose the **Deformer order** to store with the lattices (see below). It always starts as **Current** when the tool opens.
+3. Click **Export Selected...** and save the ``.lat`` file.
+
+Import
+------
+
+.. image:: images/rigbits/lattice_IO_import.png
+    :align: center
+    :scale: 80%
+
+1. Open the **Import** tab and browse to a ``.lat`` file, or use **File > Recent Files**. The file content is listed with the divisions, the geometry and whether weights are stored.
+2. Uncheck the lattices you don't want to import.
+3. The **Order** column shows the deformer order stored for each lattice. Change it to override it for this import only.
+4. Keep **Replace existing** checked to delete lattices with the same names first, including orphan lattice or base nodes left by a broken setup, so the rebuilt nodes keep their exact names.
+5. Click **Import Checked**. The whole import is a single undo step.
+
+Geometry and parents are found by name, even if they moved in the hierarchy or are in another namespace. Missing geometry is skipped with a warning in the log panel.
+
+.. note::
+    Component tag expressions are restored, but the component tags themselves are not saved. Make sure the tags exist on the rebuilt geometry.
+
+Deformer Order
+--------------
+
+The deformer order sets where the ffd goes in the deformer stack of each geometry:
+
+- **Current (as exported)**: the position the ffd had when it was exported. It goes directly after the closest deformer that was evaluated before it and still exists. If the ffd was the first deformer, it goes to the front of the chain. If its position can't be found, it is added last.
+- **Front of chain**: before all the existing deformers.
+- **Last (append)**: after all the existing deformers, the same as applying a new lattice.
+
+The order chosen on export is saved for each lattice in the ``.lat`` file, so the custom step and scripted imports rebuild the lattices in the intended order without extra settings.
+
+Shifter Custom Step
+-------------------
+
+Create a custom step from the **Import Lattice Configuration** template (see :ref:`custom-step-templates`) and set its options in ``setup()``:
+
+- ``self.lattice_path``: the ``.lat`` file. Leave it as ``None`` to pick the file when the step runs.
+- ``self.lattice_names``: the ffd names to import, ``None`` for all.
+- ``self.replace``: delete lattices with the same names first.
+- ``self.order``: ``None`` uses the order stored in the file. Use ``"current"``, ``"front"`` or ``"last"`` to override it.
+
+File Format
+-----------
+
+``.lat`` files are JSON. The ``type`` key is ``"lattice_config"``. Files exported as ``.json`` with the same content (from the original lattice serializer script) can also be imported.
+
+Scripting Access
+----------------
+
+.. code-block:: python
+
+    from mgear.rigbits import lattice_io
+
+    # Export
+    lattice_io.export_lattices(["face_ffd", "belly_ffd"], "C:/rig/data/lattices.lat")
+
+    # Import everything with the stored order
+    lattice_io.import_lattices("C:/rig/data/lattices.lat")
+
+    # Import one lattice, appended after the existing deformers
+    lattice_io.import_lattices(
+        "C:/rig/data/lattices.lat",
+        names=["face_ffd"],
+        order="last",
+    )
+
+    # Override the order per lattice
+    lattice_io.import_lattices(
+        "C:/rig/data/lattices.lat",
+        order={"face_ffd": "front"},
+    )
+
+The generic helpers used by the tool are available in ``mgear.core.deformer`` for other tools: ``get_deformer_stack``, ``move_deformer``, ``get_deformer_weights``, ``set_deformer_weights``, ``get_lattice_points``, ``set_lattice_points``, ``find_ffd_nodes`` and ``delete_lattice``.
+
+
 SDK Creator
 ===========
 

@@ -46,6 +46,11 @@ TEMPLATES = {
         "description": "Import Anim Picker from .pkr file with optional rig parenting",
         "module": "import_anim_picker",
     },
+    "import_lattice_config": {
+        "name": "Import Lattice Configuration",
+        "description": "Rebuild ffd lattices from a Lattice IO .lat file",
+        "module": "import_lattice_config",
+    },
 }
 
 

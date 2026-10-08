@@ -31,6 +31,12 @@ Release Log
 	* Core: Skin: Skin files also store the object full path and the joints' bind-pose positions; older files still import
 	* Core: Add ``mgear.core.node_remap`` — namespace- and path-aware node lookup (``find_node_candidates``) and name / position matchers that return proposed source to target mappings
 	* Docs: Skin and Weights: Document namespace support, the remap dialog and the import scripting options
+	* Rigbits: Lattice IO — new tool (Rigbits > Lattice IO) to export ffd lattices to ``.lat`` files and rebuild them: ffd settings, lattice and base placement, parents and visibility, lattice points, affected geometry, membership and sparse weights; geometry and parents are found across hierarchy and namespace changes, Replace existing also removes orphan lattice / base nodes, and the import is one undo step. Replaces the standalone lattice serializer script, whose ``.json`` files still import
+	* Rigbits: Lattice IO: Deformer order mode chosen on export and stored per lattice — Current (as exported, falls back to Last), Front of chain or Last (append); the Import tab can override it per lattice
+	* Shifter: Custom Step: Add the Import Lattice Configuration template to rebuild Lattice IO lattices during the build
+	* Core: Deformer: Add ``get_deformer_stack``, ``move_deformer`` (reorder in a geometry stack), ``get_deformers(exclude_types=...)``, ``get_deformer_geometry``, ``get_deformer_set_members``, ``get_component_tag_expression`` / ``set_component_tag_expression``, sparse ``get_deformer_weights`` / ``set_deformer_weights`` for any deformer and geometry type, and lattice helpers ``get_ffd_nodes``, ``find_ffd_nodes``, ``get_lattice_nodes``, ``get_lattice_divisions``, ``get_lattice_points`` / ``set_lattice_points`` (bulk, undoable) and ``delete_lattice``
+	* Core: Add ``utils.undo_chunk()`` (``one_undo`` now uses it), ``utils.main_progress_bar()``, ``utils.get_plug`` and ``utils.get_point_count``, and ``pyqt.QtLogHandler`` to show a logger in a text widget (``attach`` / ``detach`` handle the logger level)
+	* Docs: Rigbits: Document Lattice IO
 
 **Bug Fix**
 	* Core: Skin: Skin pack export no longer writes invalid file names for objects with clashing names, and objects with the same name in different namespaces no longer overwrite each other's file (``nsA.body.jSkin``, ``grpA-body.jSkin``)

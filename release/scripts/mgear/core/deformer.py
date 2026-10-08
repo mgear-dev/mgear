@@ -1,12 +1,20 @@
+import logging
+
 from maya import cmds
 import maya.api.OpenMaya as om2
 import maya.internal.nodes.proximitywrap.node_interface as ifc
 
 import mgear.pymaya as pm
+from mgear.core import utils
 
 # Backward-compat re-exports (moved to mgear.core.blendshape)
 from mgear.core.blendshape import BS_TARGET_ITEM_ATTR  # noqa: F401
 from mgear.core.blendshape import bs_target_weight  # noqa: F401
+
+logger = logging.getLogger(__name__)
+
+# Weights closer than this to the default value are skipped in sparse maps
+WEIGHT_TOLERANCE = 1e-6
 
 
 # =============================================================================
@@ -47,27 +55,34 @@ def filter_deformers(node_list):
     return [node for node in node_list if is_deformer(node)]
 
 
-def get_deformers(mesh, deformer_type=None):
-    """Get deformer nodes from a mesh's history.
+def get_deformers(mesh, deformer_type=None, exclude_types=None):
+    """Get deformer nodes from a geometry's history.
 
     Args:
-        mesh (str): The mesh transform name.
+        mesh (str): The geometry transform or shape name (any geometry
+            type, not only meshes).
         deformer_type (str, optional): Filter by a specific Maya
             deformer type name (e.g. "skinCluster", "blendShape").
+        exclude_types (list, optional): Deformer type names to skip
+            (e.g. ``["tweak"]``).
 
     Returns:
-        list: List of deformer node names.
+        list: List of deformer node names, from the last evaluated to the
+            first evaluated.
     """
-    history = (
-        cmds.listHistory(mesh, pruneDagObjects=True) or []
-    )
+    history = cmds.listHistory(mesh, pruneDagObjects=True) or []
     result = [n for n in history if is_deformer(n)]
-    if deformer_type:
-        result = [
-            n for n in result
-            if cmds.nodeType(n) == deformer_type
-        ]
-    return result
+    if not deformer_type and not exclude_types:
+        return result
+    exclude_types = exclude_types or ()
+    filtered = []
+    for node in result:
+        node_type = cmds.nodeType(node)
+        if deformer_type and node_type != deformer_type:
+            continue
+        if node_type not in exclude_types:
+            filtered.append(node)
+    return filtered
 
 
 # =============================================================================
@@ -609,3 +624,429 @@ def getMeshWireDeformers(mesh):
     history = cmds.listHistory(mesh, pruneDagObjects=True) or []
     wires = [h for h in history if cmds.nodeType(h) == "wire"]
     return wires
+
+
+# =============================================================================
+# DEFORMER STACK ORDER
+# =============================================================================
+
+
+def get_deformer_stack(geometry):
+    """Return the deformers of a geometry in stack order.
+
+    The list goes from the last evaluated deformer (closest to the output)
+    to the first evaluated one, the same order as ``cmds.listHistory``.
+    Tweak nodes are skipped, since they can not be reordered.
+
+    Args:
+        geometry (str): Geometry transform or shape name.
+
+    Returns:
+        list: Deformer names.
+    """
+    return get_deformers(geometry, exclude_types=("tweak",))
+
+
+def move_deformer(deformer, geometry, after=None, stack=None):
+    """Move a deformer in the deformer stack of a geometry.
+
+    The other deformers keep their relative order.
+
+    Args:
+        deformer (str): Deformer to move.
+        geometry (str): Geometry transform or shape name.
+        after (str, optional): Deformer that ``deformer`` should evaluate
+            directly after. If None, ``deformer`` is moved to the front of
+            the chain (evaluated first).
+        stack (list, optional): Current stack from
+            :func:`get_deformer_stack`, to avoid querying it again.
+
+    Raises:
+        ValueError: If ``deformer`` or ``after`` is not in the stack.
+    """
+    stack = list(stack or get_deformer_stack(geometry))
+    if deformer not in stack:
+        raise ValueError("'{}' does not deform '{}'".format(deformer, geometry))
+    others = [d for d in stack if d != deformer]
+    if not others:
+        return
+
+    # cmds.reorderDeformers(a, b) moves b directly after a in the stack
+    # list, so b evaluates directly before a.
+    if after is None:
+        if stack[-1] != deformer:
+            cmds.reorderDeformers(others[-1], deformer, geometry)
+        return
+
+    if after not in others:
+        raise ValueError("'{}' does not deform '{}'".format(after, geometry))
+    if stack.index(deformer) == stack.index(after) - 1:
+        return
+    index = others.index(after)
+    if index > 0:
+        cmds.reorderDeformers(others[index - 1], deformer, geometry)
+        return
+
+    # "after" is the last evaluated deformer: swap up to the top
+    for above in reversed(stack[: stack.index(deformer)]):
+        cmds.reorderDeformers(deformer, above, geometry)
+
+
+# =============================================================================
+# DEFORMER MEMBERSHIP AND WEIGHTS
+# =============================================================================
+
+
+def get_deformer_geometry(deformer):
+    """Return the geometry affected by a deformer.
+
+    Args:
+        deformer (str): Deformer name.
+
+    Returns:
+        list: ``(geo_index, shape_long_name)`` tuples.
+    """
+    shapes = cmds.deformer(deformer, query=True, geometry=True) or []
+    indices = cmds.deformer(deformer, query=True, geometryIndices=True) or []
+    return [
+        (index, cmds.ls(shape, long=True)[0]) for shape, index in zip(shapes, indices)
+    ]
+
+
+def get_deformer_set_members(deformer):
+    """Return the members of a deformer's legacy deformer set.
+
+    Deformers using component tags (Maya 2022+ default) have no deformer
+    set, so the result is empty.
+
+    Args:
+        deformer (str): Deformer name.
+
+    Returns:
+        list: Member strings (objects or components).
+    """
+    members = []
+    for obj_set in cmds.listConnections(deformer, type="objectSet") or []:
+        members += cmds.sets(obj_set, query=True) or []
+    return members
+
+
+def get_component_tag_expression(deformer, geo_index):
+    """Return the component tag expression of a deformer input.
+
+    Args:
+        deformer (str): Deformer name.
+        geo_index (int): Geometry index in the deformer.
+
+    Returns:
+        str: The expression, or None if the deformer has no component tag
+            support (Maya < 2022).
+    """
+    plug = "{}.input[{}].componentTagExpression".format(deformer, geo_index)
+    return cmds.getAttr(plug) if cmds.objExists(plug) else None
+
+
+def set_component_tag_expression(deformer, geo_index, expression):
+    """Set the component tag expression of a deformer input.
+
+    Args:
+        deformer (str): Deformer name.
+        geo_index (int): Geometry index in the deformer.
+        expression (str): Component tag expression, e.g. ``"lips*"``.
+
+    Returns:
+        bool: True if set, False if the deformer has no component tag
+            support (Maya < 2022).
+    """
+    plug = "{}.input[{}].componentTagExpression".format(deformer, geo_index)
+    if not cmds.objExists(plug):
+        return False
+    cmds.setAttr(plug, expression, type="string")
+    return True
+
+
+def _get_deformer_shape(deformer, geo_index):
+    """Return the shape deformed at a geometry index.
+
+    Args:
+        deformer (str): Deformer name.
+        geo_index (int): Geometry index in the deformer.
+
+    Returns:
+        str: Shape long name.
+
+    Raises:
+        ValueError: If the deformer has no geometry at that index.
+    """
+    shape = dict(get_deformer_geometry(deformer)).get(geo_index)
+    if not shape:
+        raise ValueError("'{}' has no geometry at index {}".format(deformer, geo_index))
+    return shape
+
+
+def get_deformer_weights(deformer, geo_index, default=1.0, sparse=True, shape=None):
+    """Read the weight map of a deformer for one geometry.
+
+    Works with any weighted deformer (geometryFilter) and any geometry
+    type, including setups that use component tags. The whole map is read
+    with a single command.
+
+    Args:
+        deformer (str): Deformer name.
+        geo_index (int): Geometry index in the deformer.
+        default (float, optional): Weights within tolerance of this value
+            are skipped when ``sparse`` is True.
+        sparse (bool, optional): If True, only return weights different
+            from ``default``. If False, return the weight of every point.
+        shape (str, optional): Shape deformed at ``geo_index``, to avoid
+            querying it again.
+
+    Returns:
+        dict: ``{point_index (int): weight (float)}``.
+    """
+    shape = shape or _get_deformer_shape(deformer, geo_index)
+    count = utils.get_point_count(shape)
+    if not count:
+        return {}
+    values = cmds.getAttr(
+        "{}.weightList[{}].weights[0:{}]".format(deformer, geo_index, count - 1)
+    )
+    if not isinstance(values, list):
+        values = [values]
+    if not sparse:
+        return dict(enumerate(values))
+    return {
+        index: value
+        for index, value in enumerate(values)
+        if abs(value - default) > WEIGHT_TOLERANCE
+    }
+
+
+def set_deformer_weights(
+    deformer, geo_index, weights, default=1.0, point_count=None, shape=None
+):
+    """Set the weight map of a deformer for one geometry.
+
+    Every point gets a weight: points missing in ``weights`` get
+    ``default``. The whole map is written with a single command.
+
+    Args:
+        deformer (str): Deformer name.
+        geo_index (int): Geometry index in the deformer.
+        weights (dict): ``{point_index: weight}``. Keys can be int or str
+            (as loaded from JSON). Indices out of range are ignored.
+        default (float, optional): Weight for points not in ``weights``.
+        point_count (int, optional): Expected point count. A warning is
+            logged if the geometry has a different count.
+        shape (str, optional): Shape deformed at ``geo_index``, to avoid
+            querying it again.
+    """
+    shape = shape or _get_deformer_shape(deformer, geo_index)
+    count = utils.get_point_count(shape)
+    if point_count is not None and point_count != count:
+        logger.warning(
+            "Point count mismatch on '%s' (expected: %d, scene: %d). "
+            "Weights applied by index.",
+            shape.split("|")[-1],
+            point_count,
+            count,
+        )
+    if not count:
+        return
+
+    values = [default] * count
+    for index, value in weights.items():
+        index = int(index)
+        if 0 <= index < count:
+            values[index] = float(value)
+    cmds.setAttr(
+        "{}.weightList[{}].weights[0:{}]".format(deformer, geo_index, count - 1),
+        *values,
+        size=count,
+    )
+
+
+# =============================================================================
+# LATTICE
+# =============================================================================
+
+
+def get_ffd_nodes():
+    """Return all the ffd (lattice) deformers in the scene.
+
+    Returns:
+        list: ffd node names.
+    """
+    return cmds.ls(type="ffd") or []
+
+
+def find_ffd_nodes(nodes):
+    """Find the ffd deformers related to arbitrary nodes.
+
+    Accepts ffd nodes, lattice or base lattice transforms and shapes, and
+    deformed geometry or components (searching their history).
+
+    Args:
+        nodes (list): Node or component names.
+
+    Returns:
+        list: Unique ffd node names.
+    """
+    result = []
+    for node in nodes or []:
+        node = node.split(".")[0]
+        if not cmds.objExists(node):
+            continue
+        if cmds.nodeType(node) == "ffd":
+            candidates = [node]
+        else:
+            shapes = cmds.listRelatives(node, shapes=True, fullPath=True)
+            candidates = []
+            for shape in shapes or [node]:
+                if cmds.nodeType(shape) in ("lattice", "baseLattice"):
+                    candidates += (
+                        cmds.listConnections(
+                            shape, source=False, destination=True, type="ffd"
+                        )
+                        or []
+                    )
+            if not candidates:
+                candidates = get_deformers(node, "ffd")
+        for ffd in candidates:
+            if ffd not in result:
+                result.append(ffd)
+    return result
+
+
+def get_lattice_nodes(ffd):
+    """Return the lattice and base lattice nodes driving an ffd.
+
+    Args:
+        ffd (str): ffd deformer name.
+
+    Returns:
+        tuple: ``(lattice_transform, lattice_shape, base_transform,
+            base_shape)`` as long names. Missing items are None.
+    """
+
+    def _connected(node_type):
+        shapes = cmds.listConnections(
+            ffd, source=True, destination=False, type=node_type, shapes=True
+        )
+        if not shapes:
+            return None, None
+        shape = cmds.ls(shapes[0], long=True)[0]
+        parents = cmds.listRelatives(shape, parent=True, fullPath=True)
+        return (parents[0] if parents else None), shape
+
+    lat_tfm, lat_shape = _connected("lattice")
+    base_tfm, base_shape = _connected("baseLattice")
+    return lat_tfm, lat_shape, base_tfm, base_shape
+
+
+def _get_lattice_shape(lattice):
+    """Return the lattice shape of a lattice transform or shape.
+
+    Args:
+        lattice (str): Lattice transform or shape name.
+
+    Returns:
+        str: Lattice shape long name.
+
+    Raises:
+        ValueError: If no lattice shape is found.
+    """
+    if cmds.nodeType(lattice) == "lattice":
+        return cmds.ls(lattice, long=True)[0]
+    shapes = cmds.listRelatives(
+        lattice, shapes=True, type="lattice", noIntermediate=True, fullPath=True
+    )
+    if not shapes:
+        raise ValueError("'{}' is not a lattice".format(lattice))
+    return shapes[0]
+
+
+def get_lattice_divisions(lattice):
+    """Return the s, t and u divisions of a lattice.
+
+    Args:
+        lattice (str): Lattice transform or shape name.
+
+    Returns:
+        list: ``[s, t, u]`` divisions.
+    """
+    shape = _get_lattice_shape(lattice)
+    return [cmds.getAttr("{}.{}Divisions".format(shape, axis)) for axis in "stu"]
+
+
+def get_lattice_points(lattice, divisions=None):
+    """Read the object space positions of all the lattice points.
+
+    Points are ordered with nested loops ``s -> t -> u`` (u varies
+    fastest). All the points are read with a single command.
+
+    Args:
+        lattice (str): Lattice transform or shape name.
+        divisions (list, optional): ``[s, t, u]`` divisions. Read from the
+            lattice if None.
+
+    Returns:
+        list: ``[x, y, z]`` positions.
+    """
+    shape = _get_lattice_shape(lattice)
+    s_div, t_div, u_div = divisions or get_lattice_divisions(shape)
+    count = s_div * t_div * u_div
+    raw = cmds.getAttr("{}.controlPoints[0:{}]".format(shape, count - 1))
+
+    # Maya stores the points with s varying fastest
+    points = []
+    for s in range(s_div):
+        for t in range(t_div):
+            for u in range(u_div):
+                points.append(list(raw[s + t * s_div + u * s_div * t_div]))
+    return points
+
+
+def set_lattice_points(lattice, divisions, points):
+    """Set the object space positions of all the lattice points.
+
+    All the points are set with a single, undoable command.
+
+    Args:
+        lattice (str): Lattice transform or shape name.
+        divisions (list): ``[s, t, u]`` divisions.
+        points (list): ``[x, y, z]`` positions ordered ``s -> t -> u``
+            (u varies fastest), as returned by :func:`get_lattice_points`.
+
+    Raises:
+        ValueError: If the number of points doesn't match the divisions.
+    """
+    shape = _get_lattice_shape(lattice)
+    s_div, t_div, u_div = divisions
+    count = s_div * t_div * u_div
+    if len(points) != count:
+        raise ValueError(
+            "Expected {} lattice points, got {}".format(count, len(points))
+        )
+
+    values = []
+    for index in range(count):
+        s = index % s_div
+        t = (index // s_div) % t_div
+        u = index // (s_div * t_div)
+        values.extend(points[s * t_div * u_div + t * u_div + u])
+    cmds.setAttr("{}.controlPoints[0:{}]".format(shape, count - 1), *values)
+
+
+def delete_lattice(ffd):
+    """Delete an ffd deformer with its lattice and base lattice.
+
+    The deformed geometry is kept.
+
+    Args:
+        ffd (str): ffd deformer name.
+    """
+    lat_tfm, _, base_tfm, _ = get_lattice_nodes(ffd)
+    nodes = [n for n in (ffd, lat_tfm, base_tfm) if n and cmds.objExists(n)]
+    if nodes:
+        cmds.delete(nodes)

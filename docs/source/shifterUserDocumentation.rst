@@ -904,6 +904,8 @@ When creating a new custom step, mGear provides a template selection dialog that
 
 - **Import Anim Picker Template**: Imports Anim Picker data from a ``.pkr`` file with an option to reparent the picker node under the rig root.
 
+- **Import Lattice Configuration**: Rebuilds ffd lattices from a Lattice IO ``.lat`` file (see :ref:`lattice-io`). Options to import only some lattices, replace existing ones and override the stored deformer order.
+
 **Template Configuration Options:**
 
 Each template provides three ways to configure file paths:

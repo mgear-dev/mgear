@@ -259,17 +259,76 @@ def one_undo(func):
     def wrap(*args, **kwargs):
         # type: (*str, **str) -> None
 
-        try:
-            cmds.undoInfo(openChunk=True)
+        with undo_chunk():
             return func(*args, **kwargs)
 
-        except Exception as e:
-            raise e
-
-        finally:
-            cmds.undoInfo(closeChunk=True)
-
     return wrap
+
+
+@contextlib.contextmanager
+def undo_chunk(name=None):
+    """Context manager - Group all edits made in the block in one undo.
+
+    The chunk is always closed, even if the block raises.
+
+    Args:
+        name (str, optional): Name of the undo chunk.
+
+    Example:
+        >>> with undo_chunk("buildLattices"):
+        ...     cmds.lattice("pSphere1")
+    """
+    kwargs = {"chunkName": name} if name else {}
+    cmds.undoInfo(openChunk=True, **kwargs)
+    try:
+        yield
+    finally:
+        cmds.undoInfo(closeChunk=True)
+
+
+@contextlib.contextmanager
+def main_progress_bar(status, max_value):
+    """Context manager - Drive Maya's main progress bar.
+
+    Yields a ``step(status=None)`` callable that advances the bar by one
+    and optionally updates its status text. The bar is always ended, even
+    if the block raises. In batch mode nothing is shown, but ``step`` can
+    still be called.
+
+    Args:
+        status (str): Initial status text.
+        max_value (int): Total number of steps.
+
+    Yields:
+        callable: ``step(status=None)`` function.
+
+    Example:
+        >>> with main_progress_bar("Exporting", len(items)) as step:
+        ...     for item in items:
+        ...         step("Exporting {}".format(item))
+    """
+    if cmds.about(batch=True):
+        yield lambda status=None: None
+        return
+
+    bar = mel.eval("$tmp = $gMainProgressBar")
+    cmds.progressBar(
+        bar,
+        edit=True,
+        beginProgress=True,
+        isInterruptable=False,
+        status=status,
+        maxValue=max(max_value, 1),
+    )
+
+    def step(status=None):
+        kwargs = {"status": status} if status else {}
+        cmds.progressBar(bar, edit=True, step=1, **kwargs)
+
+    try:
+        yield step
+    finally:
+        cmds.progressBar(bar, edit=True, endProgress=True)
 
 
 def undo_off(func):
@@ -458,6 +517,42 @@ def get_dag_path(name):
         raise NameError("Multiple dag paths found from the same name")
 
     return selection_list.getDagPath(0)
+
+
+def get_plug(node, attr):
+    """Return the OpenMaya plug of a node attribute.
+
+    Args:
+        node (str): Node name.
+        attr (str): Attribute name (long or short).
+
+    Returns:
+        OpenMaya.MPlug: The plug.
+
+    Raises:
+        RuntimeError: If the node does not exist.
+    """
+    selection_list = OpenMaya.MSelectionList()
+    selection_list.add(node)
+    fn_node = OpenMaya.MFnDependencyNode(selection_list.getDependNode(0))
+    return fn_node.findPlug(attr, False)
+
+
+def get_point_count(shape):
+    """Return the number of deformable points of a geometry shape.
+
+    Works with any deformable geometry: mesh, NURBS curve, NURBS surface,
+    lattice, etc.
+
+    Args:
+        shape (str): Shape node name.
+
+    Returns:
+        int: Number of points.
+    """
+    selection_list = OpenMaya.MSelectionList()
+    selection_list.add(shape)
+    return OpenMaya.MItGeometry(selection_list.getDagPath(0)).count()
 
 
 def get_os():
