@@ -43,6 +43,11 @@ Release Log
 	* Rigbits: Add ``deformer_io_ui.DeformerIOUI``, the shared Export / Import window of the deformer IO tools
 	* Core: Add ``node_remap.find_node`` (single node lookup, warns when ambiguous), ``node_remap.leaf_name`` and ``deformer.find_deformer_nodes`` (deformers of a type from nodes, geometry, components, driver shapes or controls); ``deformer.set_deformer_weights`` gains a ``sparse`` write so restored deformers only store the painted weights; ``pyqt.QtLogHandler.attach`` accepts several loggers
 	* Docs: Rigbits: Document Shrink Wrap IO
+	* Rigbits: Proximity Wrap IO — new tool (Rigbits > Proximity Wrap IO) to export proximityWrap deformers to ``.pxw`` files and rebuild them: node settings and falloff ramp, every driver with its own settings and falloff ramp, driving connections (remapped to the rebuilt driver indices), affected geometry, membership, sparse weights and the deformer order mode; missing drivers are skipped, a proximity wrap without drivers is skipped, and the import is one undo step (drivers are bound again at their shape: import at bind pose)
+	* Shifter: Custom Step: Add the Import Proximity Wrap Configuration template
+	* Core: Deformer: ``create_proximity_wrap`` gains an optional ``wrap_mode`` argument (index or name; Maya's default is kept when not given), fully backward compatible; supersedes PR #650 (thanks evilbeanz13). Add ``add_proximity_wrap_drivers`` (version safe, returns the new driver indices)
+	* Core: Add ``attribute.get_ramp`` / ``set_ramp`` (float ramp attributes, nested plugs), ``deformer.get_plug_source_shape`` and ``deformer.get_proximity_wrap_drivers``; deformer_io: ``restore_input_connections`` takes a ``{multi: {old: new}}`` index remap (connections of elements that were not rebuilt are skipped), ``get_attrs`` / ``set_attrs`` accept multi element plugs, and ``set_attrs`` lists the stored attributes the node doesn't have (e.g. files from a newer Maya)
+	* Docs: Rigbits: Document Proximity Wrap IO
 
 **Bug Fix**
 	* Core: Skin: Skin pack export no longer writes invalid file names for objects with clashing names, and objects with the same name in different namespaces no longer overwrite each other's file (``nsA.body.jSkin``, ``grpA-body.jSkin``)

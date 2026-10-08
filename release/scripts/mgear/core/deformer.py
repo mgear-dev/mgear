@@ -325,6 +325,76 @@ def create_cluster_on_curve(curve, control_points=None):
     return cluster_node, cluster_handle
 
 
+def get_plug_source_shape(plug):
+    """Return the shape connected to a destination plug.
+
+    Args:
+        plug (str): Destination plug, e.g. ``shrinkWrap1.targetGeom``.
+
+    Returns:
+        tuple: ``(transform, shape)`` long names, or ``(None, None)`` when
+            nothing is connected.
+    """
+    source = cmds.connectionInfo(plug, sourceFromDestination=True)
+    if not source:
+        return None, None
+    shape = cmds.ls(source.split(".")[0], long=True)[0]
+    parents = cmds.listRelatives(shape, parent=True, fullPath=True)
+    return (parents[0] if parents else None), shape
+
+
+def get_proximity_wrap_drivers(node):
+    """Return the driver meshes of a proximityWrap.
+
+    Args:
+        node (str): proximityWrap name.
+
+    Returns:
+        list: ``(index, transform, shape)`` tuples with long names.
+    """
+    drivers = []
+    for index in cmds.getAttr(node + ".drivers", multiIndices=True) or []:
+        transform, shape = get_plug_source_shape(
+            "{}.drivers[{}].driverGeometry".format(node, index)
+        )
+        if shape:
+            drivers.append((index, transform, shape))
+    return drivers
+
+
+PROXIMITY_WRAP_MODES = ("offset", "surface", "snap", "rigid", "cluster")
+
+
+def add_proximity_wrap_drivers(node, shapes):
+    """Add driver meshes to a proximityWrap deformer.
+
+    Uses Maya's proximity wrap node interface. ``addDriver`` is tried
+    first and ``addDrivers`` is used when it doesn't exist (Maya 2023+),
+    the same order as :func:`create_proximity_wrap` always used.
+
+    Args:
+        node (str): proximityWrap name.
+        shapes (list): Driver shape names.
+
+    Returns:
+        list: The new driver indices, in the order of ``shapes``.
+
+    Raises:
+        AttributeError: If the proximity wrap interface can't add drivers.
+    """
+    pwni = ifc.NodeInterface(node)
+    indices = []
+    for shape in shapes:
+        before = set(cmds.getAttr(node + ".drivers", multiIndices=True) or [])
+        try:
+            pwni.addDriver(shape)
+        except AttributeError:
+            pwni.addDrivers(shape)
+        after = cmds.getAttr(node + ".drivers", multiIndices=True) or []
+        indices += [i for i in after if i not in before]
+    return indices
+
+
 def create_proximity_wrap(
     target_geos,
     driver_geos,
@@ -332,7 +402,7 @@ def create_proximity_wrap(
     weights_path=None,
     weights_filename=None,
     smoothInfluences=0,
-
+    wrap_mode=None,
 ):
     """
     Create a proximity wrap deformer.
@@ -343,6 +413,10 @@ def create_proximity_wrap(
         deformer_name: Optional name for the deformer. If None, generates from first target geo.
         weights_path: Optional path to the weights file directory
         weights_filename: Optional filename for the weights (defaults to deformer_name + ".json")
+        smoothInfluences (int, optional): Smooth influences value.
+        wrap_mode (int or str, optional): Wrap mode, as the enum index or
+            its name: "offset", "surface", "snap", "rigid" or "cluster".
+            None keeps Maya's default (surface).
 
     Returns:
         The renamed deformer node name
@@ -365,14 +439,11 @@ def create_proximity_wrap(
     # Create the proximity wrap deformer on all target geos
     target_names = [geo.name() for geo in target_geos]
     d = cmds.deformer(target_names, type="proximityWrap")
-    pwni = ifc.NodeInterface(d[0])
 
     # Add all drivers (Maya 2023 changed method name to addDrivers)
-    for driver_geo in driver_geos:
-        try:
-            pwni.addDriver(driver_geo.getShape().name())
-        except AttributeError:
-            pwni.addDrivers(driver_geo.getShape().name())
+    add_proximity_wrap_drivers(
+        d[0], [driver_geo.getShape().name() for driver_geo in driver_geos]
+    )
 
     pm.rename(d[0], deformer_name)
 
@@ -388,6 +459,11 @@ def create_proximity_wrap(
         )
 
     cmds.setAttr(f"{deformer_name}.smoothInfluences", smoothInfluences)
+
+    if wrap_mode is not None:
+        if isinstance(wrap_mode, str):
+            wrap_mode = PROXIMITY_WRAP_MODES.index(wrap_mode.lower())
+        cmds.setAttr(f"{deformer_name}.wrapMode", wrap_mode)
 
     return deformer_name
 

@@ -176,3 +176,69 @@ def test_delete_lattice(run_with_maya_standalone, setup_path):
     for node in (ffd, lattice, base):
         assert not cmds.objExists(node)
     assert cmds.objExists(sphere)
+
+
+def _proximity_scene():
+    from maya import cmds
+
+    cmds.file(new=True, force=True)
+    cloth = cmds.polySphere(name="cloth", radius=1.2)[0]
+    body = cmds.polyCube(name="body")[0]
+    return cloth, body
+
+
+def test_create_proximity_wrap_backcompat(run_with_maya_standalone, setup_path):
+    """Existing calls keep working exactly as before (custom steps, scripts)."""
+    from maya import cmds
+    import mgear.pymaya as pm
+    from mgear.core import deformer
+
+    # Positional call with the original parameters
+    cloth, body = _proximity_scene()
+    name = deformer.create_proximity_wrap(
+        ["cloth"], ["body"], "cloth_pw", None, None, 2
+    )
+    assert name == "cloth_pw"
+    assert cmds.nodeType(name) == "proximityWrap"
+    assert cmds.isConnected(
+        "bodyShape.worldMesh[0]", name + ".drivers[0].driverGeometry"
+    )
+    assert cmds.getAttr(name + ".smoothInfluences") == 2
+    assert cmds.getAttr(name + ".wrapMode") == 1  # Maya default kept
+
+    # Single pymaya nodes and default name
+    cloth, body = _proximity_scene()
+    name = deformer.create_proximity_wrap(pm.PyNode(cloth), pm.PyNode(body))
+    assert name == "cloth_proximityWrap"
+    assert cmds.getAttr(name + ".smoothInfluences") == 0
+
+
+def test_create_proximity_wrap_wrap_mode(run_with_maya_standalone, setup_path):
+    from maya import cmds
+    from mgear.core import deformer
+
+    _proximity_scene()
+    name = deformer.create_proximity_wrap("cloth", "body", wrap_mode="Snap")
+    assert cmds.getAttr(name + ".wrapMode") == 2
+    _proximity_scene()
+    name = deformer.create_proximity_wrap("cloth", "body", wrap_mode=3)
+    assert cmds.getAttr(name + ".wrapMode") == 3
+
+
+def test_add_proximity_wrap_drivers(run_with_maya_standalone, setup_path):
+    from maya import cmds
+    from mgear.core import deformer
+
+    cloth, body = _proximity_scene()
+    cmds.polyCube(name="other")
+    node = cmds.deformer(cloth, type="proximityWrap")[0]
+    assert deformer.add_proximity_wrap_drivers(node, ["bodyShape", "otherShape"]) == [
+        0,
+        1,
+    ]
+    assert cmds.isConnected(
+        "bodyShape.worldMesh[0]", node + ".drivers[0].driverGeometry"
+    )
+    assert cmds.isConnected(
+        "otherShape.worldMesh[0]", node + ".drivers[1].driverGeometry"
+    )

@@ -97,11 +97,7 @@ def get_target(node):
         tuple: ``(transform, shape)`` long names, or ``(None, None)`` when
             no target is connected.
     """
-    source = cmds.connectionInfo(node + ".targetGeom", sourceFromDestination=True)
-    if not source:
-        return None, None
-    shape = cmds.ls(source.split(".")[0], long=True)[0]
-    return deformer_io.get_parent(shape), shape
+    return deformer.get_plug_source_shape(node + ".targetGeom")
 
 
 def find_shrinkwrap_nodes(nodes):

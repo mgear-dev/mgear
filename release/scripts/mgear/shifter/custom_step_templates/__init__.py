@@ -56,6 +56,11 @@ TEMPLATES = {
         "description": "Rebuild shrinkWrap deformers from a Shrink Wrap IO .shw file",
         "module": "import_shrinkwrap_config",
     },
+    "import_proximitywrap_config": {
+        "name": "Import Proximity Wrap Configuration",
+        "description": "Rebuild proximityWrap deformers from a Proximity Wrap IO .pxw file",
+        "module": "import_proximitywrap_config",
+    },
 }
 
 

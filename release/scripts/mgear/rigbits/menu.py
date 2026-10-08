@@ -49,6 +49,7 @@ def install():
         ("Blendshape Setup Transfer", str_blendshape_transfer, "mgear_copy.svg"),
         ("Lattice IO", str_lattice_io, "mgear_lattice_io.svg"),
         ("Shrink Wrap IO", str_shrinkwrap_io, "mgear_shrinkwrap_io.svg"),
+        ("Proximity Wrap IO", str_proximitywrap_io, "mgear_proximitywrap_io.svg"),
         ("-----", None),
         ("Proxy Geo", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
         ("Proxy Slicer", str_proxySlicer, "mgear_proxy_slicer.svg"),
@@ -298,6 +299,11 @@ lattice_io.show()
 str_shrinkwrap_io = """
 from mgear.rigbits import shrinkwrap_io
 shrinkwrap_io.show()
+"""
+
+str_proximitywrap_io = """
+from mgear.rigbits import proximitywrap_io
+proximitywrap_io.show()
 """
 
 # Gimmick joints str commands

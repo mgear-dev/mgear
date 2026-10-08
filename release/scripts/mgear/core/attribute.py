@@ -1828,3 +1828,56 @@ def toggle_bool_attr(attr):
         attr.set(False)
     else:
         attr.set(True)
+
+
+#############################################
+# Ramp attributes
+#############################################
+
+
+def get_ramp(node, attr):
+    """Read the entries of a float ramp attribute.
+
+    Args:
+        node (str): Node name.
+        attr (str): Ramp attribute, can be a nested plug path such as
+            ``drivers[0].driverFalloffRamp``. The entry children are
+            ``<leaf>_Position``, ``<leaf>_FloatValue`` and ``<leaf>_Interp``.
+
+    Returns:
+        list: ``[position, value, interp]`` entries, sorted by position.
+    """
+    plug = "{}.{}".format(node, attr)
+    leaf = attr.split(".")[-1]
+    entries = []
+    for index in cmds.getAttr(plug, multiIndices=True) or []:
+        element = "{}[{}].{}_".format(plug, index, leaf)
+        entries.append(
+            [
+                cmds.getAttr(element + "Position"),
+                cmds.getAttr(element + "FloatValue"),
+                cmds.getAttr(element + "Interp"),
+            ]
+        )
+    return sorted(entries, key=lambda entry: entry[0])
+
+
+def set_ramp(node, attr, entries):
+    """Replace the entries of a float ramp attribute.
+
+    Args:
+        node (str): Node name.
+        attr (str): Ramp attribute, can be a nested plug path.
+        entries (list): ``[position, value, interp]`` entries, as returned
+            by :func:`get_ramp`.
+    """
+    plug = "{}.{}".format(node, attr)
+    leaf = attr.split(".")[-1]
+    for index in cmds.getAttr(plug, multiIndices=True) or []:
+        # "b" is the break flag: "break" is a Python keyword
+        cmds.removeMultiInstance("{}[{}]".format(plug, index), b=True)
+    for index, (position, value, interp) in enumerate(entries):
+        element = "{}[{}].{}_".format(plug, index, leaf)
+        cmds.setAttr(element + "Position", position)
+        cmds.setAttr(element + "FloatValue", value)
+        cmds.setAttr(element + "Interp", int(interp))

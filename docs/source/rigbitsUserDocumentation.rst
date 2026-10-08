@@ -1226,6 +1226,92 @@ Scripting Access
 Lattice IO and Shrink Wrap IO share ``mgear.core.deformer_io``, a generic layer to save and rebuild deformers (file envelope, deformer order modes, geometry data, attributes and connections). Use it to add the same workflow to other deformer types.
 
 
+.. _proximitywrap-io:
+
+Proximity Wrap IO
+=================
+
+Proximity Wrap IO exports Maya proximityWrap deformers to a ``.pxw`` file and rebuilds them, so the proximity wraps used for clothing, accessories, proxies or partitioned meshes survive a rig rebuild. It works the same way as :ref:`lattice-io` and :ref:`shrinkwrap-io`: export with the tool, then rebuild the proximity wraps in the Shifter build with the **Import Proximity Wrap Configuration** custom step template.
+
+Access from the menu: **mGear > Rigbits > Proximity Wrap IO**
+
+What is Saved
+-------------
+
+- **Settings**: wrap mode, falloff and dropoff rate scale, scale compensation, coordinate frames, smooth normals, span samples, smooth influences, soft normalization, bind tags, max drivers and envelope, plus the falloff ramp
+- **Drivers**: every driver mesh, in order, with its own settings (falloff start and end, dropoff rate, strength, use transform as deformation, scale compensation, smooth normals, span samples and smooth influences with their overrides, driver wrap mode) and its own falloff ramp
+- **Connections**: every connection driving the proximity wrap, apart from the deformed geometry and the driver meshes themselves, for example a rig control driving the envelope or a driver strength
+- **Affected geometry**: the deformed shapes, their deformer set members or component tag expression, and the weight map (only the weights that are not 1.0 are stored)
+- **Deformer order**: the deformer stack of each geometry and the order mode chosen on export
+
+Export
+------
+
+.. image:: images/rigbits/proximityWrap_IO_export.png
+    :align: center
+    :scale: 80%
+
+1. Open the **Export** tab. It lists the proximity wraps in the scene with their number of drivers and geometry. Use **From Selection** to select the proximity wraps of the selected objects: proximity wraps, deformed geometry, driver meshes or controls driving them. Selecting a proximity wrap in the list selects its driver meshes.
+2. Choose the **Deformer order** to store with the proximity wraps (see :ref:`lattice-io` for the modes). It always starts as **Current** when the tool opens.
+3. Click **Export Selected...** and save the ``.pxw`` file. Proximity wraps without drivers are skipped with a warning.
+
+Import
+------
+
+.. image:: images/rigbits/proximityWrap_IO_import.png
+    :align: center
+    :scale: 80%
+
+1. Open the **Import** tab and browse to a ``.pxw`` file, or use **File > Recent Files**. The file content is listed with the drivers, the geometry and whether weights are stored.
+2. Uncheck the proximity wraps you don't want to import.
+3. Change the **Order** of a proximity wrap to override the stored deformer order for this import only.
+4. Keep **Replace existing** checked to delete proximity wraps with the same names first. Only the proximity wrap node is deleted: the driver and deformed meshes are kept.
+5. Click **Import Checked**. The whole import is a single undo step.
+
+.. important::
+    Like when a driver is added in Maya, the drivers are bound again at their shape when you import. Import with the rig at bind pose. In a Shifter build, custom steps run at bind pose.
+
+Missing driver meshes are skipped with a warning, and the proximity wrap is built with the drivers that exist. A proximity wrap with no driver left is skipped. Geometry, drivers and driving controls are found by name, even if they moved in the hierarchy or are in another namespace. Settings that don't exist in your Maya version are skipped and listed in the log panel.
+
+Shifter Custom Step
+-------------------
+
+Create a custom step from the **Import Proximity Wrap Configuration** template (see :ref:`custom-step-templates`) and set its options in ``setup()``:
+
+- ``self.proximitywrap_path``: the ``.pxw`` file. Leave it as ``None`` to pick the file when the step runs.
+- ``self.proximitywrap_names``: the proximity wrap names to import, ``None`` for all.
+- ``self.replace``: delete proximity wraps with the same names first.
+- ``self.order``: ``None`` uses the order stored in the file. Use ``"current"``, ``"front"`` or ``"last"`` to override it.
+
+Run the step after the driver meshes and the controls that drive the proximity wraps exist in the rig.
+
+File Format
+-----------
+
+``.pxw`` files are JSON. The ``type`` key is ``"proximitywrap_config"``.
+
+Scripting Access
+----------------
+
+.. code-block:: python
+
+    from mgear.rigbits import proximitywrap_io
+
+    # Export
+    proximitywrap_io.export_proximitywraps(["shirt_pw"], "C:/rig/data/cloth.pxw")
+
+    # Import everything with the stored order
+    proximitywrap_io.import_proximitywraps("C:/rig/data/cloth.pxw")
+
+To create a proximity wrap from a script, use ``mgear.core.deformer.create_proximity_wrap``. Its optional ``wrap_mode`` argument sets the wrap mode, as an index or a name (``"offset"``, ``"surface"``, ``"snap"``, ``"rigid"`` or ``"cluster"``). When it is not given, Maya's default (surface) is kept.
+
+.. code-block:: python
+
+    from mgear.core import deformer
+
+    deformer.create_proximity_wrap("shirt", ["body", "arms"], wrap_mode="snap")
+
+
 SDK Creator
 ===========
 

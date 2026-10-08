@@ -25,6 +25,7 @@ Example:
 import json
 import logging
 import os
+import re
 
 from maya import cmds
 
@@ -687,34 +688,52 @@ def get_attrs(node, attrs):
     """Read attribute values, skipping attributes the node doesn't have.
 
     Args:
-        node (str): Node name.
+        node (str): Node name, or an element plug such as
+            ``pw1.drivers[0]`` to read the children of a multi element.
         attrs (list): Attribute names.
 
     Returns:
         dict: ``{attr: value}``.
     """
-    return {
-        attr: cmds.getAttr("{}.{}".format(node, attr))
-        for attr in attrs
-        if cmds.attributeQuery(attr, node=node, exists=True)
-    }
+    values = {}
+    for attr in attrs:
+        plug = "{}.{}".format(node, attr)
+        if cmds.objExists(plug):
+            values[attr] = cmds.getAttr(plug)
+    return values
 
 
 def set_attrs(node, values, attrs=None, skip=None):
     """Set attribute values on the settable plugs of a node.
 
     Args:
-        node (str): Node name.
+        node (str): Node name, or an element plug such as
+            ``pw1.drivers[0]``.
         values (dict): ``{attr: value}``.
         attrs (list, optional): Attribute order. Only these attributes
             are set. Defaults to the keys of ``values``.
         skip (set, optional): Attributes to leave untouched, e.g. the
             ones restored as connections.
+
+    Stored attributes the node doesn't have (e.g. a file from a newer
+    Maya version) are skipped and listed in one info message.
     """
     skip = skip or ()
+    missing = []
     for attr in attrs or list(values):
-        if attr in values and attr not in skip:
-            set_attr("{}.{}".format(node, attr), values[attr])
+        if attr not in values or attr in skip:
+            continue
+        plug = "{}.{}".format(node, attr)
+        if not cmds.objExists(plug):
+            missing.append(attr)
+        elif cmds.getAttr(plug, settable=True):
+            cmds.setAttr(plug, values[attr])
+    if missing:
+        logger.info(
+            "'%s' has no %s, skipped.",
+            node_remap.leaf_name(node),
+            ", ".join(missing),
+        )
 
 
 def get_input_connections(node, exclude=GEOMETRY_PIPELINE_ATTRS):
@@ -761,7 +780,26 @@ def get_input_connections(node, exclude=GEOMETRY_PIPELINE_ATTRS):
     return connections
 
 
-def restore_input_connections(node, connections):
+def _remap_destination(attr, remap):
+    """Rewrite the multi index of a destination attribute path.
+
+    Args:
+        attr (str): Destination attribute path, e.g. ``drivers[3].x``.
+        remap (dict): ``{multi: {old_index: new_index}}``, or None.
+
+    Returns:
+        str: The remapped path, or None if its element is not mapped.
+    """
+    match = re.match(r"(\w+)\[(\d+)\](.*)$", attr)
+    if not remap or not match or match.group(1) not in remap:
+        return attr
+    index = remap[match.group(1)].get(int(match.group(2)))
+    if index is None:
+        return None
+    return "{}[{}]{}".format(match.group(1), index, match.group(3))
+
+
+def restore_input_connections(node, connections, remap=None):
     """Reconnect stored incoming connections to a node.
 
     Source nodes are found by name, tolerant to hierarchy and namespace
@@ -771,14 +809,26 @@ def restore_input_connections(node, connections):
     Args:
         node (str): Node name.
         connections (list): Dicts from :func:`get_input_connections`.
+        remap (dict, optional): ``{multi: {old_index: new_index}}`` for
+            destinations under a multi attribute whose indices changed on
+            rebuild, e.g. ``{"drivers": {3: 0}}``. Connections to an
+            index missing from the mapping (the element is gone) are
+            skipped with an info message.
 
     Returns:
-        set: Destination attributes that are connected.
+        set: Destination attributes that are connected (remapped).
     """
     connected = set()
     for connection in connections:
         src_node, _, src_plug = connection["source"].partition(".")
-        destination = "{}.{}".format(node, connection["destination"])
+        attr = _remap_destination(connection["destination"], remap)
+        if attr is None:
+            logger.info(
+                "'%s' is not rebuilt, its connection is skipped.",
+                connection["destination"],
+            )
+            continue
+        destination = "{}.{}".format(node, attr)
         if connection.get("source_parent"):
             found = resolve_shape(
                 {"shape": src_node, "transform": connection["source_parent"]}
@@ -789,7 +839,7 @@ def restore_input_connections(node, connections):
             logger.warning(
                 "Source '%s' not found, '%s' keeps its stored value.",
                 node_remap.leaf_name(connection["source"]),
-                connection["destination"],
+                attr,
             )
             continue
         source = "{}.{}".format(found, src_plug)
@@ -799,5 +849,5 @@ def restore_input_connections(node, connections):
         except RuntimeError as err:
             logger.warning("Can't connect '%s' to '%s': %s", source, destination, err)
             continue
-        connected.add(connection["destination"])
+        connected.add(attr)
     return connected

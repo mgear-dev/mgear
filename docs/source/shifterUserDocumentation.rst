@@ -908,6 +908,8 @@ When creating a new custom step, mGear provides a template selection dialog that
 
 - **Import Shrink Wrap Configuration**: Rebuilds shrinkWrap deformers from a Shrink Wrap IO ``.shw`` file (see :ref:`shrinkwrap-io`), reconnecting their target meshes and driving controls. Options to import only some shrink wraps, replace existing ones and override the stored deformer order.
 
+- **Import Proximity Wrap Configuration**: Rebuilds proximityWrap deformers from a Proximity Wrap IO ``.pxw`` file (see :ref:`proximitywrap-io`), with their drivers, ramps and driving controls. Options to import only some proximity wraps, replace existing ones and override the stored deformer order. Run it at bind pose.
+
 **Template Configuration Options:**
 
 Each template provides three ways to configure file paths:

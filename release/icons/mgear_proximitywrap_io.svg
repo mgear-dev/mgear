@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Wrapped mesh, following the driver -->
+  <path d="M3 9 Q12 2 21 9"/>
+  <!-- Driver surface -->
+  <path d="M3 19 Q12 12 21 19"/>
+  <!-- Proximity bindings (colored) -->
+  <g stroke="#7cb5a0">
+    <line x1="6.5" y1="9.6" x2="6.5" y2="14.0"/>
+    <line x1="12" y1="8.3" x2="12" y2="12.7"/>
+    <line x1="17.5" y1="9.6" x2="17.5" y2="14.0"/>
+  </g>
+</svg>

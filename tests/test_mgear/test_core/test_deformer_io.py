@@ -255,3 +255,53 @@ def test_deformer_format(run_with_maya_standalone, setup_path, tmp_path):
     assert fmt.resolve_order(fmt.items(data)[0], {"a_node": "last"}) == "last"
     with pytest.raises(ValueError):
         fmt.import_file(path, order="middle")
+
+
+def test_ramps_remap_and_missing_attrs(run_with_maya_standalone, setup_path, caplog):
+    from maya import cmds
+    from mgear.core import attribute
+    from mgear.core import deformer
+    from mgear.core import deformer_io
+
+    cmds.file(new=True, force=True)
+    cloth = cmds.polySphere(name="cloth")[0]
+    cmds.polyCube(name="bodyA")
+    cmds.polyCube(name="bodyB")
+    node = cmds.deformer(cloth, type="proximityWrap", name="pw1")[0]
+    deformer.add_proximity_wrap_drivers(node, ["bodyAShape", "bodyBShape"])
+
+    # Node and driver ramps round trip
+    entries = [[0.0, 1.0, 1], [0.4, 0.3, 2], [1.0, 0.0, 1]]
+    for attr in ("falloffRamp", "drivers[1].driverFalloffRamp"):
+        attribute.set_ramp(node, attr, entries)
+        stored = attribute.get_ramp(node, attr)
+        assert [e[2] for e in stored] == [1, 2, 1]
+        for got, want in zip(stored, entries):
+            assert got[:2] == pytest.approx(want[:2], abs=1e-5)
+        attribute.set_ramp(node, attr, [[0.5, 0.5, 1]])
+        assert len(attribute.get_ramp(node, attr)) == 1
+
+    # Connection remap to another driver index
+    ctl = cmds.createNode("transform", name="ctl")
+    cmds.addAttr(ctl, longName="strength", keyable=True)
+    connections = [
+        {"source": "|ctl.strength", "destination": "drivers[3].driverStrength"}
+    ]
+    connected = deformer_io.restore_input_connections(
+        node, connections, remap={"drivers": {3: 1}}
+    )
+    assert connected == {"drivers[1].driverStrength"}
+    assert cmds.isConnected("ctl.strength", node + ".drivers[1].driverStrength")
+
+    # The element is gone: skipped, no new multi element created
+    connected = deformer_io.restore_input_connections(
+        node, connections, remap={"drivers": {0: 0}}
+    )
+    assert connected == set()
+    assert cmds.getAttr(node + ".drivers", multiIndices=True) == [0, 1]
+
+    # Missing attributes are logged and skipped
+    with caplog.at_level(logging.INFO, logger="mgear.core.deformer_io"):
+        deformer_io.set_attrs(node, {"falloffScale": 2.0, "notAnAttr": 1})
+    assert cmds.getAttr(node + ".falloffScale") == pytest.approx(2.0)
+    assert "notAnAttr" in caplog.text
