@@ -1,6 +1,9 @@
+"""mgear package test"""
+
 
 def test_mgear_version(setup_path):
-    # mGear imports
     import mgear
-    version = "{}.{}.{}".format(mgear.major, mgear.minor, mgear.micro)
-    assert mgear.version == version
+
+    assert len(mgear.VERSION) == 3
+    assert all(isinstance(number, int) for number in mgear.VERSION)
+    assert mgear.getVersion() == "{}.{}.{}".format(*mgear.VERSION)

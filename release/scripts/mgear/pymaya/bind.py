@@ -1,6 +1,7 @@
 from maya import cmds
 import re
 from . import base
+from . import exception
 from . import node
 from . import geometry
 
@@ -34,7 +35,9 @@ def PyNode(name_or_node):
         The corresponding node, attribute, or geometry object.
 
     Raises:
-        RuntimeError: If the node or attribute does not exist in the scene.
+        MayaNodeError: If the node does not exist in the scene (a
+            RuntimeError subclass).
+        RuntimeError: If the attribute or geometry does not exist.
     """
 
     # If the input is already a Base type, return it directly
@@ -61,7 +64,7 @@ def PyNode(name_or_node):
     else:
         # Check if the node exists before attempting to bind
         if not cmds.objExists(name_or_node):
-            raise RuntimeError(
+            raise exception.MayaNodeError(
                 "Node '{}' does not exist.".format(name_or_node)
             )
 

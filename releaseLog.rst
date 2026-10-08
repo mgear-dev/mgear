@@ -42,6 +42,7 @@ Release Log
 	* Anim Picker: New vector items (imported or dropped SVGs, new vector items, SVG library shapes, converted polygons) are fully opaque by default instead of inheriting the polygons' semi-transparent default; a user-set opacity is kept
 	* Anim Picker: "Toggle handles" no longer appears as a dead entry on vector items; it is replaced by "Edit SVG"
 	* Core: ``callbackManager``: ``removeManagedCB``, ``removeAllSessionCB`` and ``removeNamespaceCB`` no longer raise under Python 3 (dict changed size during iteration), and ``removeCBviaMayaID`` no longer uses the Python 2 ``iteritems``
+	* PyMaya: ``pm.PyNode`` raises ``pm.MayaNodeError`` (now a ``RuntimeError`` subclass) for a missing node again, so the ``except pm.MayaNodeError`` handlers in core attribute, dag, meshNavigation and the Crank tool catch it instead of letting a bare ``RuntimeError`` through; code catching ``RuntimeError`` keeps working
 
 5.3.5
 ------

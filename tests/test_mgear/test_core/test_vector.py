@@ -1,94 +1,94 @@
 """mgear.core.vector test"""
 
+import pytest
 
-def test_get_distance(run_with_maya_pymel, setup_path):
-    # Maya imports
+
+def _transform(name, position):
+    """Create a transform at a world position."""
+    from maya import cmds
+
+    node = cmds.createNode("transform", name=name)
+    cmds.setAttr(node + ".translate", *position, type="double3")
+    return node
+
+
+def test_get_distance(run_with_maya_standalone, setup_path):
+    from maya import cmds
     from maya import OpenMaya
-    import pymel.core as pm
-    # mGear imports
-    from mgear.core.vector import get_distance
-
-    v_1 = [0, 0, 0]
-    v_2 = [1, 0, 0]
-    assert get_distance(v_1, v_2) == 1.0
+    from mgear.core import vector
 
     v_1 = OpenMaya.MVector(0, 0, 0)
     v_2 = OpenMaya.MVector(1, 0, 0)
-    assert get_distance(v_1, v_2) == 1.0
+    assert vector.getDistance(v_1, v_2) == 1.0
 
-    pm.newFile(force=True)
-    v_1 = pm.createNode("transform")
-    v_2 = pm.createNode("transform")
-    v_2.translate.set(10, 5, 7)
-    distance = pm.createNode("distanceBetween")
-    v_1.worldMatrix >> distance.inMatrix1
-    v_2.worldMatrix >> distance.inMatrix2
-    distance_value = distance.distance.get()
-    assert get_distance(v_1, v_2) == distance_value
+    cmds.file(new=True, force=True)
+    a = _transform("a", (0, 0, 0))
+    b = _transform("b", (10, 5, 7))
+    distance = cmds.createNode("distanceBetween")
+    cmds.connectAttr(a + ".worldMatrix[0]", distance + ".inMatrix1")
+    cmds.connectAttr(b + ".worldMatrix[0]", distance + ".inMatrix2")
+    expected = cmds.getAttr(distance + ".distance")
+    result = vector.getDistance(vector.get_mvector(a), vector.get_mvector(b))
+    assert result == pytest.approx(expected)
 
 
-def test_get_plane_binormal(run_with_maya_pymel, setup_path):
-    # Maya imports
+def test_get_plane_binormal(run_with_maya_standalone, setup_path):
     from maya import OpenMaya
+    from mgear.core import vector
 
-    # mGear imports
-    from mgear.core.vector import get_plane_binormal
-
-    vector_a = OpenMaya.MVector(0, 0, 0)
-    vector_b = OpenMaya.MVector(-1, 0, 0)
-    vector_c = OpenMaya.MVector(0, 0, 1)
-    result = get_plane_binormal(vector_a, vector_b, vector_c)
-    assert type(result) == OpenMaya.MVector
-    assert [result[0], result[1], result[2]] == [0, 0, -1]
+    result = vector.getPlaneBiNormal(
+        OpenMaya.MVector(0, 0, 0),
+        OpenMaya.MVector(-1, 0, 0),
+        OpenMaya.MVector(0, 0, 1),
+    )
+    assert isinstance(result, OpenMaya.MVector)
+    assert [result.x, result.y, result.z] == [0, 0, -1]
 
 
-def test_get_plane_normal(run_with_maya_pymel, setup_path):
-    # Maya imports
+def test_get_plane_normal(run_with_maya_standalone, setup_path):
+    from maya import cmds
     from maya import OpenMaya
-    import pymel.core as pm
-    # mGear imports
-    from mgear.core.vector import get_plane_normal
+    from mgear.core import vector
 
-    vector_a = OpenMaya.MVector(0, 0, 0)
-    vector_b = OpenMaya.MVector(1, 0, 0)
-    vector_c = OpenMaya.MVector(0, 0, 1)
-    result = get_plane_normal(vector_a, vector_b, vector_c)
-    assert type(result) == OpenMaya.MVector
-    assert [result[0], result[1], result[2]] == [0, 1, 0]
+    result = vector.getPlaneNormal(
+        OpenMaya.MVector(0, 0, 0),
+        OpenMaya.MVector(1, 0, 0),
+        OpenMaya.MVector(0, 0, 1),
+    )
+    assert isinstance(result, OpenMaya.MVector)
+    assert [result.x, result.y, result.z] == [0, 1, 0]
 
-    pm.newFile(force=True)
-    vector_a = pm.createNode("transform")
-    vector_b = pm.createNode("transform")
-    vector_c = pm.createNode("transform")
-    vector_b.translate.set(-1, 0, 0)
-    vector_c.translate.set(0, 0, 1)
-    result = get_plane_normal(vector_a, vector_b, vector_c)
-    assert [result[0], result[1], result[2]] == [0, -1, 0]
-
-    result = get_plane_normal(list(vector_a.getTranslation()),
-                              list(vector_b.getTranslation()),
-                              list(vector_c.getTranslation()))
-    assert [result[0], result[1], result[2]] == [0, -1, 0]
+    cmds.file(new=True, force=True)
+    points = [
+        vector.get_mvector(_transform(name, position))
+        for name, position in (
+            ("a", (0, 0, 0)),
+            ("b", (-1, 0, 0)),
+            ("c", (0, 0, 1)),
+        )
+    ]
+    result = vector.getPlaneNormal(*points)
+    assert [result.x, result.y, result.z] == [0, -1, 0]
 
 
-def test_linear_interpolate(run_with_maya_pymel, setup_path):
-    # Maya imports
+def test_linearly_interpolate(run_with_maya_standalone, setup_path):
+    from maya import cmds
     from maya import OpenMaya
-    import pymel.core as pm
-    # mGear imports
-    from mgear.core.vector import linear_interpolate
+    from mgear.core import vector
 
-    _value = [2, 5, 8]
+    result = vector.linearlyInterpolate(
+        OpenMaya.MVector(0, 0, 0), OpenMaya.MVector(2, 5, 8)
+    )
+    assert isinstance(result, OpenMaya.MVector)
+    assert [result.x, result.y, result.z] == [1, 2.5, 4]
 
-    v_1 = [0, 0, 0]
-    v_2 = _value
-    result = linear_interpolate(v_1, v_2)
-    assert type(result) == OpenMaya.MVector
-    assert [result[0], result[1], result[2]] == [1, 2.5, 4]
+    result = vector.linearlyInterpolate(
+        OpenMaya.MVector(0, 0, 0), OpenMaya.MVector(2, 5, 8), blend=0.25
+    )
+    assert [result.x, result.y, result.z] == [0.5, 1.25, 2]
 
-    pm.newFile(force=True)
-    v_1 = pm.createNode("transform")
-    v_2 = pm.createNode("transform")
-    v_2.translate.set(_value[0], _value[1], _value[2])
-    result = linear_interpolate(v_1, v_2)
-    assert [result[0], result[1], result[2]] == [1, 2.5, 4]
+    cmds.file(new=True, force=True)
+    a = vector.get_mvector(_transform("a", (0, 0, 0)))
+    b = vector.get_mvector(_transform("b", (2, 5, 8)))
+    result = vector.linearlyInterpolate(a, b)
+    assert [result.x, result.y, result.z] == [1, 2.5, 4]

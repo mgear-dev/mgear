@@ -19,4 +19,4 @@ jobs:
         mayapy -m pip install pytest pytest-cov
     - name: Run code tests
       run: |
-        mayapy -m pytest
+        mayapy -m pytest --cov=release/scripts/mgear --cov-report term-missing
