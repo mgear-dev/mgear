@@ -394,6 +394,9 @@ Blocking Ghosts
 
 See your key poses side by side while you block. Blocking Ghosts creates static, semi-transparent copies ("ghosts") of the character at the keyframes of the controls you choose, and keeps them in step with the timeline and the camera.
 
+.. image:: images/animbits/Blocking_ghosts.gif
+    :align: center
+
 **Key Features:**
 
 * Ghosts at every keyframe of a set of watched controls inside a frame range, including the pose on the current frame
@@ -415,6 +418,10 @@ See your key poses side by side while you block. Blocking Ghosts creates static,
 6. Click **Clear** to remove the ghosts
 
 **Options:**
+
+.. image:: images/animbits/Blocking_ghosts_UI.png
+    :align: center
+    :scale: 50%
 
 * **Frame range** - Start and end frame. Every key of the watched controls in this range gets a ghost. More than 30 poses asks for confirmation first.
 * **Timeline** - Set the frame range to the timeline's playback range
