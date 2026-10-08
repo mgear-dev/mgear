@@ -16,12 +16,13 @@ __version__ = "1.0.0"
 
 from mgear.core import pyqt
 
+from mgear.core.deformer_io import ORDER_CURRENT
+from mgear.core.deformer_io import ORDER_FRONT
+from mgear.core.deformer_io import ORDER_LAST
+from mgear.core.deformer_io import ORDER_MODES
+
 from .core import FILE_TYPE
 from .core import LATTICE_FILE_EXT
-from .core import ORDER_CURRENT
-from .core import ORDER_FRONT
-from .core import ORDER_LAST
-from .core import ORDER_MODES
 from .core import SCHEMA_VERSION
 from .core import build_lattice
 from .core import export_lattices

@@ -655,32 +655,34 @@ class QtLogHandler(logging.Handler):
         self.setFormatter(logging.Formatter(fmt or "%(levelname)s: %(message)s"))
         self.emitter = _LogEmitter()
         self.emitter.message.connect(widget.appendPlainText)
-        self.logger = None
-        self.previous_level = logging.NOTSET
+        # [(logger, level before attach)]
+        self.attached = []
         widget.destroyed.connect(self.detach)
 
-    def attach(self, logger, level=logging.INFO):
-        """Add the handler to a logger.
+    def attach(self, *loggers, **kwargs):
+        """Add the handler to one or more loggers.
 
         Args:
-            logger (logging.Logger): Logger to show in the widget.
-            level (int, optional): Level set on the logger while attached,
-                only if the logger has no level of its own.
+            *loggers (logging.Logger): Loggers to show in the widget, e.g.
+                the tool logger and the core module loggers it uses.
+            **kwargs: ``level`` (int, optional): level set on each logger
+                while attached, only if the logger has no level of its own.
+                Defaults to ``logging.INFO``.
         """
+        level = kwargs.get("level", logging.INFO)
         self.detach()
-        self.logger = logger
-        self.previous_level = logger.level
-        logger.addHandler(self)
-        if logger.level == logging.NOTSET:
-            logger.setLevel(level)
+        for logger in loggers:
+            self.attached.append((logger, logger.level))
+            logger.addHandler(self)
+            if logger.level == logging.NOTSET:
+                logger.setLevel(level)
 
     def detach(self, *args):
-        """Remove the handler from its logger and restore the level."""
-        if self.logger is None:
-            return
-        self.logger.removeHandler(self)
-        self.logger.setLevel(self.previous_level)
-        self.logger = None
+        """Remove the handler from its loggers and restore their levels."""
+        for logger, previous_level in self.attached:
+            logger.removeHandler(self)
+            logger.setLevel(previous_level)
+        self.attached = []
 
     def emit(self, record):
         """Send a formatted record to the widget.

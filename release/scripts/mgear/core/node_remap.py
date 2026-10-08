@@ -7,11 +7,14 @@ proposals; callers decide how to combine or apply them.
 """
 
 import difflib
+import logging
 import re
 
 from maya import cmds
 
 from mgear.core import string
+
+logger = logging.getLogger(__name__)
 
 
 def strip_namespace_path(path):
@@ -24,6 +27,18 @@ def strip_namespace_path(path):
         str: The path without namespaces, e.g. ``|grp|body``.
     """
     return "|".join(seg.split(":")[-1] for seg in path.split("|"))
+
+
+def leaf_name(path):
+    """Return the leaf name of a DAG path, namespace kept.
+
+    Args:
+        path (str): Node name or DAG path.
+
+    Returns:
+        str: The leaf name, e.g. ``a:body`` for ``|grp|a:body``.
+    """
+    return path.split("|")[-1]
 
 
 def short_name(path):
@@ -129,6 +144,26 @@ def find_node_candidates(name, long_name=None, node_type=None, namespace=None):
             return matched
 
     return pool
+
+
+def find_node(name):
+    """Find the single scene node matching an exported node name.
+
+    Uses :func:`find_node_candidates`. When several nodes match, the name
+    is ambiguous: a warning is logged and None is returned.
+
+    Args:
+        name (str): Exported node name, may include namespace or path.
+
+    Returns:
+        str: Full path of the node, or None if not found or ambiguous.
+    """
+    if not name:
+        return None
+    hits = find_node_candidates(name)
+    if len(hits) > 1:
+        logger.warning("Ambiguous name '%s' (%d matches).", name, len(hits))
+    return hits[0] if len(hits) == 1 else None
 
 
 def group_by_short_name(paths):

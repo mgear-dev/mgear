@@ -51,6 +51,11 @@ TEMPLATES = {
         "description": "Rebuild ffd lattices from a Lattice IO .lat file",
         "module": "import_lattice_config",
     },
+    "import_shrinkwrap_config": {
+        "name": "Import Shrink Wrap Configuration",
+        "description": "Rebuild shrinkWrap deformers from a Shrink Wrap IO .shw file",
+        "module": "import_shrinkwrap_config",
+    },
 }
 
 

@@ -823,12 +823,18 @@ def get_deformer_weights(deformer, geo_index, default=1.0, sparse=True, shape=No
 
 
 def set_deformer_weights(
-    deformer, geo_index, weights, default=1.0, point_count=None, shape=None
+    deformer,
+    geo_index,
+    weights,
+    default=1.0,
+    point_count=None,
+    shape=None,
+    sparse=False,
 ):
     """Set the weight map of a deformer for one geometry.
 
-    Every point gets a weight: points missing in ``weights`` get
-    ``default``. The whole map is written with a single command.
+    By default every point gets a weight: points missing in ``weights``
+    get ``default``, and the whole map is written with a single command.
 
     Args:
         deformer (str): Deformer name.
@@ -840,6 +846,10 @@ def set_deformer_weights(
             logged if the geometry has a different count.
         shape (str, optional): Shape deformed at ``geo_index``, to avoid
             querying it again.
+        sparse (bool, optional): Only write the given weights, e.g. on a
+            new deformer where every weight is still the default. Keeps
+            the scene small when few points are painted. A dense map is
+            written in one command instead when most points are given.
     """
     shape = shape or _get_deformer_shape(deformer, geo_index)
     count = utils.get_point_count(shape)
@@ -852,6 +862,14 @@ def set_deformer_weights(
             count,
         )
     if not count:
+        return
+
+    if sparse and len(weights) < count // 2:
+        plug = "{}.weightList[{}].weights[{}]"
+        for index, value in weights.items():
+            index = int(index)
+            if 0 <= index < count:
+                cmds.setAttr(plug.format(deformer, geo_index, index), float(value))
         return
 
     values = [default] * count
@@ -880,6 +898,52 @@ def get_ffd_nodes():
     return cmds.ls(type="ffd") or []
 
 
+def find_deformer_nodes(nodes, deformer_type, drivers=False, driver_types=None):
+    """Find the deformers of a type related to arbitrary nodes.
+
+    Accepts deformer nodes and deformed geometry or components (searching
+    their history). With ``drivers``, also the deformers driven by the
+    nodes' shapes, e.g. a lattice shape or a shrinkWrap target mesh, or by
+    the node itself, e.g. a control driving the envelope. Missing nodes
+    are ignored.
+
+    Args:
+        nodes (list): Node or component names.
+        deformer_type (str): Deformer node type, e.g. ``"shrinkWrap"``.
+        drivers (bool, optional): Also search downstream connections.
+        driver_types (tuple, optional): Only search downstream connections
+            of shapes of these types, e.g. ``("lattice", "baseLattice")``.
+
+    Returns:
+        list: Unique deformer names.
+    """
+    result = {}
+    # A component selection gives one entry per range: query each node once
+    for node in dict.fromkeys(n.split(".")[0] for n in nodes or []):
+        if not cmds.objExists(node):
+            continue
+        if cmds.nodeType(node) == deformer_type:
+            result.setdefault(node)
+            continue
+        found = get_deformers(node, deformer_type)
+        if drivers:
+            shapes = cmds.listRelatives(
+                node, shapes=True, noIntermediate=True, fullPath=True
+            )
+            for shape in shapes or [node]:
+                if driver_types and cmds.nodeType(shape) not in driver_types:
+                    continue
+                found += (
+                    cmds.listConnections(
+                        shape, source=False, destination=True, type=deformer_type
+                    )
+                    or []
+                )
+        for deformer_node in found:
+            result.setdefault(deformer_node)
+    return list(result)
+
+
 def find_ffd_nodes(nodes):
     """Find the ffd deformers related to arbitrary nodes.
 
@@ -892,30 +956,9 @@ def find_ffd_nodes(nodes):
     Returns:
         list: Unique ffd node names.
     """
-    result = []
-    for node in nodes or []:
-        node = node.split(".")[0]
-        if not cmds.objExists(node):
-            continue
-        if cmds.nodeType(node) == "ffd":
-            candidates = [node]
-        else:
-            shapes = cmds.listRelatives(node, shapes=True, fullPath=True)
-            candidates = []
-            for shape in shapes or [node]:
-                if cmds.nodeType(shape) in ("lattice", "baseLattice"):
-                    candidates += (
-                        cmds.listConnections(
-                            shape, source=False, destination=True, type="ffd"
-                        )
-                        or []
-                    )
-            if not candidates:
-                candidates = get_deformers(node, "ffd")
-        for ffd in candidates:
-            if ffd not in result:
-                result.append(ffd)
-    return result
+    return find_deformer_nodes(
+        nodes, "ffd", drivers=True, driver_types=("lattice", "baseLattice")
+    )
 
 
 def get_lattice_nodes(ffd):

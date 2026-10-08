@@ -1142,6 +1142,90 @@ Scripting Access
 The generic helpers used by the tool are available in ``mgear.core.deformer`` for other tools: ``get_deformer_stack``, ``move_deformer``, ``get_deformer_weights``, ``set_deformer_weights``, ``get_lattice_points``, ``set_lattice_points``, ``find_ffd_nodes`` and ``delete_lattice``.
 
 
+.. _shrinkwrap-io:
+
+Shrink Wrap IO
+==============
+
+Shrink Wrap IO exports Maya shrinkWrap deformers to a ``.shw`` file and rebuilds them, so the shrink wraps used to fit clothing, accessories or proxies onto a body survive a rig rebuild. It works the same way as :ref:`lattice-io`: export with the tool, then rebuild the shrink wraps in the Shifter build with the **Import Shrink Wrap Configuration** custom step template.
+
+Access from the menu: **mGear > Rigbits > Shrink Wrap IO**
+
+What is Saved
+-------------
+
+- **Settings**: projection, closest if no intersection, reverse, bidirectional, axis options, offset, target inflation, falloff and falloff iterations, shape preservation, target smoothing (smooth level, continuity, UVs, borders, hard edges) and envelope
+- **Target mesh**: the mesh the geometry is wrapped onto
+- **Connections**: every connection driving the shrink wrap, apart from the deformed geometry itself: the target and optional inner mesh, and any rig control driving a setting such as the envelope
+- **Affected geometry**: the deformed shapes, their deformer set members or component tag expression, and the weight map (only the weights that are not 1.0 are stored)
+- **Deformer order**: the deformer stack of each geometry and the order mode chosen on export
+
+Export
+------
+
+.. image:: images/rigbits/shirnkwrap_IO_export.png
+    :align: center
+    :scale: 80%
+
+1. Open the **Export** tab. It lists the shrink wraps in the scene with their target. Use **From Selection** to select the shrink wraps of the selected objects: shrink wraps, deformed geometry, or target and inner meshes.
+2. Choose the **Deformer order** to store with the shrink wraps (see :ref:`lattice-io` for the modes). It always starts as **Current** when the tool opens.
+3. Click **Export Selected...** and save the ``.shw`` file. Shrink wraps without a target mesh are skipped with a warning.
+
+Import
+------
+
+.. image:: images/rigbits/shirnkwrap_IO_import.png
+    :align: center
+    :scale: 80%
+
+1. Open the **Import** tab and browse to a ``.shw`` file, or use **File > Recent Files**. The file content is listed with the target, the geometry and whether weights are stored.
+2. Uncheck the shrink wraps you don't want to import.
+3. Change the **Order** of a shrink wrap to override the stored deformer order for this import only.
+4. Keep **Replace existing** checked to delete shrink wraps with the same names first. Only the shrink wrap node is deleted: the target and deformed meshes are kept.
+5. Click **Import Checked**. The whole import is a single undo step.
+
+The target mesh must exist in the scene: a shrink wrap whose target can't be found is skipped with a warning. Geometry, targets and driving controls are found by name, even if they moved in the hierarchy or are in another namespace. A missing driving control is reported in the log panel and the setting keeps the exported value.
+
+Shifter Custom Step
+-------------------
+
+Create a custom step from the **Import Shrink Wrap Configuration** template (see :ref:`custom-step-templates`) and set its options in ``setup()``:
+
+- ``self.shrinkwrap_path``: the ``.shw`` file. Leave it as ``None`` to pick the file when the step runs.
+- ``self.shrinkwrap_names``: the shrink wrap names to import, ``None`` for all.
+- ``self.replace``: delete shrink wraps with the same names first.
+- ``self.order``: ``None`` uses the order stored in the file. Use ``"current"``, ``"front"`` or ``"last"`` to override it.
+
+Run the step after the target meshes and the controls that drive the shrink wraps exist in the rig.
+
+File Format
+-----------
+
+``.shw`` files are JSON. The ``type`` key is ``"shrinkwrap_config"``.
+
+Scripting Access
+----------------
+
+.. code-block:: python
+
+    from mgear.rigbits import shrinkwrap_io
+
+    # Export
+    shrinkwrap_io.export_shrinkwraps(["shirt_sw", "belt_sw"], "C:/rig/data/cloth.shw")
+
+    # Import everything with the stored order
+    shrinkwrap_io.import_shrinkwraps("C:/rig/data/cloth.shw")
+
+    # Import one shrink wrap, appended after the existing deformers
+    shrinkwrap_io.import_shrinkwraps(
+        "C:/rig/data/cloth.shw",
+        names=["shirt_sw"],
+        order="last",
+    )
+
+Lattice IO and Shrink Wrap IO share ``mgear.core.deformer_io``, a generic layer to save and rebuild deformers (file envelope, deformer order modes, geometry data, attributes and connections). Use it to add the same workflow to other deformer types.
+
+
 SDK Creator
 ===========
 

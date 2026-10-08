@@ -48,6 +48,7 @@ def install():
         ("Evaluation Partition", str_evaluation_partition, "mgear_evaluation_partition.svg"),
         ("Blendshape Setup Transfer", str_blendshape_transfer, "mgear_copy.svg"),
         ("Lattice IO", str_lattice_io, "mgear_lattice_io.svg"),
+        ("Shrink Wrap IO", str_shrinkwrap_io, "mgear_shrinkwrap_io.svg"),
         ("-----", None),
         ("Proxy Geo", str_proxyGeo, "mgear_proxyGeo_to_next.svg"),
         ("Proxy Slicer", str_proxySlicer, "mgear_proxy_slicer.svg"),
@@ -292,6 +293,11 @@ blendshape_transfer.show()
 str_lattice_io = """
 from mgear.rigbits import lattice_io
 lattice_io.show()
+"""
+
+str_shrinkwrap_io = """
+from mgear.rigbits import shrinkwrap_io
+shrinkwrap_io.show()
 """
 
 # Gimmick joints str commands
