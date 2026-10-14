@@ -685,7 +685,7 @@ class Component(component.Main):
                 if self.settings["div0"]:
                     self.jnt_pos.append(
                         {
-                            "obj": roll_off,
+                            "obj": self.arm_root_base,
                             "name": jdn_upperarm + "_swing",
                             "data_contracts": "Twist,Squash",
                             "newActiveJnt": current_parent,
