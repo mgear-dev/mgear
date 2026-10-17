@@ -274,14 +274,18 @@ class ComponentGuide(guide.Main):
         return
 
     def get_divisions(self):
-        """Get the divisions to sample a Fcurve parameter definition.
+        """Get the divisions to sample a FCurve parameter definition.
 
         Note:
-            REIMPLEMENT. This method should only if the component is using
-            Fcurve paramDef.
+            REIMPLEMENT. This method must be implemented if the component is using an
+            FCurve paramDef.
 
         """
-        return
+        errmsg = (
+            f"'{self.compType}' has FCurve parameters but is missing a required "
+            f"`get_divisions` implementation in the `Guide` class."
+        )
+        raise NotImplementedError(errmsg)
 
     def getMergedValues(self):
         """Get merged component values combining local with blueprint settings.
