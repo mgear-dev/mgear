@@ -1622,7 +1622,7 @@ Hover over items to see detailed tooltips showing component names and additional
 Chain Utils
 ------------
 
-Chain Utils provides specialized tools for working with chain components (such as spine chains, tail chains, finger chains, etc.). It simplifies the process of extending chains by adding new locators.
+Chain Utils provides specialized tools for working with chain components (such as spine chains, tail chains, finger chains, etc.). It simplifies extending and shortening chains by adding or removing locators.
 
 .. image:: images/shifter/guide_utils/chain_utils.png
     :align: center
@@ -1638,6 +1638,14 @@ Extend an existing chain by adding a new locator at the end.
 - **Index Increment**: The new locator automatically receives the correct index number.
 - **Display Curve Update**: Connection curves are regenerated to include the new locator.
 
+**Remove Locator from Chain**
+
+Shorten an existing chain by removing its last locator.
+
+- **Minimum Length Guard**: At least one chain locator is always preserved.
+- **Child Guide Preservation**: Child component guides are moved to the new chain end.
+- **Display Curve Update**: Connection curves are regenerated after removal.
+
 **X-Ray Connection**
 
 For Maya 2022 and later, the tool automatically connects the ``guide_x_ray`` attribute to new locators, maintaining consistent X-ray visualization settings.
@@ -1651,8 +1659,8 @@ How to Use
 
 1. Select one or more chain guide roots in your scene.
 2. Open Chain Utils from **Shifter > Guide Utils > Chain Utils**.
-3. Click the button to add a locator to the selected chain(s).
-4. The new locator will appear at the end of each chain with proper positioning and naming.
+3. Click the add or remove button to modify the selected chain(s).
+4. The chain display curve will update to match the current locators.
 
 .. _bindplane-control-utils:
 

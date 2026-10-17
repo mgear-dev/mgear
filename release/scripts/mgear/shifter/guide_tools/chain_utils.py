@@ -7,10 +7,11 @@ from __future__ import print_function
 from maya import cmds
 
 from mgear.vendor.Qt import QtWidgets
-from mgear.core import pyqt
 
 import mgear.pymaya as pm
 from mgear.core import icon
+from mgear.core import pyqt
+from mgear.core import utils
 
 
 # =============================================================================
@@ -143,14 +144,18 @@ def calculate_chain_offset(chain_end, chain_end_parent):
 
     Returns:
         list: [x, y, z] offset to apply to the new locator, or [0, 0, 0]
-            if no parent exists.
+            if no parent or component root exists.
     """
-    if chain_end_parent is None:
+    direction_source = chain_end_parent
+    if direction_source is None:
+        direction_source = find_component_root(chain_end)
+
+    if direction_source is None:
         return [0.0, 0.0, 0.0]
 
     # Get world positions
     end_pos = get_world_position(chain_end)
-    parent_pos = get_world_position(chain_end_parent)
+    parent_pos = get_world_position(direction_source)
 
     # Calculate direction vector (parent -> end)
     offset = [
@@ -426,10 +431,15 @@ def regenerate_display_curve(node):
         print("Warning: No mgear_curveCns found for: %s" % disp_curve)
         return None
 
-    # Collect all chain locators
+    # Collect the component root and all chain locators
+    # Component guides build display curves from the root followed by locators.
+    # Preserve that order so the root-to-first-locator segment is not lost
+    # during regeneration. A root + 1 locator is the minimum valid curve.
     locators = collect_chain_locators(node)
-    if len(locators) < 2:
-        print("Warning: Need at least 2 locators for display curve")
+    centers = [component_root]
+    centers.extend(locators)
+    if len(centers) < 2:
+        print("Warning: Need at least 2 centers for display curve")
         return None
 
     # Store curve properties before deleting
@@ -453,8 +463,8 @@ def regenerate_display_curve(node):
     cmds.delete(disp_curve)
 
     # Create new curve with updated locators using pymaya/icon
-    pm_locators = [pm.PyNode(loc) for loc in locators]
-    new_curve = icon.connection_display_curve(curve_name, pm_locators, degree)
+    pm_centers = [pm.PyNode(center) for center in centers]
+    new_curve = icon.connection_display_curve(curve_name, pm_centers, degree)
 
     # Restore line width
     if line_width >= 0:
@@ -571,6 +581,97 @@ def add_locator_to_chain(nodes=None):
     return results
 
 
+def remove_locator_from_chain(nodes=None):
+    """Remove the last locator from each selected chain.
+
+    The selected node may be anywhere in the chain. Child component guides
+    parented under the last locator are moved to the new chain end before the
+    display curve is regenerated. At least one chain locator is preserved.
+
+    Args:
+        nodes (list[str] or None): Nodes to process. If None, the current
+            selection (transforms) is used.
+
+    Returns:
+        list[tuple[str, str]]: List of (parent, removed_node) name pairs.
+
+    Raises:
+        RuntimeError: If no valid nodes are provided.
+    """
+    if nodes is None:
+        nodes = cmds.ls(sl=True, type="transform")
+        if nodes is None:
+            nodes = []
+
+    if not nodes:
+        raise RuntimeError("No transform selected or provided.")
+
+    results = []
+    processed_chains = set()
+
+    for node in nodes:
+        if not cmds.objExists(node):
+            print("Warning: node not found, skipping: %s" % node)
+            continue
+
+        chain_end, chain_end_parent = find_chain_end(node)
+        chain_locators = collect_chain_locators(chain_end)
+        if not chain_locators:
+            print("Warning: no chain locators found for: %s" % node)
+            continue
+
+        chain_key = chain_locators[0]
+        if chain_key in processed_chains:
+            continue
+        processed_chains.add(chain_key)
+
+        if len(chain_locators) <= 1 or chain_end_parent is None:
+            print(
+                "Warning: cannot remove '%s'. "
+                "At least one chain locator is required." % chain_end
+            )
+            continue
+
+        # Get the child guides
+        child_guides = []
+        children = cmds.listRelatives(
+            chain_end,
+            children=True,
+            type="transform",
+            fullPath=True,
+        )
+        if children is None:
+            children = []
+        for child in children:
+            if cmds.attributeQuery("isGearGuide", node=child, exists=True):
+                # temporarily parent the child guide to world space
+                unparented = cmds.parent(child, world=True)
+                if unparented:
+                    child_guides.append(unparented[0])
+
+        # Delete the chain end
+        removed_node = chain_end.split("|")[-1]
+        try:
+            cmds.delete(chain_end)
+        except Exception:
+            # If the deletion fails, parent the child guides back to the chain end
+            for child_guide in child_guides:
+                cmds.parent(child_guide, chain_end)
+            raise
+
+        for child_guide in child_guides:
+            cmds.parent(child_guide, chain_end_parent)
+
+        regenerate_display_curve(chain_end_parent)
+        results.append((chain_end_parent, removed_node))
+        print(
+            "Removed '%s' from chain (new end is '%s')"
+            % (removed_node, chain_end_parent)
+        )
+
+    return results
+
+
 # =============================================================================
 # UI Dialog
 # =============================================================================
@@ -603,6 +704,7 @@ class ChainUtilsDialog(QtWidgets.QDialog):
     def _create_widgets(self):
         """Create UI widgets."""
         self.add_locator_group = QtWidgets.QGroupBox("Add Locator to Chain")
+        self.remove_locator_group = QtWidgets.QGroupBox("Remove Locator from Chain")
 
         self.add_locator_btn = QtWidgets.QPushButton("Add Locator")
         self.add_locator_btn.setToolTip(
@@ -610,20 +712,31 @@ class ChainUtilsDialog(QtWidgets.QDialog):
             "Select any locator in a chain - the new locator will be\n"
             "added at the end with the correct incremented index."
         )
+        self.remove_locator_btn = QtWidgets.QPushButton("Remove Locator")
+        self.remove_locator_btn.setToolTip(
+            "Remove the last locator from the selected chain.\n\n"
+            "Child component guides are moved to the new chain end.\n"
+            "At least one chain locator is preserved."
+        )
 
     def _create_layout(self):
         """Create UI layouts."""
         add_locator_layout = QtWidgets.QVBoxLayout(self.add_locator_group)
         add_locator_layout.addWidget(self.add_locator_btn)
+        remove_locator_layout = QtWidgets.QVBoxLayout(self.remove_locator_group)
+        remove_locator_layout.addWidget(self.remove_locator_btn)
 
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.addWidget(self.add_locator_group)
+        main_layout.addWidget(self.remove_locator_group)
         main_layout.addStretch()
 
     def _create_connections(self):
         """Connect signals and slots."""
         self.add_locator_btn.clicked.connect(self._on_add_locator)
+        self.remove_locator_btn.clicked.connect(self._on_remove_locator)
 
+    @utils.one_undo
     def _on_add_locator(self):
         """Handle add locator button click."""
         try:
@@ -632,6 +745,18 @@ class ChainUtilsDialog(QtWidgets.QDialog):
                 # Select the newly created nodes
                 new_nodes = [r[1] for r in results]
                 cmds.select(new_nodes, r=True)
+        except RuntimeError as exc:
+            cmds.warning(str(exc))
+
+    @utils.one_undo
+    def _on_remove_locator(self):
+        """Handle remove locator button click."""
+        try:
+            results = remove_locator_from_chain()
+            if results:
+                # Select the newly end nodes
+                new_ends = [r[0] for r in results]
+                cmds.select(new_ends, r=True)
         except RuntimeError as exc:
             cmds.warning(str(exc))
 
