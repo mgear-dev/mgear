@@ -7,9 +7,19 @@ import maya.internal.nodes.proximitywrap.node_interface as ifc
 import mgear.pymaya as pm
 from mgear.core import utils
 
-# Backward-compat re-exports (moved to mgear.core.blendshape)
-from mgear.core.blendshape import BS_TARGET_ITEM_ATTR  # noqa: F401
-from mgear.core.blendshape import bs_target_weight  # noqa: F401
+# Backward-compat re-exports (moved to mgear.core.blendshape), read when
+# used: blendshape imports this module, so importing them here would fail
+# when blendshape is imported first
+_BLENDSHAPE_NAMES = ("BS_TARGET_ITEM_ATTR", "bs_target_weight")
+
+
+def __getattr__(name):
+    if name in _BLENDSHAPE_NAMES:
+        from mgear.core import blendshape
+
+        return getattr(blendshape, name)
+    raise AttributeError("module {!r} has no attribute {!r}".format(__name__, name))
+
 
 logger = logging.getLogger(__name__)
 

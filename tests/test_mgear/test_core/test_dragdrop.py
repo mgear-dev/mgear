@@ -524,3 +524,21 @@ def test_scene_namespaces_moved_to_core(dragdrop):
     cmds.namespace(add="hero")
     cmds.namespace(add="prop", parent="hero")
     assert node_remap.scene_namespaces() == ["hero", "hero:prop"]
+
+
+def test_blendshape_imports_before_deformer(scripts_path):
+    """core.blendshape loads on its own: deformer re-exports its names
+    lazily, without a circular import."""
+    code = (
+        "import sys; sys.path.insert(0, {!r});"
+        "import maya.standalone; maya.standalone.initialize();"
+        "import mgear.core.blendshape;"
+        "from mgear.core import deformer;"
+        "from mgear.core.deformer import BS_TARGET_ITEM_ATTR;"
+        "print('OK:' + str(deformer.bs_target_weight is "
+        "mgear.core.blendshape.bs_target_weight))".format(scripts_path)
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=600
+    )
+    assert "OK:True" in result.stdout, result.stderr[-2000:]
