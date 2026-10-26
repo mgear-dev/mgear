@@ -1805,7 +1805,7 @@ class RBFManagerUI(widget.RBFWidget):
         for index in range(poseIndices):
             # Apply mirror pose to control
             aRbfNode.recallDriverPose(index)
-            anim_utils.mirrorPose(flip=False, nodes=[driverControl])
+            anim_utils.mirrorPose(flip=False, nodes=[driverControl], key=False)
             mrData = []
             for srcNode, dstValues in setupTargetInfo_dict.items():
                 mrData.extend(
@@ -1895,7 +1895,6 @@ class RBFManagerUI(widget.RBFWidget):
     def _on_custom_names_toggled(self, checked):
 
         self.customNameDefaults = checked
-
 
     # signal management -------------------------------------------------------
     def connectSignals(self):

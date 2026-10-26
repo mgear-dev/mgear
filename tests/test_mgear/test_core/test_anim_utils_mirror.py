@@ -172,7 +172,8 @@ def test_full_pose_two_rigs(anim_utils, two_biped_rigs):
 
 def test_mirror_pose_wrapper(anim_utils, biped_rig):
     cmds = biped_rig
-    assert list(inspect.signature(anim_utils.mirrorPose).parameters) == [
+    # the original params keep their order; new ones only come after
+    assert list(inspect.signature(anim_utils.mirrorPose).parameters)[:2] == [
         "flip",
         "nodes",
     ]
@@ -435,6 +436,12 @@ def test_eight_bipeds_same_result_and_faster(
     assert new_time < previous_time
 
 
+def _reevaluate(cmds, frame):
+    """Go to another frame and back: only keyed values survive."""
+    cmds.currentTime(frame + 1)
+    cmds.currentTime(frame)
+
+
 def _viewport_messages(anim_utils, monkeypatch):
     messages = []
     monkeypatch.setattr(anim_utils.utils, "viewport_message", messages.append)
@@ -451,8 +458,7 @@ def test_flip_keyed_controls(anim_utils, biped_rig, monkeypatch):
     cmds.currentTime(10)
     anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
     # keyed: the pose stays when the time changes
-    cmds.currentTime(1)
-    cmds.currentTime(10)
+    _reevaluate(cmds, 10)
     assert _rz(cmds, L_ARM) == -10.0
     assert _rz(cmds, R_ARM) == 30.0
     assert cmds.keyframe(L_ARM + ".rotateZ", query=True, keyframeCount=True) == 2
@@ -474,8 +480,7 @@ def test_mirror_keyed_control(anim_utils, biped_rig, monkeypatch):
     for node in (L_ARM, R_ARM):
         cmds.setKeyframe(node, attribute="rotateZ", time=1)
     anim_utils.mirror_controls([L_ARM])
-    cmds.currentTime(2)
-    cmds.currentTime(1)
+    _reevaluate(cmds, 1)
     assert _rz(cmds, R_ARM) == expected
     assert "<hl>1</hl> channel(s)" in messages[0]
 
@@ -493,8 +498,7 @@ def test_animated_pose_keys_the_controls_without_keys(
     anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
     # the right arm had no keys: now its flipped value is keyed
     assert cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True) == 1
-    cmds.currentTime(2)
-    cmds.currentTime(1)
+    _reevaluate(cmds, 1)
     assert _rz(cmds, L_ARM) == -10.0
     assert _rz(cmds, R_ARM) == 30.0
     assert "<hl>1</hl> of them had no keys yet" in messages[0]
@@ -517,3 +521,33 @@ def test_mirror_skips_driven_keys(anim_utils, biped_rig):
     cmds.setAttr(L_ARM + ".rotateZ", 30.0)
     anim_utils.mirror_controls([L_ARM])
     assert _rz(cmds, R_ARM) == -10.0
+    # a driven key isn't a keyframe: nothing was keyed
+    assert not cmds.keyframe(L_ARM, query=True, keyframeCount=True)
+
+
+def test_key_option(anim_utils, biped_rig, monkeypatch):
+    """key=False never keys (scripts, RBF Manager); key=True always keys."""
+    cmds = biped_rig
+    messages = _viewport_messages(anim_utils, monkeypatch)
+    cmds.setKeyframe(L_ARM, attribute="rotateZ", time=1)
+    _pose_arms(cmds)
+    anim_utils.mirror_controls([L_ARM], key=False)
+    assert not cmds.keyframe(R_ARM, query=True, keyframeCount=True)
+    assert messages == []
+    _pose_arms(cmds, left=20.0)
+    cmds.cutKey(L_ARM)
+    anim_utils.mirrorPose(nodes=[L_ARM], key=True)
+    assert cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True) == 1
+    assert "had no keys yet" in messages[0]
+
+
+def test_animation_layer_channels_are_skipped(anim_utils, biped_rig, monkeypatch):
+    cmds = biped_rig
+    logs = []
+    monkeypatch.setattr(anim_utils.mgear, "log", lambda text, *a: logs.append(text))
+    layer = cmds.animLayer("mirror_test_layer")
+    cmds.animLayer(layer, edit=True, attribute=R_ARM + ".rotateZ")
+    cmds.setKeyframe(R_ARM, attribute="rotateZ", animLayer=layer, value=-10.0)
+    cmds.setAttr(L_ARM + ".rotateZ", 30.0)
+    anim_utils.mirror_controls([L_ARM])
+    assert any("animation layers" in text for text in logs)
