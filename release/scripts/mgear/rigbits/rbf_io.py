@@ -62,7 +62,7 @@ def fileDialog(startDir=None, mode=0):
     return fPath
 
 
-def __importData(filePath):
+def _importData(filePath):
     """Return the contents of a json file. Expecting, but not limited to,
     a dictionary.
 
@@ -81,7 +81,7 @@ def __importData(filePath):
         return None
 
 
-def __exportData(data, filePath):
+def _exportData(data, filePath):
     """export data, dict, to filepath provided
 
     Args:
@@ -95,6 +95,11 @@ def __exportData(data, filePath):
         print(e)
 
 
+# Older names, kept for scripts using them
+__importData = _importData
+__exportData = _exportData
+
+
 def importRBFs(filePath):
     """import rbfs from file, using the assoiciated module type to recreate
 
@@ -104,7 +109,7 @@ def importRBFs(filePath):
     Returns:
         n/a: n/a
     """
-    data = __importData(filePath)
+    data = _importData(filePath)
     if data is None:
         return
     for k, v in data.items():
@@ -123,5 +128,5 @@ def exportRBFs(nodes, filePath):
     for n in nodes:
         rbfType = mc.nodeType(n)
         rbfNode_Info[n] = RBF_MODULES[rbfType].getNodeInfo(n)
-    __exportData(rbfNode_Info, filePath)
+    _exportData(rbfNode_Info, filePath)
     print("RBF Data exported: {}".format(filePath))
