@@ -433,3 +433,87 @@ def test_eight_bipeds_same_result_and_faster(
         )
     )
     assert new_time < previous_time
+
+
+def _viewport_messages(anim_utils, monkeypatch):
+    messages = []
+    monkeypatch.setattr(anim_utils.utils, "viewport_message", messages.append)
+    return messages
+
+
+def test_flip_keyed_controls(anim_utils, biped_rig, monkeypatch):
+    """Keyed channels get the flipped values, keyed at the current frame."""
+    cmds = biped_rig
+    messages = _viewport_messages(anim_utils, monkeypatch)
+    for node, value in ((L_ARM, 30.0), (R_ARM, -10.0)):
+        cmds.setKeyframe(node, attribute="rotateZ", time=1, value=0.0)
+        cmds.setKeyframe(node, attribute="rotateZ", time=10, value=value)
+    cmds.currentTime(10)
+    anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
+    # keyed: the pose stays when the time changes
+    cmds.currentTime(1)
+    cmds.currentTime(10)
+    assert _rz(cmds, L_ARM) == -10.0
+    assert _rz(cmds, R_ARM) == 30.0
+    assert cmds.keyframe(L_ARM + ".rotateZ", query=True, keyframeCount=True) == 2
+    assert len(messages) == 1 and "of <hl>2</hl> control(s)" in messages[0]
+    assert "no keys yet" not in messages[0]
+
+
+def test_mirror_keyed_control(anim_utils, biped_rig, monkeypatch):
+    cmds = biped_rig
+    messages = _viewport_messages(anim_utils, monkeypatch)
+    _pose_arms(cmds)
+    anim_utils.mirror_controls([L_ARM])
+    expected = _rz(cmds, R_ARM)
+    # not keyed, nothing said
+    assert messages == []
+    assert not cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True)
+    # the same pose with keys on both arms
+    cmds.setAttr(R_ARM + ".rotateZ", -10.0)
+    for node in (L_ARM, R_ARM):
+        cmds.setKeyframe(node, attribute="rotateZ", time=1)
+    anim_utils.mirror_controls([L_ARM])
+    cmds.currentTime(2)
+    cmds.currentTime(1)
+    assert _rz(cmds, R_ARM) == expected
+    assert "<hl>1</hl> channel(s)" in messages[0]
+
+
+def test_animated_pose_keys_the_controls_without_keys(
+    anim_utils, biped_rig, monkeypatch
+):
+    """One keyed control is enough: every value set is keyed, so the pose
+    stays consistent."""
+    cmds = biped_rig
+    messages = _viewport_messages(anim_utils, monkeypatch)
+    _pose_arms(cmds)
+    cmds.setKeyframe(L_ARM, attribute="rotateZ", time=1)
+    assert not cmds.keyframe(R_ARM, query=True, keyframeCount=True)
+    anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
+    # the right arm had no keys: now its flipped value is keyed
+    assert cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True) == 1
+    cmds.currentTime(2)
+    cmds.currentTime(1)
+    assert _rz(cmds, L_ARM) == -10.0
+    assert _rz(cmds, R_ARM) == 30.0
+    assert "<hl>1</hl> of them had no keys yet" in messages[0]
+    # only the right arm keyed: mirroring the left side keys it at frame 5
+    cmds.cutKey(L_ARM)
+    cmds.currentTime(5)
+    _pose_arms(cmds, left=12.0, right=-10.0)
+    anim_utils.mirror_side([L_ARM, R_ARM], "L")
+    assert cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True) == 2
+    # the left arm wasn't set, so it gets no keys
+    assert not cmds.keyframe(L_ARM, query=True, keyframeCount=True)
+
+
+def test_mirror_skips_driven_keys(anim_utils, biped_rig):
+    """A channel a driven key sets isn't a keyed pose: it is skipped."""
+    cmds = biped_rig
+    cmds.setDrivenKeyframe(
+        R_ARM + ".rotateZ", currentDriver=BODY + ".translateX", value=-10.0
+    )
+    cmds.setAttr(L_ARM + ".rotateZ", 30.0)
+    anim_utils.mirror_controls([L_ARM])
+    assert _rz(cmds, R_ARM) == -10.0
