@@ -2,6 +2,19 @@ Release Log
 ===========
 
 
+5.4.4
+------
+**Enhancements**
+	* Core: Anim Utils: Mirror and flip pose key the whole pose when any of the controls is animated, also on animation layers, and the viewport says what was keyed
+	* Anim Picker: Character Selector: The options wrap and the picture hides in narrow windows, so the picker can be made much smaller
+
+**Bug Fix**
+	* Core: Anim Utils: Mirror and flip pose work again on keyed controls, a regression from 5.4.1
+	* Core: Anim Utils: Pose blends no longer key channels driven by set driven keys, and keys on animation layers update the pose at once
+	* Rigbits: Weight Driver: Export and import of weight driver nodes work again
+	* Core: Deformer: Importing mgear.core.blendshape first no longer fails with a circular import
+
+
 5.4.2
 ------
 **Enhancements**
