@@ -307,8 +307,20 @@ def _build_reset(builder, ctx):
             )
 
 
+def mirror_and_tell(command, *args, **kwargs):
+    """Run a mirror or flip and say in the viewport what it keyed.
+
+    Args:
+        command (callable): ``anim_utils.mirror_controls`` or a full pose
+            mirror, returning its result.
+        *args: The command arguments.
+        **kwargs: The command keyword arguments.
+    """
+    anim_utils.show_mirror_message(command(*args, **kwargs))
+
+
 def _build_mirror_flip(builder, ctx):
-    mirror = anim_utils.mirror_controls
+    mirror = partial(mirror_and_tell, anim_utils.mirror_controls)
     builder.item(
         "Mirror",
         partial(mirror, ctx.selection, flip=False),
@@ -337,6 +349,7 @@ def _add_full_pose_items(builder, selection, control_set=None):
         builder.item(
             "Mirror {} → {}".format(source, target),
             partial(
+                mirror_and_tell,
                 anim_utils.mirror_full_pose,
                 selection,
                 source,
@@ -345,7 +358,12 @@ def _add_full_pose_items(builder, selection, control_set=None):
         )
     builder.item(
         "Flip",
-        partial(anim_utils.flip_full_pose, selection, control_set=control_set),
+        partial(
+            mirror_and_tell,
+            anim_utils.flip_full_pose,
+            selection,
+            control_set=control_set,
+        ),
     )
 
 

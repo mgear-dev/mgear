@@ -448,6 +448,13 @@ def _viewport_messages(anim_utils, monkeypatch):
     return messages
 
 
+def _mirrored_rz(anim_utils, cmds, left=30.0):
+    """The right arm rotateZ mirroring the left arm gives, without keys."""
+    cmds.setAttr(L_ARM + ".rotateZ", left)
+    anim_utils.mirror_controls([L_ARM])
+    return _rz(cmds, R_ARM)
+
+
 def test_flip_keyed_controls(anim_utils, biped_rig, monkeypatch):
     """Keyed channels get the flipped values, keyed at the current frame."""
     cmds = biped_rig
@@ -456,52 +463,52 @@ def test_flip_keyed_controls(anim_utils, biped_rig, monkeypatch):
         cmds.setKeyframe(node, attribute="rotateZ", time=1, value=0.0)
         cmds.setKeyframe(node, attribute="rotateZ", time=10, value=value)
     cmds.currentTime(10)
-    anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
+    result = anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
     # keyed: the pose stays when the time changes
     _reevaluate(cmds, 10)
     assert _rz(cmds, L_ARM) == -10.0
     assert _rz(cmds, R_ARM) == 30.0
     assert cmds.keyframe(L_ARM + ".rotateZ", query=True, keyframeCount=True) == 2
-    assert len(messages) == 1 and "of <hl>2</hl> control(s)" in messages[0]
-    assert "no keys yet" not in messages[0]
-
-
-def test_mirror_keyed_control(anim_utils, biped_rig, monkeypatch):
-    cmds = biped_rig
-    messages = _viewport_messages(anim_utils, monkeypatch)
-    _pose_arms(cmds)
-    anim_utils.mirror_controls([L_ARM])
-    expected = _rz(cmds, R_ARM)
-    # not keyed, nothing said
+    assert result == {"keyed": 2, "controls": 2, "new": 0, "layered_skipped": 0}
+    # the core function says nothing; the menus show the result
     assert messages == []
+    message = anim_utils.mirror_message(result)
+    assert "of <hl>2</hl> control(s)" in message and "no keys yet" not in message
+
+
+def test_mirror_keyed_control(anim_utils, biped_rig):
+    cmds = biped_rig
+    _pose_arms(cmds)
+    result = anim_utils.mirror_controls([L_ARM])
+    expected = _rz(cmds, R_ARM)
+    # not keyed, nothing keyed and nothing to say
+    assert result["keyed"] == 0 and anim_utils.mirror_message(result) == ""
     assert not cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True)
     # the same pose with keys on both arms
     cmds.setAttr(R_ARM + ".rotateZ", -10.0)
     for node in (L_ARM, R_ARM):
         cmds.setKeyframe(node, attribute="rotateZ", time=1)
-    anim_utils.mirror_controls([L_ARM])
+    result = anim_utils.mirror_controls([L_ARM])
     _reevaluate(cmds, 1)
     assert _rz(cmds, R_ARM) == expected
-    assert "<hl>1</hl> channel(s)" in messages[0]
+    assert "<hl>1</hl> channel(s)" in anim_utils.mirror_message(result)
 
 
-def test_animated_pose_keys_the_controls_without_keys(
-    anim_utils, biped_rig, monkeypatch
-):
+def test_animated_pose_keys_the_controls_without_keys(anim_utils, biped_rig):
     """One keyed control is enough: every value set is keyed, so the pose
     stays consistent."""
     cmds = biped_rig
-    messages = _viewport_messages(anim_utils, monkeypatch)
     _pose_arms(cmds)
     cmds.setKeyframe(L_ARM, attribute="rotateZ", time=1)
     assert not cmds.keyframe(R_ARM, query=True, keyframeCount=True)
-    anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
+    result = anim_utils.mirror_controls([L_ARM, R_ARM], flip=True)
     # the right arm had no keys: now its flipped value is keyed
     assert cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True) == 1
     _reevaluate(cmds, 1)
     assert _rz(cmds, L_ARM) == -10.0
     assert _rz(cmds, R_ARM) == 30.0
-    assert "<hl>1</hl> of them had no keys yet" in messages[0]
+    assert result["new"] == 1
+    assert "<hl>1</hl> of them had no keys yet" in anim_utils.mirror_message(result)
     # only the right arm keyed: mirroring the left side keys it at frame 5
     cmds.cutKey(L_ARM)
     cmds.currentTime(5)
@@ -526,28 +533,102 @@ def test_mirror_skips_driven_keys(anim_utils, biped_rig):
 
 
 def test_key_option(anim_utils, biped_rig, monkeypatch):
-    """key=False never keys (scripts, RBF Manager); key=True always keys."""
+    """key=False never keys (scripts, RBF Manager); key=True always keys.
+    mirrorPose, the selection command, says what it keyed."""
     cmds = biped_rig
     messages = _viewport_messages(anim_utils, monkeypatch)
     cmds.setKeyframe(L_ARM, attribute="rotateZ", time=1)
     _pose_arms(cmds)
     anim_utils.mirror_controls([L_ARM], key=False)
     assert not cmds.keyframe(R_ARM, query=True, keyframeCount=True)
-    assert messages == []
     _pose_arms(cmds, left=20.0)
     cmds.cutKey(L_ARM)
     anim_utils.mirrorPose(nodes=[L_ARM], key=True)
     assert cmds.keyframe(R_ARM + ".rotateZ", query=True, keyframeCount=True) == 1
-    assert "had no keys yet" in messages[0]
+    assert len(messages) == 1 and "had no keys yet" in messages[0]
 
 
-def test_animation_layer_channels_are_skipped(anim_utils, biped_rig, monkeypatch):
+def test_animation_layer_channels_are_keyed(anim_utils, biped_rig, monkeypatch):
+    """A channel on an animation layer is keyed with its mirrored value,
+    like set_or_key; with key=False it is skipped and logged."""
     cmds = biped_rig
-    logs = []
-    monkeypatch.setattr(anim_utils.mgear, "log", lambda text, *a: logs.append(text))
+    expected = _mirrored_rz(anim_utils, cmds, left=50.0)
+    # back to another pose, then the right arm goes on a layer
+    _mirrored_rz(anim_utils, cmds, left=30.0)
     layer = cmds.animLayer("mirror_test_layer")
     cmds.animLayer(layer, edit=True, attribute=R_ARM + ".rotateZ")
-    cmds.setKeyframe(R_ARM, attribute="rotateZ", animLayer=layer, value=-10.0)
-    cmds.setAttr(L_ARM + ".rotateZ", 30.0)
-    anim_utils.mirror_controls([L_ARM])
+    cmds.setKeyframe(R_ARM, attribute="rotateZ", animLayer=layer)
+    assert anim_utils.plug_state(R_ARM + ".rotateZ") == anim_utils.PLUG_LAYERED
+    cmds.setAttr(L_ARM + ".rotateZ", 50.0)
+    logs = []
+    monkeypatch.setattr(anim_utils.mgear, "log", lambda text, *a: logs.append(text))
+    result = anim_utils.mirror_controls([L_ARM], key=False)
+    assert result["layered_skipped"] == 1 and result["keyed"] == 0
     assert any("animation layers" in text for text in logs)
+    # by default a layered channel makes the pose animated: it is keyed
+    result = anim_utils.mirror_controls([L_ARM])
+    assert result["keyed"] == 1 and result["layered_skipped"] == 0
+    # the pose updates at once, not only after a time change
+    assert _rz(cmds, R_ARM) == pytest.approx(expected)
+    _reevaluate(cmds, 1)
+    assert _rz(cmds, R_ARM) == pytest.approx(expected)
+
+
+def test_layered_keys_update_at_once(anim_utils, biped_rig):
+    """A key set with a value on a layer updates the pose without a time
+    change, also through two layers: set_or_key and apply_blend."""
+    cmds = biped_rig
+    for name in ("layer_a", "layer_b"):
+        layer = cmds.animLayer(name)
+        cmds.animLayer(
+            layer,
+            edit=True,
+            attribute=(L_ARM + ".rotateZ", L_ARM + ".translateY"),
+        )
+        cmds.setKeyframe(L_ARM, attribute="rotateZ", animLayer=layer, value=2.0)
+        cmds.setKeyframe(L_ARM, attribute="translateY", animLayer=layer, value=0.0)
+    cmds.currentTime(1)
+    assert anim_utils.set_or_key(L_ARM + ".rotateZ", 25.0)
+    assert _rz(cmds, L_ARM) == pytest.approx(25.0)
+    plug = L_ARM + ".translateY"
+    start = cmds.getAttr(plug)
+    anim_utils.apply_blend([(plug, start, start + 2.0, True)], 0.5)
+    assert cmds.getAttr(plug) == pytest.approx(start + 1.0)
+
+
+def test_plug_state(anim_utils, biped_rig):
+    """One rule for mirror and the pose blends: free, keyed, layered or
+    driven, through unit conversions."""
+    cmds = biped_rig
+    assert anim_utils.plug_state(L_ARM + ".rotateZ") == anim_utils.PLUG_FREE
+    cmds.setKeyframe(L_ARM, attribute="rotateZ", time=1)
+    assert anim_utils.plug_state(L_ARM + ".rotateZ") == anim_utils.PLUG_KEYED
+    # a time curve through a unit conversion is still keyframes
+    curve = cmds.createNode("animCurveTU")
+    cmds.setKeyframe(curve, time=1, value=0.5)
+    cmds.connectAttr(curve + ".output", L_ARM + ".rotateX")
+    assert anim_utils.plug_state(L_ARM + ".rotateX") == anim_utils.PLUG_KEYED
+    # a driven key isn't animation: driven, and set_or_key leaves it alone
+    cmds.setDrivenKeyframe(
+        R_ARM + ".rotateZ", currentDriver=BODY + ".translateX", value=-10.0
+    )
+    assert anim_utils.plug_state(R_ARM + ".rotateZ") == anim_utils.PLUG_DRIVEN
+    assert not anim_utils.is_animated(R_ARM + ".rotateZ")
+    assert anim_utils.set_or_key(R_ARM + ".rotateZ", 5.0) is False
+    assert _rz(cmds, R_ARM) == -10.0
+    assert anim_utils._blend_plug_state(R_ARM + ".rotateZ") == (False, False)
+    assert anim_utils._blend_plug_state(L_ARM + ".rotateZ") == (True, True)
+
+
+def test_menu_mirror_says_what_it_keyed(anim_utils, biped_rig, monkeypatch):
+    from mgear.core.dagmenu.sections import control
+
+    cmds = biped_rig
+    messages = _viewport_messages(anim_utils, monkeypatch)
+    _pose_arms(cmds)
+    control.mirror_and_tell(anim_utils.mirror_controls, [L_ARM])
+    assert messages == []
+    cmds.setKeyframe(L_ARM, attribute="rotateZ", time=1)
+    _pose_arms(cmds, left=40.0)
+    control.mirror_and_tell(anim_utils.mirror_controls, [L_ARM])
+    assert len(messages) == 1 and "had no keys yet" in messages[0]

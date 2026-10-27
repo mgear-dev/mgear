@@ -148,6 +148,8 @@ This menu is dynamic, and changes based on what kind of controller you have sele
 * **Flip**: Flip the selected controllers pose to the other side
 * **Flip all below**: Same as Flip, for the selected controls and all their child controls
 * **Full Pose**: Mirror L → R, Mirror R → L or Flip the whole pose of every rig with a selected control. Center controls are flipped. When the rig groups its controls in sets (i.e. face, body), each set has its own submenu to mirror or flip only that part.
+
+  Mirror, Flip and Full Pose work on animated poses too. When any of the involved controls has keys or is on an animation layer, every value they set is keyed at the current frame, also on the controls without keys yet, so the pose stays consistent. The viewport says what was keyed. Channels driven by set driven keys or constraints are skipped.
 * **Rotate Order switch**: Change the rotate order, while attempting to keep animation intact
 
 **Host Viewport Menu**

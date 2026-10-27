@@ -342,22 +342,97 @@ def is_anim_source(node):
     return "animCurve" in types or "animBlendNodeBase" in types
 
 
+# What drives a plug, see plug_state
+PLUG_FREE = "free"
+PLUG_KEYED = "keyed"
+PLUG_LAYERED = "layered"
+PLUG_DRIVEN = "driven"
+# Animation curves driven by time: keyframes. Curves driven by another
+# attribute are driven keys
+_KEY_CURVE_TYPES = (
+    om2.MFn.kAnimCurveTimeToAngular,
+    om2.MFn.kAnimCurveTimeToDistance,
+    om2.MFn.kAnimCurveTimeToUnitless,
+    om2.MFn.kAnimCurveTimeToTime,
+)
+
+
+def plug_state(plug):
+    """Tell what drives a plug, looking through unit conversions.
+
+    The one rule the pose tools share: mirror and flip, pose blends and
+    ``set_or_key`` set free plugs, key keyed and layered plugs, and leave
+    driven plugs alone.
+
+    Args:
+        plug (str or om2.MPlug): The plug, e.g. ``"ctl.translateX"``.
+
+    Returns:
+        str: ``free`` (no input), ``keyed`` (keyframes), ``layered`` (an
+            animation layer) or ``driven`` (a constraint, an expression, a
+            driven key, a character set...).
+    """
+    if not isinstance(plug, om2.MPlug):
+        selection = om2.MSelectionList()
+        selection.add(plug)
+        plug = selection.getPlug(0)
+    if not plug.isDestination:
+        return PLUG_FREE
+    source = plug.source()
+    while source.node().apiType() == om2.MFn.kUnitConversion:
+        source = om2.MFnDependencyNode(source.node()).findPlug("input", False)
+        if not source.isDestination:
+            return PLUG_DRIVEN
+        source = source.source()
+    if source.node().apiType() in _KEY_CURVE_TYPES:
+        return PLUG_KEYED
+    if om2.MFnDependencyNode(source.node()).typeName.startswith("animBlendNode"):
+        return PLUG_LAYERED
+    return PLUG_DRIVEN
+
+
 def is_animated(plug):
-    """Return True if a plug is driven by an anim curve or an anim layer.
+    """Return True if a plug is keyed or on an animation layer.
 
     Args:
         plug (str): Plug name, e.g. ``"ctl.translateX"``.
 
     Returns:
-        bool: True if animated.
+        bool: True if animated; a driven key isn't animation.
     """
-    sources = (
-        cmds.listConnections(
-            plug, source=True, destination=False, skipConversionNodes=True
-        )
-        or []
-    )
-    return any(is_anim_source(node) for node in sources)
+    return plug_state(plug) in (PLUG_KEYED, PLUG_LAYERED)
+
+
+def refresh_keyed(plugs):
+    """Update the values of plugs keyed with a value on the current frame.
+
+    Such a key doesn't change the evaluated value until the time changes,
+    so the pose wouldn't update. Dirtying the plug is enough for a plain
+    anim curve; on animation layers the layer blend nodes are dirtied too.
+
+    Args:
+        plugs (list): Plug names.
+    """
+    if not plugs:
+        return
+    dirty = list(plugs)
+    if cmds.ls(type="animLayer"):
+        seen = set()
+        pending = list(plugs)
+        while pending:
+            sources = cmds.listConnections(
+                pending.pop(),
+                source=True,
+                destination=False,
+                skipConversionNodes=True,
+                type="animBlendNodeBase",
+            )
+            for node in sources or ():
+                if node not in seen:
+                    seen.add(node)
+                    pending.append(node)
+        dirty.extend(seen)
+    cmds.dgdirty(dirty)
 
 
 def layer_base_plug(plug):
@@ -450,6 +525,7 @@ def set_or_key(plug, value):
     settable, animated = _blend_plug_state(plug)
     if animated:
         cmds.setKeyframe(plug, value=value)
+        refresh_keyed([plug])
         return True
     if not settable:
         mgear.log(
@@ -543,8 +619,9 @@ def apply_tween(cache, fraction, time=None):
 def _blend_plug_state(plug):
     """Return whether a plug can be blended, and whether it is animated.
 
-    Animated plugs are keyed. Plugs without an incoming connection are set.
-    Plugs driven by anything else (constraints, expressions...) are skipped.
+    Keyed and layered plugs are keyed. Plugs without an incoming connection
+    are set. Plugs driven by anything else (constraints, expressions,
+    driven keys...) are skipped. See ``plug_state``.
 
     Args:
         plug (str): Plug name.
@@ -552,14 +629,8 @@ def _blend_plug_state(plug):
     Returns:
         tuple: ``(settable, animated)`` booleans.
     """
-    sources = cmds.listConnections(
-        plug, source=True, destination=False, skipConversionNodes=True
-    )
-    if not sources:
-        return True, False
-    if any(is_anim_source(node) for node in sources):
-        return True, True
-    return False, False
+    state = plug_state(plug)
+    return state != PLUG_DRIVEN, state in (PLUG_KEYED, PLUG_LAYERED)
 
 
 def _add_blend_entry(cache, plug, a, b):
@@ -769,10 +840,7 @@ def apply_blend(cache, weight, time=None):
                 cmds.setAttr(plug, value)
             except RuntimeError:
                 continue
-    if keyed:
-        # a key set with a value on the current frame does not update the
-        # evaluated value, so the pose would not change until a time change
-        cmds.dgdirty(keyed)
+    refresh_keyed(keyed)
 
 
 def get_timeline_range():
@@ -2504,7 +2572,8 @@ def getMirrorTarget(nameSpace=None, node=None):
 def mirrorPose(flip=False, nodes=None, key=None):
     """Mirror or flip the pose of controls.
 
-    Same as mirror_controls, defaulting to the selected controls.
+    Same as mirror_controls, defaulting to the selected controls, and it
+    shows what it keyed in the viewport.
 
     Args:
         flip (bool, options): Set the function behaviour to flip
@@ -2515,7 +2584,7 @@ def mirrorPose(flip=False, nodes=None, key=None):
         nodes = pm.selected()
     if not nodes:
         return
-    mirror_controls(nodes, flip=flip, key=key)
+    show_mirror_message(mirror_controls(nodes, flip=flip, key=key))
 
 
 def applyMirror(nameSpace, mirrorEntry):
@@ -2772,55 +2841,16 @@ def _mirror_values(source, target, fn_cache, channels, swapped_attrs):
         yield target_attr, target_plug, current, _plug_value(plug) * inv
 
 
-# Animation curves driven by time: keyed channels, which mirror can set
-_KEY_CURVE_TYPES = (
-    om2.MFn.kAnimCurveTimeToAngular,
-    om2.MFn.kAnimCurveTimeToDistance,
-    om2.MFn.kAnimCurveTimeToUnitless,
-    om2.MFn.kAnimCurveTimeToTime,
-)
-# What drives a channel, see _plug_state
-_FREE = "free"
-_KEYED = "keyed"
-_LAYERED = "layered"
-_DRIVEN = "driven"
-
-
-def _plug_state(plug):
-    """Tell what drives a plug, looking through unit conversions.
-
-    Args:
-        plug (om2.MPlug): The plug.
-
-    Returns:
-        str: ``free`` (nothing), ``keyed`` (keyframes), ``layered`` (an
-            animation layer) or ``driven`` (a constraint, an expression, a
-            driven key...).
-    """
-    if not plug.isDestination:
-        return _FREE
-    source = plug.source()
-    while source.node().apiType() == om2.MFn.kUnitConversion:
-        source = om2.MFnDependencyNode(source.node()).findPlug("input", False)
-        if not source.isDestination:
-            return _DRIVEN
-        source = source.source()
-    if source.node().apiType() in _KEY_CURVE_TYPES:
-        return _KEYED
-    if om2.MFnDependencyNode(source.node()).typeName.startswith("animBlendNode"):
-        return _LAYERED
-    return _DRIVEN
-
-
 def _mirror_plan(nodes, flip=False):
     """Compute the mirror values of controls before any value is set.
 
     Each control finds its mirror target in its own namespace. A center
     control is its own target, so mirroring inverts it. Only the values that
-    change are kept. Target channels that are missing, locked, driven
-    (constraints, expressions, driven keys) or on an animation layer are
-    skipped; keyed channels get the value, like setting it by hand. A
-    control that fails is logged and skipped.
+    change are kept. Target channels that are missing, locked or driven
+    (constraints, expressions, driven keys) are skipped; keyed channels get
+    the value like setting it by hand, and channels on animation layers are
+    keyed with it, like ``set_or_key``. See ``plug_state``. A control that
+    fails is logged and skipped.
 
     Args:
         nodes (list): Controls, str or PyNode.
@@ -2828,41 +2858,41 @@ def _mirror_plan(nodes, flip=False):
             control when the target is not in the list.
 
     Returns:
-        tuple: The (target long name, attribute, value) entries, the long
-            names of the controls and targets with keyframes on the
-            channels mirror uses, and the number of channels skipped for
-            being on an animation layer.
+        tuple: The (target long name, attribute, value) entries to set, the
+            entries on animation layers (set by keying them), and the long
+            names of the controls and targets whose mirror channels are
+            keyed or layered.
     """
     if not nodes:
-        return [], set(), 0
+        return [], [], set()
     names = cmds.ls([str(n) for n in nodes], long=True, type="transform")
     in_list = set(names)
     fn_cache = {}
     channels = {}
     entries = []
     no_target = []
-    keyed = set()
-    layered = [0]
+    layered = []
+    animated = set()
     swapped_attrs = {}
+    animated_states = (PLUG_KEYED, PLUG_LAYERED)
 
     def add_entries(source, target):
         for target_attr, target_plug, current, value in _mirror_values(
             source, target, fn_cache, channels, swapped_attrs
         ):
-            state = _plug_state(target_plug)
-            if state == _KEYED:
-                keyed.add(target)
-            elif state == _LAYERED:
-                layered[0] += 1
+            state = plug_state(target_plug)
+            if state == PLUG_DRIVEN:
                 continue
-            elif state == _DRIVEN:
-                continue
+            if state in animated_states:
+                animated.add(target)
             if abs(current - value) > 1e-9:
-                entries.append((target, target_attr, value))
-        if source not in keyed and any(
-            _plug_state(plug) == _KEYED for _, plug, _ in channels.get(source, ())
+                entry = (target, target_attr, value)
+                (layered if state == PLUG_LAYERED else entries).append(entry)
+        if source not in animated and any(
+            plug_state(plug) in animated_states
+            for _, plug, _ in channels.get(source, ())
         ):
-            keyed.add(source)
+            animated.add(source)
 
     for name in names:
         try:
@@ -2885,7 +2915,7 @@ def _mirror_plan(nodes, flip=False):
             ),
             mgear.sev_warning,
         )
-    return entries, keyed, layered[0]
+    return entries, layered, animated
 
 
 def _mirror_entries(nodes, flip=False):
@@ -2897,26 +2927,31 @@ def _mirror_entries(nodes, flip=False):
             control when the target is not in the list.
 
     Returns:
-        list: (target long name, attribute, value) tuples.
+        list: (target long name, attribute, value) tuples, the layered
+            channels included.
     """
-    return _mirror_plan(nodes, flip)[0]
+    entries, layered, _ = _mirror_plan(nodes, flip)
+    return entries + layered
 
 
-def _apply_mirror_entries(entries, key=False):
+def _apply_mirror_entries(entries, key=False, layered=()):
     """Apply mirror entries in one undo step.
 
     An entry that fails is logged and skipped, the others are still applied.
 
     Args:
-        entries (list): (target, attribute, value) tuples.
+        entries (list): (target, attribute, value) tuples to set.
         key (bool, optional): Also key every value set, at the current
             frame.
+        layered (list, optional): Entries on animation layers: keyed with
+            their value when ``key`` is on, else skipped.
 
     Returns:
         list: The long names of the controls keyed, one per channel keyed.
     """
     failed = []
     written = []
+    keyed = []
     with utils.undo_chunk("mgearMirrorPose"):
         for target, attr, value in entries:
             plug = "{}.{}".format(target, attr)
@@ -2928,14 +2963,25 @@ def _apply_mirror_entries(entries, key=False):
         if key and written:
             try:
                 cmds.setKeyframe([plug for _, plug in written])
+                keyed.extend(target for target, _ in written)
             except Exception:
                 # one by one, to tell which channel can't be keyed
-                for target, plug in list(written):
+                for target, plug in written:
                     try:
                         cmds.setKeyframe(plug)
+                        keyed.append(target)
                     except Exception as e:
-                        written.remove((target, plug))
                         failed.append("{} (key: {})".format(plug.split("|")[-1], e))
+        layer_keyed = []
+        for target, attr, value in layered if key else ():
+            plug = "{}.{}".format(target, attr)
+            try:
+                cmds.setKeyframe(plug, value=value)
+                keyed.append(target)
+                layer_keyed.append(plug)
+            except Exception as e:
+                failed.append("{} (layer key: {})".format(plug.split("|")[-1], e))
+        refresh_keyed(layer_keyed)
     if failed:
         mgear.log(
             "Mirror: could not set {} attributes: {}".format(
@@ -2943,38 +2989,76 @@ def _apply_mirror_entries(entries, key=False):
             ),
             mgear.sev_warning,
         )
-    return [target for target, _ in written] if key else []
+    return keyed
 
 
 def _mirror_and_apply(nodes, flip=False, key=None):
     """Mirror controls, keying the values set when asked or when the pose is
-    animated, and say in the viewport what was keyed.
+    animated.
 
     Args:
         nodes (list): Controls, str or PyNode.
         flip (bool, optional): Flip instead of mirror.
         key (bool, optional): Key the values set; None keys them when any
-            of the controls or their counterparts has keyframes.
+            of the controls or their counterparts is keyed or layered.
+
+    Returns:
+        dict: See ``mirror_controls``.
     """
-    entries, keyed, layered = _mirror_plan(nodes, flip=flip)
+    entries, layered, animated = _mirror_plan(nodes, flip=flip)
     if key is None:
-        key = bool(keyed)
-    targets = _apply_mirror_entries(entries, key=key)
-    if targets:
-        controls = set(targets)
-        newly = len(controls - keyed)
-        utils.viewport_message(
-            "Mirror keyed <hl>{}</hl> channel(s) of <hl>{}</hl> control(s){}".format(
-                len(targets),
-                len(controls),
-                ", <hl>{}</hl> of them had no keys yet".format(newly) if newly else "",
-            )
-        )
-    if layered:
+        key = bool(animated)
+    keyed = _apply_mirror_entries(entries, key=key, layered=layered)
+    controls = set(keyed)
+    result = {
+        "keyed": len(keyed),
+        "controls": len(controls),
+        "new": len(controls - animated),
+        "layered_skipped": 0 if key else len(layered),
+    }
+    if result["layered_skipped"]:
         mgear.log(
-            "Mirror: skipped {} channel(s) on animation layers".format(layered),
+            "Mirror: skipped {} channel(s) on animation layers: they change "
+            "only by keying them".format(result["layered_skipped"]),
             mgear.sev_warning,
         )
+    return result
+
+
+def mirror_message(result):
+    """Get the viewport message of a mirror or flip that keyed values.
+
+    Args:
+        result (dict): What ``mirror_controls`` returned.
+
+    Returns:
+        str: The message with ``<hl>`` highlights, or empty when nothing
+            was keyed.
+    """
+    if not result or not result.get("keyed"):
+        return ""
+    newly = result.get("new")
+    return "Mirror keyed <hl>{}</hl> channel(s) of <hl>{}</hl> control(s){}".format(
+        result["keyed"],
+        result["controls"],
+        ", <hl>{}</hl> of them had no keys yet".format(newly) if newly else "",
+    )
+
+
+def show_mirror_message(result):
+    """Show what a mirror or flip keyed in the viewport; nothing when it
+    keyed nothing.
+
+    Args:
+        result (dict): What ``mirror_controls`` returned.
+
+    Returns:
+        dict: The result, so a call can wrap a mirror.
+    """
+    message = mirror_message(result)
+    if message:
+        utils.viewport_message(message)
+    return result
 
 
 def mirror_controls(nodes, flip=False, key=None):
@@ -2991,10 +3075,17 @@ def mirror_controls(nodes, flip=False, key=None):
             counterpart is not in the list are swapped with it.
         key (bool, optional): Key the values set at the current frame.
             None (the default) keys them when any of the controls or their
-            counterparts has keyframes on the mirrored channels; False
-            never keys, for scripts.
+            counterparts is keyed or on an animation layer on the mirrored
+            channels; False never keys.
+
+    Returns:
+        dict: ``keyed`` (channels keyed), ``controls`` (controls keyed),
+            ``new`` (keyed controls that had no keys yet) and
+            ``layered_skipped`` (channels on animation layers left
+            unchanged because keying was off). Show it with
+            ``show_mirror_message``.
     """
-    _mirror_and_apply(nodes, flip=flip, key=key)
+    return _mirror_and_apply(nodes, flip=flip, key=key)
 
 
 def mirror_side(nodes, source_side, key=None):
@@ -3008,9 +3099,12 @@ def mirror_side(nodes, source_side, key=None):
         nodes (list): Controls, str or PyNode.
         source_side (str): "L" or "R".
         key (bool, optional): Key the values set, see ``mirror_controls``.
+
+    Returns:
+        dict: See ``mirror_controls``.
     """
     sources = [n for n in nodes if get_control_side(n) in (source_side, None)]
-    _mirror_and_apply(sources, key=key)
+    return _mirror_and_apply(sources, key=key)
 
 
 def get_set_members(sets):
@@ -3156,8 +3250,11 @@ def mirror_full_pose(nodes, source_side="L", control_set=None):
         source_side (str, optional): "L" or "R", the side to copy.
         control_set (str, optional): Only mirror the controls of this
             control set (i.e. "face"). See get_rig_control_sets.
+
+    Returns:
+        dict: See ``mirror_controls``.
     """
-    mirror_side(_get_full_pose_controls(nodes, control_set), source_side)
+    return mirror_side(_get_full_pose_controls(nodes, control_set), source_side)
 
 
 def flip_full_pose(nodes, control_set=None):
@@ -3167,8 +3264,11 @@ def flip_full_pose(nodes, control_set=None):
         nodes (list): Any nodes of the rigs to flip.
         control_set (str, optional): Only flip the controls of this control
             set (i.e. "face"). See get_rig_control_sets.
+
+    Returns:
+        dict: See ``mirror_controls``.
     """
-    mirror_controls(_get_full_pose_controls(nodes, control_set), flip=True)
+    return mirror_controls(_get_full_pose_controls(nodes, control_set), flip=True)
 
 
 def mirrorPoseOld(flip=False, nodes=False):
