@@ -48,7 +48,9 @@ The top bar drives which picker is loaded and how it behaves:
 
 * **Character Selector:** the collapsible header holds the picker-data combo
   box (which ``PICKER_DATAS`` node to show) and a snapshot picture of the
-  character. Uncheck the group title to collapse it.
+  character. Uncheck the group title to collapse it. In a narrow window the
+  buttons below wrap to new rows and the picture hides, so the picker can be
+  made small.
 * **Passthrough:** turns this window into a click-through overlay (see
   `Opacity passthrough`_).
 * **Sync Namespace:** when on, the picker resolves its controls in the

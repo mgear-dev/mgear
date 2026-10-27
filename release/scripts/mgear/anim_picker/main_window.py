@@ -13,6 +13,7 @@ import mgear.pymaya as pm
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 from mgear.core import pyqt
+from mgear.core import widgets
 from mgear.core import callbackManager
 from mgear.vendor.Qt import QtGui
 from mgear.vendor.Qt import QtCore
@@ -70,6 +71,66 @@ class _PassthroughMoveHandle(QtWidgets.QLabel):
 
     def mouseReleaseEvent(self, event):
         self._grab = None
+
+
+class _CharacterSelectWidget(QtWidgets.QWidget):
+    """Character selector area that hides the picture when it gets narrow.
+
+    The picture would otherwise set the minimum width of the picker window.
+    It is as tall as the combo box and one row of options, so it leaves no
+    empty space under the options.
+    """
+
+    def __init__(self, parent=None):
+        super(_CharacterSelectWidget, self).__init__(parent)
+        self.picture = None
+        self.picture_min_width = pyqt.dpi_scale(380)
+        self.column = None
+        self.options = None
+
+    def fit_to_rows(self):
+        """Give the option groups one row height, and the picture its size."""
+        groups = [self.options.itemAt(i).widget() for i in range(self.options.count())]
+        row = max(group.sizeHint().height() for group in groups)
+        for group in groups:
+            group.setMinimumHeight(row)
+        side = self.column.sizeHint().height()
+        self.picture.setFixedSize(side, side)
+
+    def showEvent(self, event):
+        super(_CharacterSelectWidget, self).showEvent(event)
+        if self.options is not None and self.options.count():
+            self.fit_to_rows()
+
+    def minimumSizeHint(self):
+        """Leave the picture out: it hides when there is no room for it."""
+        hint = super(_CharacterSelectWidget, self).minimumSizeHint()
+        if self.picture is not None and not self.picture.isHidden():
+            hint.setWidth(hint.width() - self.picture.width() - self.layout().spacing())
+        return hint
+
+    def resizeEvent(self, event):
+        super(_CharacterSelectWidget, self).resizeEvent(event)
+        if self.picture is not None:
+            self.picture.setVisible(event.size().width() >= self.picture_min_width)
+
+
+def _flow_group(items):
+    """Return a widget holding widgets in a row, which wraps as one block.
+
+    Args:
+        items (list): The widgets, left to right.
+
+    Returns:
+        QWidget: The group.
+    """
+    group = QtWidgets.QWidget()
+    layout = QtWidgets.QHBoxLayout(group)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(pyqt.dpi_scale(4))
+    for widget in items:
+        layout.addWidget(widget)
+    return group
 
 
 class MainDockWindow(QtWidgets.QWidget):
@@ -509,12 +570,14 @@ class MainDockWindow(QtWidgets.QWidget):
         self.character_box.setStyleSheet(cc_style_sheet)
         self.character_box.setContentsMargins(0, 0, 0, 0)
         self.character_box.setMinimumHeight(0)
-        self.character_box.setMaximumHeight(pyqt.dpi_scale(80))
+        self.character_box.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed
+        )
         self.character_box.setCheckable(True)
         self.character_box.setChecked(True)
         self.character_box.clicked.connect(self.toggle_character_selector)
 
-        self.char_select_widget = QtWidgets.QWidget()
+        self.char_select_widget = _CharacterSelectWidget()
         self.char_select_widget.setContentsMargins(0, 5, 0, 0)
         tmp_layout = QtWidgets.QHBoxLayout(self.character_box)
         tmp_layout.setSpacing(0)
@@ -523,64 +586,66 @@ class MainDockWindow(QtWidgets.QWidget):
         # Create layout
         layout = QtWidgets.QHBoxLayout(self.char_select_widget)
 
-        # Create character picture widget
+        # Create character picture widget, hidden when the area is narrow and
+        # sized to the options when shown
         self.pic_widget = basic.SnapshotWidget()
+        self.char_select_widget.picture = self.pic_widget
 
         box_layout = QtWidgets.QVBoxLayout()
         layout.addLayout(box_layout)
         layout.addWidget(self.pic_widget, QtCore.Qt.AlignCenter)
 
-        # Add combo box
+        # Add combo box: long character names don't widen the window, the
+        # drop-down list still shows them in full
         self.char_selector_cb = basic.CallbackComboBox(
             callback=self.selector_change_event
         )
+        self.char_selector_cb.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.char_selector_cb.setMinimumContentsLength(12)
         box_layout.addWidget(self.char_selector_cb)
 
         # Init combo box data
         self.char_selector_cb.nodes = []
 
-        # Add option buttons
-        btns_layout = QtWidgets.QHBoxLayout()
+        # Option buttons, in groups that wrap to a new row when the window
+        # is narrow
+        btns_layout = widgets.FlowLayout(spacing=pyqt.dpi_scale(8))
         box_layout.addLayout(btns_layout)
         # Kept so add_tab_widget can append the view-mode selector here.
         self.char_btns_layout = btns_layout
-
-        # Add horizont spacer
-        spacer = QtWidgets.QSpacerItem(
-            10,
-            0,
-            QtWidgets.QSizePolicy.Expanding,
-            QtWidgets.QSizePolicy.Minimum,
-        )
-        btns_layout.addItem(spacer)
+        self.char_select_widget.column = box_layout
+        self.char_select_widget.options = btns_layout
 
         # Passthrough toggle, to the left of the Sync Namespace checkbox (only
         # the floating window supports the click-through mask).
+        options = []
         self.passthrough_cb = self._make_passthrough_checkbox()
         if not __EDIT_MODE__.get() and not self.is_dockable:
-            btns_layout.addWidget(self.passthrough_cb)
+            options.append(self.passthrough_cb)
 
         # sync checkbox
         self.checkbox = QtWidgets.QCheckBox("Sync Namespace")
         if not __EDIT_MODE__.get():
-            btns_layout.addWidget(self.checkbox)
+            options.append(self.checkbox)
+        if options:
+            btns_layout.addWidget(_flow_group(options))
 
         # About btn
         about_btn = basic.CallbackButton(callback=self.show_about_infos)
         about_btn.setText("?")
         about_btn.setToolTip("Show help/about informations")
-        btns_layout.addWidget(about_btn)
 
         # laod btn
         load_btn = basic.CallbackButton(callback=self.show_load_widget)
         load_btn.setText("Load")
         load_btn.setToolTip("Load from file")
-        btns_layout.addWidget(load_btn)
 
         # Refresh button
         self.char_refresh_btn = basic.CallbackButton(callback=self.refresh)
         self.char_refresh_btn.setText("Refresh")
-        btns_layout.addWidget(self.char_refresh_btn)
+        buttons = [about_btn, load_btn, self.char_refresh_btn]
 
         # Edit buttons
         self.new_char_btn = None
@@ -592,8 +657,7 @@ class MainDockWindow(QtWidgets.QWidget):
             )
             self.new_char_btn.setText("New")
             self.new_char_btn.setFixedWidth(pyqt.dpi_scale(40))
-
-            btns_layout.addWidget(self.new_char_btn)
+            buttons.append(self.new_char_btn)
 
             # Add Save  button
             self.save_char_btn = basic.CallbackButton(
@@ -601,8 +665,8 @@ class MainDockWindow(QtWidgets.QWidget):
             )
             self.save_char_btn.setText("Save")
             self.save_char_btn.setFixedWidth(pyqt.dpi_scale(40))
-
-            btns_layout.addWidget(self.save_char_btn)
+            buttons.append(self.save_char_btn)
+        btns_layout.addWidget(_flow_group(buttons))
         self.main_vertical_layout.addWidget(self.character_box)
 
     def add_tab_widget(self, name="default"):
@@ -821,7 +885,6 @@ class MainDockWindow(QtWidgets.QWidget):
 
     def _build_view_mode_selector(self):
         """Add the Tabbed / Grid / Rows / Columns selector to the char bar."""
-        self.char_btns_layout.addWidget(QtWidgets.QLabel("View"))
         self.view_mode_cb = QtWidgets.QComboBox()
         self.view_mode_cb.addItems(["Tabbed", "Grid", "Rows", "Columns"])
         self.view_mode_cb.setToolTip(
@@ -830,14 +893,17 @@ class MainDockWindow(QtWidgets.QWidget):
         self.view_mode_cb.currentIndexChanged.connect(
             self._on_view_mode_changed
         )
-        self.char_btns_layout.addWidget(self.view_mode_cb)
 
         self.grid_cols_sb = QtWidgets.QSpinBox()
         self.grid_cols_sb.setRange(0, 12)
         self.grid_cols_sb.setToolTip("Grid columns (0 = auto)")
         self.grid_cols_sb.setEnabled(False)
         self.grid_cols_sb.valueChanged.connect(self._on_grid_cols_changed)
-        self.char_btns_layout.addWidget(self.grid_cols_sb)
+        self.char_btns_layout.addWidget(
+            _flow_group(
+                [QtWidgets.QLabel("View"), self.view_mode_cb, self.grid_cols_sb]
+            )
+        )
 
     def _view_settings(self):
         """Return the QSettings store for anim picker UI preferences."""
@@ -1372,6 +1438,10 @@ class MainDockWindow(QtWidgets.QWidget):
             # text = data_node.get_namespace() or data_node.name
             text = data_node.name
             self.char_selector_cb.addItem(text)
+        # the narrow combo box keeps its drop-down list wide enough for the
+        # full names
+        view = self.char_selector_cb.view()
+        view.setMinimumWidth(view.sizeHintForColumn(0) + pyqt.dpi_scale(24))
 
         # Set elements active status
         self.set_field_status()
