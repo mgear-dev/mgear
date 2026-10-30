@@ -10,6 +10,10 @@ gzipped in ``data/`` (``check_golden``).
 import pytest
 
 TEMPLATES = ("biped.sgt", "EPIC_metahuman_y_up.sgt")
+# Connections that depend on the Maya version, not on the guide draw: Maya
+# 2025 and newer connect a deformer's original shape to its
+# originalGeometry, Maya 2024 doesn't
+VERSION_DEPENDENT_ATTRS = (".originalGeometry[",)
 
 
 def plug_key(plug, shape_index):
@@ -72,6 +76,8 @@ def guide_snapshot(describe_shapes, default_nodes):
         )
         pairs = pairs or []
         for dst, src in zip(pairs[::2], pairs[1::2]):
+            if any(attr in dst for attr in VERSION_DEPENDENT_ATTRS):
+                continue
             connections.add(
                 "{} -> {}".format(
                     plug_key(src, shape_index), plug_key(dst, shape_index)
