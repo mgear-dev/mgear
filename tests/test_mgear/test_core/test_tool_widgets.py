@@ -359,6 +359,27 @@ def test_height_grip(qt_app):
     assert heights == [120, 300, 80]
 
 
+def test_logical_dpi_without_a_main_window(qt_app, monkeypatch):
+    """Without Maya's main window (mayapy), the scale is the screen's: Qt 5
+    gives a high DPI screen 144 DPI and sizes widgets by it. Before Qt runs
+    it is 96, not kept."""
+    import os
+
+    from mgear.core import pyqt
+    from mgear.vendor.Qt import QtWidgets
+
+    monkeypatch.delenv(pyqt._LOGICAL_DPI_KEY, raising=False)
+    monkeypatch.setattr(pyqt, "maya_main_window", lambda: None)
+    screen = int(round(qt_app.primaryScreen().logicalDotsPerInchX()))
+    assert pyqt.get_logicaldpi() == screen
+    assert pyqt.dpi_scale(100) == 100 * max(1, min(screen / 96.0, 2))
+    # no QApplication yet: 96, read again later
+    monkeypatch.delenv(pyqt._LOGICAL_DPI_KEY)
+    monkeypatch.setattr(QtWidgets.QApplication, "instance", staticmethod(lambda: None))
+    assert pyqt.get_logicaldpi() == 96
+    assert pyqt._LOGICAL_DPI_KEY not in os.environ
+
+
 def test_pyqt_image_and_settings_helpers(clean_settings):
     from mgear.core import pyqt
     from mgear.vendor.Qt import QtGui

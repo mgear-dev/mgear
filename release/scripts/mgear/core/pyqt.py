@@ -547,13 +547,25 @@ def get_logicaldpi():
         int: dpi of the monitor
     """
     if _LOGICAL_DPI_KEY not in os.environ.keys():
-        try:
-            logical_dpi = maya_main_window().logicalDpiX()
-        except Exception:
-            logical_dpi = 96
-        finally:
-            os.environ[_LOGICAL_DPI_KEY] = str(logical_dpi)
+        logical_dpi = _screen_logical_dpi()
+        if logical_dpi is None:
+            # no Qt yet: assume 96, and read it again once Qt runs
+            return 96
+        os.environ[_LOGICAL_DPI_KEY] = str(logical_dpi)
     return int(os.environ.get(_LOGICAL_DPI_KEY)) or 96
+
+
+def _screen_logical_dpi():
+    """The logical DPI of Maya's main window, else of the application's
+    screen (mayapy: Qt 5 scales a high DPI screen by its DPI, Qt 6 by its
+    pixel ratio); None before a QApplication exists."""
+    window = maya_main_window()
+    if window is not None:
+        return window.logicalDpiX()
+    app = QtWidgets.QApplication.instance()
+    if app is None or app.primaryScreen() is None:
+        return None
+    return int(round(app.primaryScreen().logicalDotsPerInchX()))
 
 
 def dpi_scale(value, default=96, min_=1, max_=2):
