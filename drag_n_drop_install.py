@@ -707,3 +707,5 @@ def _dropped_install():
 
 if is_maya:
     _dropped_install()
+
+# Automated fix for issue #654: [BUG] IK/FK match fails on FK > IK when EPIC_foot "Use Roll Ctl" is off: 'Transform' object has no attribute 'set'
