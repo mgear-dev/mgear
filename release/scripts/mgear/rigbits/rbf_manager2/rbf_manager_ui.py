@@ -579,6 +579,10 @@ class RBFManagerUI(widget.RBFWidget):
         driverControl = result["driverControl"]
         driverNode, drivenNode = result["driverNode"], result["drivenNode"]
         driverAttrs, drivenAttrs = result["driverAttrs"], result["drivenAttrs"]
+        # a node added to a setup takes the setup driver attributes, in the
+        # order of the pose inputs it syncs
+        if self.currentRBFSetupNodes and driverAttrs:
+            driverAttrs = self.currentRBFSetupNodes[0].getDriverNodeAttributes()
 
         drivenType = mc.nodeType(drivenNode)
         if drivenType in ["transform", "joint"]:
@@ -670,8 +674,15 @@ class RBFManagerUI(widget.RBFWidget):
         driverNode = self.driverLineEdit.text()
         drivenNode = self.drivenLineEdit.text()
         driverControl = self.controlLineEdit.text()
-        driverSelectedAttrItems = self.driverAttributesWidget.selectedItems()
-        drivenSelectedAttrItems = self.drivenAttributesWidget.selectedItems()
+        # in list order, selectedItems() follows the selection order
+        driverSelectedAttrItems = sorted(
+            self.driverAttributesWidget.selectedItems(),
+            key=self.driverAttributesWidget.row,
+        )
+        drivenSelectedAttrItems = sorted(
+            self.drivenAttributesWidget.selectedItems(),
+            key=self.drivenAttributesWidget.row,
+        )
 
         # Create a default return dictionary with None values
         result = {
@@ -978,8 +989,9 @@ class RBFManagerUI(widget.RBFWidget):
         nodeAttrsToDisplay = [
             "{}.{}".format(driverName, attr) for attr in displayAttrs
         ]
+        # in the given order: the driver attributes follow the pose inputs
         attrListWidget.clear()
-        attrListWidget.addItems(sorted(nodeAttrsToDisplay))
+        attrListWidget.addItems(nodeAttrsToDisplay)
         self.highlightListEntries(attrListWidget, displayAttrs)
 
     def setAttributeToAutoSelect(self, attrListWidget):

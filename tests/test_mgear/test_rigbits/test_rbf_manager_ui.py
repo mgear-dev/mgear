@@ -143,3 +143,43 @@ def test_update_pose_keeps_each_tab_values(rbf_window):
     # the driven nodes got different values, so the tabs differ
     first, second = values.values()
     assert first[1] != second[1]
+
+
+def _driver_attrs(cmds, rbf_node):
+    """The driver attributes connected to an RBF node, in input order."""
+    from mgear.rigbits.rbf_manager2 import rbf_manager_ui
+
+    return rbf_manager_ui.sortRBF(rbf_node).getDriverNodeAttributes()
+
+
+def test_driver_attr_order_kept(rbf_window):
+    """The driver attributes keep their order once the setup exists (#643)."""
+    from maya import cmds
+
+    window = rbf_window
+    _add_driven(window, "drivenA")
+    listed = [
+        window.driverAttributesWidget.item(index).text().split(".")[-1]
+        for index in range(window.driverAttributesWidget.count())
+    ]
+    assert listed == list(DRIVER_ATTRS)
+
+    # a second driven node uses the driver attributes of the setup
+    cmds.setAttr("drv.translateX", 5.0)
+    cmds.setAttr("drv.rotateZ", 30.0)
+    window.addPose()
+    _add_driven(window, "drivenB")
+    nodes = [rbf_node for _, rbf_node in _tab_nodes(window)]
+    assert len(nodes) == 2
+    for rbf_node in nodes:
+        assert list(_driver_attrs(cmds, rbf_node)) == list(DRIVER_ATTRS)
+
+    # both nodes store the same pose inputs, in the driver attribute order
+    inputs = []
+    for rbf_node in nodes:
+        plug = "{}.poses[1].poseInput".format(rbf_node)
+        indices = cmds.getAttr(plug, multiIndices=True)
+        inputs.append(
+            [round(cmds.getAttr("{}[{}]".format(plug, i)), 4) for i in indices]
+        )
+    assert inputs[0] == inputs[1] == [5.0, 0.0, 0.0, 0.0, 0.0, 30.0]
