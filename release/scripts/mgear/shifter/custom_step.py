@@ -322,6 +322,9 @@ class customShifterMainStep(object):
     def log(self, message, level="info"):
         """Log a message with the step name prefix.
 
+        Warnings and errors are only reported, the step keeps running. To stop
+        the build, raise an exception instead.
+
         Args:
             message (str): The message to log
             level (str): Log level - "info", "warning", or "error"
@@ -333,10 +336,11 @@ class customShifterMainStep(object):
         prefix = "[{}]".format(self.name) if hasattr(self, "name") else "[CustomStep]"
         full_message = "{} {}".format(prefix, message)
 
+        # pm.display* show in the build log window, pm.error would raise
         if level == "warning":
-            pm.warning(full_message)
+            pm.displayWarning(full_message)
         elif level == "error":
-            pm.error(full_message)
+            pm.displayError(full_message)
         else:
             print(full_message)
 
