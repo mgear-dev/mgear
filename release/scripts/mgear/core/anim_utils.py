@@ -2260,8 +2260,13 @@ def ikFkMatch_with_namespace(
             else:
                 roll_ctl = None
             if foot_root.hasAttr("roll_cnx"):
-                roll_attr = foot_root.roll_cnx.listConnections()[0]
-                bank_attr = foot_root.bank_cnx.listConnections()[0]
+                # the roll / bank attributes on the UI host
+                roll_attr = foot_root.roll_cnx.listConnections(
+                    source=True, destination=False, plugs=True
+                )[0]
+                bank_attr = foot_root.bank_cnx.listConnections(
+                    source=True, destination=False, plugs=True
+                )[0]
             else:
                 roll_attr = None
                 bank_attr = None
