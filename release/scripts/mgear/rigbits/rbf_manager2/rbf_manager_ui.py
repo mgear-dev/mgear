@@ -710,19 +710,19 @@ class RBFManagerUI(widget.RBFWidget):
 
     def refreshAllTables(self):
         """Refresh all tables on all the tabs with the latest information"""
-        # Iterate through each tab in the widget
+        # the poses are synced between the setup nodes, so any node with a
+        # driven node fills the driver table
+        for rbfNode in self.currentRBFSetupNodes:
+            if rbfNode.getDrivenNode():
+                self.setDriverTable(rbfNode, rbfNode.getNodeInfo())
+                break
+
+        # each tab shows the poses of its own node
         for index in range(self.rbfTabWidget.count()):
             drivenWidget = self.rbfTabWidget.widget(index)
-            # drivenNodeName = drivenWidget.property("drivenNode")
-
-            # Update table if the rbfNode's drivenNode matches the current tab's drivenNode
-            for rbfNode in self.currentRBFSetupNodes:
-                drivenNodes = rbfNode.getDrivenNode()
-                # if drivenNodes and drivenNodes[0] == drivenNodeName:
-                if drivenNodes:
-                    weightInfo = rbfNode.getNodeInfo()
-                    self.setDriverTable(rbfNode, weightInfo)
-                    self.setDrivenTable(drivenWidget, rbfNode, weightInfo)
+            rbfNode = getattr(drivenWidget, "rbfNode", None)
+            if rbfNode and rbfNode.getDrivenNode():
+                self.setDrivenTable(drivenWidget, rbfNode, rbfNode.getNodeInfo())
 
     @staticmethod
     def determineAttrType(node):
