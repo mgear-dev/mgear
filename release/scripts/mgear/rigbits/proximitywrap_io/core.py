@@ -255,8 +255,9 @@ def build_proximitywrap(config, replace=True, order=None):
 
     Args:
         config (dict): Proximity wrap configuration.
-        replace (bool, optional): Delete an existing proximityWrap with
-            the same name first. Driver and driven meshes are kept.
+        replace (bool, optional): Delete an existing local proximityWrap
+            with the same name first. A referenced one is kept. Driver
+            and driven meshes are kept.
         order (str or dict, optional): Deformer order override. None uses
             the mode stored in the configuration.
 
@@ -265,9 +266,8 @@ def build_proximitywrap(config, replace=True, order=None):
     """
     name = config["proximitywrap"]["name"]
     mode = FORMAT.resolve_order(config, order)
-    if replace and cmds.objExists(name) and cmds.nodeType(name) == NODE_TYPE:
-        cmds.delete(name)
-        logger.info("Replaced existing '%s'.", name)
+    if replace:
+        deformer_io.delete_existing(name, NODE_TYPE, logger)
 
     drivers = _resolve_drivers(config, name)
     if not drivers:
@@ -283,7 +283,10 @@ def build_proximitywrap(config, replace=True, order=None):
     positions, front_of_chain = deformer_io.resolve_placements(name, geo_map, mode)
 
     node = cmds.deformer(
-        targets, type=NODE_TYPE, name=name, frontOfChain=front_of_chain
+        targets,
+        type=NODE_TYPE,
+        name=deformer_io.new_node_name(name),
+        frontOfChain=front_of_chain,
     )[0]
 
     # Drivers get new indices: remap their settings and connections

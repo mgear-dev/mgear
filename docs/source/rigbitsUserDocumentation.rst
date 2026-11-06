@@ -1329,6 +1329,8 @@ Import
 
 Geometry and parents are found by name, even if they moved in the hierarchy or are in another namespace. Missing geometry is skipped with a warning in the log panel.
 
+Lattices can be exported from referenced geometry, and imported onto it. The ffd always goes on the visible shape, also when the referenced geometry is already deformed in the scene. Rebuilt nodes are created in the scene, with their stored names without the namespace. **Replace existing** never deletes a lattice that comes from a reference: it is kept, a warning says so, and the new lattice is added next to it.
+
 .. note::
     Component tag expressions are restored, but the component tags themselves are not saved. Make sure the tags exist on the rebuilt geometry.
 
@@ -1433,6 +1435,8 @@ Import
 
 The target mesh must exist in the scene: a shrink wrap whose target can't be found is skipped with a warning. Geometry, targets and driving controls are found by name, even if they moved in the hierarchy or are in another namespace. A missing driving control is reported in the log panel and the setting keeps the exported value.
 
+Referenced geometry works the same way as in :ref:`lattice-io`: shrink wraps can be exported from and imported onto referenced geometry and go on the visible shape, new nodes are created in the scene without the namespace, and **Replace existing** keeps a shrink wrap that comes from a reference and adds the new one next to it.
+
 Shifter Custom Step
 -------------------
 
@@ -1521,6 +1525,8 @@ Import
     Like when a driver is added in Maya, the drivers are bound again at their shape when you import. Import with the rig at bind pose. In a Shifter build, custom steps run at bind pose.
 
 Missing driver meshes are skipped with a warning, and the proximity wrap is built with the drivers that exist. A proximity wrap with no driver left is skipped. Geometry, drivers and driving controls are found by name, even if they moved in the hierarchy or are in another namespace. Settings that don't exist in your Maya version are skipped and listed in the log panel.
+
+Referenced geometry works the same way as in :ref:`lattice-io`: proximity wraps can be exported from and imported onto referenced geometry and go on the visible shape, new nodes are created in the scene without the namespace, and **Replace existing** keeps a proximity wrap that comes from a reference and adds the new one next to it.
 
 Shifter Custom Step
 -------------------

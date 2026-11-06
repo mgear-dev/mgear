@@ -30,6 +30,7 @@ from maya import cmds
 from mgear.core import deformer
 from mgear.core import node_remap
 from mgear.core import utils
+from mgear.core.node import is_referenced
 
 # file helpers, moved to config_io and kept here for backward compatibility
 from mgear.core.config_io import file_path  # noqa: F401
@@ -395,8 +396,9 @@ def resolve_shape(entry):
     """Find the scene shape for a stored ``{shape, transform}`` entry.
 
     The shape is found by name, tolerant to hierarchy and namespace
-    changes. If it is missing, the first visible shape of the transform
-    is used.
+    changes. If it is missing or is an intermediate shape (e.g. the
+    hidden shape of referenced geometry deformed in the referencing
+    scene), the first visible shape of the transform is used.
 
     Args:
         entry (dict): Stored entry with ``shape`` and/or ``transform``.
@@ -404,10 +406,15 @@ def resolve_shape(entry):
     Returns:
         str: Shape long name, or None.
     """
-    shape = node_remap.find_node(entry.get("shape"))
-    if shape and cmds.nodeType(shape) != "transform":
-        return shape
-    transform = shape or node_remap.find_node(entry.get("transform"))
+    found = node_remap.find_node(entry.get("shape"))
+    if found and cmds.nodeType(found) == "transform":
+        transform = found
+    elif found and not cmds.getAttr(found + ".intermediateObject"):
+        return found
+    elif found:
+        transform = get_parent(found)
+    else:
+        transform = node_remap.find_node(entry.get("transform"))
     if not transform:
         return None
     shapes = cmds.listRelatives(
@@ -487,6 +494,60 @@ def apply_geometry_data(deformer_node, geo_map):
                 shape=shape,
                 sparse=True,
             )
+
+
+def new_node_name(name):
+    """Return the name to create a node with from its stored name.
+
+    The namespace is dropped, so the node is created in the root namespace
+    and never inside the namespace of a file reference.
+
+    Args:
+        name (str): Stored node name, may include namespace or path.
+
+    Returns:
+        str: The short name without namespace.
+    """
+    return node_remap.short_name(name)
+
+
+def delete_existing(name, node_type, log=None, delete=None):
+    """Delete the local nodes of a type that hold a stored name.
+
+    Looks under the stored name and its namespace-stripped short name
+    (the name a previous import created, see :func:`new_node_name`).
+    Referenced nodes can't be deleted: they are kept, and a warning says
+    the new node is added next to them.
+
+    Args:
+        name (str): Stored node name.
+        node_type (str): Only nodes of this type are deleted.
+        log (logging.Logger, optional): Logger for the messages. Defaults
+            to this module's logger.
+        delete (callable, optional): Called with the node to delete it,
+            e.g. ``deformer.delete_lattice``. Defaults to ``cmds.delete``.
+
+    Returns:
+        bool: True if a node was deleted.
+    """
+    log = log or logger
+    delete = delete or cmds.delete
+    deleted = False
+    for candidate in dict.fromkeys((name, new_node_name(name))):
+        if not cmds.objExists(candidate) or cmds.nodeType(candidate) != node_type:
+            continue
+        if is_referenced(candidate):
+            log.warning(
+                "'%s' is referenced and can't be replaced, a new %s is added "
+                "next to it.",
+                candidate,
+                node_type,
+            )
+            continue
+        delete(candidate)
+        log.info("Replaced existing '%s'.", candidate)
+        deleted = True
+    return deleted
 
 
 # =============================================================================

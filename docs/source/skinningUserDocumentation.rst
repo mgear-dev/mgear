@@ -20,7 +20,7 @@ Copy the complete skin cluster from a source mesh to a target mesh.
 2. Select the target mesh (add it to the selection)
 3. Run **Copy Skin**
 
-The tool uses Maya's ``copySkinWeights`` with one-to-one influence association to transfer all weights from source to target. If the target mesh does not have a skin cluster, one is created automatically with the same influences as the source.
+The tool uses Maya's ``copySkinWeights`` with one-to-one influence association to transfer all weights from source to target. If the target mesh does not have a skin cluster, one is created automatically with the same influences as the source. The source and the target can be referenced geometry. The new skin cluster is always created in the scene, never in the reference, and is named ``targetName_skinCluster`` without the namespace.
 
 
 Copy Skin Add
@@ -150,6 +150,14 @@ The import process:
 **Namespaces and Clashing Names:**
 
 Objects and joints are matched even when the namespace differs between export and import, for example weights exported from a referenced rig (``char:body``) and imported into the rig file (``body``), or the other way around. When several objects share a short name (``grpA|body`` and ``grpB|body``), the full DAG path stored in the file picks the right one.
+
+**Referenced Geometry:**
+
+Weights can be imported onto geometry that comes from a file reference. The import only creates or updates skin clusters that belong to the scene:
+
+* Referenced geometry without a skin cluster gets a new skin cluster in the scene.
+* A skin cluster created in the scene on referenced geometry, for example by an earlier import, is updated.
+* An object whose skin cluster comes from the reference is skipped, so its weights are never saved as reference edits. The import ends with one warning that lists every skipped object. They and their joints don't show in the remap dialog.
 
 **Remap Dialog:**
 

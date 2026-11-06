@@ -31,6 +31,8 @@ from mgear.core import node_remap
 from mgear.core import utils
 from mgear.core import meshNavigation
 from mgear.core import mesh as mesh_utils
+from mgear.core import deformer
+from mgear.core.node import is_referenced
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 FILE_EXT = ".gSkin"
@@ -188,11 +190,10 @@ def get_mesh_components_from_tag_expression(skinCls, tag="*"):
     Returns:
         dagPath, MObject: The dagpath tho the shpe and the MObject components
     """
-    geo_types = ["mesh", "nurbsSurface", "nurbsCurve"]
-    for t in geo_types:
-        obj = skinCls.listConnections(et=True, t=t)
-        if obj:
-            geo = obj[0].getShape().name()
+    # The shape the skinCluster deforms. The first shape of its transform
+    # can be an intermediate one, e.g. the hidden shape of referenced
+    # geometry deformed in the referencing scene.
+    geo = deformer.get_deformer_geometry(skinCls.name())[0][1]
 
     # Get the geo out attribute for the shape
     out_attr = cmds.deformableShape(geo, localShapeOutAttr=True)[0]
@@ -353,7 +354,9 @@ def getVertexPositions(geo):
     if isinstance(geo, string_types):
         geo = pm.PyNode(geo)
 
-    shape = geo.getShape()
+    # The first visible shape: the output of deformed geometry. getShape()
+    # can return the hidden input shape of referenced geometry.
+    shape = geo.getShape(noIntermediate=True)
     if shape is None:
         return {}, "unknown"
 
@@ -1402,6 +1405,10 @@ class SkinRemapReport(object):
         influence_pool (list): Influences of the target skinClusters that
             already exist. Preferred match candidates; empty if no target
             is skinned yet.
+        referenced (list): Scene names of the objects skipped because
+            their skinCluster comes from a file reference. Only local
+            skinClusters are imported. Not a missing item: ignored by
+            is_empty and the remap dialog.
     """
 
     def __init__(self, file_path=None):
@@ -1409,6 +1416,7 @@ class SkinRemapReport(object):
         self.geometry = []
         self.influences = {}
         self.influence_pool = []
+        self.referenced = []
 
     def is_empty(self):
         """Return True when nothing is missing or ambiguous.
@@ -1664,6 +1672,9 @@ def _resolve_skin_data(dataPack, filePath, namespace, mapping, cache=None):
             geoPath = hits[0]
 
         skinCls = getSkinCluster(geoPath)
+        if skinCls and is_referenced(skinCls.name()):
+            report.referenced.append(node_remap.leaf_name(geoPath))
+            continue
         existing = _skin_influence_paths(skinCls) if skinCls else []
         existingIndex = node_remap.group_by_short_name(existing)
         pool.extend(existing)
@@ -1979,6 +1990,19 @@ def _apply_resolved(resolved, vertexMismatchMode):
     return volumeImported
 
 
+def _warn_referenced(referenced):
+    """Warn once about the objects skipped for a referenced skinCluster.
+
+    Args:
+        referenced (list): Scene names of the skipped objects.
+    """
+    if referenced:
+        pm.displayWarning(
+            "Skipped objects with a referenced skinCluster, only local "
+            "skinClusters are imported:\n  " + "\n  ".join(referenced)
+        )
+
+
 def _import_skin_file(
     filePath,
     vertexMismatchMode,
@@ -1988,6 +2012,7 @@ def _import_skin_file(
     cache,
     index=None,
     total=None,
+    referenced=None,
 ):
     """Resolve, run the missing policy and apply one skin file.
 
@@ -2002,6 +2027,8 @@ def _import_skin_file(
         cache (dict): Influence lookup cache, see _resolve_influence.
         index (int, optional): File position in a pack, from 1.
         total (int, optional): Number of files in the pack.
+        referenced (list, optional): Extended with the scene names of the
+            objects skipped for a referenced skinCluster.
 
     Returns:
         tuple: (status, object names imported with the volume method)
@@ -2034,6 +2061,8 @@ def _import_skin_file(
     if not report.is_empty():
         pm.displayWarning("Skipped unresolved items:\n" + report.summary())
 
+    if referenced is not None:
+        referenced.extend(report.referenced)
     return REMAP_APPLY, _apply_resolved(resolved, vertexMismatchMode)
 
 
@@ -2078,6 +2107,7 @@ def importSkin(
     if not isinstance(filePath, string_types):
         filePath = filePath[0]
 
+    referenced = []
     _, volumeImported = _import_skin_file(
         filePath,
         vertexMismatchMode,
@@ -2085,7 +2115,9 @@ def importSkin(
         on_missing,
         SkinRemapSession(mapping),
         {},
+        referenced=referenced,
     )
+    _warn_referenced(referenced)
     return volumeImported
 
 
@@ -2139,6 +2171,7 @@ def importSkinPack(
         # Check every file before applying any, then reuse the results.
         checked = []
         reports = []
+        referenced = []
         for skinFile in skinFiles:
             resolved, report = _resolve_skin_data(
                 _load_skin_file(skinFile),
@@ -2148,6 +2181,7 @@ def importSkinPack(
                 cache,
             )
             checked.append(resolved)
+            referenced.extend(report.referenced)
             if not report.is_empty():
                 reports.append(report)
         if reports:
@@ -2155,9 +2189,11 @@ def importSkinPack(
         volumeImported = []
         for resolved in checked:
             volumeImported.extend(_apply_resolved(resolved, vertexMismatchMode))
+        _warn_referenced(referenced)
         return volumeImported
 
     volumeImported = []
+    referenced = []
     total = len(skinFiles)
     for ii, skinFile in enumerate(skinFiles):
         status, result = _import_skin_file(
@@ -2169,6 +2205,7 @@ def importSkinPack(
             cache,
             index=ii + 1,
             total=total,
+            referenced=referenced,
         )
         volumeImported.extend(result)
         if status == REMAP_CANCEL:
@@ -2178,6 +2215,7 @@ def importSkinPack(
             )
             break
 
+    _warn_referenced(referenced)
     return volumeImported
 
 
@@ -2215,17 +2253,17 @@ def skinCopy(sourceMesh=None, targetMesh=None, *args, **kwargs):
         if ss:
             skinMethod = ss.skinningMethod.get()
             oDef = pm.skinCluster(sourceMesh, query=True, influence=True)
-            # strip | from longName, or skinCluster command may fail.
-            # skinName = targetMesh.name().replace('|', '') + "_skinCluster"
+            # No path or namespace in the name: the new skinCluster is
+            # local, also on referenced geometry.
             if "name" in kwargs.keys():
                 skinName = kwargs["name"]
             else:
-                skinName = targetMesh.name() + "_skinCluster"
+                skinName = node_remap.short_name(targetMesh.name()) + "_skinCluster"
             skinCluster = pm.skinCluster(
                 oDef, targetMesh, tsb=True, nw=1, n=skinName
             )[0]
             pm.copySkinWeights(
-                sourceSkin=ss.stripNamespace(),
+                sourceSkin=ss.name(),
                 destinationSkin=skinCluster.name(),
                 noMirror=True,
                 influenceAssociation="oneToOne",

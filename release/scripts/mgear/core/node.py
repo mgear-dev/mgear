@@ -1066,3 +1066,18 @@ def create_dag_node(node_type, name, parent=None):
     """
     kwargs = {"parent": parent} if parent else {}
     return cmds.ls(cmds.createNode(node_type, name=name, **kwargs), long=True)[0]
+
+
+def is_referenced(node):
+    """Check if a node comes from a file reference.
+
+    Referenced nodes can't be deleted or renamed, and their edits are
+    saved as reference edits.
+
+    Args:
+        node (str): Node name.
+
+    Returns:
+        bool: True if the node is referenced.
+    """
+    return cmds.referenceQuery(node, isNodeReferenced=True)

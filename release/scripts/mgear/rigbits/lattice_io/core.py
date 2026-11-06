@@ -28,6 +28,7 @@ from mgear.core import deformer
 from mgear.core import deformer_io
 from mgear.core import node_remap
 from mgear.core.deformer_io import ORDER_CURRENT
+from mgear.core.node import is_referenced
 
 logger = logging.getLogger(__name__)
 
@@ -180,27 +181,14 @@ def load_file(path):
     return FORMAT.load(path)
 
 
-def _remove_existing(config):
-    """Delete a previous build of a lattice configuration.
-
-    Deletes the ffd with the stored name, with its lattice and base.
-
-    Args:
-        config (dict): Lattice configuration.
-    """
-    name = config["ffd"]["name"]
-    if cmds.objExists(name) and cmds.nodeType(name) == "ffd":
-        deformer.delete_lattice(name)
-        logger.info("Replaced existing '%s'.", name)
-
-
 def _rename_in_place(node, name, shape_type, replace):
     """Rename a placed lattice or base transform to its stored name.
 
-    With replace, an orphan transform (a lattice or base that drives no
-    ffd) already using the name next to the node is deleted first, so the
-    node keeps its exact name. Nodes with that name anywhere else are left
-    alone: they can't clash.
+    The stored namespace is dropped, see ``deformer_io.new_node_name``.
+    With replace, a local orphan transform (a lattice or base that drives
+    no ffd) already using the name next to the node is deleted first, so
+    the node keeps its exact name. Nodes with that name anywhere else are
+    left alone: they can't clash.
 
     Args:
         node (str): Long name of the placed transform.
@@ -211,9 +199,15 @@ def _rename_in_place(node, name, shape_type, replace):
     Returns:
         str: Long name of the renamed node.
     """
+    name = deformer_io.new_node_name(name)
     parent = cmds.listRelatives(node, parent=True, fullPath=True)
     target = "{}|{}".format(parent[0] if parent else "", name)
-    if replace and target != node and cmds.objExists(target):
+    if (
+        replace
+        and target != node
+        and cmds.objExists(target)
+        and not is_referenced(target)
+    ):
         shapes = cmds.listRelatives(target, shapes=True, type=shape_type, fullPath=True)
         if shapes and not cmds.listConnections(shapes[0], type="ffd"):
             cmds.delete(target)
@@ -263,7 +257,9 @@ def build_lattice(config, replace=True, order=None):
     name = config["ffd"]["name"]
     mode = resolve_order(config, order)
     if replace:
-        _remove_existing(config)
+        # A local ffd with the stored name (or its name without namespace)
+        # goes with its lattice and base. A referenced ffd is kept.
+        deformer_io.delete_existing(name, "ffd", logger, delete=deformer.delete_lattice)
 
     targets, geo_map = deformer_io.resolve_geometry(
         config["geometry"], config.get("members")
@@ -281,7 +277,7 @@ def build_lattice(config, replace=True, order=None):
         divisions=divisions,
         objectCentered=True,
         frontOfChain=front_of_chain,
-        name=name,
+        name=deformer_io.new_node_name(name),
     )[0]
     # Long names: cmds.lattice returns short names, which can be ambiguous
     lat_tfm, _, base_tfm, _ = deformer.get_lattice_nodes(ffd)
@@ -292,7 +288,7 @@ def build_lattice(config, replace=True, order=None):
     lat_tfm = _rename_in_place(lat_tfm, lat_data["name"], "lattice", replace)
     lat_shape = cmds.listRelatives(lat_tfm, shapes=True, fullPath=True)
     if lat_shape and lat_data.get("shape"):
-        cmds.rename(lat_shape[0], lat_data["shape"])
+        cmds.rename(lat_shape[0], deformer_io.new_node_name(lat_data["shape"]))
     deformer.set_lattice_points(lat_tfm, divisions, lat_data["points"])
     for node, data in ((lat_tfm, lat_data), (base_tfm, base_data)):
         if "visibility" in data:
