@@ -826,6 +826,68 @@ def delete(*args, **kwargs):
     return cmds.delete(*args, **kwargs)
 
 
+# parent flags where the last positional argument is not a new parent
+_PARENT_NO_SKIP_FLAGS = (
+    "world",
+    "w",
+    "addObject",
+    "add",
+    "removeObject",
+    "rm",
+)
+_parent = _pymaya_cmd_wrap(cmds.parent)
+
+
+def parent(*args, **kwargs):
+    """Wrapper for cmds.parent() that skips objects already under the parent.
+
+    Maya 2025 and newer skip an object that is already a child of the given
+    parent with a warning, Maya 2024 and older raise an error. This wrapper
+    skips them with the same warning on every Maya version.
+
+    Args:
+        *args: Objects to parent followed by the new parent. Nested lists
+            are flattened.
+        **kwargs: cmds.parent flags.
+
+    Returns:
+        list: The parented objects, including the skipped ones.
+    """
+    args = _flatten_list(_obj_to_name(args))
+    kwargs = _obj_to_name(kwargs)
+    if len(args) < 2 or any(flag in kwargs for flag in _PARENT_NO_SKIP_FLAGS):
+        return _parent(*args, **kwargs)
+
+    target = cmds.ls(args[-1], long=True)
+    if len(target) != 1:
+        return _parent(*args, **kwargs)
+
+    to_parent = []
+    is_child = []
+    for obj in args[:-1]:
+        current = cmds.listRelatives(obj, parent=True, fullPath=True) or []
+        child = current == target
+        is_child.append(child)
+        if child:
+            displayWarning(
+                "Object, '{}', skipped. It is already a child of the "
+                "parent, '{}'.".format(obj, args[-1])
+            )
+        else:
+            to_parent.append(obj)
+
+    if not any(is_child):
+        return _parent(*args, **kwargs)
+
+    parented = iter(
+        _parent(*(to_parent + [args[-1]]), **kwargs) if to_parent else []
+    )
+    return [
+        _name_to_obj(obj) if child else next(parented)
+        for obj, child in zip(args[:-1], is_child)
+    ]
+
+
 # set Locals dict
 
 local_dict = locals()
