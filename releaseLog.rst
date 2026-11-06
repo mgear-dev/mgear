@@ -2,6 +2,21 @@ Release Log
 ===========
 
 
+5.4.5
+------
+**Enhancements**
+	* Core: Skin IO / Rigbits: Deformer IO: Skin, lattice, shrink wrap and proximity wrap import and export support referenced geometry; referenced skin clusters and deformers are kept and listed in a warning
+
+**Bug Fix**
+	* Rigbits: Deformer IO: Deformers imported onto referenced, already deformed geometry go on the visible shape, and Replace no longer stops the import on a referenced deformer
+	* Core: Skin: Copy Skin works from a referenced mesh
+	* Core: Anim Utils: IK/FK match FK > IK works again when the foot Use Roll Ctl is off #654
+	* Shifter: Custom Step: A log with level error no longer stops the step, errors and warnings show in the build log #652
+	* Rigbits: RBF Manager: Update and Delete Pose show the values of each driven node tab #648
+	* Rigbits: RBF Manager: A driven node added to an RBF setup gets its pose inputs in the right order #643
+	* PyMaya: Parenting a node under its current parent no longer fails on Maya 2024
+
+
 5.4.4
 ------
 **Enhancements**
