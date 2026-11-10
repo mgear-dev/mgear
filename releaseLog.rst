@@ -2,6 +2,12 @@ Release Log
 ===========
 
 
+5.4.6
+------
+**Enhancements**
+	* Shifter: Components: New chain_spring_gravity_02, a stackable and scalable spring gravity chain with extra tweak and tweak end controls #581
+
+
 5.4.5
 ------
 **Enhancements**
