@@ -25,7 +25,8 @@ DESCRIPTION = "Stackable chain with special connector to drive many chains" \
     "This component is base in 'chain_FK_spline_02'"
 
 COMPATIBLE = [TYPE,
-              "chain_spring_lite_stack_master_01"]
+              "chain_spring_lite_stack_master_01",
+              "chain_spring_gravity_02"]
 ##########################################################
 # CLASS
 ##########################################################

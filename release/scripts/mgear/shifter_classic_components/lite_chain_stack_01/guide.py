@@ -22,7 +22,12 @@ NAME = "chain"
 DESCRIPTION = "Stackable chain with special connector to drive many chains" \
     " from one master chain. Initially designed for Anime Style hair" \
     ", but can be used for any purpose. \n"
-COMPATIBLE = [TYPE, "lite_chain_stack_01", "chain_spring_lite_stack_master_01"]
+COMPATIBLE = [
+    TYPE,
+    "lite_chain_stack_01",
+    "chain_spring_lite_stack_master_01",
+    "chain_spring_gravity_02",
+]
 ##########################################################
 # CLASS
 ##########################################################

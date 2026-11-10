@@ -23,6 +23,7 @@ Subpackages
    mgear.shifter_classic_components.chain_loc_ori_01
    mgear.shifter_classic_components.chain_net_01
    mgear.shifter_classic_components.chain_spring_01
+   mgear.shifter_classic_components.chain_spring_gravity_02
    mgear.shifter_classic_components.chain_spring_lite_stack_master_01
    mgear.shifter_classic_components.chain_stack_01
    mgear.shifter_classic_components.chain_whip_01

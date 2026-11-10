@@ -161,6 +161,60 @@ chain_spring_01
 ---------------
 WIP
 
+chain_spring_gravity_02
+-----------------------
+FK chain with spring and gravity on each segment. It can be scaled, stacked
+with the other stack chains, and has optional tweak controls.
+
+**Guide**
+
+* **root**: start of the chain.
+* **#_loc**: one locator for each segment end. The last one is the chain tip.
+* **blade**: orientation of the chain.
+
+**Settings**
+
+* **Mirror Behaviour L and R**: on the R side, the controls are mirrored, so
+  the same values give a mirrored pose on L and R.
+* **Extra Tweak**: a tweak control on each segment, after the spring. The
+  tweak control drives the joint. The **Tweak Vis** attribute shows them.
+* **Tweak End**: a control and a joint at the chain tip, following the last
+  spring segment. Components parented to the tip locator follow it.
+* **Master Local / Master Global**: master chain followed by this chain.
+  Select the master guide root and click the pick button. Click with nothing
+  selected to clear it. The local master adds its motion in the segment
+  space, the global master in world aligned space. The **Local Blend** and
+  **World Blend** attributes blend the master motion.
+* **Connection Offset**: master segment of the first segment of this chain.
+  Segments past the master end use its last segment.
+
+Compatible masters: ``chain_spring_gravity_02``, ``chain_stack_01``,
+``lite_chain_stack_01``, ``lite_chain_stack_02`` and
+``chain_spring_lite_stack_master_01``. The master needs at least as many
+segments as this chain.
+
+**Stack**
+
+The chain is also a master of ``chain_stack_01``, ``lite_chain_stack_01``,
+``lite_chain_stack_02`` and other ``chain_spring_gravity_02`` chains. The
+slave chains follow the FK controls after the spring. The twist, wide and
+depth channels of a master pass through to its slaves.
+
+The local stack connection uses the segment orientation of
+``chain_stack_01`` and ``lite_chain_stack``, so the master and slave chains
+bend the same way, through **Master Local** and **Master Global**.
+
+**Anim attributes**
+
+* **Spring chain intensity**: 0 is the FK pose, 1 the full spring.
+* **damping**, **stiffness**, **gravity**, **gravity_directionY**,
+  **useGround** and **collide_softness**: spring settings for each segment.
+
+**Scale**
+
+The rig holds under global scale: the controls, the spring and the joints
+scale together. Gravity is in world units and doesn't change with the scale.
+
 chain_stack_01
 --------------
 WIP

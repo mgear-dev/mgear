@@ -126,3 +126,87 @@ def import_template(rig_plugins, setup_path, monkeypatch):
         return pm.PyNode("guide")
 
     return load
+
+
+# world positions of the root and the 3 locators of a chain guide
+CHAIN_POSITIONS = ((1.0, 5.0, 0.0), (2.0, 5.0, 0.0), (3.0, 5.0, 0.0), (4.0, 5.0, 0.0))
+
+
+class _ChainSections(object):
+    """Answer of the chain guide initializer dialog."""
+
+    def __init__(self, sections_number):
+        self.sections_number = sections_number
+        self.dir_axis = 0
+        self.spacing = 1.0
+
+
+@pytest.fixture
+def chain_guide(rig_plugins, setup_path, monkeypatch):
+    """Function drawing a chain guide in a new scene.
+
+    The first call makes a new scene.
+
+    The chain guide initializer dialog is answered with the number of
+    locators. Guides after the first are drawn in the same guide.
+
+    Returns:
+        callable: Called with the component type, name, side, index,
+            parent (guide node name, optional), positions (root and
+            locator world positions) and guide settings. Returns the guide
+            root name. Its ``positions`` attribute is the default
+            positions.
+    """
+    from maya import cmds
+
+    import mgear.pymaya as pm
+    from mgear.shifter import guide
+    from mgear.shifter.component import chain_guide_initializer
+
+    cmds.file(new=True, force=True)
+
+    def draw(
+        comp="chain_spring_gravity_02",
+        name="chain",
+        side="L",
+        index=0,
+        parent=None,
+        positions=CHAIN_POSITIONS,
+        **settings
+    ):
+        monkeypatch.setattr(
+            chain_guide_initializer,
+            "exec_window",
+            lambda: _ChainSections(len(positions) - 1),
+        )
+        # draw in the existing guide, else a new guide hierarchy is made
+        if not parent and cmds.objExists("guide"):
+            parent = "guide"
+        before = set(cmds.ls("*_root", type="transform"))
+        guide.Rig().drawNewComponent(
+            pm.PyNode(parent) if parent else None, comp, showUI=False
+        )
+        root = (set(cmds.ls("*_root", type="transform")) - before).pop()
+        guide.Rig().updateProperties(pm.PyNode(root), name, side, index)
+        prefix = "{}_{}{}_".format(name, side, index)
+        root = prefix + "root"
+        _set_chain_positions(prefix, positions)
+        for key, value in settings.items():
+            if isinstance(value, str):
+                cmds.setAttr("{}.{}".format(root, key), value, type="string")
+            else:
+                cmds.setAttr("{}.{}".format(root, key), value)
+        return root
+
+    draw.positions = CHAIN_POSITIONS
+    return draw
+
+
+def _set_chain_positions(prefix, positions):
+    """Set the root and locator world positions of a chain guide."""
+    from maya import cmds
+
+    cmds.xform(prefix + "root", worldSpace=True, translation=positions[0])
+    for i, position in enumerate(positions[1:]):
+        loc = "{}{}_loc".format(prefix, i)
+        cmds.xform(loc, worldSpace=True, translation=position)
