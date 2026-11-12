@@ -1081,3 +1081,28 @@ def is_referenced(node):
         bool: True if the node is referenced.
     """
     return cmds.referenceQuery(node, isNodeReferenced=True)
+
+
+def get_visible_shape(node):
+    """Get the visible (non-intermediate) shape of a node.
+
+    A deformed mesh keeps its original shape hidden as an intermediate
+    object. On referenced geometry the hidden shape is the first child of
+    the transform and the visible one is ``<name>ShapeDeformed``, so the
+    first shape is not always the one to query or deform.
+
+    Args:
+        node (str or PyNode): A transform, or one of its shapes. A hidden
+            shape resolves to the visible shape under the same transform.
+
+    Returns:
+        str: The full path of the first visible shape, or None if there is
+            none.
+    """
+    node = str(node)
+    if cmds.objectType(node, isAType="shape"):
+        if not cmds.getAttr(node + ".intermediateObject"):
+            return cmds.ls(node, long=True)[0]
+        node = cmds.listRelatives(node, parent=True, fullPath=True)[0]
+    shapes = cmds.listRelatives(node, shapes=True, noIntermediate=True, fullPath=True)
+    return shapes[0] if shapes else None

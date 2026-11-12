@@ -30,6 +30,7 @@ from maya import cmds
 from mgear.core import deformer
 from mgear.core import node_remap
 from mgear.core import utils
+from mgear.core.node import get_visible_shape
 from mgear.core.node import is_referenced
 
 # file helpers, moved to config_io and kept here for backward compatibility
@@ -406,21 +407,10 @@ def resolve_shape(entry):
     Returns:
         str: Shape long name, or None.
     """
-    found = node_remap.find_node(entry.get("shape"))
-    if found and cmds.nodeType(found) == "transform":
-        transform = found
-    elif found and not cmds.getAttr(found + ".intermediateObject"):
-        return found
-    elif found:
-        transform = get_parent(found)
-    else:
-        transform = node_remap.find_node(entry.get("transform"))
-    if not transform:
-        return None
-    shapes = cmds.listRelatives(
-        transform, shapes=True, noIntermediate=True, fullPath=True
+    found = node_remap.find_node(entry.get("shape")) or node_remap.find_node(
+        entry.get("transform")
     )
-    return shapes[0] if shapes else None
+    return get_visible_shape(found) if found else None
 
 
 def resolve_geometry(entries, members=None):

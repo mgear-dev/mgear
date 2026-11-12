@@ -54,20 +54,17 @@ def getDeformerNode(obj, lv=2, dtype="blendShape"):
     Returns:
         PyNode: The deformer node, or None if not found.
     """
-    if isinstance(obj, str):
-        obj = pm.PyNode(obj)
-
+    deformer_node = None
     try:
-        if pm.nodeType(obj.getShape()) in [
+        shape = node.get_visible_shape(obj)
+        if pm.nodeType(shape) in [
             "mesh",
             "nurbsSurface",
             "nurbsCurve",
         ]:
-            deformer_node = pm.listHistory(
-                obj.getShape(), type=dtype, lv=lv
-            )[0]
+            deformer_node = pm.listHistory(shape, type=dtype, lv=lv)[0]
     except Exception:
-        deformer_node = None
+        pass
 
     return deformer_node
 
@@ -190,7 +187,9 @@ def blendshape_foc(deformed_obj):
         deformed_obj (PyNode): Object with deformation history
             including a blendShape node.
     """
-    meshShape = deformed_obj.getShape()
+    meshShape = node.get_visible_shape(deformed_obj)
+    if not meshShape:
+        return
 
     history = pm.listHistory(
         meshShape,
@@ -223,7 +222,9 @@ def morph_foc(deformed_obj, morph_deformer):
             including a morph node.
         morph_deformer (PyNode): The morph deformer to move.
     """
-    meshShape = deformed_obj.getShape()
+    meshShape = node.get_visible_shape(deformed_obj)
+    if not meshShape:
+        return
 
     history = pm.listHistory(
         meshShape,
