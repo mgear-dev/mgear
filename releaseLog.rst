@@ -2,6 +2,12 @@ Release Log
 ===========
 
 
+5.4.7
+------
+**Bug Fix**
+	* Core: Blendshape: Morph and blendShape connections set to front of chain go before the skin on referenced geometry
+
+
 5.4.6
 ------
 **Enhancements**
