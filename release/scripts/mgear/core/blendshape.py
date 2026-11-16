@@ -159,14 +159,14 @@ def connectWithMorph(mesh, bst, wgt=1.0, ffoc=True):
     """
     if isinstance(mesh, str):
         mesh = pm.PyNode(mesh)
-    if isinstance(bst, str):
-        bst = pm.PyNode(bst)
     morph_deformer = pm.deformer(mesh, type="morph")[0]
     pm.rename(morph_deformer, mesh.name() + "_morph")
     # relative mode
     morph_deformer.morphMode.set(1)
+    # The visible shape: on referenced geometry deformed in this scene the
+    # first shape is the hidden, undeformed one from the file
     pm.connectAttr(
-        bst.worldMesh[0],
+        node.get_visible_shape(bst) + ".worldMesh[0]",
         morph_deformer.morphTarget[0],
         force=True,
     )
@@ -183,78 +183,42 @@ def connectWithMorph(mesh, bst, wgt=1.0, ffoc=True):
 def blendshape_foc(deformed_obj):
     """Move existing blendShape node to the front of chain.
 
+    The blendShape evaluates first, like Maya's ``frontOfChain`` (a legacy
+    tweak node stays before it).
+
     Args:
         deformed_obj (PyNode): Object with deformation history
             including a blendShape node.
     """
-    meshShape = node.get_visible_shape(deformed_obj)
-    if not meshShape:
+    shape = node.get_visible_shape(deformed_obj)
+    if not shape:
         return
-
-    history = pm.listHistory(
-        meshShape,
-        gl=True,
-        pdo=True,
-        lf=True,
-        f=False,
-        il=2,
-    )
-    history = deformer.filter_deformers(history)
-    blendShape_node = None
-    deformers = []
-    for h in history:
-        object_type = pm.objectType(h)
-        if object_type == "blendShape":
-            blendShape_node = h
-        else:
-            deformers.append(h)
-    if blendShape_node:
-        deformers.append(blendShape_node)
-        deformers.append(meshShape)
-        pm.reorderDeformers(*deformers)
+    stack = deformer.get_deformer_stack(shape)
+    blendshapes = [d for d in stack if cmds.nodeType(d) == "blendShape"]
+    if blendshapes:
+        deformer.move_deformer(blendshapes[-1], shape, stack=stack)
 
 
 def morph_foc(deformed_obj, morph_deformer):
     """Move existing morph node to the front of chain.
+
+    With a blendShape, the morph evaluates directly after it, so the order
+    is blendShape > morph > the other deformers (skinCluster...). Without
+    one, the morph evaluates first.
 
     Args:
         deformed_obj (PyNode): Object with deformation history
             including a morph node.
         morph_deformer (PyNode): The morph deformer to move.
     """
-    meshShape = node.get_visible_shape(deformed_obj)
-    if not meshShape:
+    shape = node.get_visible_shape(deformed_obj)
+    if not shape:
         return
-
-    history = pm.listHistory(
-        meshShape,
-        gl=True,
-        pdo=True,
-        lf=True,
-        f=False,
-        il=2,
-    )
-    history = deformer.filter_deformers(history)
-
-    # remove the first one that is the new morph
-    history_check = history[1:]
-
-    # Insert the new element before the blendShape
-    # or at the end of the list
-    insert_index = len(history_check)
-    start_slice = -2
-    for i, element in enumerate(history_check):
-        if isinstance(element, pm.nodetypes.BlendShape):
-            insert_index = i
-            start_slice = -3
-            break
-
-    history_check.insert(insert_index, morph_deformer)
-
-    result = history_check[start_slice:]
-    if len(result) > 1:
-        result.append(meshShape)
-        pm.reorderDeformers(*result)
+    morph = str(morph_deformer)
+    stack = deformer.get_deformer_stack(shape)
+    blendshapes = [d for d in stack if cmds.nodeType(d) == "blendShape"]
+    after = blendshapes[0] if blendshapes else None
+    deformer.move_deformer(morph, shape, after=after, stack=stack)
 
 
 # =============================================================================

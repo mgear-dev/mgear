@@ -176,6 +176,48 @@ def test_morph_after_blendshape_before_skin(
 
 
 # =============================================================================
+# MORPH TARGET
+# =============================================================================
+
+
+def _points(mesh):
+    from maya import cmds
+
+    flat = cmds.xform(mesh + ".vtx[*]", query=True, worldSpace=True, translation=True)
+    return [flat[i : i + 3] for i in range(0, len(flat), 3)]
+
+
+@pytest.mark.parametrize("referenced", (True, False))
+def test_morph_target_is_deformed_shape(
+    run_with_maya_standalone, setup_path, tmp_path, referenced
+):
+    from maya import cmds
+    from mgear.core import blendshape
+    from mgear.core import node
+
+    # The target is skinned in this scene, so a referenced target has a
+    # hidden shape from the file and a visible deformed one
+    target = _body(tmp_path, referenced)
+    _skin(target)
+    driven = _plane("driven")
+    rest = _points(driven)
+
+    morph = blendshape.connectWithMorph(driven, target, ffoc=True)
+    source = cmds.listConnections(
+        morph.name() + ".morphTarget[0]", source=True, shapes=True
+    )
+    assert cmds.ls(source, long=True) == [node.get_visible_shape(target)]
+
+    # The driven mesh follows the deformation of the target
+    cmds.setAttr("jB.ty", 2)
+    moved = _points(driven)
+    target_points = _points(target)
+    assert max(abs(m[1] - r[1]) for m, r in zip(moved, rest)) > 0.5
+    for m, t in zip(moved, target_points):
+        assert m == pytest.approx(t, abs=1e-4)
+
+
+# =============================================================================
 # LOOKUP
 # =============================================================================
 
