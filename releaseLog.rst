@@ -2,6 +2,13 @@ Release Log
 ===========
 
 
+5.4.8
+------
+**Bug Fix**
+	* Core: Blendshape: Morph connections use the deformed shape of a referenced target
+	* Core: Blendshape: Morph and blendShape front of chain order is right with a legacy tweak node
+
+
 5.4.7
 ------
 **Bug Fix**
