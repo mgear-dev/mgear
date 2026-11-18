@@ -78,15 +78,15 @@ MStatus mgear_rollSplineKine::initialize()
     ctlParent = mAttr.create( "ctlParent", "ctlp", MFnMatrixAttribute::kDouble );
     mAttr.setStorable(true);
     mAttr.setReadable(false);
-    mAttr.setIndexMatters(false);
     mAttr.setArray(true);
+    mAttr.setIndexMatters(false);
     addAttribute( ctlParent );
 	
     inputs = mAttr.create( "inputs", "in", MFnMatrixAttribute::kDouble );
     mAttr.setStorable(true);
     mAttr.setReadable(false);
-    mAttr.setIndexMatters(false);
     mAttr.setArray(true);
+    mAttr.setIndexMatters(false);
     addAttribute( inputs );
 
     inputsRoll = nAttr.create ( "inputsRoll", "inr", MFnNumericData::kFloat, 0.0 );
