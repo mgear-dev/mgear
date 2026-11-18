@@ -60,8 +60,8 @@ MStatus mgear_curveCns::initialize()
 	inputs = mAttr.create( "inputs", "inputs" );
 	mAttr.setStorable(true);
     mAttr.setReadable(false);
-    mAttr.setIndexMatters(false);
     mAttr.setArray(true);
+    mAttr.setIndexMatters(false);
 	stat = addAttribute( inputs );
 		if (!stat) {stat.perror("addAttribute"); return stat;}
 
