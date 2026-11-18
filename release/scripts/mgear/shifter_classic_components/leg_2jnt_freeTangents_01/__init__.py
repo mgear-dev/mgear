@@ -65,6 +65,9 @@ class Component(component.Main):
             tp=self.parentCtlTag,
         )
 
+        if self.settings["mirrorMid"] and self.negate:
+            self.root_npo.sx.set(-1)
+
         # FK Controlers -----------------------------------
         t = transform.getTransformLookingAt(
             self.guide.apos[0],
@@ -152,14 +155,24 @@ class Component(component.Main):
 
         # IK Controlers -----------------------------------
 
-        self.ik_cns = primitive.addTransformFromPos(
-            self.root_ctl, self.getName("ik_cns"), self.guide.pos["ankle"]
+        # Define the wrist transform (wt)
+        if not self.settings["ikOri"]:
+            m = transform.getTransformLookingAt(self.guide.pos["ankle"],
+                                                self.guide.pos["eff"],
+                                                self.normal,
+                                                "z-x",
+                                                False)
+        else:
+            m = transform.getTransformFromPos(self.guide.pos["ankle"])
+
+        self.ik_cns = primitive.addTransform(
+            self.root_ctl, self.getName("ik_cns"), m
         )
 
         self.ikcns_ctl = self.addCtl(
             self.ik_cns,
             "ikcns_ctl",
-            transform.getTransformFromPos(self.guide.pos["ankle"]),
+            m,
             self.color_ik,
             "null",
             w=self.size * 0.12,
@@ -167,18 +180,10 @@ class Component(component.Main):
         )
         attribute.setInvertMirror(self.ikcns_ctl, ["tx"])
 
-        m = transform.getTransformLookingAt(
-            self.guide.pos["ankle"],
-            self.guide.pos["eff"],
-            self.x_axis,
-            "zx",
-            False,
-        )
-
         self.ik_ctl = self.addCtl(
             self.ikcns_ctl,
             "ik_ctl",
-            transform.getTransformFromPos(self.guide.pos["ankle"]),
+            m,
             self.color_ik,
             "cube",
             w=self.size * 0.12,
@@ -512,9 +517,9 @@ class Component(component.Main):
             tp=self.mid_ctl,
         )
 
-        if self.negate:
-            self.uplegTangentA_npo.rz.set(180)
-            self.uplegTangentA_npo.sz.set(-1)
+        if self.settings["mirrorMid"] and self.negate:
+            self.uplegTangentA_npo.rx.set(180)
+            self.uplegTangentA_npo.sx.set(-1)
         attribute.setKeyableAttributes(self.uplegTangentA_ctl, self.t_params)
 
         t = transform.getInterpolateTransformMatrix(
@@ -535,9 +540,9 @@ class Component(component.Main):
             tp=self.mid_ctl,
         )
 
-        if self.negate:
-            self.uplegTangentB_npo.rz.set(180)
-            self.uplegTangentB_npo.sz.set(-1)
+        if self.settings["mirrorMid"] and self.negate:
+            self.uplegTangentB_npo.rx.set(180)
+            self.uplegTangentB_npo.sx.set(-1)
         attribute.setKeyableAttributes(self.uplegTangentB_ctl, self.t_params)
 
         tC = self.tws1B_npo.getMatrix(worldSpace=True)
@@ -558,9 +563,9 @@ class Component(component.Main):
             tp=self.mid_ctl,
         )
 
-        if self.negate:
-            self.lowlegTangentA_npo.rz.set(180)
-            self.lowlegTangentA_npo.sz.set(-1)
+        if self.settings["mirrorMid"] and self.negate:
+            self.lowlegTangentA_npo.rx.set(180)
+            self.lowlegTangentA_npo.sx.set(-1)
         attribute.setKeyableAttributes(self.lowlegTangentA_ctl, self.t_params)
 
         t = transform.getInterpolateTransformMatrix(self.tws1B_npo, tC, 0.5)
@@ -584,9 +589,8 @@ class Component(component.Main):
             tp=self.mid_ctl,
         )
 
-        if self.negate:
-            self.lowlegTangentB_npo.rz.set(180)
-            self.lowlegTangentB_npo.sz.set(-1)
+        if self.settings["mirrorMid"] and self.negate:
+            self.lowlegTangentB_npo.sx.set(-1)
         attribute.setKeyableAttributes(self.lowlegTangentB_ctl, self.t_params)
 
         t = self.mid_ctl.getMatrix(worldSpace=True)
@@ -605,9 +609,6 @@ class Component(component.Main):
             tp=self.mid_ctl,
         )
 
-        if self.negate:
-            self.kneeTangent_npo.rz.set(180)
-            self.kneeTangent_npo.sz.set(-1)
         attribute.setKeyableAttributes(self.kneeTangent_ctl, self.t_params)
 
         # match IK FK references
